@@ -22,11 +22,47 @@
         </div>
     </div>
 
+    <form id="inventaris-filter-form" method="get" class="surface-card grid gap-4 p-5 md:grid-cols-[minmax(0,1.4fr)_220px_220px_auto] md:items-end">
+        <div>
+            <label for="id_q">Cari barang</label>
+            <input id="id_q" name="q" type="text" value="{{ search_query }}" placeholder="Cari nama, kode, atau keterangan" autocomplete="off">
+        </div>
+        <div>
+            <label for="id_kondisi">Filter kondisi</label>
+            <select id="id_kondisi" name="kondisi">
+                <option value="">Semua kondisi</option>
+                {% for value, label in kondisi_choices %}
+                <option value="{{ value }}"{% if selected_kondisi == value %} selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="id_lokasi">Filter lokasi</label>
+            <select id="id_lokasi" name="lokasi">
+                <option value="">Semua lokasi</option>
+                {% for lokasi in lokasi_choices %}
+                <option value="{{ lokasi.id }}"{% if selected_lokasi == lokasi.id|stringformat:"s" %} selected{% endif %}>{{ lokasi.nama_lokasi }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="flex flex-wrap gap-3">
+            <button type="submit" class="btn-primary">
+                <i data-lucide="search" class="h-4 w-4"></i>
+                <span>Terapkan</span>
+            </button>
+            <a href="{% url 'inventaris:barang_list' %}" class="btn-secondary">
+                <i data-lucide="rotate-ccw" class="h-4 w-4"></i>
+                <span>Reset</span>
+            </a>
+        </div>
+    </form>
+
     <div class="surface-card overflow-hidden">
         <div class="overflow-x-auto">
             <table>
                 <thead class="bg-slate-50">
                     <tr>
+                        <th>Foto</th>
                         <th>Kode</th>
                         <th>Nama</th>
                         <th>Jumlah</th>
@@ -38,10 +74,19 @@
                 <tbody>
                     {% for barang in barang_list %}
                     <tr class="hover:bg-slate-50/70">
+                        <td>
+                            {% if barang.foto %}
+                            <img src="{{ barang.foto.url }}" alt="{{ barang.nama }}" class="h-14 w-14 rounded-2xl object-cover ring-1 ring-slate-200">
+                            {% else %}
+                            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+                                <i data-lucide="image" class="h-5 w-5"></i>
+                            </div>
+                            {% endif %}
+                        </td>
                         <td class="font-semibold text-slate-600">{{ barang.kode_barang }}</td>
                         <td class="font-semibold text-slate-900">{{ barang.nama }}</td>
                         <td>{{ barang.jumlah }}</td>
-                        <td>{{ barang.lokasi|default:"-" }}</td>
+                        <td>{{ barang.lokasi.nama_lokasi|default:"-" }}</td>
                         <td>{{ barang.get_kondisi_display }}</td>
                         <td>
                             <div class="flex flex-wrap gap-3 text-sm font-semibold">
@@ -62,7 +107,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="py-12 text-center text-slate-500">Belum ada data barang.</td>
+                        <td colspan="7" class="py-12 text-center text-slate-500">Tidak ada barang yang cocok dengan filter saat ini.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -70,4 +115,37 @@
         </div>
     </div>
 </section>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('inventaris-filter-form');
+        const searchInput = document.getElementById('id_q');
+        const kondisiSelect = document.getElementById('id_kondisi');
+        const lokasiSelect = document.getElementById('id_lokasi');
+        let searchTimer = null;
+
+        if (searchInput) {
+            searchInput.addEventListener('input', function () {
+                clearTimeout(searchTimer);
+                searchTimer = setTimeout(function () {
+                    form.submit();
+                }, 350);
+            });
+        }
+
+        if (kondisiSelect) {
+            kondisiSelect.addEventListener('change', function () {
+                form.submit();
+            });
+        }
+
+        if (lokasiSelect) {
+            lokasiSelect.addEventListener('change', function () {
+                form.submit();
+            });
+        }
+    });
+</script>
 {% endblock %}

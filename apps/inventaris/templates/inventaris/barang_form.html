@@ -10,8 +10,11 @@
         <p class="mt-2 text-sm text-slate-500">Tambahkan atau perbarui data barang laboratorium melalui formulir berikut.</p>
     </div>
 
-    <form method="post" class="surface-card space-y-5 p-6 md:p-8">
+    <form method="post" enctype="multipart/form-data" class="surface-card space-y-5 p-6 md:p-8">
         {% csrf_token %}
+        <div class="rounded-3xl border border-brand-100 bg-brand-50 p-4 text-sm leading-7 text-brand-900">
+            Kode barang akan dibuat otomatis saat data disimpan, jadi Anda tidak perlu mengetiknya manual.
+        </div>
         {{ form.as_p }}
         <div class="flex flex-wrap gap-3 pt-2">
             <button type="submit" class="btn-primary">
