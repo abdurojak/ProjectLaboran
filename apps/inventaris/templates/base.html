@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Project Laboran{% endblock %}</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -65,6 +66,9 @@
             .surface-card {
                 @apply rounded-[28px] border border-slate-200 bg-white shadow-soft;
             }
+            .lucide-icon {
+                @apply h-5 w-5;
+            }
         }
     </style>
 </head>
@@ -73,7 +77,7 @@
         <div class="mx-auto flex max-w-[1500px] flex-wrap items-center justify-between gap-5 px-5 py-4 lg:px-7">
             <div class="flex items-center gap-4">
                 <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15 text-lg font-black backdrop-blur">
-                    PL
+                    <i data-lucide="flask-conical" class="h-7 w-7"></i>
                 </div>
                 <div>
                     <h1 class="text-2xl font-bold tracking-tight">Project Laboran</h1>
@@ -82,9 +86,16 @@
             </div>
 
             <nav class="flex flex-wrap items-center gap-2 text-sm font-medium">
-                <a href="{% url 'dashboard:home' %}" class="rounded-2xl px-4 py-3 text-white/90 transition hover:bg-white/10 hover:text-white">Dashboard</a>
-                <a href="#" class="rounded-2xl px-4 py-3 text-white/75 transition hover:bg-white/10 hover:text-white">Kalender</a>
+                <a href="{% url 'dashboard:home' %}" class="flex items-center gap-2 rounded-2xl px-4 py-3 text-white/90 transition hover:bg-white/10 hover:text-white">
+                    <i data-lucide="house" class="lucide-icon"></i>
+                    <span>Dashboard</span>
+                </a>
                 <a href="#" class="flex items-center gap-2 rounded-2xl px-4 py-3 text-white/75 transition hover:bg-white/10 hover:text-white">
+                    <i data-lucide="calendar-days" class="lucide-icon"></i>
+                    <span>Kalender</span>
+                </a>
+                <a href="#" class="flex items-center gap-2 rounded-2xl px-4 py-3 text-white/75 transition hover:bg-white/10 hover:text-white">
+                    <i data-lucide="bell" class="lucide-icon"></i>
                     <span>Notifikasi</span>
                     <span class="flex h-6 min-w-6 items-center justify-center rounded-full bg-cyan-300/25 px-2 text-xs font-bold text-cyan-100">3</span>
                 </a>
@@ -92,7 +103,7 @@
 
             <div class="flex items-center gap-3">
                 <div class="flex h-14 w-14 items-center justify-center rounded-full bg-white/15 text-lg font-black backdrop-blur">
-                    PL
+                    <i data-lucide="circle-user-round" class="h-7 w-7"></i>
                 </div>
                 <div class="hidden sm:block">
                     <div class="font-semibold">Lab Admin</div>
@@ -105,5 +116,8 @@
     <main class="mx-auto max-w-[1500px] px-4 py-6 lg:px-7">
         {% block content %}{% endblock %}
     </main>
+    <script>
+        lucide.createIcons();
+    </script>
 </body>
 </html>

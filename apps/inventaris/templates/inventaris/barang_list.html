@@ -10,7 +10,10 @@
             <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Daftar Barang</h2>
             <p class="mt-2 text-sm text-slate-500">Kelola data inventaris laboratorium dari satu tabel yang rapi dan mudah dibaca.</p>
         </div>
-        <a class="btn-primary" href="{% url 'inventaris:barang_create' %}">Tambah Barang</a>
+        <a class="btn-primary" href="{% url 'inventaris:barang_create' %}">
+            <i data-lucide="plus" class="h-4 w-4"></i>
+            <span>Tambah Barang</span>
+        </a>
     </div>
 
     <div class="surface-card overflow-hidden">
@@ -36,9 +39,18 @@
                         <td>{{ barang.get_kondisi_display }}</td>
                         <td>
                             <div class="flex flex-wrap gap-3 text-sm font-semibold">
-                                <a class="text-brand-700 hover:text-brand-800" href="{% url 'inventaris:barang_detail' barang.pk %}">Detail</a>
-                                <a class="text-amber-600 hover:text-amber-700" href="{% url 'inventaris:barang_update' barang.pk %}">Edit</a>
-                                <a class="text-rose-600 hover:text-rose-700" href="{% url 'inventaris:barang_delete' barang.pk %}">Hapus</a>
+                                <a class="inline-flex items-center gap-1 text-brand-700 hover:text-brand-800" href="{% url 'inventaris:barang_detail' barang.pk %}">
+                                    <i data-lucide="eye" class="h-4 w-4"></i>
+                                    <span>Detail</span>
+                                </a>
+                                <a class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700" href="{% url 'inventaris:barang_update' barang.pk %}">
+                                    <i data-lucide="pencil" class="h-4 w-4"></i>
+                                    <span>Edit</span>
+                                </a>
+                                <a class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700" href="{% url 'inventaris:barang_delete' barang.pk %}">
+                                    <i data-lucide="trash-2" class="h-4 w-4"></i>
+                                    <span>Hapus</span>
+                                </a>
                             </div>
                         </td>
                     </tr>

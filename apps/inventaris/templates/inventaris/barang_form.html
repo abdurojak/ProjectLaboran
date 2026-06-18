@@ -14,8 +14,14 @@
         {% csrf_token %}
         {{ form.as_p }}
         <div class="flex flex-wrap gap-3 pt-2">
-            <button type="submit" class="btn-primary">Simpan</button>
-            <a class="btn-secondary" href="{% url 'inventaris:barang_list' %}">Batal</a>
+            <button type="submit" class="btn-primary">
+                <i data-lucide="save" class="h-4 w-4"></i>
+                <span>Simpan</span>
+            </button>
+            <a class="btn-secondary" href="{% url 'inventaris:barang_list' %}">
+                <i data-lucide="arrow-left" class="h-4 w-4"></i>
+                <span>Batal</span>
+            </a>
         </div>
     </form>
 </section>

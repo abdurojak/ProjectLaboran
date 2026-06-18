@@ -11,8 +11,14 @@
             <p class="mt-2 text-sm text-slate-500">Detail lengkap barang inventaris laboratorium.</p>
         </div>
         <div class="flex flex-wrap gap-3">
-            <a class="btn-primary" href="{% url 'inventaris:barang_update' barang.pk %}">Edit</a>
-            <a class="btn-secondary" href="{% url 'inventaris:barang_list' %}">Kembali</a>
+            <a class="btn-primary" href="{% url 'inventaris:barang_update' barang.pk %}">
+                <i data-lucide="pencil" class="h-4 w-4"></i>
+                <span>Edit</span>
+            </a>
+            <a class="btn-secondary" href="{% url 'inventaris:barang_list' %}">
+                <i data-lucide="arrow-left" class="h-4 w-4"></i>
+                <span>Kembali</span>
+            </a>
         </div>
     </div>
 
