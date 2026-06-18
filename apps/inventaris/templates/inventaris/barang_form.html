@@ -3,11 +3,20 @@
 {% block title %}Form Barang{% endblock %}
 
 {% block content %}
-<h2>Form Barang</h2>
-<form method="post">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Simpan</button>
-    <a class="button secondary" href="{% url 'inventaris:barang_list' %}">Batal</a>
-</form>
+<section class="mx-auto max-w-4xl space-y-6">
+    <div>
+        <p class="text-sm font-bold uppercase tracking-[0.2em] text-brand-700">Inventaris</p>
+        <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Form Barang</h2>
+        <p class="mt-2 text-sm text-slate-500">Tambahkan atau perbarui data barang laboratorium melalui formulir berikut.</p>
+    </div>
+
+    <form method="post" class="surface-card space-y-5 p-6 md:p-8">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <div class="flex flex-wrap gap-3 pt-2">
+            <button type="submit" class="btn-primary">Simpan</button>
+            <a class="btn-secondary" href="{% url 'inventaris:barang_list' %}">Batal</a>
+        </div>
+    </form>
+</section>
 {% endblock %}

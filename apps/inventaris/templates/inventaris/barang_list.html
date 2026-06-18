@@ -3,39 +3,53 @@
 {% block title %}Daftar Barang{% endblock %}
 
 {% block content %}
-<h2>Daftar Barang</h2>
-<p><a class="button" href="{% url 'inventaris:barang_create' %}">Tambah Barang</a></p>
+<section class="space-y-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <p class="text-sm font-bold uppercase tracking-[0.2em] text-brand-700">Inventaris</p>
+            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Daftar Barang</h2>
+            <p class="mt-2 text-sm text-slate-500">Kelola data inventaris laboratorium dari satu tabel yang rapi dan mudah dibaca.</p>
+        </div>
+        <a class="btn-primary" href="{% url 'inventaris:barang_create' %}">Tambah Barang</a>
+    </div>
 
-<table>
-    <thead>
-        <tr>
-            <th>Kode</th>
-            <th>Nama</th>
-            <th>Jumlah</th>
-            <th>Lokasi</th>
-            <th>Kondisi</th>
-            <th>Aksi</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for barang in barang_list %}
-        <tr>
-            <td>{{ barang.kode_barang }}</td>
-            <td>{{ barang.nama }}</td>
-            <td>{{ barang.jumlah }}</td>
-            <td>{{ barang.lokasi|default:"-" }}</td>
-            <td>{{ barang.get_kondisi_display }}</td>
-            <td class="actions">
-                <a href="{% url 'inventaris:barang_detail' barang.pk %}">Detail</a>
-                <a href="{% url 'inventaris:barang_update' barang.pk %}">Edit</a>
-                <a href="{% url 'inventaris:barang_delete' barang.pk %}">Hapus</a>
-            </td>
-        </tr>
-        {% empty %}
-        <tr>
-            <td colspan="6">Belum ada data barang.</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+    <div class="surface-card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table>
+                <thead class="bg-slate-50">
+                    <tr>
+                        <th>Kode</th>
+                        <th>Nama</th>
+                        <th>Jumlah</th>
+                        <th>Lokasi</th>
+                        <th>Kondisi</th>
+                        <th>Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for barang in barang_list %}
+                    <tr class="hover:bg-slate-50/70">
+                        <td class="font-semibold text-slate-600">{{ barang.kode_barang }}</td>
+                        <td class="font-semibold text-slate-900">{{ barang.nama }}</td>
+                        <td>{{ barang.jumlah }}</td>
+                        <td>{{ barang.lokasi|default:"-" }}</td>
+                        <td>{{ barang.get_kondisi_display }}</td>
+                        <td>
+                            <div class="flex flex-wrap gap-3 text-sm font-semibold">
+                                <a class="text-brand-700 hover:text-brand-800" href="{% url 'inventaris:barang_detail' barang.pk %}">Detail</a>
+                                <a class="text-amber-600 hover:text-amber-700" href="{% url 'inventaris:barang_update' barang.pk %}">Edit</a>
+                                <a class="text-rose-600 hover:text-rose-700" href="{% url 'inventaris:barang_delete' barang.pk %}">Hapus</a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="py-12 text-center text-slate-500">Belum ada data barang.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
 {% endblock %}

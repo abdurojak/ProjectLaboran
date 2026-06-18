@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="grid gap-6 xl:grid-cols-[260px_minmax(0,1fr)]">
+    <aside class="surface-card h-fit p-4 xl:sticky xl:top-6">
+        <nav class="grid gap-2">
+            {% for link in sidebar_links %}
+                {% if link.url %}
+                <a href="{% url link.url %}" class="{% if link.active %}bg-brand-50 text-brand-800{% else %}text-slate-700 hover:bg-slate-50{% endif %} flex items-center gap-4 rounded-2xl px-4 py-3 font-semibold transition">
+                    <span class="{{ link.icon_bg }} {{ link.icon_text }} flex h-11 w-11 items-center justify-center rounded-2xl text-sm font-bold">{{ link.icon }}</span>
+                    <span>{{ link.title }}</span>
+                </a>
+                {% else %}
+                <div class="flex items-center gap-4 rounded-2xl px-4 py-3 text-slate-500">
+                    <span class="{{ link.icon_bg }} {{ link.icon_text }} flex h-11 w-11 items-center justify-center rounded-2xl text-sm font-bold">{{ link.icon }}</span>
+                    <span>{{ link.title }}</span>
+                </div>
+                {% endif %}
+            {% endfor %}
+        </nav>
+
+        <div class="mt-6 rounded-[24px] border border-slate-200 bg-gradient-to-b from-white to-brand-50/40 p-5">
+            <div class="text-sm font-medium text-slate-500">{{ today|date:"l, d F Y" }}</div>
+            <p class="mt-8 text-sm text-slate-500">Selamat datang,</p>
+            <p class="text-xl font-bold text-brand-800">Lab Admin</p>
+            <div class="mt-6 flex h-20 w-20 items-center justify-center rounded-[28px] bg-brand-100 text-2xl font-black text-brand-800">PL</div>
+        </div>
+    </aside>
+
+    <section class="grid gap-6">
+        <div class="grid gap-4 2xl:grid-cols-[minmax(0,2.2fr)_repeat(4,minmax(0,1fr))] xl:grid-cols-2">
+            <article class="surface-card overflow-hidden bg-gradient-to-br from-white via-brand-50/60 to-slate-100/70 p-7 md:p-9 2xl:col-auto xl:col-span-2">
+                <div class="grid items-end gap-8 lg:grid-cols-[minmax(0,1.3fr)_320px]">
+                    <div>
+                        <p class="text-xs font-extrabold uppercase tracking-[0.22em] text-brand-700">Dashboard</p>
+                        <h2 class="mt-3 max-w-xl text-4xl font-black tracking-tight text-slate-900 md:text-5xl">Pusat kendali operasional laboratorium</h2>
+                        <p class="mt-5 max-w-2xl text-base leading-8 text-slate-600">Kelola inventaris, peminjaman, jadwal, data siswa, laporan, dan seluruh aktivitas laboratorium dalam satu sistem terintegrasi. Untuk tahap sekarang, menu inventaris menjadi modul yang aktif terlebih dahulu.</p>
+                    </div>
+
+                    <div class="relative min-h-[220px]">
+                        <div class="absolute bottom-5 left-0 flex h-28 w-24 items-end justify-center rounded-t-[48px] rounded-br-[28px] bg-slate-800 text-3xl font-black text-white/90">LAB</div>
+                        <div class="absolute bottom-4 right-0 flex h-24 w-20 items-center justify-center rounded-[28px] bg-brand-100 text-2xl font-black text-brand-800">PL</div>
+                        <div class="absolute bottom-10 right-16 h-28 w-10 rounded-full bg-emerald-200/40 blur-[2px]"></div>
+                        <div class="absolute right-10 top-6 h-[120px] w-[190px] rounded-[18px] bg-slate-800 shadow-2xl shadow-slate-900/20">
+                            <div class="absolute inset-[10px] rounded-[12px] bg-gradient-to-b from-white to-cyan-50"></div>
+                            <div class="absolute left-8 top-9 h-1 w-16 rounded-full bg-emerald-300"></div>
+                            <div class="absolute right-8 top-8 h-12 w-12 rounded-full bg-[conic-gradient(#68d7d2_0_72%,#dbeef0_72%_100%)]"></div>
+                            <div class="absolute bottom-8 left-8 w-4 rounded-t-lg bg-cyan-300" style="height: 42px;"></div>
+                            <div class="absolute bottom-8 left-14 w-4 rounded-t-lg bg-sky-400" style="height: 64px;"></div>
+                            <div class="absolute bottom-8 left-20 w-4 rounded-t-lg bg-emerald-300" style="height: 84px;"></div>
+                            <div class="absolute -bottom-4 left-[70px] h-4 w-12 rounded-b-xl bg-slate-700"></div>
+                        </div>
+                    </div>
+                </div>
+            </article>
+
+            {% for stat in stats_cards %}
+            <article class="surface-card p-6">
+                <div class="{{ stat.icon_bg }} {{ stat.icon_text }} flex h-14 w-14 items-center justify-center rounded-2xl text-lg font-bold">{{ stat.icon }}</div>
+                <div class="mt-8">
+                    <div class="{{ stat.value_text }} text-5xl font-black tracking-tight">{{ stat.value }}</div>
+                    <div class="mt-3 text-lg font-bold text-slate-900">{{ stat.label }}</div>
+                    <p class="mt-3 text-sm leading-7 text-slate-500">{{ stat.note }}</p>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+
+        <section>
+            <div class="mb-4">
+                <h3 class="text-2xl font-bold tracking-tight text-slate-900">Menu Utama</h3>
+                <p class="mt-1 text-sm text-slate-500">Inventaris aktif sekarang, sementara modul lain disiapkan untuk tahap pengembangan berikutnya.</p>
+            </div>
+
+            <div class="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
+                {% for module in menu_modules %}
+                    {% if module.url %}
+                    <a href="{% url module.url %}" class="surface-card flex items-start gap-4 p-5 transition hover:-translate-y-0.5 hover:border-brand-200">
+                        <span class="{{ module.icon_bg }} {{ module.icon_text }} flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-lg font-bold">{{ module.icon }}</span>
+                        <div class="min-w-0 flex-1">
+                            <div class="text-lg font-bold text-slate-900">{{ module.title }}</div>
+                            <p class="mt-2 text-sm leading-7 text-slate-500">{{ module.description }}</p>
+                        </div>
+                        <span class="text-3xl leading-none text-slate-400">&rsaquo;</span>
+                    </a>
+                    {% else %}
+                    <article class="surface-card flex items-start gap-4 border-slate-100 bg-slate-50/80 p-5 text-slate-500">
+                        <span class="{{ module.icon_bg }} {{ module.icon_text }} flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-lg font-bold">{{ module.icon }}</span>
+                        <div class="min-w-0 flex-1">
+                            <div class="text-lg font-bold text-slate-800">{{ module.title }}</div>
+                            <p class="mt-2 text-sm leading-7 text-slate-500">{{ module.description }}</p>
+                        </div>
+                        <span class="text-3xl leading-none text-slate-300">&rsaquo;</span>
+                    </article>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </section>
+
+        <div class="grid gap-6 2xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)]">
+            <section class="surface-card p-6">
+                <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                        <h3 class="text-2xl font-bold tracking-tight text-slate-900">Aktivitas Terbaru</h3>
+                        <p class="mt-1 text-sm text-slate-500">Struktur ini siap dihubungkan ke aktivitas riil modul-modul berikutnya.</p>
+                    </div>
+                    <a href="{% url 'inventaris:barang_list' %}" class="btn-secondary">Lihat semua</a>
+                </div>
+
+                <div class="space-y-6">
+                    {% for activity in activities %}
+                    <div class="grid grid-cols-[56px_18px_minmax(0,1fr)] gap-4">
+                        <div class="pt-1 text-sm font-semibold text-slate-500">{{ activity.time }}</div>
+                        <div class="relative mx-auto min-h-[62px] w-px bg-slate-200
+                            {% if activity.tone == 'orange' %}text-amber-500{% elif activity.tone == 'blue' %}text-blue-600{% elif activity.tone == 'green' %}text-emerald-600{% else %}text-cyan-700{% endif %}">
+                            <span class="absolute -left-[5px] top-0 h-3 w-3 rounded-full bg-current"></span>
+                        </div>
+                        <div>
+                            <div class="font-bold text-slate-900">{{ activity.title }}</div>
+                            <p class="mt-1 text-sm leading-7 text-slate-500">{{ activity.detail }}</p>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+
+            <aside class="surface-card p-6">
+                <div class="mb-6">
+                    <h3 class="text-2xl font-bold tracking-tight text-slate-900">Akses Cepat</h3>
+                    <p class="mt-1 text-sm text-slate-500">Aksi utama yang paling sering dipakai dari dashboard.</p>
+                </div>
+
+                <div class="space-y-4">
+                    {% for action in quick_actions %}
+                        {% if action.url %}
+                        <a href="{% url action.url %}" class="flex items-start gap-4 rounded-[24px] border border-slate-200 bg-white p-5 transition hover:border-brand-200 hover:bg-brand-50/40">
+                            <span class="{{ action.icon_bg }} {{ action.icon_text }} flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-lg font-bold">{{ action.icon }}</span>
+                            <div class="min-w-0 flex-1">
+                                <div class="font-bold text-slate-900">{{ action.title }}</div>
+                                <p class="mt-1 text-sm leading-7 text-slate-500">{{ action.description }}</p>
+                            </div>
+                            <span class="text-3xl leading-none text-slate-400">&rsaquo;</span>
+                        </a>
+                        {% else %}
+                        <article class="flex items-start gap-4 rounded-[24px] border border-slate-100 bg-slate-50/80 p-5">
+                            <span class="{{ action.icon_bg }} {{ action.icon_text }} flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-lg font-bold">{{ action.icon }}</span>
+                            <div class="min-w-0 flex-1">
+                                <div class="font-bold text-slate-800">{{ action.title }}</div>
+                                <p class="mt-1 text-sm leading-7 text-slate-500">{{ action.description }}</p>
+                            </div>
+                            <span class="text-3xl leading-none text-slate-300">&rsaquo;</span>
+                        </article>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </aside>
+        </div>
+
+        <section class="surface-card p-6">
+            <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h3 class="text-2xl font-bold tracking-tight text-slate-900">Inventaris Terbaru</h3>
+                    <p class="mt-1 text-sm text-slate-500">Ringkasan singkat barang yang terakhir masuk atau diperbarui.</p>
+                </div>
+                <a href="{% url 'inventaris:barang_list' %}" class="btn-secondary">Buka modul inventaris</a>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Kode</th>
+                            <th>Nama</th>
+                            <th>Jumlah</th>
+                            <th>Kondisi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for barang in barang_terbaru %}
+                        <tr>
+                            <td class="font-semibold text-slate-600">{{ barang.kode_barang }}</td>
+                            <td><a class="font-semibold text-brand-700 hover:text-brand-800" href="{% url 'inventaris:barang_detail' barang.pk %}">{{ barang.nama }}</a></td>
+                            <td>{{ barang.jumlah }}</td>
+                            <td>{{ barang.get_kondisi_display }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="py-10 text-center text-slate-500">Belum ada data inventaris.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </section>
+</div>
+{% endblock %}
