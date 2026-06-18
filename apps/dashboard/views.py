@@ -3,6 +3,7 @@ from django.db.models import Sum
 from django.views.generic import TemplateView
 
 from apps.inventaris.models import Barang
+from apps.peminjaman.models import PeminjamanAlat
 
 
 class DashboardView(TemplateView):
@@ -50,12 +51,15 @@ class DashboardView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         barang_qs = Barang.objects.all()
+        peminjaman_qs = PeminjamanAlat.objects.select_related('barang')
+        peminjaman_aktif = peminjaman_qs.exclude(status='dikembalikan')
 
         context['total_barang'] = barang_qs.count()
         context['total_unit'] = barang_qs.aggregate(total=Sum('jumlah'))['total'] or 0
         context['kondisi_baik'] = barang_qs.filter(kondisi='baik').count()
         context['butuh_perhatian'] = barang_qs.exclude(kondisi='baik').count()
         context['barang_terbaru'] = barang_qs.order_by('-dibuat_pada')[:5]
+        context['peminjaman_terbaru'] = peminjaman_qs[:5]
         context['today'] = timezone.localdate()
         context['stats_cards'] = self._decorate_items([
             {
@@ -67,8 +71,8 @@ class DashboardView(TemplateView):
             },
             {
                 'label': 'Peminjaman Aktif',
-                'value': 0,
-                'note': 'Disiapkan untuk modul berikutnya',
+                'value': peminjaman_aktif.count(),
+                'note': 'Transaksi yang belum ditandai selesai',
                 'icon': 'arrow-left-right',
                 'tone': 'orange',
             },
@@ -98,9 +102,9 @@ class DashboardView(TemplateView):
             },
             {
                 'title': 'Peminjaman Alat',
-                'description': 'Pencatatan peminjaman dan pengembalian alat akan ditambahkan berikutnya.',
-                'url': '',
-                'status': 'Segera Hadir',
+                'description': 'Catat peminjaman dan pengembalian alat laboratorium dari satu modul terpusat.',
+                'url': 'peminjaman:peminjaman_list',
+                'status': 'Aktif',
                 'icon': 'arrow-left-right',
                 'tone': 'orange',
             },
@@ -156,7 +160,7 @@ class DashboardView(TemplateView):
         context['sidebar_links'] = self._decorate_items([
             {'title': 'Dashboard', 'icon': 'layout-grid', 'url': 'dashboard:home', 'active': True, 'tone': 'teal'},
             {'title': 'Inventaris', 'icon': 'package', 'url': 'inventaris:barang_list', 'active': False, 'tone': 'gray'},
-            {'title': 'Peminjaman Alat', 'icon': 'arrow-left-right', 'url': '', 'active': False, 'tone': 'gray'},
+            {'title': 'Peminjaman Alat', 'icon': 'arrow-left-right', 'url': 'peminjaman:peminjaman_list', 'active': False, 'tone': 'gray'},
             {'title': 'Jadwal Praktikum', 'icon': 'calendar-days', 'url': '', 'active': False, 'tone': 'gray'},
             {'title': 'Data Siswa', 'icon': 'users', 'url': '', 'active': False, 'tone': 'gray'},
             {'title': 'Laporan', 'icon': 'file-chart-column', 'url': '', 'active': False, 'tone': 'gray'},
@@ -174,7 +178,7 @@ class DashboardView(TemplateView):
             {
                 'time': '09:47',
                 'title': 'Peminjaman alat dibuat',
-                'detail': 'Aktivitas peminjaman akan aktif saat modul peminjaman selesai dibangun.',
+                'detail': 'Transaksi peminjaman baru sekarang bisa dicatat dari modul peminjaman alat.',
                 'tone': 'orange',
             },
             {
@@ -206,17 +210,17 @@ class DashboardView(TemplateView):
                 'tone': 'orange',
             },
             {
-                'title': 'Buat Jadwal Praktikum',
-                'description': 'Segera aktif setelah modul jadwal ditambahkan.',
-                'url': '',
-                'icon': 'calendar-plus-2',
+                'title': 'Buat Peminjaman Alat',
+                'description': 'Catat transaksi peminjaman alat laboratorium baru.',
+                'url': 'peminjaman:peminjaman_create',
+                'icon': 'handshake',
                 'tone': 'blue',
             },
             {
-                'title': 'Cetak Laporan Inventaris',
-                'description': 'Akan tersedia setelah modul laporan disiapkan.',
-                'url': '',
-                'icon': 'printer',
+                'title': 'Lihat Daftar Peminjaman',
+                'description': 'Pantau status pinjam, kembali, dan transaksi aktif.',
+                'url': 'peminjaman:peminjaman_list',
+                'icon': 'clipboard-list',
                 'tone': 'purple',
             },
         ])

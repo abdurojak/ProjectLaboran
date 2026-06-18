@@ -1,0 +1,39 @@
+from django.core.exceptions import ValidationError
+from django.db import models
+
+from apps.inventaris.models import Barang
+
+
+class PeminjamanAlat(models.Model):
+    STATUS_CHOICES = [
+        ('diajukan', 'Diajukan'),
+        ('dipinjam', 'Dipinjam'),
+        ('dikembalikan', 'Dikembalikan'),
+    ]
+
+    barang = models.ForeignKey(Barang, on_delete=models.PROTECT, related_name='peminjaman')
+    nama_peminjam = models.CharField(max_length=150)
+    kelas_tujuan = models.CharField(max_length=100, blank=True)
+    jumlah = models.PositiveIntegerField(default=1)
+    tanggal_pinjam = models.DateField()
+    tanggal_kembali = models.DateField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='diajukan')
+    catatan = models.TextField(blank=True)
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+    diperbarui_pada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-tanggal_pinjam', '-dibuat_pada']
+        verbose_name = 'Peminjaman Alat'
+        verbose_name_plural = 'Peminjaman Alat'
+
+    def clean(self):
+        if self.tanggal_kembali and self.tanggal_pinjam and self.tanggal_kembali < self.tanggal_pinjam:
+            raise ValidationError({'tanggal_kembali': 'Tanggal kembali tidak boleh lebih awal dari tanggal pinjam.'})
+
+        if self.barang_id and self.jumlah and self.jumlah > self.barang.jumlah:
+            raise ValidationError({'jumlah': 'Jumlah pinjam tidak boleh melebihi stok barang.'})
+
+    def __str__(self):
+        return f'{self.nama_peminjam} - {self.barang.nama}'
+

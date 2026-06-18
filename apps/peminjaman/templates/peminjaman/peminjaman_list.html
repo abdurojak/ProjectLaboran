@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Peminjaman Alat{% endblock %}
+
+{% block content %}
+<section class="space-y-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <p class="text-sm font-bold uppercase tracking-[0.2em] text-amber-600">Peminjaman</p>
+            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Peminjaman Alat</h2>
+            <p class="mt-2 text-sm text-slate-500">Kelola daftar peminjaman alat laboratorium, status peminjaman, dan jadwal pengembalian.</p>
+        </div>
+        <a class="btn-primary bg-amber-500 hover:bg-amber-600 shadow-amber-500/20" href="{% url 'peminjaman:peminjaman_create' %}">
+            <i data-lucide="plus" class="h-4 w-4"></i>
+            <span>Buat Peminjaman</span>
+        </a>
+    </div>
+
+    <div class="surface-card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table>
+                <thead class="bg-slate-50">
+                    <tr>
+                        <th>Barang</th>
+                        <th>Peminjam</th>
+                        <th>Jumlah</th>
+                        <th>Tanggal Pinjam</th>
+                        <th>Tanggal Kembali</th>
+                        <th>Status</th>
+                        <th>Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for peminjaman in peminjaman_list %}
+                    <tr class="hover:bg-slate-50/70">
+                        <td>
+                            <div class="font-semibold text-slate-900">{{ peminjaman.barang.nama }}</div>
+                            <div class="text-xs text-slate-500">{{ peminjaman.barang.kode_barang }}</div>
+                        </td>
+                        <td>
+                            <div class="font-semibold text-slate-800">{{ peminjaman.nama_peminjam }}</div>
+                            <div class="text-xs text-slate-500">{{ peminjaman.kelas_tujuan|default:"-" }}</div>
+                        </td>
+                        <td>{{ peminjaman.jumlah }}</td>
+                        <td>{{ peminjaman.tanggal_pinjam|date:"d M Y" }}</td>
+                        <td>{{ peminjaman.tanggal_kembali|date:"d M Y" }}</td>
+                        <td>
+                            <span class="
+                                {% if peminjaman.status == 'dipinjam' %}bg-amber-100 text-amber-700
+                                {% elif peminjaman.status == 'dikembalikan' %}bg-emerald-100 text-emerald-700
+                                {% else %}bg-slate-100 text-slate-700{% endif %}
+                                inline-flex rounded-full px-3 py-1 text-xs font-bold">
+                                {{ peminjaman.get_status_display }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="flex flex-wrap gap-3 text-sm font-semibold">
+                                <a class="inline-flex items-center gap-1 text-brand-700 hover:text-brand-800" href="{% url 'peminjaman:peminjaman_detail' peminjaman.pk %}">
+                                    <i data-lucide="eye" class="h-4 w-4"></i>
+                                    <span>Detail</span>
+                                </a>
+                                <a class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700" href="{% url 'peminjaman:peminjaman_update' peminjaman.pk %}">
+                                    <i data-lucide="pencil" class="h-4 w-4"></i>
+                                    <span>Edit</span>
+                                </a>
+                                <a class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700" href="{% url 'peminjaman:peminjaman_delete' peminjaman.pk %}">
+                                    <i data-lucide="trash-2" class="h-4 w-4"></i>
+                                    <span>Hapus</span>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="py-12 text-center text-slate-500">Belum ada data peminjaman alat.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
