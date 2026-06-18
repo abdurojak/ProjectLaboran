@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block title %}Detail Barang{% endblock %}
+
+{% block content %}
+<h2>{{ barang.nama }}</h2>
+<p><strong>Kode:</strong> {{ barang.kode_barang }}</p>
+<p><strong>Jumlah:</strong> {{ barang.jumlah }}</p>
+<p><strong>Lokasi:</strong> {{ barang.lokasi|default:"-" }}</p>
+<p><strong>Kondisi:</strong> {{ barang.get_kondisi_display }}</p>
+<p><strong>Keterangan:</strong> {{ barang.keterangan|default:"-" }}</p>
+
+<p>
+    <a class="button" href="{% url 'inventaris:barang_update' barang.pk %}">Edit</a>
+    <a class="button secondary" href="{% url 'inventaris:barang_list' %}">Kembali</a>
+</p>
+{% endblock %}
