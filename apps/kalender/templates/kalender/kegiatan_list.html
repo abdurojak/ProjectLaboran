@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+
+{% block title %}Kalender Kegiatan{% endblock %}
+
+{% block extra_head %}
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
+<style>
+    .fc .fc-toolbar.fc-header-toolbar {
+        margin-bottom: 1.25rem;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+    }
+    .fc .fc-toolbar-title {
+        font-size: 1.35rem;
+        font-weight: 800;
+        color: #0f172a;
+    }
+    .fc .fc-button {
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        color: #334155;
+        border-radius: 0.9rem;
+        padding: 0.55rem 0.9rem;
+        box-shadow: none;
+        text-transform: capitalize;
+    }
+    .fc .fc-button-primary:not(:disabled):active,
+    .fc .fc-button-primary:not(:disabled).fc-button-active,
+    .fc .fc-button:hover {
+        background: #116971;
+        border-color: #116971;
+        color: #fff;
+    }
+    .fc-theme-standard td,
+    .fc-theme-standard th,
+    .fc-theme-standard .fc-scrollgrid {
+        border-color: #e2e8f0;
+    }
+    .fc .fc-col-header-cell-cushion,
+    .fc .fc-daygrid-day-number {
+        color: #334155;
+        text-decoration: none;
+        font-weight: 600;
+    }
+    .fc .fc-event {
+        border-radius: 0.8rem;
+        padding: 0.2rem 0.35rem;
+        font-size: 0.78rem;
+        border-width: 0;
+        box-shadow: 0 8px 18px rgba(29, 78, 216, 0.14);
+    }
+    .fc .fc-daygrid-event-dot {
+        display: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="space-y-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <p class="text-sm font-bold uppercase tracking-[0.2em] text-blue-700">Kalender</p>
+            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Kalender Kegiatan</h2>
+            <p class="mt-2 text-sm text-slate-500">Gunakan tampilan kalender untuk menandai kegiatan mendatang dan kirimkan pengingat ke menu notifikasi.</p>
+        </div>
+        <div class="flex flex-wrap gap-3">
+            <a class="btn-secondary" href="{% url 'kalender:notifikasi_list' %}">
+                <i data-lucide="bell" class="h-4 w-4"></i>
+                <span>Lihat Notifikasi</span>
+            </a>
+            <a class="btn-primary bg-blue-700 hover:bg-blue-800 shadow-blue-900/15" href="{% url 'kalender:kegiatan_create' %}">
+                <i data-lucide="plus" class="h-4 w-4"></i>
+                <span>Tambah Kegiatan</span>
+            </a>
+        </div>
+    </div>
+
+    <div class="grid gap-6 xl:grid-cols-[minmax(0,1.65fr)_360px]">
+        <div class="surface-card p-5 md:p-6">
+            <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h3 class="text-xl font-bold text-slate-900">Tampilan Kalender</h3>
+                    <p class="mt-1 text-sm text-slate-500">Klik kegiatan pada kalender untuk membuka detailnya. Event berwarna biru berarti notifikasi aktif.</p>
+                </div>
+            </div>
+            <div id="fullcalendar" class="min-h-[760px]"></div>
+        </div>
+
+        <aside class="space-y-6">
+            <div class="surface-card p-6">
+                <div class="flex items-start gap-4">
+                    <span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+                        <i data-lucide="bell-ring" class="h-6 w-6"></i>
+                    </span>
+                    <div>
+                        <h3 class="text-xl font-bold text-slate-900">Keterangan Notifikasi</h3>
+                        <p class="mt-2 text-sm leading-7 text-slate-500">Jika opsi <strong>Tampilkan notifikasi</strong> dicentang saat membuat kegiatan, event akan muncul juga di menu notifikasi header.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="surface-card p-6">
+                <div class="mb-4 flex items-center justify-between gap-3">
+                    <div>
+                        <h3 class="text-xl font-bold text-slate-900">Agenda Terdekat</h3>
+                        <p class="mt-1 text-sm text-slate-500">Lima kegiatan terdekat untuk pengecekan cepat.</p>
+                    </div>
+                </div>
+                <div class="space-y-4">
+                    {% for kegiatan in upcoming_kegiatan %}
+                    <a href="{% url 'kalender:kegiatan_detail' kegiatan.pk %}" class="block rounded-[24px] border border-slate-200 bg-slate-50/80 p-4 transition hover:border-blue-200 hover:bg-blue-50/40">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <div class="font-bold text-slate-900">{{ kegiatan.judul }}</div>
+                                <div class="mt-1 text-sm text-slate-500">{{ kegiatan.tanggal|date:"d M Y" }} · {{ kegiatan.waktu_mulai|time:"H:i" }}</div>
+                            </div>
+                            {% if kegiatan.tampilkan_notifikasi %}
+                            <span class="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">Notif</span>
+                            {% endif %}
+                        </div>
+                        <div class="mt-3 text-sm leading-7 text-slate-500">{{ kegiatan.lokasi|default:"Lokasi belum diisi." }}</div>
+                    </a>
+                    {% empty %}
+                    <div class="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">
+                        Belum ada kegiatan yang tercatat.
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </aside>
+    </div>
+</section>
+
+{{ calendar_events|json_script:"calendar-events-data" }}
+{% endblock %}
+
+{% block extra_script %}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const calendarEl = document.getElementById('fullcalendar');
+        const eventData = JSON.parse(document.getElementById('calendar-events-data').textContent);
+
+        const calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'dayGridMonth',
+            locale: 'id',
+            height: 'auto',
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,timeGridWeek,listWeek'
+            },
+            buttonText: {
+                today: 'Hari ini',
+                month: 'Bulan',
+                week: 'Minggu',
+                list: 'Agenda'
+            },
+            events: eventData,
+            navLinks: true,
+            dayMaxEvents: 3,
+            eventTimeFormat: {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            },
+            eventClick: function(info) {
+                if (info.event.url) {
+                    info.jsEvent.preventDefault();
+                    window.location.href = info.event.url;
+                }
+            }
+        });
+
+        calendar.render();
+    });
+</script>
+{% endblock %}

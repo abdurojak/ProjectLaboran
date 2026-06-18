@@ -3,6 +3,8 @@ from django.db.models import Sum
 from django.views.generic import TemplateView
 
 from apps.inventaris.models import Barang
+from apps.jadwal.models import JadwalPraktikum
+from apps.kalender.models import KegiatanKalender
 from apps.peminjaman.models import PeminjamanAlat
 
 
@@ -51,6 +53,8 @@ class DashboardView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         barang_qs = Barang.objects.all()
+        jadwal_qs = JadwalPraktikum.objects.all()
+        kegiatan_qs = KegiatanKalender.objects.all()
         peminjaman_qs = PeminjamanAlat.objects.select_related('barang')
         peminjaman_aktif = peminjaman_qs.exclude(status='dikembalikan')
 
@@ -78,15 +82,15 @@ class DashboardView(TemplateView):
             },
             {
                 'label': 'Jadwal Hari Ini',
-                'value': 0,
-                'note': 'Belum ada jadwal aktif',
+                'value': jadwal_qs.filter(tanggal=context['today']).count(),
+                'note': 'Jadwal praktikum yang terdaftar hari ini',
                 'icon': 'calendar-days',
                 'tone': 'blue',
             },
             {
-                'label': 'Laporan Bulan Ini',
+                'label': 'Honorarium Bulan Ini',
                 'value': 0,
-                'note': 'Menunggu modul laporan',
+                'note': 'Menunggu modul rekap honorarium asleb',
                 'icon': 'file-chart-column',
                 'tone': 'purple',
             },
@@ -110,23 +114,23 @@ class DashboardView(TemplateView):
             },
             {
                 'title': 'Jadwal Praktikum',
-                'description': 'Penjadwalan sesi praktikum dan pemakaian ruang akan menyusul.',
-                'url': '',
-                'status': 'Segera Hadir',
+                'description': 'Kelola jadwal praktikum sebagai modul tersendiri, terpisah dari kalender kegiatan umum.',
+                'url': 'jadwal:jadwal_list',
+                'status': 'Aktif',
                 'icon': 'calendar-days',
                 'tone': 'blue',
             },
             {
-                'title': 'Data Siswa',
-                'description': 'Kelola data siswa, kelas, dan program praktikum pada tahap berikutnya.',
+                'title': 'Data Asleb',
+                'description': 'Kelola data asisten laboratorium untuk membantu operasional praktikum.',
                 'url': '',
                 'status': 'Segera Hadir',
                 'icon': 'users',
                 'tone': 'green',
             },
             {
-                'title': 'Laporan',
-                'description': 'Ringkasan aktivitas dan rekap inventaris akan tersedia di modul ini.',
+                'title': 'Rekap Honorarium Asleb',
+                'description': 'Rekap honor, pembayaran, dan ringkasan penggajian asleb akan tersedia di modul ini.',
                 'url': '',
                 'status': 'Segera Hadir',
                 'icon': 'file-chart-column',
@@ -149,6 +153,14 @@ class DashboardView(TemplateView):
                 'tone': 'orange',
             },
             {
+                'title': 'Ruangan',
+                'description': 'Akses daftar lab seperti RPL, SKI, Pemrograman, SDA, dan Rekayasa Data.',
+                'url': 'ruangan:ruangan_list',
+                'status': 'Aktif',
+                'icon': 'door-open',
+                'tone': 'orange',
+            },
+            {
                 'title': 'Pengaturan',
                 'description': 'Konfigurasi sistem dan preferensi laboratorium akan menyusul.',
                 'url': '',
@@ -161,12 +173,13 @@ class DashboardView(TemplateView):
             {'title': 'Dashboard', 'icon': 'layout-grid', 'url': 'dashboard:home', 'active': True, 'tone': 'teal'},
             {'title': 'Inventaris', 'icon': 'package', 'url': 'inventaris:barang_list', 'active': False, 'tone': 'gray'},
             {'title': 'Lokasi', 'icon': 'map-pin', 'url': 'inventaris:lokasi_list', 'active': False, 'tone': 'gray'},
+            {'title': 'Barang Tertinggal', 'icon': 'briefcase', 'url': 'barang_tertinggal:list', 'active': False, 'tone': 'gray'},
             {'title': 'Peminjaman Alat', 'icon': 'arrow-left-right', 'url': 'peminjaman:peminjaman_list', 'active': False, 'tone': 'gray'},
-            {'title': 'Jadwal Praktikum', 'icon': 'calendar-days', 'url': '', 'active': False, 'tone': 'gray'},
-            {'title': 'Data Siswa', 'icon': 'users', 'url': '', 'active': False, 'tone': 'gray'},
-            {'title': 'Laporan', 'icon': 'file-chart-column', 'url': '', 'active': False, 'tone': 'gray'},
+            {'title': 'Jadwal Praktikum', 'icon': 'calendar-days', 'url': 'jadwal:jadwal_list', 'active': False, 'tone': 'gray'},
+            {'title': 'Data Asleb', 'icon': 'users', 'url': '', 'active': False, 'tone': 'gray'},
+            {'title': 'Rekap Honorarium Asleb', 'icon': 'file-chart-column', 'url': '', 'active': False, 'tone': 'gray'},
             {'title': 'Pengguna', 'icon': 'user-round', 'url': '', 'active': False, 'tone': 'gray'},
-            {'title': 'Ruangan', 'icon': 'door-open', 'url': '', 'active': False, 'tone': 'gray'},
+            {'title': 'Ruangan', 'icon': 'door-open', 'url': 'ruangan:ruangan_list', 'active': False, 'tone': 'gray'},
             {'title': 'Pengaturan', 'icon': 'settings', 'url': '', 'active': False, 'tone': 'gray'},
         ])
         context['activities'] = [
@@ -185,7 +198,7 @@ class DashboardView(TemplateView):
             {
                 'time': '09:30',
                 'title': 'Jadwal praktikum dibuat',
-                'detail': 'Jadwal harian laboratorium nantinya ditampilkan otomatis pada bagian ini.',
+                'detail': 'Jadwal praktikum sekarang punya modul sendiri dan tidak bercampur lagi dengan kalender umum.',
                 'tone': 'blue',
             },
             {
@@ -218,11 +231,32 @@ class DashboardView(TemplateView):
                 'tone': 'green',
             },
             {
+                'title': 'Barang Mahasiswa Tertinggal',
+                'description': 'Buka halaman pendataan barang mahasiswa yang tertinggal di laboratorium.',
+                'url': 'barang_tertinggal:list',
+                'icon': 'briefcase',
+                'tone': 'teal',
+            },
+            {
                 'title': 'Buat Peminjaman Alat',
                 'description': 'Catat transaksi peminjaman alat laboratorium baru.',
                 'url': 'peminjaman:peminjaman_create',
                 'icon': 'handshake',
                 'tone': 'blue',
+            },
+            {
+                'title': 'Tambah Jadwal Praktikum',
+                'description': 'Masukkan jadwal praktikum baru ke modul jadwal.',
+                'url': 'jadwal:jadwal_create',
+                'icon': 'calendar-plus-2',
+                'tone': 'blue',
+            },
+            {
+                'title': 'Tambah Kegiatan Kalender',
+                'description': 'Catat kegiatan umum dan tandai untuk notifikasi bila diperlukan.',
+                'url': 'kalender:kegiatan_create',
+                'icon': 'calendar-range',
+                'tone': 'purple',
             },
             {
                 'title': 'Lihat Daftar Peminjaman',

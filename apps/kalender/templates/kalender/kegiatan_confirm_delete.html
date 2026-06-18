@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}Hapus Kegiatan{% endblock %}
+
+{% block content %}
+<section class="mx-auto max-w-3xl space-y-6">
+    <div>
+        <p class="text-sm font-bold uppercase tracking-[0.2em] text-rose-600">Kalender</p>
+        <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Hapus Kegiatan</h2>
+        <p class="mt-2 text-sm text-slate-500">Konfirmasi penghapusan kegiatan dari kalender.</p>
+    </div>
+
+    <form method="post" class="surface-card space-y-5 p-6 md:p-8">
+        {% csrf_token %}
+        <div class="rounded-3xl border border-rose-100 bg-rose-50 p-5 text-slate-700">
+            Yakin ingin menghapus kegiatan <strong>{{ kegiatan.judul }}</strong>?
+        </div>
+        <div class="flex flex-wrap gap-3">
+            <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-2xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-rose-700">
+                <i data-lucide="trash-2" class="h-4 w-4"></i>
+                <span>Hapus</span>
+            </button>
+            <a class="btn-secondary" href="{% url 'kalender:kegiatan_list' %}">
+                <i data-lucide="arrow-left" class="h-4 w-4"></i>
+                <span>Batal</span>
+            </a>
+        </div>
+    </form>
+</section>
+{% endblock %}
+

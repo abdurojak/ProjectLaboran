@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Jadwal Praktikum{% endblock %}
+
+{% block content %}
+<section class="space-y-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <p class="text-sm font-bold uppercase tracking-[0.2em] text-blue-700">Jadwal</p>
+            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Jadwal Praktikum</h2>
+            <p class="mt-2 text-sm text-slate-500">Kelola jadwal praktikum terpisah dari kalender kegiatan umum.</p>
+        </div>
+        <a class="btn-primary bg-blue-700 hover:bg-blue-800 shadow-blue-900/15" href="{% url 'jadwal:jadwal_create' %}">
+            <i data-lucide="plus" class="h-4 w-4"></i>
+            <span>Tambah Jadwal</span>
+        </a>
+    </div>
+
+    <div class="surface-card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table>
+                <thead class="bg-slate-50">
+                    <tr>
+                        <th>Mata Praktikum</th>
+                        <th>Kelas</th>
+                        <th>Ruangan</th>
+                        <th>Pengampu</th>
+                        <th>Tanggal</th>
+                        <th>Waktu</th>
+                        <th>Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for jadwal in jadwal_list %}
+                    <tr class="hover:bg-slate-50/70">
+                        <td class="font-semibold text-slate-900">{{ jadwal.mata_praktikum }}</td>
+                        <td>{{ jadwal.kelas }}</td>
+                        <td>{{ jadwal.ruangan }}</td>
+                        <td>{{ jadwal.pengampu }}</td>
+                        <td>{{ jadwal.tanggal|date:"d M Y" }}</td>
+                        <td>{{ jadwal.waktu_mulai|time:"H:i" }}{% if jadwal.waktu_selesai %} - {{ jadwal.waktu_selesai|time:"H:i" }}{% endif %}</td>
+                        <td>
+                            <div class="flex flex-wrap gap-3 text-sm font-semibold">
+                                <a class="inline-flex items-center gap-1 text-brand-700 hover:text-brand-800" href="{% url 'jadwal:jadwal_detail' jadwal.pk %}">
+                                    <i data-lucide="eye" class="h-4 w-4"></i><span>Detail</span>
+                                </a>
+                                <a class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700" href="{% url 'jadwal:jadwal_update' jadwal.pk %}">
+                                    <i data-lucide="pencil" class="h-4 w-4"></i><span>Edit</span>
+                                </a>
+                                <a class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700" href="{% url 'jadwal:jadwal_delete' jadwal.pk %}">
+                                    <i data-lucide="trash-2" class="h-4 w-4"></i><span>Hapus</span>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="py-12 text-center text-slate-500">Belum ada jadwal praktikum.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+{% endblock %}
+

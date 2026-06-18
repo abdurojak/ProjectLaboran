@@ -7,4 +7,4 @@ class DashboardViewTests(TestCase):
         response = self.client.get(reverse('dashboard:home'))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Menu Modul')
+        self.assertContains(response, 'Project Laboran')
