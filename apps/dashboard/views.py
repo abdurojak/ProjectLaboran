@@ -145,14 +145,6 @@ class DashboardView(TemplateView):
                 'tone': 'teal',
             },
             {
-                'title': 'Lokasi',
-                'description': 'Kelola kode lokasi, nama lokasi, dan ukuran ruang penyimpanan inventaris.',
-                'url': 'inventaris:lokasi_list',
-                'status': 'Aktif',
-                'icon': 'map-pin',
-                'tone': 'orange',
-            },
-            {
                 'title': 'Ruangan',
                 'description': 'Akses daftar lab seperti RPL, SKI, Pemrograman, SDA, dan Rekayasa Data.',
                 'url': 'ruangan:ruangan_list',
@@ -172,7 +164,6 @@ class DashboardView(TemplateView):
         context['sidebar_links'] = self._decorate_items([
             {'title': 'Dashboard', 'icon': 'layout-grid', 'url': 'dashboard:home', 'active': True, 'tone': 'teal'},
             {'title': 'Inventaris', 'icon': 'package', 'url': 'inventaris:barang_list', 'active': False, 'tone': 'gray'},
-            {'title': 'Lokasi', 'icon': 'map-pin', 'url': 'inventaris:lokasi_list', 'active': False, 'tone': 'gray'},
             {'title': 'Barang Tertinggal', 'icon': 'briefcase', 'url': 'barang_tertinggal:list', 'active': False, 'tone': 'gray'},
             {'title': 'Peminjaman Alat', 'icon': 'arrow-left-right', 'url': 'peminjaman:peminjaman_list', 'active': False, 'tone': 'gray'},
             {'title': 'Jadwal Praktikum', 'icon': 'calendar-days', 'url': 'jadwal:jadwal_list', 'active': False, 'tone': 'gray'},
@@ -222,13 +213,6 @@ class DashboardView(TemplateView):
                 'url': 'inventaris:barang_list',
                 'icon': 'package',
                 'tone': 'orange',
-            },
-            {
-                'title': 'Kelola Lokasi',
-                'description': 'Buka data lokasi penyimpanan barang laboratorium.',
-                'url': 'inventaris:lokasi_list',
-                'icon': 'map-pin',
-                'tone': 'green',
             },
             {
                 'title': 'Barang Mahasiswa Tertinggal',
