@@ -1,12 +1,14 @@
+{% load static %}
+
 <header class="bg-gradient-to-r from-brand-900 via-brand-800 to-brand-700 text-white shadow-lg shadow-brand-900/20">
     <div class="mx-auto flex max-w-[1500px] flex-wrap items-center justify-between gap-5 px-5 py-4 lg:px-7">
         <div class="flex items-center gap-4">
-            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15 text-lg font-black backdrop-blur">
-                <i data-lucide="flask-conical" class="h-7 w-7"></i>
+            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15 backdrop-blur">
+                <img src="{% static 'core/img/labhub-logo.png' %}" alt="LabHub" class="h-11 w-11 object-contain">
             </div>
             <div>
-                <h1 class="text-2xl font-bold tracking-tight">Project Laboran</h1>
-                <p class="text-sm text-white/75">Portal operasional laboratorium sekolah</p>
+                <h1 class="text-2xl font-bold tracking-tight">LabHub</h1>
+                <p class="text-sm text-white/75">Portal operasional lab JTIF Usakti</p>
             </div>
         </div>
 

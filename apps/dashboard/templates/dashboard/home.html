@@ -4,8 +4,8 @@
 
 {% block content %}
 <div class="grid gap-6">
-        <div class="grid gap-4 2xl:grid-cols-[minmax(0,2.2fr)_repeat(4,minmax(0,1fr))] xl:grid-cols-2">
-            <article class="surface-card overflow-hidden bg-gradient-to-br from-white via-brand-50/60 to-slate-100/70 p-7 md:p-9 2xl:col-auto xl:col-span-2">
+        <div class="grid gap-4">
+            <article class="surface-card overflow-hidden bg-gradient-to-br from-white via-brand-50/60 to-slate-100/70 p-7 md:p-9">
                 <div class="grid items-end gap-8 lg:grid-cols-[minmax(0,1.3fr)_320px]">
                     <div>
                         <p class="text-xs font-extrabold uppercase tracking-[0.22em] text-brand-700">Dashboard</p>
@@ -33,7 +33,9 @@
                     </div>
                 </div>
             </article>
+        </div>
 
+        <div class="grid gap-4 md:grid-cols-4">
             {% for stat in stats_cards %}
             <article class="surface-card p-6">
                 <div class="{{ stat.icon_bg }} {{ stat.icon_text }} flex h-14 w-14 items-center justify-center rounded-2xl">
