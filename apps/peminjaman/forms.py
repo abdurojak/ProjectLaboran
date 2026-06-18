@@ -9,7 +9,8 @@ class PeminjamanAlatForm(forms.ModelForm):
         fields = [
             'barang',
             'nama_peminjam',
-            'kelas_tujuan',
+            'nim',
+            'no_hp',
             'jumlah',
             'tanggal_pinjam',
             'tanggal_kembali',
@@ -21,4 +22,3 @@ class PeminjamanAlatForm(forms.ModelForm):
             'tanggal_kembali': forms.DateInput(attrs={'type': 'date'}),
             'catatan': forms.Textarea(attrs={'rows': 4}),
         }
-

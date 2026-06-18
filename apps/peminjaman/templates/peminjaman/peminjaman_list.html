@@ -39,7 +39,8 @@
                         </td>
                         <td>
                             <div class="font-semibold text-slate-800">{{ peminjaman.nama_peminjam }}</div>
-                            <div class="text-xs text-slate-500">{{ peminjaman.kelas_tujuan|default:"-" }}</div>
+                            <div class="text-xs text-slate-500">NIM: {{ peminjaman.nim|default:"-" }}</div>
+                            <div class="text-xs text-slate-500">No HP: {{ peminjaman.no_hp|default:"-" }}</div>
                         </td>
                         <td>{{ peminjaman.jumlah }}</td>
                         <td>{{ peminjaman.tanggal_pinjam|date:"d M Y" }}</td>
@@ -81,4 +82,3 @@
     </div>
 </section>
 {% endblock %}
-

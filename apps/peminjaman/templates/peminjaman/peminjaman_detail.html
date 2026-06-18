@@ -43,7 +43,8 @@
         <div class="rounded-3xl bg-slate-50 p-5">
             <div class="text-sm font-semibold text-slate-500">Peminjam</div>
             <div class="mt-2 text-xl font-bold text-slate-900">{{ peminjaman.nama_peminjam }}</div>
-            <div class="mt-1 text-sm text-slate-500">{{ peminjaman.kelas_tujuan|default:"-" }}</div>
+            <div class="mt-1 text-sm text-slate-500">NIM: {{ peminjaman.nim|default:"-" }}</div>
+            <div class="mt-1 text-sm text-slate-500">No HP: {{ peminjaman.no_hp|default:"-" }}</div>
         </div>
         <div class="rounded-3xl bg-slate-50 p-5">
             <div class="text-sm font-semibold text-slate-500">Status</div>
@@ -56,4 +57,3 @@
     </div>
 </section>
 {% endblock %}
-

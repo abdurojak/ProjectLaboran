@@ -13,7 +13,8 @@ class PeminjamanAlat(models.Model):
 
     barang = models.ForeignKey(Barang, on_delete=models.PROTECT, related_name='peminjaman')
     nama_peminjam = models.CharField(max_length=150)
-    kelas_tujuan = models.CharField(max_length=100, blank=True)
+    nim = models.CharField('NIM', max_length=30, blank=True)
+    no_hp = models.CharField('No HP', max_length=30, blank=True)
     jumlah = models.PositiveIntegerField(default=1)
     tanggal_pinjam = models.DateField()
     tanggal_kembali = models.DateField()
@@ -36,4 +37,3 @@ class PeminjamanAlat(models.Model):
 
     def __str__(self):
         return f'{self.nama_peminjam} - {self.barang.nama}'
-
