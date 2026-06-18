@@ -30,16 +30,16 @@ TONES = {
 
 
 SIDEBAR_LINKS = [
-    {'title': 'Dashboard', 'icon': 'layout-grid', 'url': 'dashboard:home', 'namespace': 'dashboard', 'tone': 'teal'},
-    {'title': 'Inventaris', 'icon': 'package', 'url': 'inventaris:barang_list', 'namespace': 'inventaris', 'tone': 'gray'},
-    {'title': 'Barang Tertinggal', 'icon': 'briefcase', 'url': 'barang_tertinggal:list', 'namespace': 'barang_tertinggal', 'tone': 'gray'},
-    {'title': 'Peminjaman Alat', 'icon': 'arrow-left-right', 'url': 'peminjaman:peminjaman_list', 'namespace': 'peminjaman', 'tone': 'gray'},
-    {'title': 'Jadwal Praktikum', 'icon': 'calendar-days', 'url': 'jadwal:jadwal_list', 'namespace': 'jadwal', 'tone': 'gray'},
-    {'title': 'Data Asleb', 'icon': 'users', 'url': '', 'namespace': '', 'tone': 'gray'},
-    {'title': 'Rekap Honorarium Asleb', 'icon': 'file-chart-column', 'url': '', 'namespace': '', 'tone': 'gray'},
-    {'title': 'Pengguna', 'icon': 'user-round', 'url': '', 'namespace': '', 'tone': 'gray'},
-    {'title': 'Ruangan', 'icon': 'door-open', 'url': 'ruangan:ruangan_list', 'namespace': 'ruangan', 'tone': 'gray'},
-    {'title': 'Pengaturan', 'icon': 'settings', 'url': '', 'namespace': '', 'tone': 'gray'},
+    {'title': 'Dashboard', 'icon': 'layout-grid', 'url': 'dashboard:home', 'namespace': 'dashboard'},
+    {'title': 'Inventaris', 'icon': 'package', 'url': 'inventaris:barang_list', 'namespace': 'inventaris'},
+    {'title': 'Barang Tertinggal', 'icon': 'briefcase', 'url': 'barang_tertinggal:list', 'namespace': 'barang_tertinggal'},
+    {'title': 'Peminjaman Alat', 'icon': 'arrow-left-right', 'url': 'peminjaman:peminjaman_list', 'namespace': 'peminjaman'},
+    {'title': 'Jadwal Praktikum', 'icon': 'calendar-days', 'url': 'jadwal:jadwal_list', 'namespace': 'jadwal'},
+    {'title': 'Data Asleb', 'icon': 'users', 'url': '', 'namespace': ''},
+    {'title': 'Rekap Honorarium Asleb', 'icon': 'file-chart-column', 'url': '', 'namespace': ''},
+    {'title': 'Pengguna', 'icon': 'user-round', 'url': '', 'namespace': ''},
+    {'title': 'Ruangan', 'icon': 'door-open', 'url': 'ruangan:ruangan_list', 'namespace': 'ruangan'},
+    {'title': 'Pengaturan', 'icon': 'settings', 'url': '', 'namespace': ''},
 ]
 
 
@@ -49,8 +49,8 @@ def dashboard_sidebar(request):
 
     for link in SIDEBAR_LINKS:
         item = link.copy()
-        item.update(TONES.get(item['tone'], TONES['gray']))
         item['active'] = bool(item['namespace'] and item['namespace'] == current_namespace)
+        item.update(TONES['teal'] if item['active'] else TONES['gray'])
         links.append(item)
 
     return {
