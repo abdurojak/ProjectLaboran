@@ -1,3 +1,5 @@
+import re
+
 from django.db import models
 
 
@@ -32,7 +34,7 @@ class Barang(models.Model):
     ]
 
     nama = models.CharField(max_length=150)
-    kode_barang = models.CharField(max_length=50, unique=True)
+    kode_barang = models.CharField(max_length=50, unique=True, blank=True)
     jumlah = models.PositiveIntegerField(default=0)
     lokasi = models.ForeignKey(
         Lokasi,
@@ -42,6 +44,7 @@ class Barang(models.Model):
         related_name='barang',
     )
     kondisi = models.CharField(max_length=20, choices=KONDISI_CHOICES, default='baik')
+    foto = models.ImageField(upload_to='barang/', blank=True, null=True)
     keterangan = models.TextField(blank=True)
     dibuat_pada = models.DateTimeField(auto_now_add=True)
     diperbarui_pada = models.DateTimeField(auto_now=True)
@@ -53,3 +56,25 @@ class Barang(models.Model):
 
     def __str__(self):
         return f'{self.kode_barang} - {self.nama}'
+
+    def save(self, *args, **kwargs):
+        if not self.kode_barang:
+            self.kode_barang = self.generate_kode_barang()
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def generate_kode_barang(cls):
+        prefix = 'LAB'
+        latest_code = (
+            cls.objects.filter(kode_barang__startswith=f'{prefix}-')
+            .order_by('-kode_barang')
+            .values_list('kode_barang', flat=True)
+            .first()
+        )
+
+        if not latest_code:
+            return f'{prefix}-0001'
+
+        match = re.search(r'(\d+)$', latest_code)
+        next_number = int(match.group(1)) + 1 if match else cls.objects.count() + 1
+        return f'{prefix}-{next_number:04d}'

@@ -1,6 +1,8 @@
+from django.db.models import Q
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
+from .forms import BarangForm
 from .models import Barang, Lokasi
 
 
@@ -10,7 +12,34 @@ class BarangListView(ListView):
     context_object_name = 'barang_list'
 
     def get_queryset(self):
-        return super().get_queryset().select_related('lokasi')
+        queryset = super().get_queryset().select_related('lokasi')
+        search = self.request.GET.get('q', '').strip()
+        kondisi = self.request.GET.get('kondisi', '').strip()
+        lokasi = self.request.GET.get('lokasi', '').strip()
+
+        if search:
+            queryset = queryset.filter(
+                Q(nama__icontains=search) |
+                Q(kode_barang__icontains=search) |
+                Q(keterangan__icontains=search)
+            )
+
+        if kondisi:
+            queryset = queryset.filter(kondisi=kondisi)
+
+        if lokasi:
+            queryset = queryset.filter(lokasi_id=lokasi)
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['search_query'] = self.request.GET.get('q', '').strip()
+        context['selected_kondisi'] = self.request.GET.get('kondisi', '').strip()
+        context['selected_lokasi'] = self.request.GET.get('lokasi', '').strip()
+        context['kondisi_choices'] = Barang.KONDISI_CHOICES
+        context['lokasi_choices'] = Lokasi.objects.all()
+        return context
 
 
 class BarangDetailView(DetailView):
@@ -21,15 +50,15 @@ class BarangDetailView(DetailView):
 
 class BarangCreateView(CreateView):
     model = Barang
+    form_class = BarangForm
     template_name = 'inventaris/barang_form.html'
-    fields = ['nama', 'kode_barang', 'jumlah', 'lokasi', 'kondisi', 'keterangan']
     success_url = reverse_lazy('inventaris:barang_list')
 
 
 class BarangUpdateView(UpdateView):
     model = Barang
+    form_class = BarangForm
     template_name = 'inventaris/barang_form.html'
-    fields = ['nama', 'kode_barang', 'jumlah', 'lokasi', 'kondisi', 'keterangan']
     success_url = reverse_lazy('inventaris:barang_list')
 
 

@@ -42,3 +42,52 @@ class BarangLokasiTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Ruang Alat')
+
+
+class BarangModelTests(TestCase):
+    def test_kode_barang_generated_automatically(self):
+        lokasi = Lokasi.objects.create(nama_lokasi='Lab Pemrograman')
+        barang = Barang.objects.create(
+            nama='Keyboard',
+            jumlah=5,
+            lokasi=lokasi,
+            kondisi='baik',
+        )
+
+        self.assertEqual(barang.kode_barang, 'LAB-0001')
+
+
+class BarangListViewTests(TestCase):
+    def setUp(self):
+        self.lab_pemrograman = Lokasi.objects.create(nama_lokasi='Lab Pemrograman')
+        self.lab_ski = Lokasi.objects.create(nama_lokasi='Lab Sistem Keamanan Informasi')
+        Barang.objects.create(
+            nama='Keyboard',
+            jumlah=5,
+            lokasi=self.lab_pemrograman,
+            kondisi='baik',
+        )
+        Barang.objects.create(
+            nama='Router',
+            jumlah=2,
+            lokasi=self.lab_ski,
+            kondisi='rusak_ringan',
+        )
+
+    def test_search_filters_barang(self):
+        response = self.client.get(reverse('inventaris:barang_list'), {'q': 'Router'})
+
+        self.assertContains(response, 'Router')
+        self.assertNotContains(response, 'Keyboard')
+
+    def test_kondisi_filter_filters_barang(self):
+        response = self.client.get(reverse('inventaris:barang_list'), {'kondisi': 'baik'})
+
+        self.assertContains(response, 'Keyboard')
+        self.assertNotContains(response, 'Router')
+
+    def test_lokasi_filter_filters_barang(self):
+        response = self.client.get(reverse('inventaris:barang_list'), {'lokasi': self.lab_ski.id})
+
+        self.assertContains(response, 'Router')
+        self.assertNotContains(response, 'Keyboard')
