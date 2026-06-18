@@ -1,3 +1,44 @@
 from django.test import TestCase
+from django.urls import reverse
 
-# Create your tests here.
+from .models import Barang, Lokasi
+
+
+class LokasiModelTests(TestCase):
+    def test_kode_lokasi_dibuat_dari_id_database(self):
+        lokasi = Lokasi.objects.create(nama_lokasi='Lab Kimia')
+
+        self.assertEqual(lokasi.kode_lokasi, f'LK{lokasi.id:06d}')
+        self.assertEqual(len(lokasi.kode_lokasi), 8)
+
+
+class LokasiViewTests(TestCase):
+    def test_tambah_lokasi_tidak_meminta_kode_lokasi(self):
+        response = self.client.get(reverse('inventaris:lokasi_create'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'name="kode_lokasi"')
+
+
+class BarangLokasiTests(TestCase):
+    def test_form_barang_memakai_pilihan_dari_tabel_lokasi(self):
+        lokasi = Lokasi.objects.create(nama_lokasi='Lab Fisika')
+
+        response = self.client.get(reverse('inventaris:barang_create'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, lokasi.nama_lokasi)
+
+    def test_daftar_barang_menampilkan_nama_lokasi_dari_relasi(self):
+        lokasi = Lokasi.objects.create(nama_lokasi='Ruang Alat')
+        Barang.objects.create(
+            nama='Mikroskop',
+            kode_barang='BRG001',
+            jumlah=2,
+            lokasi=lokasi,
+        )
+
+        response = self.client.get(reverse('inventaris:barang_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Ruang Alat')

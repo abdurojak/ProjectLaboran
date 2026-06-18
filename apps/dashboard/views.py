@@ -141,11 +141,11 @@ class DashboardView(TemplateView):
                 'tone': 'teal',
             },
             {
-                'title': 'Ruangan',
-                'description': 'Pengaturan ruangan laboratorium dan ketersediaannya akan ditambahkan.',
-                'url': '',
-                'status': 'Segera Hadir',
-                'icon': 'door-open',
+                'title': 'Lokasi',
+                'description': 'Kelola kode lokasi, nama lokasi, dan ukuran ruang penyimpanan inventaris.',
+                'url': 'inventaris:lokasi_list',
+                'status': 'Aktif',
+                'icon': 'map-pin',
                 'tone': 'orange',
             },
             {
@@ -160,6 +160,7 @@ class DashboardView(TemplateView):
         context['sidebar_links'] = self._decorate_items([
             {'title': 'Dashboard', 'icon': 'layout-grid', 'url': 'dashboard:home', 'active': True, 'tone': 'teal'},
             {'title': 'Inventaris', 'icon': 'package', 'url': 'inventaris:barang_list', 'active': False, 'tone': 'gray'},
+            {'title': 'Lokasi', 'icon': 'map-pin', 'url': 'inventaris:lokasi_list', 'active': False, 'tone': 'gray'},
             {'title': 'Peminjaman Alat', 'icon': 'arrow-left-right', 'url': 'peminjaman:peminjaman_list', 'active': False, 'tone': 'gray'},
             {'title': 'Jadwal Praktikum', 'icon': 'calendar-days', 'url': '', 'active': False, 'tone': 'gray'},
             {'title': 'Data Siswa', 'icon': 'users', 'url': '', 'active': False, 'tone': 'gray'},
@@ -208,6 +209,13 @@ class DashboardView(TemplateView):
                 'url': 'inventaris:barang_list',
                 'icon': 'package',
                 'tone': 'orange',
+            },
+            {
+                'title': 'Kelola Lokasi',
+                'description': 'Buka data lokasi penyimpanan barang laboratorium.',
+                'url': 'inventaris:lokasi_list',
+                'icon': 'map-pin',
+                'tone': 'green',
             },
             {
                 'title': 'Buat Peminjaman Alat',

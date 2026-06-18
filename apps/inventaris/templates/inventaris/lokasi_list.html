@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Daftar Lokasi{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+    <div>
+        <h2 class="text-2xl font-bold text-slate-900">Daftar Lokasi</h2>
+        <p class="mt-1 text-sm text-slate-500">Kelola data lokasi penyimpanan inventaris laboratorium.</p>
+    </div>
+    <div class="flex flex-wrap gap-3">
+        <a class="btn-secondary gap-2" href="{% url 'inventaris:barang_list' %}">
+            <i data-lucide="package" class="lucide-icon"></i>
+            <span>Daftar Inventaris</span>
+        </a>
+        <a class="btn-primary gap-2" href="{% url 'inventaris:lokasi_create' %}">
+            <i data-lucide="plus" class="lucide-icon"></i>
+            <span>Tambah Lokasi</span>
+        </a>
+    </div>
+</div>
+
+<div class="surface-card overflow-hidden">
+    <table>
+        <thead>
+            <tr>
+                <th>Kode Lokasi</th>
+                <th>Nama Lokasi</th>
+                <th>Ukuran Lokasi</th>
+                <th>Aksi</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for lokasi in lokasi_list %}
+            <tr>
+                <td class="font-semibold text-slate-900">{{ lokasi.kode_lokasi }}</td>
+                <td>{{ lokasi.nama_lokasi }}</td>
+                <td>{{ lokasi.ukuran_lokasi|default:"-" }}</td>
+                <td>
+                    <div class="flex flex-wrap gap-3">
+                        <a href="{% url 'inventaris:lokasi_detail' lokasi.pk %}">Detail</a>
+                        <a href="{% url 'inventaris:lokasi_update' lokasi.pk %}">Edit</a>
+                        <a href="{% url 'inventaris:lokasi_delete' lokasi.pk %}">Hapus</a>
+                    </div>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="4">Belum ada data lokasi.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

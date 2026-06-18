@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block title %}Detail Lokasi{% endblock %}
+
+{% block content %}
+<div class="surface-card p-6">
+    <h2 class="text-2xl font-bold text-slate-900">{{ lokasi.nama_lokasi }}</h2>
+    <div class="mt-5 space-y-3 text-sm text-slate-700">
+        <p><strong>Kode Lokasi:</strong> {{ lokasi.kode_lokasi }}</p>
+        <p><strong>Ukuran Lokasi:</strong> {{ lokasi.ukuran_lokasi|default:"-" }}</p>
+    </div>
+    <div class="mt-6 flex flex-wrap gap-3">
+        <a class="btn-primary" href="{% url 'inventaris:lokasi_update' lokasi.pk %}">Edit</a>
+        <a class="btn-secondary" href="{% url 'inventaris:lokasi_list' %}">Kembali</a>
+    </div>
+</div>
+{% endblock %}

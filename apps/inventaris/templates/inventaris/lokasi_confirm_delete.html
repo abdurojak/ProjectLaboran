@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block title %}Hapus Lokasi{% endblock %}
+
+{% block content %}
+<div class="surface-card p-6">
+    <h2 class="text-2xl font-bold text-slate-900">Hapus Lokasi</h2>
+    <form class="mt-5" method="post">
+        {% csrf_token %}
+        <p>Yakin ingin menghapus lokasi <strong>{{ lokasi.nama_lokasi }}</strong>?</p>
+        <div class="mt-5 flex flex-wrap gap-3">
+            <button class="btn-primary" type="submit">Hapus</button>
+            <a class="btn-secondary" href="{% url 'inventaris:lokasi_list' %}">Batal</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
