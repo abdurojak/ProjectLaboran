@@ -74,54 +74,13 @@
     </style>
 </head>
 <body>
-    <header class="bg-gradient-to-r from-brand-900 via-brand-800 to-brand-700 text-white shadow-lg shadow-brand-900/20">
-        <div class="mx-auto flex max-w-[1500px] flex-wrap items-center justify-between gap-5 px-5 py-4 lg:px-7">
-            <div class="flex items-center gap-4">
-                <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15 text-lg font-black backdrop-blur">
-                    <i data-lucide="flask-conical" class="h-7 w-7"></i>
-                </div>
-                <div>
-                    <h1 class="text-2xl font-bold tracking-tight">Project Laboran</h1>
-                    <p class="text-sm text-white/75">Portal operasional laboratorium sekolah</p>
-                </div>
-            </div>
+    {% include "components/navbar.html" %}
 
-            <nav class="flex flex-wrap items-center gap-2 text-sm font-medium">
-                <a href="{% url 'dashboard:home' %}" class="flex items-center gap-2 rounded-2xl px-4 py-3 text-white/90 transition hover:bg-white/10 hover:text-white">
-                    <i data-lucide="house" class="lucide-icon"></i>
-                    <span>Dashboard</span>
-                </a>
-                <a href="{% url 'barang_tertinggal:list' %}" class="flex items-center gap-2 rounded-2xl px-4 py-3 text-white/75 transition hover:bg-white/10 hover:text-white">
-                    <i data-lucide="briefcase" class="lucide-icon"></i>
-                    <span>Barang Tertinggal</span>
-                </a>
-                <a href="{% url 'kalender:kegiatan_list' %}" class="flex items-center gap-2 rounded-2xl px-4 py-3 text-white/75 transition hover:bg-white/10 hover:text-white">
-                    <i data-lucide="calendar-days" class="lucide-icon"></i>
-                    <span>Kalender</span>
-                </a>
-                <a href="{% url 'kalender:notifikasi_list' %}" class="flex items-center gap-2 rounded-2xl px-4 py-3 text-white/75 transition hover:bg-white/10 hover:text-white">
-                    <i data-lucide="bell" class="lucide-icon"></i>
-                    <span>Notifikasi</span>
-                    {% if kalender_notification_count %}
-                    <span class="flex h-6 min-w-6 items-center justify-center rounded-full bg-cyan-300/25 px-2 text-xs font-bold text-cyan-100">{{ kalender_notification_count }}</span>
-                    {% endif %}
-                </a>
-            </nav>
-
-            <div class="flex items-center gap-3">
-                <div class="flex h-14 w-14 items-center justify-center rounded-full bg-white/15 text-lg font-black backdrop-blur">
-                    <i data-lucide="circle-user-round" class="h-7 w-7"></i>
-                </div>
-                <div class="hidden sm:block">
-                    <div class="font-semibold">Lab Admin</div>
-                    <div class="text-sm text-white/75">Administrator</div>
-                </div>
-            </div>
-        </div>
-    </header>
-
-    <main class="mx-auto max-w-[1500px] px-4 py-6 lg:px-7">
-        {% block content %}{% endblock %}
+    <main class="mx-auto flex max-w-[1500px] items-start gap-6 px-4 py-6 lg:px-7">
+        {% include "components/dashboard_sidebar.html" %}
+        <section class="grid min-w-0 flex-1 gap-6">
+            {% block content %}{% endblock %}
+        </section>
     </main>
     {% block extra_script %}{% endblock %}
     <script>

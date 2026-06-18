@@ -3,39 +3,7 @@
 {% block title %}Dashboard{% endblock %}
 
 {% block content %}
-<div class="grid gap-6 xl:grid-cols-[260px_minmax(0,1fr)]">
-    <aside class="surface-card h-fit p-4 xl:sticky xl:top-6">
-        <nav class="grid gap-2">
-            {% for link in sidebar_links %}
-                {% if link.url %}
-                <a href="{% url link.url %}" class="{% if link.active %}bg-brand-50 text-brand-800{% else %}text-slate-700 hover:bg-slate-50{% endif %} flex items-center gap-4 rounded-2xl px-4 py-3 font-semibold transition">
-                    <span class="{{ link.icon_bg }} {{ link.icon_text }} flex h-11 w-11 items-center justify-center rounded-2xl">
-                        <i data-lucide="{{ link.icon }}" class="h-5 w-5"></i>
-                    </span>
-                    <span>{{ link.title }}</span>
-                </a>
-                {% else %}
-                <div class="flex items-center gap-4 rounded-2xl px-4 py-3 text-slate-500">
-                    <span class="{{ link.icon_bg }} {{ link.icon_text }} flex h-11 w-11 items-center justify-center rounded-2xl">
-                        <i data-lucide="{{ link.icon }}" class="h-5 w-5"></i>
-                    </span>
-                    <span>{{ link.title }}</span>
-                </div>
-                {% endif %}
-            {% endfor %}
-        </nav>
-
-        <div class="mt-6 rounded-[24px] border border-slate-200 bg-gradient-to-b from-white to-brand-50/40 p-5">
-            <div class="text-sm font-medium text-slate-500">{{ today|date:"l, d F Y" }}</div>
-            <p class="mt-8 text-sm text-slate-500">Selamat datang,</p>
-            <p class="text-xl font-bold text-brand-800">Lab Admin</p>
-            <div class="mt-6 flex h-20 w-20 items-center justify-center rounded-[28px] bg-brand-100 text-brand-800">
-                <i data-lucide="flask-conical" class="h-10 w-10"></i>
-            </div>
-        </div>
-    </aside>
-
-    <section class="grid gap-6">
+<div class="grid gap-6">
         <div class="grid gap-4 2xl:grid-cols-[minmax(0,2.2fr)_repeat(4,minmax(0,1fr))] xl:grid-cols-2">
             <article class="surface-card overflow-hidden bg-gradient-to-br from-white via-brand-50/60 to-slate-100/70 p-7 md:p-9 2xl:col-auto xl:col-span-2">
                 <div class="grid items-end gap-8 lg:grid-cols-[minmax(0,1.3fr)_320px]">
@@ -261,6 +229,5 @@
                 </table>
             </div>
         </section>
-    </section>
 </div>
 {% endblock %}

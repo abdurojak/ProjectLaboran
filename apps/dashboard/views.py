@@ -161,18 +161,6 @@ class DashboardView(TemplateView):
                 'tone': 'gray',
             },
         ])
-        context['sidebar_links'] = self._decorate_items([
-            {'title': 'Dashboard', 'icon': 'layout-grid', 'url': 'dashboard:home', 'active': True, 'tone': 'teal'},
-            {'title': 'Inventaris', 'icon': 'package', 'url': 'inventaris:barang_list', 'active': False, 'tone': 'gray'},
-            {'title': 'Barang Tertinggal', 'icon': 'briefcase', 'url': 'barang_tertinggal:list', 'active': False, 'tone': 'gray'},
-            {'title': 'Peminjaman Alat', 'icon': 'arrow-left-right', 'url': 'peminjaman:peminjaman_list', 'active': False, 'tone': 'gray'},
-            {'title': 'Jadwal Praktikum', 'icon': 'calendar-days', 'url': 'jadwal:jadwal_list', 'active': False, 'tone': 'gray'},
-            {'title': 'Data Asleb', 'icon': 'users', 'url': '', 'active': False, 'tone': 'gray'},
-            {'title': 'Rekap Honorarium Asleb', 'icon': 'file-chart-column', 'url': '', 'active': False, 'tone': 'gray'},
-            {'title': 'Pengguna', 'icon': 'user-round', 'url': '', 'active': False, 'tone': 'gray'},
-            {'title': 'Ruangan', 'icon': 'door-open', 'url': 'ruangan:ruangan_list', 'active': False, 'tone': 'gray'},
-            {'title': 'Pengaturan', 'icon': 'settings', 'url': '', 'active': False, 'tone': 'gray'},
-        ])
         context['activities'] = [
             {
                 'time': '10:15',
