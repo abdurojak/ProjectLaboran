@@ -9,6 +9,9 @@ class PeminjamanAlat(models.Model):
         ('diajukan', 'Diajukan'),
         ('dipinjam', 'Dipinjam'),
         ('dikembalikan', 'Dikembalikan'),
+        ('hilang', 'Hilang'),
+        ('rusak', 'Rusak'),
+        ('digantikan', 'Digantikan'),
     ]
 
     barang = models.ForeignKey(Barang, on_delete=models.PROTECT, related_name='peminjaman')

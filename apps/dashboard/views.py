@@ -1,4 +1,6 @@
+from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 from django.db.models import Sum
 from django.views.generic import TemplateView
 
@@ -64,6 +66,8 @@ class DashboardView(TemplateView):
         context['butuh_perhatian'] = barang_qs.exclude(kondisi='baik').count()
         context['barang_terbaru'] = barang_qs.order_by('-dibuat_pada')[:5]
         context['peminjaman_terbaru'] = peminjaman_qs[:5]
+        context['peminjaman_diajukan'] = peminjaman_qs.filter(status='diajukan')[:6]
+        context['peminjaman_perlu_diganti'] = peminjaman_qs.filter(status__in=['hilang', 'rusak'])[:6]
         context['today'] = timezone.localdate()
         context['stats_cards'] = self._decorate_items([
             {
@@ -239,3 +243,26 @@ class DashboardView(TemplateView):
             },
         ])
         return context
+
+
+@require_POST
+def accept_peminjaman(request, pk):
+    peminjaman = get_object_or_404(PeminjamanAlat, pk=pk, status='diajukan')
+    peminjaman.status = 'dipinjam'
+    peminjaman.save(update_fields=['status', 'diperbarui_pada'])
+    return redirect('dashboard:home')
+
+
+@require_POST
+def reject_peminjaman(request, pk):
+    peminjaman = get_object_or_404(PeminjamanAlat, pk=pk, status='diajukan')
+    peminjaman.delete()
+    return redirect('dashboard:home')
+
+
+@require_POST
+def mark_peminjaman_replaced(request, pk):
+    peminjaman = get_object_or_404(PeminjamanAlat, pk=pk, status__in=['hilang', 'rusak'])
+    peminjaman.status = 'digantikan'
+    peminjaman.save(update_fields=['status', 'diperbarui_pada'])
+    return redirect('dashboard:home')
