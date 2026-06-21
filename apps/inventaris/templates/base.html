@@ -81,6 +81,15 @@
     <main class="mx-auto flex max-w-[1500px] items-start gap-6 px-4 py-6 lg:px-7">
         {% include "components/dashboard_sidebar.html" %}
         <section class="grid min-w-0 flex-1 gap-6">
+            {% if messages %}
+            <div class="grid gap-3">
+                {% for message in messages %}
+                <div class="{% if message.tags == 'success' %}border-emerald-200 bg-emerald-50 text-emerald-800{% elif message.tags == 'error' %}border-rose-200 bg-rose-50 text-rose-800{% elif message.tags == 'warning' %}border-amber-200 bg-amber-50 text-amber-800{% else %}border-slate-200 bg-white text-slate-700{% endif %} rounded-2xl border px-4 py-3 text-sm font-semibold">
+                    {{ message }}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
             {% block content %}{% endblock %}
         </section>
     </main>

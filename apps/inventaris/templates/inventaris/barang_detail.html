@@ -7,14 +7,16 @@
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
             <p class="text-sm font-bold uppercase tracking-[0.2em] text-brand-700">Inventaris</p>
-            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">{{ barang.nama }}</h2>
-            <p class="mt-2 text-sm text-slate-500">Detail lengkap barang inventaris laboratorium.</p>
+        <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">{{ barang.kode_barang }}</h2>
+        <p class="mt-2 text-sm text-slate-500">Detail unit barang dari inventaris {{ barang.inventaris.nama|default:"-" }}.</p>
         </div>
         <div class="flex flex-wrap gap-3">
-            <a class="btn-primary" href="{% url 'inventaris:barang_update' barang.pk %}">
+            {% if barang.inventaris %}
+            <a class="btn-primary" href="{% url 'inventaris:barang_update' barang.inventaris.pk %}">
                 <i data-lucide="pencil" class="h-4 w-4"></i>
-                <span>Edit</span>
+                <span>Edit Inventaris</span>
             </a>
+            {% endif %}
             <a class="btn-secondary" href="{% url 'inventaris:barang_list' %}">
                 <i data-lucide="arrow-left" class="h-4 w-4"></i>
                 <span>Kembali</span>
@@ -24,9 +26,9 @@
 
     <div class="surface-card grid gap-5 p-6 md:grid-cols-[280px_minmax(0,1fr)] md:p-8">
         <div class="rounded-3xl bg-slate-50 p-5">
-            <div class="mb-4 text-sm font-semibold text-slate-500">Foto Barang</div>
-            {% if barang.foto %}
-            <img src="{{ barang.foto.url }}" alt="{{ barang.nama }}" class="h-64 w-full rounded-3xl object-cover ring-1 ring-slate-200">
+            <div class="mb-4 text-sm font-semibold text-slate-500">Foto Inventaris</div>
+            {% if barang.inventaris.foto %}
+            <img src="{{ barang.inventaris.foto.url }}" alt="{{ barang.inventaris.nama }}" class="h-64 w-full rounded-3xl object-cover ring-1 ring-slate-200">
             {% else %}
             <div class="flex h-64 w-full items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-white text-slate-400">
                 <div class="text-center">
@@ -40,12 +42,12 @@
         </div>
         <div class="grid gap-5 md:grid-cols-2">
         <div class="rounded-3xl bg-slate-50 p-5">
-            <div class="text-sm font-semibold text-slate-500">Kode Barang</div>
-            <div class="mt-2 text-xl font-bold text-slate-900">{{ barang.kode_barang }}</div>
+            <div class="text-sm font-semibold text-slate-500">Kode Inventaris</div>
+            <div class="mt-2 text-xl font-bold text-slate-900">{{ barang.inventaris.kode_inventaris|default:"-" }}</div>
         </div>
         <div class="rounded-3xl bg-slate-50 p-5">
-            <div class="text-sm font-semibold text-slate-500">Jumlah</div>
-            <div class="mt-2 text-xl font-bold text-slate-900">{{ barang.jumlah }}</div>
+            <div class="text-sm font-semibold text-slate-500">Kode Barang</div>
+            <div class="mt-2 text-xl font-bold text-slate-900">{{ barang.kode_barang }}</div>
         </div>
         <div class="rounded-3xl bg-slate-50 p-5">
             <div class="text-sm font-semibold text-slate-500">Lokasi</div>
@@ -54,6 +56,14 @@
         <div class="rounded-3xl bg-slate-50 p-5">
             <div class="text-sm font-semibold text-slate-500">Kondisi</div>
             <div class="mt-2 text-xl font-bold text-slate-900">{{ barang.get_kondisi_display }}</div>
+        </div>
+        <div class="rounded-3xl bg-slate-50 p-5">
+            <div class="text-sm font-semibold text-slate-500">Status Pinjam</div>
+            <div class="mt-2">
+                <span class="{% if barang.sedang_dipinjam %}bg-amber-100 text-amber-700{% else %}bg-emerald-100 text-emerald-700{% endif %} inline-flex rounded-full px-3 py-1 text-sm font-bold">
+                    {{ barang.status_pinjam }}
+                </span>
+            </div>
         </div>
         <div class="rounded-3xl bg-slate-50 p-5 md:col-span-2">
             <div class="text-sm font-semibold text-slate-500">Keterangan</div>

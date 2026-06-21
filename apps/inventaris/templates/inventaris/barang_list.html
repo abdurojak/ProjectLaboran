@@ -11,6 +11,10 @@
             <p class="mt-2 text-sm text-slate-500">Kelola data inventaris laboratorium dari satu tabel yang rapi dan mudah dibaca.</p>
         </div>
         <div class="flex flex-wrap gap-3">
+            <a class="btn-secondary gap-2" href="{% url 'inventaris:lokasi_list' %}">
+                <i data-lucide="map-pin" class="h-4 w-4"></i>
+                <span>Kelola Lokasi</span>
+            </a>
             <a class="btn-primary gap-2" href="{% url 'inventaris:barang_create' %}">
                 <i data-lucide="plus" class="h-4 w-4"></i>
                 <span>Tambah Barang</span>
@@ -18,38 +22,10 @@
         </div>
     </div>
 
-    <form id="inventaris-filter-form" method="get" class="surface-card grid gap-4 p-5 md:grid-cols-[minmax(0,1.4fr)_220px_220px_auto] md:items-end">
+    <form id="inventaris-search-form" method="get" class="surface-card p-5">
         <div>
             <label for="id_q">Cari barang</label>
             <input id="id_q" name="q" type="text" value="{{ search_query }}" placeholder="Cari nama, kode, atau keterangan" autocomplete="off">
-        </div>
-        <div>
-            <label for="id_kondisi">Filter kondisi</label>
-            <select id="id_kondisi" name="kondisi">
-                <option value="">Semua kondisi</option>
-                {% for value, label in kondisi_choices %}
-                <option value="{{ value }}"{% if selected_kondisi == value %} selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div>
-            <label for="id_lokasi">Filter lokasi</label>
-            <select id="id_lokasi" name="lokasi">
-                <option value="">Semua lokasi</option>
-                {% for lokasi in lokasi_choices %}
-                <option value="{{ lokasi.id }}"{% if selected_lokasi == lokasi.id|stringformat:"s" %} selected{% endif %}>{{ lokasi.nama_lokasi }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="flex flex-wrap gap-3">
-            <button type="submit" class="btn-primary">
-                <i data-lucide="search" class="h-4 w-4"></i>
-                <span>Terapkan</span>
-            </button>
-            <a href="{% url 'inventaris:barang_list' %}" class="btn-secondary">
-                <i data-lucide="rotate-ccw" class="h-4 w-4"></i>
-                <span>Reset</span>
-            </a>
         </div>
     </form>
 
@@ -59,11 +35,11 @@
                 <thead class="bg-slate-50">
                     <tr>
                         <th>Foto</th>
-                        <th>Kode</th>
+                        <th>Kode Inventaris</th>
                         <th>Nama</th>
-                        <th>Jumlah</th>
-                        <th>Lokasi</th>
-                        <th>Kondisi</th>
+                        <th>Stok Total</th>
+                        <th>Dipinjam</th>
+                        <th>Tersedia</th>
                         <th>Aksi</th>
                     </tr>
                 </thead>
@@ -79,14 +55,18 @@
                             </div>
                             {% endif %}
                         </td>
-                        <td class="font-semibold text-slate-600">{{ barang.kode_barang }}</td>
+                        <td class="font-semibold text-slate-600">{{ barang.kode_inventaris }}</td>
                         <td class="font-semibold text-slate-900">{{ barang.nama }}</td>
                         <td>{{ barang.jumlah }}</td>
-                        <td>{{ barang.lokasi.nama_lokasi|default:"-" }}</td>
-                        <td>{{ barang.get_kondisi_display }}</td>
+                        <td>{{ barang.jumlah_dipinjam }}</td>
+                        <td>
+                            <span class="{% if barang.stok_tersedia %}bg-emerald-100 text-emerald-700{% else %}bg-rose-100 text-rose-700{% endif %} inline-flex rounded-full px-3 py-1 text-xs font-bold">
+                                {{ barang.stok_tersedia }}
+                            </span>
+                        </td>
                         <td>
                             <div class="flex flex-wrap gap-3 text-sm font-semibold">
-                                <a class="inline-flex items-center gap-1 text-brand-700 hover:text-brand-800" href="{% url 'inventaris:barang_detail' barang.pk %}">
+                                <a class="inline-flex items-center gap-1 text-brand-700 hover:text-brand-800" href="{% url 'inventaris:inventaris_detail' barang.pk %}">
                                     <i data-lucide="eye" class="h-4 w-4"></i>
                                     <span>Detail</span>
                                 </a>
@@ -103,7 +83,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="7" class="py-12 text-center text-slate-500">Tidak ada barang yang cocok dengan filter saat ini.</td>
+                        <td colspan="7" class="py-12 text-center text-slate-500">Tidak ada barang yang cocok dengan pencarian saat ini.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -116,10 +96,8 @@
 {% block extra_script %}
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        const form = document.getElementById('inventaris-filter-form');
+        const form = document.getElementById('inventaris-search-form');
         const searchInput = document.getElementById('id_q');
-        const kondisiSelect = document.getElementById('id_kondisi');
-        const lokasiSelect = document.getElementById('id_lokasi');
         let searchTimer = null;
 
         if (searchInput) {
@@ -128,18 +106,6 @@
                 searchTimer = setTimeout(function () {
                     form.submit();
                 }, 350);
-            });
-        }
-
-        if (kondisiSelect) {
-            kondisiSelect.addEventListener('change', function () {
-                form.submit();
-            });
-        }
-
-        if (lokasiSelect) {
-            lokasiSelect.addEventListener('change', function () {
-                form.submit();
             });
         }
     });

@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+
+{% block title %}Detail Inventaris{% endblock %}
+
+{% block content %}
+<section class="space-y-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <p class="text-sm font-bold uppercase tracking-[0.2em] text-brand-700">Inventaris Barang</p>
+            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">{{ inventaris.nama }}</h2>
+            <p class="mt-2 text-sm text-slate-500">Daftar detail barang yang berada di bawah inventaris ini.</p>
+        </div>
+        <div class="flex flex-wrap gap-3">
+            <a class="btn-primary" href="{% url 'inventaris:detail_barang_create' inventaris.pk %}">
+                <i data-lucide="plus" class="h-4 w-4"></i>
+                <span>Tambah Detail Barang</span>
+            </a>
+            <a class="btn-primary" href="{% url 'inventaris:barang_update' inventaris.pk %}">
+                <i data-lucide="pencil" class="h-4 w-4"></i>
+                <span>Edit Inventaris</span>
+            </a>
+            <a class="btn-secondary" href="{% url 'inventaris:barang_list' %}">
+                <i data-lucide="arrow-left" class="h-4 w-4"></i>
+                <span>Kembali</span>
+            </a>
+        </div>
+    </div>
+
+    <div class="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
+        <article class="surface-card p-5">
+            {% if inventaris.foto %}
+            <img src="{{ inventaris.foto.url }}" alt="{{ inventaris.nama }}" class="h-56 w-full rounded-3xl object-cover ring-1 ring-slate-200">
+            {% else %}
+            <div class="flex h-56 w-full items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50 text-slate-400">
+                <i data-lucide="image-off" class="h-8 w-8"></i>
+            </div>
+            {% endif %}
+        </article>
+
+        <article class="surface-card grid gap-4 p-5 md:grid-cols-4">
+            <div>
+                <div class="text-sm font-semibold text-slate-500">Kode Inventaris</div>
+                <div class="mt-2 text-xl font-bold text-slate-900">{{ inventaris.kode_inventaris }}</div>
+            </div>
+            <div>
+                <div class="text-sm font-semibold text-slate-500">Stok Total</div>
+                <div class="mt-2 text-xl font-bold text-slate-900">{{ inventaris.jumlah }}</div>
+            </div>
+            <div>
+                <div class="text-sm font-semibold text-slate-500">Dipinjam</div>
+                <div class="mt-2 text-xl font-bold text-slate-900">{{ inventaris.jumlah_dipinjam }}</div>
+            </div>
+            <div>
+                <div class="text-sm font-semibold text-slate-500">Tersedia</div>
+                <div class="mt-2 text-xl font-bold text-brand-800">{{ inventaris.stok_tersedia }}</div>
+            </div>
+            <div class="md:col-span-4">
+                <div class="text-sm font-semibold text-slate-500">Keterangan</div>
+                <div class="mt-2 text-sm leading-7 text-slate-700">{{ inventaris.keterangan|default:"-" }}</div>
+            </div>
+        </article>
+    </div>
+
+    <section class="surface-card overflow-hidden">
+        <div class="border-b border-slate-200 p-5">
+            <h3 class="text-xl font-bold text-slate-900">Detail Barang</h3>
+            <form id="detail-barang-filter-form" method="get" class="mt-5 grid gap-4 md:grid-cols-[minmax(0,1.4fr)_220px_220px_auto] md:items-end">
+                <div>
+                    <label for="id_detail_q">Cari detail barang</label>
+                    <input id="id_detail_q" name="q" type="text" value="{{ detail_search_query }}" placeholder="Cari kode, lokasi, atau keterangan" autocomplete="off">
+                </div>
+                <div>
+                    <label for="id_kondisi">Filter kondisi</label>
+                    <select id="id_kondisi" name="kondisi">
+                        <option value="">Semua kondisi</option>
+                        {% for value, label in kondisi_choices %}
+                        <option value="{{ value }}"{% if selected_kondisi == value %} selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="id_lokasi">Filter lokasi</label>
+                    <select id="id_lokasi" name="lokasi">
+                        <option value="">Semua lokasi</option>
+                        {% for lokasi in lokasi_choices %}
+                        <option value="{{ lokasi.id }}"{% if selected_lokasi == lokasi.id|stringformat:"s" %} selected{% endif %}>{{ lokasi.nama_lokasi }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="flex flex-wrap gap-3">
+                    <a href="{% url 'inventaris:inventaris_detail' inventaris.pk %}" class="btn-secondary">
+                        <i data-lucide="rotate-ccw" class="h-4 w-4"></i>
+                        <span>Reset</span>
+                    </a>
+                </div>
+            </form>
+        </div>
+        <div class="overflow-x-auto">
+            <table>
+                <thead class="bg-slate-50">
+                    <tr>
+                        <th>Kode Inventaris</th>
+                        <th>Kode Barang</th>
+                        <th>Lokasi</th>
+                        <th>Kondisi</th>
+                        <th>Status Pinjam</th>
+                        <th>Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for barang in detail_barang_list %}
+                    <tr class="hover:bg-slate-50/70">
+                        <td class="font-semibold text-slate-600">{{ inventaris.kode_inventaris }}</td>
+                        <td class="font-semibold text-slate-900">{{ barang.kode_barang }}</td>
+                        <td>{{ barang.lokasi.nama_lokasi|default:"-" }}</td>
+                        <td>{{ barang.get_kondisi_display }}</td>
+                        <td>
+                            <span class="{% if barang.sedang_dipinjam %}bg-amber-100 text-amber-700{% else %}bg-emerald-100 text-emerald-700{% endif %} inline-flex rounded-full px-3 py-1 text-xs font-bold">
+                                {{ barang.status_pinjam }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="flex flex-wrap gap-3 text-sm font-semibold">
+                            <a class="inline-flex items-center gap-1 text-brand-700 hover:text-brand-800" href="{% url 'inventaris:barang_detail' barang.pk %}">
+                                <i data-lucide="eye" class="h-4 w-4"></i>
+                                <span>Detail</span>
+                            </a>
+                            <a class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700" href="{% url 'inventaris:detail_barang_update' barang.pk %}">
+                                <i data-lucide="pencil" class="h-4 w-4"></i>
+                                <span>Edit</span>
+                            </a>
+                            <a class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700" href="{% url 'inventaris:detail_barang_delete' barang.pk %}">
+                                <i data-lucide="trash-2" class="h-4 w-4"></i>
+                                <span>Hapus</span>
+                            </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="py-12 text-center text-slate-500">Tidak ada detail barang yang cocok dengan filter saat ini.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('detail-barang-filter-form');
+        const searchInput = document.getElementById('id_detail_q');
+        const kondisiSelect = document.getElementById('id_kondisi');
+        const lokasiSelect = document.getElementById('id_lokasi');
+        let searchTimer = null;
+
+        if (searchInput) {
+            searchInput.addEventListener('input', function () {
+                clearTimeout(searchTimer);
+                searchTimer = setTimeout(function () {
+                    form.submit();
+                }, 350);
+            });
+        }
+
+        if (kondisiSelect) {
+            kondisiSelect.addEventListener('change', function () {
+                form.submit();
+            });
+        }
+
+        if (lokasiSelect) {
+            lokasiSelect.addEventListener('change', function () {
+                form.submit();
+            });
+        }
+    });
+</script>
+{% endblock %}

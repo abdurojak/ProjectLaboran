@@ -1,10 +1,12 @@
+from django.contrib import messages
+from django.db import transaction
+from django.db.models import Sum
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 from django.views.decorators.http import require_POST
-from django.db.models import Sum
 from django.views.generic import TemplateView
 
-from apps.inventaris.models import Barang
+from apps.inventaris.models import Barang, InventarisBarang
 from apps.jadwal.models import JadwalPraktikum
 from apps.kalender.models import KegiatanKalender
 from apps.peminjaman.models import PeminjamanAlat
@@ -54,19 +56,21 @@ class DashboardView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        inventaris_qs = InventarisBarang.objects.all()
         barang_qs = Barang.objects.all()
         jadwal_qs = JadwalPraktikum.objects.all()
         kegiatan_qs = KegiatanKalender.objects.all()
         peminjaman_qs = PeminjamanAlat.objects.select_related('barang')
         peminjaman_aktif = peminjaman_qs.exclude(status='dikembalikan')
 
-        context['total_barang'] = barang_qs.count()
-        context['total_unit'] = barang_qs.aggregate(total=Sum('jumlah'))['total'] or 0
+        context['total_barang'] = inventaris_qs.count()
+        context['total_unit'] = inventaris_qs.aggregate(total=Sum('jumlah'))['total'] or 0
         context['kondisi_baik'] = barang_qs.filter(kondisi='baik').count()
         context['butuh_perhatian'] = barang_qs.exclude(kondisi='baik').count()
-        context['barang_terbaru'] = barang_qs.order_by('-dibuat_pada')[:5]
+        context['barang_terbaru'] = inventaris_qs.order_by('-dibuat_pada')[:5]
         context['peminjaman_terbaru'] = peminjaman_qs[:5]
         context['peminjaman_diajukan'] = peminjaman_qs.filter(status='diajukan')[:6]
+        context['peminjaman_dipinjam'] = peminjaman_qs.filter(status='dipinjam')[:6]
         context['peminjaman_perlu_diganti'] = peminjaman_qs.filter(status__in=['hilang', 'rusak'])[:6]
         context['today'] = timezone.localdate()
         context['stats_cards'] = self._decorate_items([
@@ -247,9 +251,27 @@ class DashboardView(TemplateView):
 
 @require_POST
 def accept_peminjaman(request, pk):
-    peminjaman = get_object_or_404(PeminjamanAlat, pk=pk, status='diajukan')
-    peminjaman.status = 'dipinjam'
-    peminjaman.save(update_fields=['status', 'diperbarui_pada'])
+    with transaction.atomic():
+        peminjaman = get_object_or_404(
+            PeminjamanAlat.objects.select_for_update().select_related('barang'),
+            pk=pk,
+        )
+
+        if peminjaman.status != 'diajukan':
+            messages.warning(request, 'Pengajuan ini sudah diproses.')
+            return redirect('dashboard:home')
+
+        barang = Barang.objects.select_for_update().get(pk=peminjaman.barang_id)
+        stok_tersedia = barang.stok_tersedia
+
+        if peminjaman.jumlah > stok_tersedia:
+            messages.error(request, f'Stok {barang.nama} tidak cukup. Tersedia {stok_tersedia} unit.')
+            return redirect('dashboard:home')
+
+        peminjaman.status = 'dipinjam'
+        peminjaman.save(update_fields=['status', 'diperbarui_pada'])
+        messages.success(request, 'Pengajuan peminjaman diterima.')
+
     return redirect('dashboard:home')
 
 
@@ -258,6 +280,28 @@ def reject_peminjaman(request, pk):
     peminjaman = get_object_or_404(PeminjamanAlat, pk=pk, status='diajukan')
     peminjaman.delete()
     return redirect('dashboard:home')
+
+
+def _mark_borrowed_status(request, pk, status):
+    peminjaman = get_object_or_404(PeminjamanAlat, pk=pk, status='dipinjam')
+    peminjaman.status = status
+    peminjaman.save(update_fields=['status', 'diperbarui_pada'])
+    return redirect('dashboard:home')
+
+
+@require_POST
+def mark_peminjaman_returned(request, pk):
+    return _mark_borrowed_status(request, pk, 'dikembalikan')
+
+
+@require_POST
+def mark_peminjaman_lost(request, pk):
+    return _mark_borrowed_status(request, pk, 'hilang')
+
+
+@require_POST
+def mark_peminjaman_broken(request, pk):
+    return _mark_borrowed_status(request, pk, 'rusak')
 
 
 @require_POST

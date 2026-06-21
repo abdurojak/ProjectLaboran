@@ -35,8 +35,8 @@ class PeminjamanAlat(models.Model):
         if self.tanggal_kembali and self.tanggal_pinjam and self.tanggal_kembali < self.tanggal_pinjam:
             raise ValidationError({'tanggal_kembali': 'Tanggal kembali tidak boleh lebih awal dari tanggal pinjam.'})
 
-        if self.barang_id and self.jumlah and self.jumlah > self.barang.jumlah:
-            raise ValidationError({'jumlah': 'Jumlah pinjam tidak boleh melebihi stok barang.'})
+        if self.barang_id and self.jumlah and self.jumlah > self.barang.stok_tersedia:
+            raise ValidationError({'jumlah': 'Jumlah pinjam tidak boleh melebihi stok tersedia.'})
 
     def __str__(self):
         return f'{self.nama_peminjam} - {self.barang.nama}'
