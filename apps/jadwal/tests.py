@@ -1,5 +1,6 @@
 from datetime import date, time
 
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 
@@ -9,9 +10,9 @@ from .models import JadwalPraktikum
 class JadwalViewTests(TestCase):
     def setUp(self):
         JadwalPraktikum.objects.create(
-            mata_praktikum='Praktikum Basis Data',
+            mata_kuliah='Praktikum Basis Data',
             kelas='XI RPL 1',
-            ruangan='Lab Rekayasa Data',
+            letak_ruangan='Lab Rekayasa Data',
             pengampu='Ibu Sari',
             tanggal=date(2026, 6, 18),
             waktu_mulai=time(8, 0),
@@ -23,4 +24,33 @@ class JadwalViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Jadwal Praktikum')
+        self.assertContains(response, 'Praktikum Basis Data')
+        self.assertContains(response, 'Lab Rekayasa Data')
+
+    def test_jadwal_tidak_bisa_bentrok_ruangan_dan_waktu(self):
+        jadwal_bentrok = JadwalPraktikum(
+            mata_kuliah='Praktikum Pemrograman',
+            kelas='XI RPL 2',
+            letak_ruangan='Lab Rekayasa Data',
+            pengampu='Pak Budi',
+            tanggal=date(2026, 6, 18),
+            waktu_mulai=time(9, 0),
+            waktu_selesai=time(11, 0),
+        )
+
+        with self.assertRaises(ValidationError):
+            jadwal_bentrok.full_clean()
+
+    def test_jadwal_boleh_jika_waktu_berurutan_di_ruangan_sama(self):
+        jadwal_lanjutan = JadwalPraktikum(
+            mata_kuliah='Praktikum Jaringan',
+            kelas='XI RPL 3',
+            letak_ruangan='Lab Rekayasa Data',
+            pengampu='Pak Dimas',
+            tanggal=date(2026, 6, 18),
+            waktu_mulai=time(10, 0),
+            waktu_selesai=time(12, 0),
+        )
+
+        jadwal_lanjutan.full_clean()
 
