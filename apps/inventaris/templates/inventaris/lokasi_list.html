@@ -3,53 +3,71 @@
 {% block title %}Daftar Lokasi{% endblock %}
 
 {% block content %}
-<div class="mb-6 flex flex-wrap items-center justify-between gap-4">
-    <div>
-        <h2 class="text-2xl font-bold text-slate-900">Daftar Lokasi</h2>
-        <p class="mt-1 text-sm text-slate-500">Kelola data lokasi penyimpanan inventaris laboratorium.</p>
+<section class="space-y-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <p class="text-sm font-bold uppercase tracking-[0.2em] text-brand-700">Inventaris</p>
+            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Daftar Lokasi</h2>
+            <p class="mt-2 text-sm text-slate-500">Kelola data lokasi penyimpanan inventaris laboratorium dari tabel yang rapi dan mudah dipindai.</p>
+        </div>
+        <div class="flex flex-wrap gap-3">
+            <a class="btn-secondary gap-2" href="{% url 'inventaris:barang_list' %}">
+                <i data-lucide="package" class="h-4 w-4"></i>
+                <span>Daftar Inventaris</span>
+            </a>
+            <a class="btn-primary gap-2" href="{% url 'inventaris:lokasi_create' %}">
+                <i data-lucide="plus" class="h-4 w-4"></i>
+                <span>Tambah Lokasi</span>
+            </a>
+        </div>
     </div>
-    <div class="flex flex-wrap gap-3">
-        <a class="btn-secondary gap-2" href="{% url 'inventaris:barang_list' %}">
-            <i data-lucide="package" class="lucide-icon"></i>
-            <span>Daftar Inventaris</span>
-        </a>
-        <a class="btn-primary gap-2" href="{% url 'inventaris:lokasi_create' %}">
-            <i data-lucide="plus" class="lucide-icon"></i>
-            <span>Tambah Lokasi</span>
-        </a>
-    </div>
-</div>
 
-<div class="surface-card overflow-hidden">
-    <table>
-        <thead>
-            <tr>
-                <th>Kode Lokasi</th>
-                <th>Nama Lokasi</th>
-                <th>Ukuran Lokasi</th>
-                <th>Aksi</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for lokasi in lokasi_list %}
-            <tr>
-                <td class="font-semibold text-slate-900">{{ lokasi.kode_lokasi }}</td>
-                <td>{{ lokasi.nama_lokasi }}</td>
-                <td>{{ lokasi.ukuran_lokasi|default:"-" }}</td>
-                <td>
-                    <div class="flex flex-wrap gap-3">
-                        <a href="{% url 'inventaris:lokasi_detail' lokasi.pk %}">Detail</a>
-                        <a href="{% url 'inventaris:lokasi_update' lokasi.pk %}">Edit</a>
-                        <a href="{% url 'inventaris:lokasi_delete' lokasi.pk %}">Hapus</a>
-                    </div>
-                </td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="4">Belum ada data lokasi.</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
+    <div class="surface-card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table>
+                <thead class="bg-slate-50">
+                    <tr>
+                        <th>Kode Lokasi</th>
+                        <th>Nama Lokasi</th>
+                        <th>Ukuran Lokasi</th>
+                        <th>Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for lokasi in lokasi_list %}
+                    <tr class="hover:bg-slate-50/70">
+                        <td class="font-semibold text-slate-600">{{ lokasi.kode_lokasi }}</td>
+                        <td class="font-semibold text-slate-900">{{ lokasi.nama_lokasi }}</td>
+                        <td>{{ lokasi.ukuran_lokasi|default:"-" }}</td>
+                        <td>
+                            <div class="flex flex-wrap gap-3 text-sm font-semibold">
+                                <a class="inline-flex items-center gap-1 text-brand-700 hover:text-brand-800" href="{% url 'inventaris:lokasi_detail' lokasi.pk %}">
+                                    <i data-lucide="eye" class="h-4 w-4"></i>
+                                    <span>Detail</span>
+                                </a>
+                                <a class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700" href="{% url 'inventaris:lokasi_update' lokasi.pk %}">
+                                    <i data-lucide="pencil" class="h-4 w-4"></i>
+                                    <span>Edit</span>
+                                </a>
+                                <a data-confirmation-trigger data-confirm-message="Lanjut ke halaman konfirmasi hapus lokasi {{ lokasi.nama_lokasi }}?" class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700" href="{% url 'inventaris:lokasi_delete' lokasi.pk %}">
+                                    <i data-lucide="trash-2" class="h-4 w-4"></i>
+                                    <span>Hapus</span>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="py-12 text-center text-slate-500">Belum ada data lokasi.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+{% include "components/confirmation_modal.html" with title="Konfirmasi Hapus Lokasi" confirm_label="Lanjutkan" confirm_icon="arrow-right" %}
 {% endblock %}

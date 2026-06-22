@@ -21,6 +21,17 @@ class LokasiViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, 'name="kode_lokasi"')
 
+    def test_daftar_lokasi_memakai_desain_dan_modal_konfirmasi_inventaris(self):
+        lokasi = Lokasi.objects.create(nama_lokasi='Lab Kimia')
+
+        response = self.client.get(reverse('inventaris:lokasi_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-confirmation-modal')
+        self.assertContains(response, 'data-confirmation-trigger')
+        self.assertContains(response, 'Lanjut ke halaman konfirmasi hapus lokasi Lab Kimia?')
+        self.assertContains(response, reverse('inventaris:lokasi_delete', args=[lokasi.pk]))
+
 
 class BarangLokasiTests(TestCase):
     def test_form_create_inventaris_meminta_lokasi_untuk_detail_awal(self):
@@ -222,6 +233,12 @@ class BarangListViewTests(TestCase):
         self.assertContains(response, 'Tersedia')
         self.assertContains(response, '3')
 
+    def test_daftar_barang_mengarahkan_hapus_ke_komponen_konfirmasi(self):
+        response = self.client.get(reverse('inventaris:barang_list'))
+
+        self.assertContains(response, 'data-confirmation-trigger')
+        self.assertContains(response, reverse('inventaris:barang_delete', args=[self.keyboard_inventaris.pk]))
+
     def test_detail_inventaris_menampilkan_list_detail_barang(self):
         response = self.client.get(reverse('inventaris:inventaris_detail', args=[self.keyboard_inventaris.pk]))
 
@@ -231,6 +248,12 @@ class BarangListViewTests(TestCase):
         self.assertContains(response, self.keyboard_barang.kode_barang)
         self.assertContains(response, 'Lab Pemrograman')
         self.assertContains(response, 'Status Pinjam')
+
+    def test_detail_inventaris_mengarahkan_hapus_detail_ke_komponen_konfirmasi(self):
+        response = self.client.get(reverse('inventaris:inventaris_detail', args=[self.keyboard_inventaris.pk]))
+
+        self.assertContains(response, 'data-confirmation-trigger')
+        self.assertContains(response, reverse('inventaris:detail_barang_delete', args=[self.keyboard_barang.pk]))
 
 
 class DetailBarangCrudTests(TestCase):
@@ -355,3 +378,13 @@ class InventarisCrudTests(TestCase):
         self.assertRedirects(response, reverse('inventaris:barang_list'))
         self.assertFalse(InventarisBarang.objects.filter(pk=inventaris.pk).exists())
         self.assertFalse(Barang.objects.filter(inventaris_id=inventaris.pk).exists())
+
+    def test_delete_inventaris_memakai_komponen_konfirmasi(self):
+        inventaris = InventarisBarang.objects.create(nama='Osiloskop', jumlah=2)
+
+        response = self.client.get(reverse('inventaris:barang_delete', args=[inventaris.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-confirmation-component')
+        self.assertContains(response, 'Yakin ingin menghapus barang <strong>Osiloskop</strong>?')
+        self.assertContains(response, reverse('inventaris:barang_list'))

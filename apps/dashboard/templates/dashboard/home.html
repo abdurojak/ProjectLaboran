@@ -388,15 +388,5 @@
 {% endblock %}
 
 {% block extra_script %}
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        document.querySelectorAll('[data-confirm-message]').forEach(function (form) {
-            form.addEventListener('submit', function (event) {
-                if (!window.confirm(form.dataset.confirmMessage)) {
-                    event.preventDefault();
-                }
-            });
-        });
-    });
-</script>
+{% include "components/confirmation_modal.html" with title="Konfirmasi Status Peminjaman" confirm_label="Ya, Lanjutkan" %}
 {% endblock %}

@@ -3,15 +3,6 @@
 {% block title %}Hapus Lokasi{% endblock %}
 
 {% block content %}
-<div class="surface-card p-6">
-    <h2 class="text-2xl font-bold text-slate-900">Hapus Lokasi</h2>
-    <form class="mt-5" method="post">
-        {% csrf_token %}
-        <p>Yakin ingin menghapus lokasi <strong>{{ lokasi.nama_lokasi }}</strong>?</p>
-        <div class="mt-5 flex flex-wrap gap-3">
-            <button class="btn-primary" type="submit">Hapus</button>
-            <a class="btn-secondary" href="{% url 'inventaris:lokasi_list' %}">Batal</a>
-        </div>
-    </form>
-</div>
+{% url 'inventaris:lokasi_list' as cancel_url %}
+{% include "components/confirmation.html" with eyebrow="Inventaris" title="Hapus Lokasi" description="Konfirmasi penghapusan lokasi penyimpanan barang." message_prefix="Yakin ingin menghapus lokasi" target_label=lokasi.nama_lokasi cancel_url=cancel_url %}
 {% endblock %}

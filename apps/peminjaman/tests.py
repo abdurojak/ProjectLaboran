@@ -62,6 +62,15 @@ class PeminjamanViewsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Peminjaman Alat')
 
+    def test_list_page_memakai_modal_konfirmasi_hapus(self):
+        response = self.client.get(reverse('peminjaman:peminjaman_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-confirmation-modal')
+        self.assertContains(response, 'data-confirmation-trigger')
+        self.assertContains(response, 'Lanjut ke halaman konfirmasi hapus peminjaman Andi Pratama?')
+        self.assertContains(response, reverse('peminjaman:peminjaman_delete', args=[self.peminjaman.pk]))
+
     def test_detail_page_loads(self):
         response = self.client.get(reverse('peminjaman:peminjaman_detail', args=[self.peminjaman.pk]))
 
@@ -69,6 +78,14 @@ class PeminjamanViewsTests(TestCase):
         self.assertContains(response, 'Andi Pratama')
         self.assertContains(response, '2201001')
         self.assertContains(response, '081234567890')
+
+    def test_detail_page_memakai_modal_konfirmasi_hapus(self):
+        response = self.client.get(reverse('peminjaman:peminjaman_detail', args=[self.peminjaman.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-confirmation-modal')
+        self.assertContains(response, 'data-confirmation-trigger')
+        self.assertContains(response, 'Lanjut ke halaman konfirmasi hapus peminjaman Andi Pratama?')
 
     def test_create_menolak_detail_barang_rusak_berat(self):
         response = self.client.post(
@@ -89,6 +106,7 @@ class PeminjamanViewsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Pilih minimal satu detail barang yang tersedia dan tidak rusak berat.')
         self.assertFalse(PeminjamanAlat.objects.filter(nama_peminjam='Budi').exists())
+
 
     def test_form_peminjaman_memakai_dialog_pencarian_detail_barang(self):
         response = self.client.get(reverse('peminjaman:peminjaman_create'))
@@ -167,3 +185,25 @@ class PeminjamanViewsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Pilih minimal satu detail barang yang tersedia dan tidak rusak berat.')
         self.assertFalse(PeminjamanAlat.objects.filter(nama_peminjam='Budi').exists())
+
+
+class PeminjamanAlatModelTests(TestCase):
+    def test_kode_pinjam_dibuat_dari_tanggal_pinjam_dan_id(self):
+        lokasi = Lokasi.objects.create(nama_lokasi='Gudang A')
+        barang = Barang.objects.create(
+            nama='Mikroskop',
+            kode_barang='LAB-001',
+            jumlah=10,
+            lokasi=lokasi,
+            kondisi='baik',
+        )
+
+        peminjaman = PeminjamanAlat.objects.create(
+            barang=barang,
+            nama_peminjam='Andi Pratama',
+            jumlah=1,
+            tanggal_pinjam=date(2026, 6, 22),
+            tanggal_kembali=date(2026, 6, 23),
+        )
+
+        self.assertEqual(peminjaman.kode_pinjam, f'PJM-260622-{peminjaman.id:04d}')

@@ -163,6 +163,8 @@ class DashboardViewTests(TestCase):
         response = self.client.get(reverse('dashboard:home'))
 
         self.assertContains(response, 'data-confirm-message="', count=4)
+        self.assertContains(response, 'data-confirmation-modal')
+        self.assertNotContains(response, 'window.confirm')
         self.assertContains(response, 'Yakin tandai peminjaman ini sudah dikembalikan?')
         self.assertContains(response, 'Yakin tandai barang ini hilang?')
         self.assertContains(response, 'Yakin tandai barang ini rusak?')

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Detail Barang Tertinggal{% endblock %}
+
+{% block content %}
+<section class="mx-auto max-w-4xl space-y-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <p class="text-sm font-bold uppercase tracking-[0.2em] text-amber-600">Barang Tertinggal</p>
+            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">{{ barang.nama_barang }}</h2>
+            <p class="mt-2 text-sm text-slate-500">Detail barang mahasiswa yang tertinggal di laboratorium.</p>
+        </div>
+        <div class="flex flex-wrap gap-3">
+            <a class="btn-primary bg-amber-500 shadow-amber-500/20 hover:bg-amber-600" href="{% url 'barang_tertinggal:update' barang.pk %}">
+                <i data-lucide="pencil" class="h-4 w-4"></i>
+                <span>Edit</span>
+            </a>
+            <a data-confirmation-trigger data-confirm-message="Lanjut ke halaman konfirmasi hapus barang tertinggal {{ barang.nama_barang }}?" class="inline-flex items-center justify-center gap-2 rounded-2xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-rose-700" href="{% url 'barang_tertinggal:delete' barang.pk %}">
+                <i data-lucide="trash-2" class="h-4 w-4"></i>
+                <span>Hapus</span>
+            </a>
+            <a class="btn-secondary gap-2" href="{% url 'barang_tertinggal:list' %}">
+                <i data-lucide="arrow-left" class="h-4 w-4"></i>
+                <span>Kembali</span>
+            </a>
+        </div>
+    </div>
+
+    <div class="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
+        <article class="surface-card p-5">
+            {% if barang.foto %}
+            <img src="{{ barang.foto.url }}" alt="{{ barang.nama_barang }}" class="h-56 w-full rounded-3xl object-cover ring-1 ring-slate-200">
+            {% else %}
+            <div class="flex h-56 w-full items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50 text-slate-400">
+                <i data-lucide="image-off" class="h-8 w-8"></i>
+            </div>
+            {% endif %}
+        </article>
+
+        <article class="surface-card grid gap-5 p-6 md:grid-cols-2 md:p-8">
+        <div class="rounded-3xl bg-slate-50 p-5">
+            <div class="text-sm font-semibold text-slate-500">Kode Barang Tertinggal</div>
+            <div class="mt-2 text-xl font-bold text-slate-900">{{ barang.kode_barang_tertinggal }}</div>
+        </div>
+        <div class="rounded-3xl bg-slate-50 p-5">
+            <div class="text-sm font-semibold text-slate-500">Status</div>
+            <div class="mt-2 text-xl font-bold text-slate-900">{{ barang.get_status_display }}</div>
+        </div>
+        <div class="rounded-3xl bg-slate-50 p-5">
+            <div class="text-sm font-semibold text-slate-500">Jenis Barang</div>
+            <div class="mt-2 text-xl font-bold text-slate-900">{{ barang.jenis_barang }}</div>
+        </div>
+        <div class="rounded-3xl bg-slate-50 p-5">
+            <div class="text-sm font-semibold text-slate-500">Jumlah Barang</div>
+            <div class="mt-2 text-xl font-bold text-slate-900">{{ barang.jumlah_barang }}</div>
+        </div>
+        <div class="rounded-3xl bg-slate-50 p-5">
+            <div class="text-sm font-semibold text-slate-500">Tanggal Ditemukan</div>
+            <div class="mt-2 text-xl font-bold text-slate-900">{{ barang.tanggal_ditemukan|date:"d M Y" }}</div>
+        </div>
+        <div class="rounded-3xl bg-slate-50 p-5">
+            <div class="text-sm font-semibold text-slate-500">Tanggal Diambil</div>
+            <div class="mt-2 text-xl font-bold text-slate-900">{{ barang.tanggal_diambil|date:"d M Y"|default:"-" }}</div>
+        </div>
+        <div class="rounded-3xl bg-slate-50 p-5 md:col-span-2">
+            <div class="text-sm font-semibold text-slate-500">Nama Pemilik</div>
+            <div class="mt-2 text-xl font-bold text-slate-900">{{ barang.nama_pemilik|default:"-" }}</div>
+        </div>
+        </article>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+{% include "components/confirmation_modal.html" with title="Konfirmasi Hapus Barang Tertinggal" confirm_label="Lanjutkan" confirm_icon="arrow-right" %}
+{% endblock %}

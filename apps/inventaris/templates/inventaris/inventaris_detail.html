@@ -129,7 +129,7 @@
                                 <i data-lucide="pencil" class="h-4 w-4"></i>
                                 <span>Edit</span>
                             </a>
-                            <a class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700" href="{% url 'inventaris:detail_barang_delete' barang.pk %}">
+                            <a data-confirmation-trigger data-confirm-message="Lanjut ke halaman konfirmasi hapus detail barang {{ barang.kode_barang }}?" class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700" href="{% url 'inventaris:detail_barang_delete' barang.pk %}">
                                 <i data-lucide="trash-2" class="h-4 w-4"></i>
                                 <span>Hapus</span>
                             </a>
@@ -149,6 +149,7 @@
 {% endblock %}
 
 {% block extra_script %}
+{% include "components/confirmation_modal.html" with title="Konfirmasi Hapus Detail Barang" confirm_label="Lanjutkan" confirm_icon="arrow-right" %}
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const form = document.getElementById('detail-barang-filter-form');

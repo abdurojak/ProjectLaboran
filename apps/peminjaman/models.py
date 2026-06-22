@@ -14,6 +14,7 @@ class PeminjamanAlat(models.Model):
         ('digantikan', 'Digantikan'),
     ]
 
+    kode_pinjam = models.CharField(max_length=15, unique=True, blank=True, editable=False)
     barang = models.ForeignKey(Barang, on_delete=models.PROTECT, related_name='peminjaman')
     nama_peminjam = models.CharField(max_length=150)
     nim = models.CharField('NIM', max_length=30, blank=True)
@@ -38,5 +39,15 @@ class PeminjamanAlat(models.Model):
         if self.barang_id and self.jumlah and self.jumlah > self.barang.stok_tersedia:
             raise ValidationError({'jumlah': 'Jumlah pinjam tidak boleh melebihi stok tersedia.'})
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+
+        if not self.kode_pinjam:
+            self.kode_pinjam = self.generate_kode_pinjam()
+            super().save(update_fields=['kode_pinjam'])
+
+    def generate_kode_pinjam(self):
+        return f'PJM-{self.tanggal_pinjam:%y%m%d}-{self.id:04d}'
+
     def __str__(self):
-        return f'{self.nama_peminjam} - {self.barang.nama}'
+        return f'{self.kode_pinjam or "PJM"} - {self.nama_peminjam} - {self.barang.nama}'
