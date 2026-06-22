@@ -5,7 +5,7 @@ from .models import JadwalPraktikum
 
 @admin.register(JadwalPraktikum)
 class JadwalPraktikumAdmin(admin.ModelAdmin):
-    list_display = ('mata_praktikum', 'kelas', 'tanggal', 'waktu_mulai', 'ruangan', 'pengampu')
-    list_filter = ('tanggal', 'ruangan')
-    search_fields = ('mata_praktikum', 'kelas', 'ruangan', 'pengampu')
+    list_display = ('mata_kuliah', 'kelas', 'tanggal', 'waktu_mulai', 'letak_ruangan', 'pengampu')
+    list_filter = ('tanggal', 'letak_ruangan')
+    search_fields = ('mata_kuliah', 'kelas', 'letak_ruangan', 'pengampu')
 

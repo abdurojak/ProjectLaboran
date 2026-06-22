@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'apps.core',
+    'apps.asleb',
     'apps.barang_tertinggal',
     'apps.dashboard',
     'apps.inventaris',

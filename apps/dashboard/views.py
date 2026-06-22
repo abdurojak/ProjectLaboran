@@ -6,6 +6,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
+from apps.asleb.models import Asleb
 from apps.inventaris.models import Barang, InventarisBarang
 from apps.jadwal.models import JadwalPraktikum
 from apps.kalender.models import KegiatanKalender
@@ -62,6 +63,7 @@ class DashboardView(TemplateView):
         kegiatan_qs = KegiatanKalender.objects.all()
         peminjaman_qs = PeminjamanAlat.objects.select_related('barang')
         peminjaman_aktif = peminjaman_qs.exclude(status='dikembalikan')
+        asleb_qs = Asleb.objects.all()
 
         context['total_barang'] = inventaris_qs.count()
         context['total_unit'] = inventaris_qs.aggregate(total=Sum('jumlah'))['total'] or 0
@@ -131,8 +133,8 @@ class DashboardView(TemplateView):
             {
                 'title': 'Data Asleb',
                 'description': 'Kelola data asisten laboratorium untuk membantu operasional praktikum.',
-                'url': '',
-                'status': 'Segera Hadir',
+                'url': 'asleb:asleb_list',
+                'status': 'Aktif',
                 'icon': 'users',
                 'tone': 'green',
             },
@@ -191,7 +193,7 @@ class DashboardView(TemplateView):
             {
                 'time': '08:55',
                 'title': 'Pengguna baru ditambahkan',
-                'detail': 'Manajemen pengguna akan dihubungkan setelah modul berikutnya disiapkan.',
+                'detail': f'{asleb_qs.filter(status="aktif").count()} asleb aktif tercatat di sistem.',
                 'tone': 'green',
             },
         ]
@@ -230,6 +232,13 @@ class DashboardView(TemplateView):
                 'url': 'jadwal:jadwal_create',
                 'icon': 'calendar-plus-2',
                 'tone': 'blue',
+            },
+            {
+                'title': 'Tambah Data Asleb',
+                'description': 'Masukkan data asisten laboratorium baru.',
+                'url': 'asleb:asleb_create',
+                'icon': 'user-plus',
+                'tone': 'green',
             },
             {
                 'title': 'Tambah Kegiatan Kalender',

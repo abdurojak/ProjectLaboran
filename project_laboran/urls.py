@@ -21,6 +21,7 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('', include('apps.dashboard.urls')),
+    path('asleb/', include('apps.asleb.urls')),
     path('barang-tertinggal/', include('apps.barang_tertinggal.urls')),
     path('inventaris/', include('apps.inventaris.urls')),
     path('jadwal/', include('apps.jadwal.urls')),
