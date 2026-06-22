@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}Data Asleb{% endblock %}
+
+{% block content %}
+<section class="space-y-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <p class="text-sm font-bold uppercase tracking-[0.2em] text-emerald-700">Asleb</p>
+            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Data Asleb</h2>
+            <p class="mt-2 text-sm text-slate-500">Kelola data asisten laboratorium, kontak, status aktif, dan program studi.</p>
+        </div>
+        <a class="btn-primary bg-emerald-600 hover:bg-emerald-700 shadow-emerald-700/20" href="{% url 'asleb:asleb_create' %}">
+            <i data-lucide="plus" class="h-4 w-4"></i>
+            <span>Tambah Asleb</span>
+        </a>
+    </div>
+
+    <form id="asleb-filter-form" method="get" class="surface-card grid gap-4 p-5 md:grid-cols-[minmax(0,1.4fr)_220px_auto] md:items-end">
+        <div>
+            <label for="id_q">Cari asleb</label>
+            <input id="id_q" name="q" type="text" value="{{ search_query }}" placeholder="Cari nama, NIM, no HP, atau program studi" autocomplete="off">
+        </div>
+        <div>
+            <label for="id_status">Filter status</label>
+            <select id="id_status" name="status">
+                <option value="">Semua status</option>
+                {% for value, label in status_choices %}
+                <option value="{{ value }}"{% if selected_status == value %} selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="flex flex-wrap gap-3">
+            <button type="submit" class="btn-primary bg-emerald-600 hover:bg-emerald-700 shadow-emerald-700/20">
+                <i data-lucide="search" class="h-4 w-4"></i>
+                <span>Terapkan</span>
+            </button>
+            <a href="{% url 'asleb:asleb_list' %}" class="btn-secondary">
+                <i data-lucide="rotate-ccw" class="h-4 w-4"></i>
+                <span>Reset</span>
+            </a>
+        </div>
+    </form>
+
+    <div class="surface-card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table>
+                <thead class="bg-slate-50">
+                    <tr>
+                        <th>Nama</th>
+                        <th>NIM</th>
+                        <th>No HP</th>
+                        <th>Program Studi</th>
+                        <th>Semester</th>
+                        <th>Status</th>
+                        <th>Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for asleb in asleb_list %}
+                    <tr class="hover:bg-slate-50/70">
+                        <td>
+                            <div class="font-semibold text-slate-900">{{ asleb.nama }}</div>
+                            <div class="text-xs text-slate-500">{{ asleb.email|default:"Email belum diisi" }}</div>
+                        </td>
+                        <td>{{ asleb.nim }}</td>
+                        <td>{{ asleb.no_hp }}</td>
+                        <td>{{ asleb.program_studi }}</td>
+                        <td>{{ asleb.semester }}</td>
+                        <td>
+                            <span class="{% if asleb.status == 'aktif' %}bg-emerald-100 text-emerald-700{% else %}bg-slate-100 text-slate-600{% endif %} inline-flex rounded-full px-3 py-1 text-xs font-bold">
+                                {{ asleb.get_status_display }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="flex flex-wrap gap-3 text-sm font-semibold">
+                                <a class="inline-flex items-center gap-1 text-brand-700 hover:text-brand-800" href="{% url 'asleb:asleb_detail' asleb.pk %}">
+                                    <i data-lucide="eye" class="h-4 w-4"></i><span>Detail</span>
+                                </a>
+                                <a class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700" href="{% url 'asleb:asleb_update' asleb.pk %}">
+                                    <i data-lucide="pencil" class="h-4 w-4"></i><span>Edit</span>
+                                </a>
+                                <a class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700" href="{% url 'asleb:asleb_delete' asleb.pk %}">
+                                    <i data-lucide="trash-2" class="h-4 w-4"></i><span>Hapus</span>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="py-12 text-center text-slate-500">Belum ada data asleb.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('asleb-filter-form');
+        const searchInput = document.getElementById('id_q');
+        const statusSelect = document.getElementById('id_status');
+        let searchTimer = null;
+
+        if (searchInput) {
+            searchInput.addEventListener('input', function () {
+                clearTimeout(searchTimer);
+                searchTimer = setTimeout(function () {
+                    form.submit();
+                }, 350);
+            });
+        }
+
+        if (statusSelect) {
+            statusSelect.addEventListener('change', function () {
+                form.submit();
+            });
+        }
+    });
+</script>
+{% endblock %}

@@ -7,7 +7,7 @@
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
             <p class="text-sm font-bold uppercase tracking-[0.2em] text-blue-700">Jadwal</p>
-            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">{{ jadwal.mata_praktikum }}</h2>
+            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">{{ jadwal.mata_kuliah }}</h2>
             <p class="mt-2 text-sm text-slate-500">Detail jadwal praktikum.</p>
         </div>
         <div class="flex flex-wrap gap-3">
@@ -21,7 +21,7 @@
     </div>
     <div class="surface-card grid gap-5 p-6 md:grid-cols-2 md:p-8">
         <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Kelas</div><div class="mt-2 text-xl font-bold text-slate-900">{{ jadwal.kelas }}</div></div>
-        <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Ruangan</div><div class="mt-2 text-xl font-bold text-slate-900">{{ jadwal.ruangan }}</div></div>
+        <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Letak Ruangan</div><div class="mt-2 text-xl font-bold text-slate-900">{{ jadwal.letak_ruangan }}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Pengampu</div><div class="mt-2 text-xl font-bold text-slate-900">{{ jadwal.pengampu }}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Tanggal</div><div class="mt-2 text-xl font-bold text-slate-900">{{ jadwal.tanggal|date:"d M Y" }}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5 md:col-span-2"><div class="text-sm font-semibold text-slate-500">Waktu</div><div class="mt-2 text-xl font-bold text-slate-900">{{ jadwal.waktu_mulai|time:"H:i" }}{% if jadwal.waktu_selesai %} - {{ jadwal.waktu_selesai|time:"H:i" }}{% endif %}</div></div>

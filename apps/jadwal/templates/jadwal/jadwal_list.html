@@ -21,9 +21,9 @@
             <table>
                 <thead class="bg-slate-50">
                     <tr>
-                        <th>Mata Praktikum</th>
+                        <th>Matkul</th>
                         <th>Kelas</th>
-                        <th>Ruangan</th>
+                        <th>Letak Ruangan</th>
                         <th>Pengampu</th>
                         <th>Tanggal</th>
                         <th>Waktu</th>
@@ -33,9 +33,9 @@
                 <tbody>
                     {% for jadwal in jadwal_list %}
                     <tr class="hover:bg-slate-50/70">
-                        <td class="font-semibold text-slate-900">{{ jadwal.mata_praktikum }}</td>
+                        <td class="font-semibold text-slate-900">{{ jadwal.mata_kuliah }}</td>
                         <td>{{ jadwal.kelas }}</td>
-                        <td>{{ jadwal.ruangan }}</td>
+                        <td>{{ jadwal.letak_ruangan }}</td>
                         <td>{{ jadwal.pengampu }}</td>
                         <td>{{ jadwal.tanggal|date:"d M Y" }}</td>
                         <td>{{ jadwal.waktu_mulai|time:"H:i" }}{% if jadwal.waktu_selesai %} - {{ jadwal.waktu_selesai|time:"H:i" }}{% endif %}</td>
