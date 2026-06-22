@@ -28,12 +28,22 @@ class PeminjamanAlatForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        self.current_pengguna = kwargs.pop('current_pengguna', None)
         super().__init__(*args, **kwargs)
         self.fields['barang'].queryset = Barang.objects.select_related('inventaris', 'lokasi')
         self.fields['barang'].label = 'Detail Barang'
         self.fields['barang'].required = False
         if self.instance.pk and self.instance.barang_id:
             self.fields['barang'].required = True
+        if self.current_pengguna and self.current_pengguna.role == 'mahasiswa':
+            self.fields['nama_peminjam'].initial = self.current_pengguna.nama_pengguna
+            self.fields['nim'].initial = self.current_pengguna.nim_nik
+            self.fields['no_hp'].initial = self.current_pengguna.no_hp
+            self.fields['nama_peminjam'].widget.attrs['readonly'] = True
+            self.fields['nim'].widget.attrs['readonly'] = True
+            self.fields['no_hp'].widget.attrs['readonly'] = True
+            self.fields['status'].initial = 'diajukan'
+            self.fields['status'].widget = forms.HiddenInput()
 
     def clean(self):
         cleaned_data = super().clean()

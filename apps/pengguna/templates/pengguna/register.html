@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}Register{% endblock %}
+
+{% block content %}
+<section class="mx-auto max-w-4xl space-y-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <p class="text-sm font-bold uppercase tracking-[0.2em] text-brand-700">Autentikasi</p>
+            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Register</h2>
+            <p class="mt-2 text-sm text-slate-500">Buat akun pengguna baru. Role awal otomatis menjadi Mahasiswa.</p>
+        </div>
+        <a class="btn-secondary gap-2" href="{% url 'pengguna:login' %}">
+            <i data-lucide="log-in" class="h-4 w-4"></i>
+            <span>Login</span>
+        </a>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" class="surface-card grid gap-5 p-6 md:grid-cols-2 md:p-8">
+        {% csrf_token %}
+        {% for field in form %}
+        <div class="{% if field.name == 'foto' or field.name == 'nama_pengguna' or field.name == 'alamat' %}md:col-span-2{% endif %}">
+            {{ field.label_tag }}
+            {% if field.name == 'foto' %}
+            {% include "components/file_upload.html" with field=field current_file=None button_label="Pilih Foto" title="Upload foto pengguna" empty_label="Belum ada foto dipilih" preview_label="Preview foto" preview_alt="Preview foto pengguna" show_preview=True %}
+            {% else %}
+            {{ field }}
+            {% endif %}
+            {% if field.errors %}
+            <div class="mt-2 text-sm font-semibold text-rose-600">{{ field.errors|striptags }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+        <div class="flex flex-wrap gap-3 md:col-span-2">
+            <button type="submit" class="btn-primary gap-2">
+                <i data-lucide="user-plus" class="h-4 w-4"></i>
+                <span>Register</span>
+            </button>
+            <a class="btn-secondary gap-2" href="{% url 'pengguna:login' %}">
+                <i data-lucide="x" class="h-4 w-4"></i>
+                <span>Batal</span>
+            </a>
+        </div>
+    </form>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('[data-file-upload]').forEach(function (component) {
+            const fileInput = component.querySelector('input[type="file"]');
+            const previewWrapper = component.querySelector('[data-preview-wrapper]');
+            const previewImage = component.querySelector('[data-preview-image]');
+            const fileName = component.querySelector('[data-file-name]');
+            const emptyLabel = component.dataset.emptyLabel || 'Belum ada file dipilih';
+            let previewUrl = null;
+
+            if (!fileInput || !fileName) {
+                return;
+            }
+
+            fileInput.addEventListener('change', function () {
+                const file = fileInput.files && fileInput.files[0];
+
+                if (previewUrl) {
+                    URL.revokeObjectURL(previewUrl);
+                    previewUrl = null;
+                }
+
+                if (!file) {
+                    if (previewImage) {
+                        previewImage.removeAttribute('src');
+                    }
+                    if (previewWrapper) {
+                        previewWrapper.classList.add('hidden');
+                    }
+                    fileName.textContent = emptyLabel;
+                    return;
+                }
+
+                fileName.textContent = file.name;
+
+                if (previewImage && previewWrapper) {
+                    previewUrl = URL.createObjectURL(file);
+                    previewImage.src = previewUrl;
+                    previewWrapper.classList.remove('hidden');
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

@@ -37,10 +37,12 @@ SIDEBAR_LINKS = [
     {'title': 'Jadwal Praktikum', 'icon': 'calendar-days', 'url': 'jadwal:jadwal_list', 'namespace': 'jadwal'},
     {'title': 'Data Asleb', 'icon': 'users', 'url': 'asleb:asleb_list', 'namespace': 'asleb'},
     {'title': 'Rekap Honorarium Asleb', 'icon': 'file-chart-column', 'url': '', 'namespace': ''},
-    {'title': 'Pengguna', 'icon': 'user-round', 'url': '', 'namespace': ''},
+    {'title': 'Pengguna', 'icon': 'user-round', 'url': 'pengguna:list', 'namespace': 'pengguna'},
     {'title': 'Ruangan', 'icon': 'door-open', 'url': 'ruangan:ruangan_list', 'namespace': 'ruangan'},
     {'title': 'Pengaturan', 'icon': 'settings', 'url': '', 'namespace': ''},
 ]
+
+MAHASISWA_VISIBLE_NAMESPACES = {'dashboard', 'peminjaman', 'jadwal'}
 
 
 def dashboard_sidebar(request):
@@ -48,6 +50,10 @@ def dashboard_sidebar(request):
     links = []
 
     for link in SIDEBAR_LINKS:
+        current_pengguna = getattr(request, 'current_pengguna', None)
+        if current_pengguna and current_pengguna.role == 'mahasiswa' and link['namespace'] not in MAHASISWA_VISIBLE_NAMESPACES:
+            continue
+
         item = link.copy()
         item['active'] = bool(item['namespace'] and item['namespace'] == current_namespace)
         item.update(TONES['teal'] if item['active'] else TONES['gray'])

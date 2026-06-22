@@ -16,9 +16,54 @@
         </a>
     </div>
 
-    <div class="surface-card overflow-hidden">
+    <form method="get" class="surface-card min-w-0 p-5">
+        <div class="grid gap-4 lg:grid-cols-[minmax(220px,1.3fr)_minmax(160px,0.8fr)_minmax(160px,0.8fr)_minmax(180px,0.9fr)]">
+            <div>
+                <label for="id_barang_filter">Nama barang</label>
+                <input id="id_barang_filter" name="barang" type="text" value="{{ filter_barang }}" placeholder="Cari nama atau kode barang" autocomplete="off">
+            </div>
+            <div>
+                <label for="id_tanggal_mulai">Dari tanggal</label>
+                <input id="id_tanggal_mulai" name="tanggal_mulai" type="date" value="{{ filter_tanggal_mulai }}">
+            </div>
+            <div>
+                <label for="id_tanggal_selesai">Sampai tanggal</label>
+                <input id="id_tanggal_selesai" name="tanggal_selesai" type="date" value="{{ filter_tanggal_selesai }}">
+            </div>
+            <div>
+                <label for="id_status_filter">Status</label>
+                <select id="id_status_filter" name="status">
+                    <option value="">Semua status</option>
+                    {% for value, label in status_choices %}
+                    <option value="{{ value }}"{% if filter_status == value %} selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+            {% if current_pengguna and current_pengguna.role == 'mahasiswa' %}
+            <label for="id_milik_saya" class="mb-0 inline-flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 sm:w-auto">
+                <input id="id_milik_saya" name="milik_saya" value="1" type="checkbox" class="h-4 w-4 rounded border-slate-300 p-0 text-brand-700 focus:ring-brand-100"{% if filter_milik_saya %} checked{% endif %}>
+                <span>Peminjaman saya</span>
+            </label>
+            {% endif %}
+            <div class="flex w-full flex-wrap gap-3 sm:w-auto">
+                <button type="submit" class="btn-primary flex-1 gap-2 bg-amber-500 shadow-amber-500/20 hover:bg-amber-600 sm:flex-none">
+                    <i data-lucide="filter" class="h-4 w-4"></i>
+                    <span>Filter</span>
+                </button>
+                <a class="btn-secondary flex-1 gap-2 sm:flex-none" href="{% url 'peminjaman:peminjaman_list' %}">
+                    <i data-lucide="rotate-ccw" class="h-4 w-4"></i>
+                    <span>Reset</span>
+                </a>
+            </div>
+        </div>
+    </form>
+
+    <div class="surface-card min-w-0 overflow-hidden">
         <div class="overflow-x-auto">
-            <table>
+            <table class="min-w-max">
                 <thead class="bg-slate-50">
                     <tr>
                         <th>Kode Pinjam</th>
@@ -65,6 +110,7 @@
                                     <i data-lucide="eye" class="h-4 w-4"></i>
                                     <span>Detail</span>
                                 </a>
+                                {% if peminjaman.can_current_pengguna_change %}
                                 <a class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700" href="{% url 'peminjaman:peminjaman_update' peminjaman.pk %}">
                                     <i data-lucide="pencil" class="h-4 w-4"></i>
                                     <span>Edit</span>
@@ -73,6 +119,7 @@
                                     <i data-lucide="trash-2" class="h-4 w-4"></i>
                                     <span>Hapus</span>
                                 </a>
+                                {% endif %}
                             </div>
                         </td>
                     </tr>

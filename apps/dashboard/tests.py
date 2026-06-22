@@ -4,10 +4,26 @@ from django.utils import timezone
 
 from apps.inventaris.models import Barang
 from apps.peminjaman.models import PeminjamanAlat
+from apps.pengguna.models import Pengguna
 
 
 class DashboardViewTests(TestCase):
     def setUp(self):
+        self.pengguna = Pengguna.objects.create(
+            nama_pengguna='Lab Admin',
+            nim_nik='ADM001',
+            email='admin@example.com',
+            password='rahasia123',
+            no_hp='080000000000',
+            alamat='Kampus',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='laboran',
+        )
+        session = self.client.session
+        session['pengguna_id'] = self.pengguna.pk
+        session.save()
         self.barang = Barang.objects.create(nama='Mikroskop', jumlah=5)
 
     def test_dashboard_page_loads(self):
@@ -233,3 +249,41 @@ class DashboardViewTests(TestCase):
 
         self.assertRedirects(response, reverse('dashboard:home'))
         self.assertEqual(peminjaman.status, 'digantikan')
+
+    def test_dashboard_mahasiswa_menyembunyikan_panel_operasional_admin(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Siti Aminah',
+            nim_nik='2201002',
+            email='siti@example.com',
+            password='rahasia123',
+            no_hp='081111111111',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='mahasiswa',
+        )
+        PeminjamanAlat.objects.create(
+            barang=self.barang,
+            nama_peminjam='Siti Aminah',
+            nim='2201002',
+            jumlah=1,
+            tanggal_pinjam=timezone.localdate(),
+            tanggal_kembali=timezone.localdate(),
+            status='diajukan',
+        )
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+
+        response = self.client.get(reverse('dashboard:home'))
+
+        self.assertContains(response, 'Peminjaman Saya')
+        self.assertContains(response, 'Mikroskop')
+        self.assertContains(response, 'Jadwal Praktikum')
+        self.assertNotContains(response, 'Peminjaman Alat Diajukan')
+        self.assertNotContains(response, 'Barang Yang Dipinjam')
+        self.assertNotContains(response, 'Peminjaman Perlu Diganti')
+        self.assertNotContains(response, 'Inventaris Terbaru')
+        self.assertNotContains(response, 'Akses Cepat')
+        self.assertNotContains(response, 'Aktivitas Terbaru')

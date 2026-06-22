@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     'apps.jadwal',
     'apps.kalender',
     'apps.peminjaman',
+    'apps.pengguna',
     'apps.ruangan',
 ]
 
@@ -62,6 +63,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'apps.pengguna.middleware.PenggunaLoginRequiredMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -80,6 +82,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'apps.core.context_processors.dashboard_sidebar',
                 'apps.kalender.context_processors.kalender_notifikasi',
+                'apps.pengguna.context_processors.pengguna_session',
             ],
         },
     },

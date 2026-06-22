@@ -51,6 +51,83 @@
             {% endfor %}
         </div>
 
+        {% if is_mahasiswa_dashboard %}
+        <section class="surface-card min-w-0 overflow-hidden p-6">
+            <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h3 class="text-2xl font-bold tracking-tight text-slate-900">Peminjaman Saya</h3>
+                    <p class="mt-1 text-sm text-slate-500">Pantau pengajuan dan peminjaman alat yang tercatat atas nama Anda.</p>
+                </div>
+                <a href="{% url 'peminjaman:peminjaman_list' %}?milik_saya=1" class="btn-secondary">Lihat semua</a>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-max">
+                    <thead class="bg-slate-50">
+                        <tr>
+                            <th>Kode Pinjam</th>
+                            <th>Barang</th>
+                            <th>Tanggal Pinjam</th>
+                            <th>Tanggal Kembali</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for peminjaman in peminjaman_saya %}
+                        <tr>
+                            <td class="font-semibold text-slate-600">{{ peminjaman.kode_pinjam }}</td>
+                            <td><a class="font-semibold text-brand-700 hover:text-brand-800" href="{% url 'peminjaman:peminjaman_detail' peminjaman.pk %}">{{ peminjaman.barang.nama }}</a></td>
+                            <td>{{ peminjaman.tanggal_pinjam|date:"d M Y" }}</td>
+                            <td>{{ peminjaman.tanggal_kembali|date:"d M Y" }}</td>
+                            <td>{{ peminjaman.get_status_display }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="py-10 text-center text-slate-500">Belum ada peminjaman alat atas nama Anda.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="surface-card min-w-0 overflow-hidden p-6">
+            <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h3 class="text-2xl font-bold tracking-tight text-slate-900">Jadwal Praktikum Hari Ini</h3>
+                    <p class="mt-1 text-sm text-slate-500">Jadwal praktikum yang tercatat untuk hari ini.</p>
+                </div>
+                <a href="{% url 'jadwal:jadwal_list' %}" class="btn-secondary">Lihat jadwal</a>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-max">
+                    <thead class="bg-slate-50">
+                        <tr>
+                            <th>Mata Praktikum</th>
+                            <th>Kelas</th>
+                            <th>Ruangan</th>
+                            <th>Waktu</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for jadwal in jadwal_hari_ini %}
+                        <tr>
+                            <td class="font-semibold text-slate-900">{{ jadwal.mata_praktikum }}</td>
+                            <td>{{ jadwal.kelas }}</td>
+                            <td>{{ jadwal.ruangan }}</td>
+                            <td>{{ jadwal.waktu_mulai|time:"H:i" }} - {{ jadwal.waktu_selesai|time:"H:i" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="py-10 text-center text-slate-500">Tidak ada jadwal praktikum hari ini.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        {% else %}
         <section class="surface-card min-w-0 overflow-hidden p-6">
             <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
                 <div>
@@ -384,6 +461,7 @@
                 </table>
             </div>
         </section>
+        {% endif %}
 </div>
 {% endblock %}
 

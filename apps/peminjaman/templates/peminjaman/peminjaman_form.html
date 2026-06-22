@@ -15,6 +15,12 @@
         {{ form.non_field_errors }}
         {{ form.barang }}
         {{ form.selected_barang_ids }}
+        {% if current_pengguna and current_pengguna.role == 'mahasiswa' %}
+        {{ form.status }}
+        <div class="rounded-3xl border border-amber-100 bg-amber-50 p-4 text-sm font-semibold leading-7 text-amber-800">
+            Pengajuan mahasiswa otomatis masuk dengan status Diajukan dan menunggu persetujuan admin laboratorium.
+        </div>
+        {% endif %}
         <div>
             <label>Detail Barang</label>
             <div class="flex flex-col gap-3">
@@ -45,7 +51,7 @@
         </div>
 
         {% for field in form %}
-            {% if field.name != 'barang' and field.name != 'selected_barang_ids' %}
+            {% if field.name != 'barang' and field.name != 'selected_barang_ids' and not field.is_hidden %}
             <div>
                 {{ field.label_tag }}
                 {{ field }}

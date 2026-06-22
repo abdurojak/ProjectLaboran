@@ -1,3 +1,5 @@
+from datetime import date
+
 from django.core.exceptions import ValidationError
 from django.db import models
 
@@ -47,7 +49,11 @@ class PeminjamanAlat(models.Model):
             super().save(update_fields=['kode_pinjam'])
 
     def generate_kode_pinjam(self):
-        return f'PJM-{self.tanggal_pinjam:%y%m%d}-{self.id:04d}'
+        tanggal_pinjam = self.tanggal_pinjam
+        if isinstance(tanggal_pinjam, str):
+            tanggal_pinjam = date.fromisoformat(tanggal_pinjam)
+
+        return f'PJM-{tanggal_pinjam:%y%m%d}-{self.id:04d}'
 
     def __str__(self):
         return f'{self.kode_pinjam or "PJM"} - {self.nama_peminjam} - {self.barang.nama}'

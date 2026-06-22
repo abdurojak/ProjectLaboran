@@ -57,6 +57,7 @@ class DashboardView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        pengguna = getattr(self.request, 'current_pengguna', None)
         inventaris_qs = InventarisBarang.objects.all()
         barang_qs = Barang.objects.all()
         jadwal_qs = JadwalPraktikum.objects.all()
@@ -64,6 +65,62 @@ class DashboardView(TemplateView):
         peminjaman_qs = PeminjamanAlat.objects.select_related('barang')
         peminjaman_aktif = peminjaman_qs.exclude(status='dikembalikan')
         asleb_qs = Asleb.objects.all()
+        context['is_mahasiswa_dashboard'] = bool(pengguna and pengguna.role == 'mahasiswa')
+
+        if context['is_mahasiswa_dashboard']:
+            peminjaman_saya = peminjaman_qs.filter(nim=pengguna.nim_nik)
+            context['today'] = timezone.localdate()
+            context['peminjaman_saya'] = peminjaman_saya[:6]
+            context['jadwal_hari_ini'] = jadwal_qs.filter(tanggal=context['today'])[:6]
+            context['stats_cards'] = self._decorate_items([
+                {
+                    'label': 'Peminjaman Saya',
+                    'value': peminjaman_saya.count(),
+                    'note': 'Semua pengajuan dan peminjaman Anda',
+                    'icon': 'clipboard-list',
+                    'tone': 'orange',
+                },
+                {
+                    'label': 'Sedang Dipinjam',
+                    'value': peminjaman_saya.filter(status='dipinjam').count(),
+                    'note': 'Alat yang masih tercatat dipinjam',
+                    'icon': 'arrow-left-right',
+                    'tone': 'blue',
+                },
+                {
+                    'label': 'Menunggu Persetujuan',
+                    'value': peminjaman_saya.filter(status='diajukan').count(),
+                    'note': 'Pengajuan yang belum diproses',
+                    'icon': 'hourglass',
+                    'tone': 'purple',
+                },
+                {
+                    'label': 'Jadwal Hari Ini',
+                    'value': jadwal_qs.filter(tanggal=context['today']).count(),
+                    'note': 'Jadwal praktikum hari ini',
+                    'icon': 'calendar-days',
+                    'tone': 'green',
+                },
+            ])
+            context['menu_modules'] = self._decorate_items([
+                {
+                    'title': 'Peminjaman Alat',
+                    'description': 'Ajukan peminjaman alat dan pantau status pengajuan Anda.',
+                    'url': 'peminjaman:peminjaman_list',
+                    'status': 'Aktif',
+                    'icon': 'arrow-left-right',
+                    'tone': 'orange',
+                },
+                {
+                    'title': 'Jadwal Praktikum',
+                    'description': 'Lihat jadwal praktikum yang terdaftar di laboratorium.',
+                    'url': 'jadwal:jadwal_list',
+                    'status': 'Aktif',
+                    'icon': 'calendar-days',
+                    'tone': 'blue',
+                },
+            ])
+            return context
 
         context['total_barang'] = inventaris_qs.count()
         context['total_unit'] = inventaris_qs.aggregate(total=Sum('jumlah'))['total'] or 0

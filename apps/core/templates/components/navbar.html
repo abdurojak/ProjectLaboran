@@ -35,8 +35,13 @@
                 <i data-lucide="circle-user-round" class="h-7 w-7"></i>
             </div>
             <div class="hidden sm:block">
-                <div class="font-semibold">Lab Admin</div>
-                <div class="text-sm text-white/75">Administrator</div>
+                {% if current_pengguna %}
+                <div class="font-semibold">{{ current_pengguna.nama_pengguna }}</div>
+                <div class="text-sm text-white/75">{{ current_pengguna.get_role_display }}</div>
+                {% else %}
+                <a href="{% url 'pengguna:login' %}" class="font-semibold hover:text-white">Login</a>
+                <div class="text-sm text-white/75">Belum masuk</div>
+                {% endif %}
             </div>
         </div>
     </div>

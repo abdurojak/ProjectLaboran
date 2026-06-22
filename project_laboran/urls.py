@@ -27,6 +27,7 @@ urlpatterns = [
     path('jadwal/', include('apps.jadwal.urls')),
     path('kalender/', include('apps.kalender.urls')),
     path('peminjaman/', include('apps.peminjaman.urls')),
+    path('pengguna/', include('apps.pengguna.urls')),
     path('ruangan/', include('apps.ruangan.urls')),
     path('admin/', admin.site.urls),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
