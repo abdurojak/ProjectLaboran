@@ -1,27 +1,50 @@
 {% load static %}
 
 <header class="bg-gradient-to-r from-brand-900 via-brand-800 to-brand-700 text-white shadow-lg shadow-brand-900/20">
-    <div class="mx-auto flex max-w-[1500px] flex-wrap items-center justify-between gap-5 px-5 py-4 lg:px-7">
-        <div class="flex items-center gap-4">
-            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15 backdrop-blur">
-                <img src="{% static 'core/img/labhub-logo.png' %}" alt="LabHub" class="h-11 w-11 object-contain">
+    <div class="mx-auto grid max-w-[1500px] gap-3 px-5 py-4 lg:px-7">
+        <div class="flex items-center border-b border-white/15 pb-3 md:hidden">
+            <button id="dashboard-sidebar-mobile-toggle" type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/15 bg-white/15 p-0 text-white shadow-sm backdrop-blur transition hover:bg-white/20" aria-label="Buka menu dashboard" title="Buka menu" aria-expanded="false">
+                <i data-lucide="menu" class="h-4 w-4"></i>
+            </button>
+        </div>
+
+        <div class="flex min-w-0 items-center gap-4">
+            <div class="flex min-w-0 items-center gap-4">
+                <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15 backdrop-blur">
+                    <img src="{% static 'core/img/labhub-logo.png' %}" alt="LabHub" class="h-11 w-11 object-contain">
+                </div>
+                <div class="min-w-0">
+                    <h1 class="truncate text-2xl font-bold tracking-tight">LabHub</h1>
+                    <p class="truncate text-sm text-white/75">Portal operasional lab JTIF Usakti</p>
+                </div>
             </div>
-            <div>
-                <h1 class="text-2xl font-bold tracking-tight">LabHub</h1>
-                <p class="text-sm text-white/75">Portal operasional lab JTIF Usakti</p>
+
+            <div class="ml-auto flex shrink-0 items-center gap-3">
+                <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white/15 text-lg font-black backdrop-blur">
+                    <i data-lucide="circle-user-round" class="h-7 w-7"></i>
+                </div>
+                <div class="hidden xl:block">
+                    {% if current_pengguna %}
+                    <div class="font-semibold">{{ current_pengguna.nama_pengguna }}</div>
+                    <div class="text-sm text-white/75">{{ current_pengguna.get_role_display }}</div>
+                    {% else %}
+                    <a href="{% url 'pengguna:login' %}" class="font-semibold hover:text-white">Login</a>
+                    <div class="text-sm text-white/75">Belum masuk</div>
+                    {% endif %}
+                </div>
             </div>
         </div>
 
         <nav class="flex flex-wrap items-center gap-2 text-sm font-medium">
-            <a href="{% url 'dashboard:home' %}" class="flex items-center gap-2 rounded-2xl px-4 py-3 text-white/90 transition hover:bg-white/10 hover:text-white">
+            <a href="{% url 'dashboard:home' %}" class="flex shrink-0 items-center gap-2 rounded-2xl px-4 py-3 text-white/90 transition hover:bg-white/10 hover:text-white">
                 <i data-lucide="house" class="lucide-icon"></i>
                 <span>Dashboard</span>
             </a>
-            <a href="{% url 'kalender:kegiatan_list' %}" class="flex items-center gap-2 rounded-2xl px-4 py-3 text-white/75 transition hover:bg-white/10 hover:text-white">
+            <a href="{% url 'kalender:kegiatan_list' %}" class="flex shrink-0 items-center gap-2 rounded-2xl px-4 py-3 text-white/75 transition hover:bg-white/10 hover:text-white">
                 <i data-lucide="calendar-days" class="lucide-icon"></i>
                 <span>Kalender</span>
             </a>
-            <a href="{% url 'kalender:notifikasi_list' %}" class="flex items-center gap-2 rounded-2xl px-4 py-3 text-white/75 transition hover:bg-white/10 hover:text-white">
+            <a href="{% url 'kalender:notifikasi_list' %}" class="flex shrink-0 items-center gap-2 rounded-2xl px-4 py-3 text-white/75 transition hover:bg-white/10 hover:text-white">
                 <i data-lucide="bell" class="lucide-icon"></i>
                 <span>Notifikasi</span>
                 {% if kalender_notification_count %}
@@ -29,20 +52,5 @@
                 {% endif %}
             </a>
         </nav>
-
-        <div class="flex items-center gap-3">
-            <div class="flex h-14 w-14 items-center justify-center rounded-full bg-white/15 text-lg font-black backdrop-blur">
-                <i data-lucide="circle-user-round" class="h-7 w-7"></i>
-            </div>
-            <div class="hidden sm:block">
-                {% if current_pengguna %}
-                <div class="font-semibold">{{ current_pengguna.nama_pengguna }}</div>
-                <div class="text-sm text-white/75">{{ current_pengguna.get_role_display }}</div>
-                {% else %}
-                <a href="{% url 'pengguna:login' %}" class="font-semibold hover:text-white">Login</a>
-                <div class="text-sm text-white/75">Belum masuk</div>
-                {% endif %}
-            </div>
-        </div>
     </div>
 </header>

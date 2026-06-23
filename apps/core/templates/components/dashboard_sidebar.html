@@ -1,18 +1,8 @@
-{% load static %}
-<div class="h-fit w-[96px] shrink-0 transition-all duration-300 xl:w-[280px]" data-dashboard-sidebar-shell>
-<aside id="dashboard-sidebar" class="fixed inset-y-0 left-0 z-40 flex h-screen w-[96px] flex-col overflow-x-hidden border-r border-slate-200 bg-white shadow-soft transition-all duration-300 xl:w-[280px]" data-dashboard-sidebar>
-    <div class="relative flex min-h-[98px] items-center border-b border-slate-200 bg-white px-4" data-sidebar-brand-shell>
-        <a href="{% url 'dashboard:home' %}" class="flex min-w-0 items-center gap-3 rounded-3xl px-2 py-2 text-brand-800 transition hover:bg-brand-50" title="LabHub">
-            <span class="flex h-14 w-14 shrink-0 items-center justify-center rounded-[22px] bg-gradient-to-br from-brand-800 to-brand-600 shadow-lg shadow-brand-900/20">
-                <img src="{% static 'core/img/labhub-logo.png' %}" alt="LabHub" class="h-11 w-11 object-contain">
-            </span>
-            <span data-sidebar-label class="hidden min-w-0 xl:block">
-                <span class="block truncate text-lg font-black leading-5 tracking-tight text-brand-900">LabHub</span>
-                <span class="mt-1 block truncate text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Project Laboran</span>
-            </span>
-        </a>
+<div class="h-fit w-0 shrink-0 transition-all duration-300 md:w-[96px] xl:w-[280px]" data-dashboard-sidebar-shell>
+<aside id="dashboard-sidebar" class="fixed inset-y-0 left-0 z-40 flex h-screen w-[300px] -translate-x-full flex-col overflow-x-hidden border-r border-slate-200 bg-white shadow-soft transition-all duration-300 md:w-[96px] md:translate-x-0 xl:w-[280px]" data-dashboard-sidebar>
+    <div class="relative flex min-h-[98px] items-center justify-end border-b border-slate-200 bg-white px-4" data-sidebar-brand-shell>
         <button id="dashboard-sidebar-toggle" type="button" class="absolute right-3 top-1/2 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-2xl border border-slate-200 bg-white p-0 text-brand-800 shadow-sm transition hover:border-brand-200 hover:bg-brand-50" aria-label="Tutup menu dashboard" title="Tutup menu" aria-expanded="true">
-            <i data-sidebar-toggle-icon data-lucide="panel-left-close" class="h-4 w-4"></i>
+            <i data-lucide="panel-left-close" class="h-4 w-4"></i>
         </button>
     </div>
 
@@ -52,9 +42,10 @@
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const sidebar = document.querySelector('[data-dashboard-sidebar]');
-        const toggle = document.getElementById('dashboard-sidebar-toggle');
+        const desktopToggle = document.getElementById('dashboard-sidebar-toggle');
+        const mobileToggle = document.getElementById('dashboard-sidebar-mobile-toggle');
 
-        if (!sidebar || !toggle) {
+        if (!sidebar || !desktopToggle || !mobileToggle) {
             return;
         }
 
@@ -62,37 +53,55 @@
         const profile = sidebar.querySelector('[data-sidebar-profile]');
         const shell = sidebar.closest('[data-dashboard-sidebar-shell]');
         const header = document.querySelector('body > header');
+        const mediumQuery = window.matchMedia('(min-width: 768px)');
         const desktopQuery = window.matchMedia('(min-width: 1280px)');
         const brandShell = sidebar.querySelector('[data-sidebar-brand-shell]');
+        const toggles = [desktopToggle, mobileToggle];
 
         function setToggleIcon(iconName) {
-            toggle.innerHTML = '<i data-sidebar-toggle-icon data-lucide="' + iconName + '" class="h-4 w-4"></i>';
+            toggles.forEach(function (toggle) {
+                toggle.innerHTML = '<i data-lucide="' + iconName + '" class="h-4 w-4"></i>';
+            });
             if (window.lucide) {
                 window.lucide.createIcons();
             }
         }
 
         function setCollapsed(collapsed) {
-            sidebar.classList.toggle('w-[300px]', !collapsed);
-            sidebar.classList.toggle('w-[96px]', collapsed);
-            sidebar.classList.toggle('xl:w-[280px]', !collapsed);
-            sidebar.classList.toggle('xl:w-[96px]', collapsed);
+            const isMedium = mediumQuery.matches;
+
+            sidebar.classList.toggle('-translate-x-full', collapsed && !isMedium);
+            sidebar.classList.toggle('translate-x-0', !collapsed || isMedium);
+            sidebar.classList.toggle('w-[300px]', !collapsed && !desktopQuery.matches);
+            sidebar.classList.toggle('w-[96px]', collapsed || (isMedium && !desktopQuery.matches));
+            sidebar.classList.toggle('md:w-[96px]', collapsed || !desktopQuery.matches);
+            sidebar.classList.toggle('xl:w-[280px]', !collapsed && desktopQuery.matches);
+            sidebar.classList.toggle('xl:w-[96px]', collapsed && desktopQuery.matches);
             if (shell) {
-                shell.classList.toggle('w-[300px]', !collapsed);
-                shell.classList.toggle('w-[96px]', collapsed);
-                shell.classList.toggle('xl:w-[280px]', !collapsed);
-                shell.classList.toggle('xl:w-[96px]', collapsed);
+                shell.classList.toggle('w-0', !isMedium);
+                shell.classList.toggle('w-[300px]', isMedium && !collapsed && !desktopQuery.matches);
+                shell.classList.toggle('w-[96px]', isMedium && (collapsed || !desktopQuery.matches));
+                shell.classList.toggle('md:w-[96px]', isMedium && (collapsed || !desktopQuery.matches));
+                shell.classList.toggle('xl:w-[280px]', isMedium && !collapsed && desktopQuery.matches);
+                shell.classList.toggle('xl:w-[96px]', isMedium && collapsed && desktopQuery.matches);
             }
 
             if (header) {
-                const sidebarWidth = collapsed ? '96px' : (desktopQuery.matches ? '280px' : '300px');
-                header.style.marginLeft = sidebarWidth;
-                header.style.width = 'calc(100% - ' + sidebarWidth + ')';
+                if (!isMedium) {
+                    header.style.marginLeft = '0px';
+                    header.style.width = '100%';
+                } else {
+                    const sidebarWidth = collapsed ? '96px' : (desktopQuery.matches ? '280px' : '300px');
+                    header.style.marginLeft = sidebarWidth;
+                    header.style.width = 'calc(100% - ' + sidebarWidth + ')';
+                }
             }
 
-            toggle.setAttribute('aria-expanded', String(!collapsed));
-            toggle.setAttribute('aria-label', collapsed ? 'Buka menu dashboard' : 'Tutup menu dashboard');
-            toggle.setAttribute('title', collapsed ? 'Buka menu' : 'Tutup menu');
+            toggles.forEach(function (toggle) {
+                toggle.setAttribute('aria-expanded', String(!collapsed));
+                toggle.setAttribute('aria-label', collapsed ? 'Buka menu dashboard' : 'Tutup menu dashboard');
+                toggle.setAttribute('title', collapsed ? 'Buka menu' : 'Tutup menu');
+            });
 
             labels.forEach(function (label) {
                 label.classList.toggle('hidden', collapsed);
@@ -104,7 +113,7 @@
 
             if (brandShell) {
                 brandShell.classList.toggle('justify-center', collapsed);
-                brandShell.classList.toggle('justify-start', !collapsed);
+                brandShell.classList.toggle('justify-end', !collapsed);
                 brandShell.classList.toggle('px-3', collapsed);
                 brandShell.classList.toggle('px-4', !collapsed);
             }
@@ -116,20 +125,24 @@
                 profile.classList.toggle('xl:hidden', collapsed);
             }
 
-            toggle.classList.toggle('-right-4', collapsed);
-            toggle.classList.toggle('right-3', !collapsed);
             setToggleIcon(collapsed ? 'menu' : 'x');
         }
 
         setCollapsed(!desktopQuery.matches);
 
-        toggle.addEventListener('click', function () {
-            const isExpanded = toggle.getAttribute('aria-expanded') === 'true';
+        function handleToggleClick() {
+            const isExpanded = mobileToggle.getAttribute('aria-expanded') === 'true';
             setCollapsed(isExpanded);
-        });
+        }
+
+        desktopToggle.addEventListener('click', handleToggleClick);
+        mobileToggle.addEventListener('click', handleToggleClick);
 
         desktopQuery.addEventListener('change', function (event) {
             setCollapsed(!event.matches);
+        });
+        mediumQuery.addEventListener('change', function () {
+            setCollapsed(!desktopQuery.matches);
         });
     });
 </script>
