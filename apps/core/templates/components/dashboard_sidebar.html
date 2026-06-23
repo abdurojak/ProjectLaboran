@@ -1,23 +1,33 @@
-<div class="h-fit w-[86px] shrink-0 transition-all duration-200 xl:w-[260px]" data-dashboard-sidebar-shell>
-<aside id="dashboard-sidebar" class="fixed inset-y-0 left-0 z-40 flex h-screen w-[86px] flex-col border-r border-slate-200 bg-white shadow-soft transition-all duration-200 xl:w-[260px]" data-dashboard-sidebar>
-    <div class="flex min-h-[88px] items-center justify-center border-b border-slate-200 bg-white px-3 xl:justify-end">
-        <button id="dashboard-sidebar-toggle" type="button" class="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white p-0 text-brand-800 shadow-sm transition hover:bg-white" aria-label="Tutup menu dashboard" title="Tutup menu" aria-expanded="true">
-            <i data-sidebar-toggle-icon data-lucide="panel-left-close" class="h-5 w-5"></i>
+{% load static %}
+<div class="h-fit w-[96px] shrink-0 transition-all duration-300 xl:w-[280px]" data-dashboard-sidebar-shell>
+<aside id="dashboard-sidebar" class="fixed inset-y-0 left-0 z-40 flex h-screen w-[96px] flex-col overflow-x-hidden border-r border-slate-200 bg-white shadow-soft transition-all duration-300 xl:w-[280px]" data-dashboard-sidebar>
+    <div class="relative flex min-h-[98px] items-center border-b border-slate-200 bg-white px-4" data-sidebar-brand-shell>
+        <a href="{% url 'dashboard:home' %}" class="flex min-w-0 items-center gap-3 rounded-3xl px-2 py-2 text-brand-800 transition hover:bg-brand-50" title="LabHub">
+            <span class="flex h-14 w-14 shrink-0 items-center justify-center rounded-[22px] bg-gradient-to-br from-brand-800 to-brand-600 shadow-lg shadow-brand-900/20">
+                <img src="{% static 'core/img/labhub-logo.png' %}" alt="LabHub" class="h-11 w-11 object-contain">
+            </span>
+            <span data-sidebar-label class="hidden min-w-0 xl:block">
+                <span class="block truncate text-lg font-black leading-5 tracking-tight text-brand-900">LabHub</span>
+                <span class="mt-1 block truncate text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Project Laboran</span>
+            </span>
+        </a>
+        <button id="dashboard-sidebar-toggle" type="button" class="absolute right-3 top-1/2 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-2xl border border-slate-200 bg-white p-0 text-brand-800 shadow-sm transition hover:border-brand-200 hover:bg-brand-50" aria-label="Tutup menu dashboard" title="Tutup menu" aria-expanded="true">
+            <i data-sidebar-toggle-icon data-lucide="panel-left-close" class="h-4 w-4"></i>
         </button>
     </div>
 
-    <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
+    <div class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-4">
         <nav class="grid gap-2">
             {% for link in sidebar_links %}
                 {% if link.url %}
-                <a href="{% url link.url %}" class="{% if link.active %}bg-brand-50 text-brand-800{% else %}text-slate-700 hover:bg-slate-50{% endif %} flex items-center gap-4 rounded-2xl px-3 py-3 font-semibold transition" title="{{ link.title }}">
+                <a href="{% url link.url %}" class="{% if link.active %}bg-brand-50 text-brand-800 ring-1 ring-brand-100{% else %}text-slate-700 hover:bg-slate-50{% endif %} flex h-14 items-center gap-4 rounded-2xl px-3 font-semibold transition" title="{{ link.title }}">
                     <span class="{{ link.icon_bg }} {{ link.icon_text }} flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl">
                         <i data-lucide="{{ link.icon }}" class="h-5 w-5"></i>
                     </span>
                     <span data-sidebar-label class="hidden min-w-0 truncate xl:inline">{{ link.title }}</span>
                 </a>
                 {% else %}
-                <div class="flex items-center gap-4 rounded-2xl px-3 py-3 text-slate-500" title="{{ link.title }}">
+                <div class="flex h-14 items-center gap-4 rounded-2xl px-3 text-slate-500" title="{{ link.title }}">
                     <span class="{{ link.icon_bg }} {{ link.icon_text }} flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl">
                         <i data-lucide="{{ link.icon }}" class="h-5 w-5"></i>
                     </span>
@@ -53,9 +63,10 @@
         const shell = sidebar.closest('[data-dashboard-sidebar-shell]');
         const header = document.querySelector('body > header');
         const desktopQuery = window.matchMedia('(min-width: 1280px)');
+        const brandShell = sidebar.querySelector('[data-sidebar-brand-shell]');
 
         function setToggleIcon(iconName) {
-            toggle.innerHTML = '<i data-sidebar-toggle-icon data-lucide="' + iconName + '" class="h-5 w-5"></i>';
+            toggle.innerHTML = '<i data-sidebar-toggle-icon data-lucide="' + iconName + '" class="h-4 w-4"></i>';
             if (window.lucide) {
                 window.lucide.createIcons();
             }
@@ -63,18 +74,18 @@
 
         function setCollapsed(collapsed) {
             sidebar.classList.toggle('w-[300px]', !collapsed);
-            sidebar.classList.toggle('w-[86px]', collapsed);
-            sidebar.classList.toggle('xl:w-[260px]', !collapsed);
-            sidebar.classList.toggle('xl:w-[86px]', collapsed);
+            sidebar.classList.toggle('w-[96px]', collapsed);
+            sidebar.classList.toggle('xl:w-[280px]', !collapsed);
+            sidebar.classList.toggle('xl:w-[96px]', collapsed);
             if (shell) {
                 shell.classList.toggle('w-[300px]', !collapsed);
-                shell.classList.toggle('w-[86px]', collapsed);
-                shell.classList.toggle('xl:w-[260px]', !collapsed);
-                shell.classList.toggle('xl:w-[86px]', collapsed);
+                shell.classList.toggle('w-[96px]', collapsed);
+                shell.classList.toggle('xl:w-[280px]', !collapsed);
+                shell.classList.toggle('xl:w-[96px]', collapsed);
             }
 
             if (header) {
-                const sidebarWidth = collapsed ? '86px' : (desktopQuery.matches ? '260px' : '300px');
+                const sidebarWidth = collapsed ? '96px' : (desktopQuery.matches ? '280px' : '300px');
                 header.style.marginLeft = sidebarWidth;
                 header.style.width = 'calc(100% - ' + sidebarWidth + ')';
             }
@@ -86,9 +97,17 @@
             labels.forEach(function (label) {
                 label.classList.toggle('hidden', collapsed);
                 label.classList.toggle('inline', !collapsed);
+                label.classList.toggle('block', !collapsed);
                 label.classList.toggle('xl:inline', !collapsed);
                 label.classList.toggle('xl:hidden', collapsed);
             });
+
+            if (brandShell) {
+                brandShell.classList.toggle('justify-center', collapsed);
+                brandShell.classList.toggle('justify-start', !collapsed);
+                brandShell.classList.toggle('px-3', collapsed);
+                brandShell.classList.toggle('px-4', !collapsed);
+            }
 
             if (profile) {
                 profile.classList.toggle('hidden', collapsed);
@@ -97,6 +116,8 @@
                 profile.classList.toggle('xl:hidden', collapsed);
             }
 
+            toggle.classList.toggle('-right-4', collapsed);
+            toggle.classList.toggle('right-3', !collapsed);
             setToggleIcon(collapsed ? 'menu' : 'x');
         }
 
