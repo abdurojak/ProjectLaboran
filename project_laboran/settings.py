@@ -31,9 +31,11 @@ DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = [
     host.strip()
-    for host in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+    for host in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,10.24.80.214').split(',')
     if host.strip()
 ]
+
+PUBLIC_ACCESS_BASE_URL = os.getenv('PUBLIC_ACCESS_BASE_URL', 'http://10.24.80.214:8001')
 
 
 # Application definition
@@ -153,3 +155,6 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@project-laboran.local')

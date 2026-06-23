@@ -20,12 +20,15 @@ class PenggunaLoginRequiredMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
+        forgot_password_url = reverse('pengguna:forgot_password')
         login_url = reverse('pengguna:login')
         register_url = reverse('pengguna:register')
+        reset_password_url = reverse('pengguna:reset_password')
+        verify_register_url = reverse('pengguna:verify_register')
         path = request.path
 
         is_exempt = (
-            path in [login_url, register_url]
+            path in [forgot_password_url, login_url, register_url, reset_password_url, verify_register_url]
             or any(path.startswith(prefix) for prefix in self.EXEMPT_PREFIXES)
         )
 
