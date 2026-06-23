@@ -11,6 +11,8 @@ class PenggunaLoginRequiredMiddleware:
     EXEMPT_PREFIXES = (
         '/admin/',
         '/media/',
+        '/pendaftaran-asleb/daftar/',
+        '/pendaftaran-asleb/berhasil/',
         '/static/',
     )
 
