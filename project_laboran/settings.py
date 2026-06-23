@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     'apps.jadwal',
     'apps.kalender',
     'apps.peminjaman',
+    'apps.pendaftaran_asleb',
     'apps.pengguna',
     'apps.ruangan',
 ]

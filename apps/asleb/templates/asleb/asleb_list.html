@@ -19,7 +19,7 @@
     <form id="asleb-filter-form" method="get" class="surface-card grid gap-4 p-5 md:grid-cols-[minmax(0,1.4fr)_220px_auto] md:items-end">
         <div>
             <label for="id_q">Cari asleb</label>
-            <input id="id_q" name="q" type="text" value="{{ search_query }}" placeholder="Cari nama, NIM, no HP, atau program studi" autocomplete="off">
+            <input id="id_q" name="q" type="text" value="{{ search_query }}" placeholder="Cari nama, NIM, no HP, program studi, atau matkul" autocomplete="off">
         </div>
         <div>
             <label for="id_status">Filter status</label>
@@ -51,6 +51,7 @@
                         <th>NIM</th>
                         <th>No HP</th>
                         <th>Program Studi</th>
+                        <th>Matkul</th>
                         <th>Semester</th>
                         <th>Status</th>
                         <th>Aksi</th>
@@ -66,6 +67,7 @@
                         <td>{{ asleb.nim }}</td>
                         <td>{{ asleb.no_hp }}</td>
                         <td>{{ asleb.program_studi }}</td>
+                        <td>{{ asleb.matkul|default:"-" }}</td>
                         <td>{{ asleb.semester }}</td>
                         <td>
                             <span class="{% if asleb.status == 'aktif' %}bg-emerald-100 text-emerald-700{% else %}bg-slate-100 text-slate-600{% endif %} inline-flex rounded-full px-3 py-1 text-xs font-bold">
@@ -88,7 +90,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="7" class="py-12 text-center text-slate-500">Belum ada data asleb.</td>
+                        <td colspan="8" class="py-12 text-center text-slate-500">Belum ada data asleb.</td>
                     </tr>
                     {% endfor %}
                 </tbody>

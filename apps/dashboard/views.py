@@ -11,6 +11,7 @@ from apps.inventaris.models import Barang, InventarisBarang
 from apps.jadwal.models import JadwalPraktikum
 from apps.kalender.models import KegiatanKalender
 from apps.peminjaman.models import PeminjamanAlat
+from apps.pendaftaran_asleb.models import PendaftaranAsleb
 
 
 class DashboardView(TemplateView):
@@ -65,6 +66,7 @@ class DashboardView(TemplateView):
         peminjaman_qs = PeminjamanAlat.objects.select_related('barang')
         peminjaman_aktif = peminjaman_qs.exclude(status='dikembalikan')
         asleb_qs = Asleb.objects.all()
+        pendaftaran_asleb_qs = PendaftaranAsleb.objects.all()
         context['is_mahasiswa_dashboard'] = bool(pengguna and pengguna.role == 'mahasiswa')
 
         if context['is_mahasiswa_dashboard']:
@@ -196,6 +198,14 @@ class DashboardView(TemplateView):
                 'tone': 'green',
             },
             {
+                'title': 'Pendaftaran Asleb',
+                'description': 'Kelola calon asleb yang mendaftar berdasarkan matkul, kontak, dan status seleksi.',
+                'url': 'pendaftaran_asleb:pendaftaran_list',
+                'status': 'Aktif',
+                'icon': 'clipboard-user',
+                'tone': 'teal',
+            },
+            {
                 'title': 'Rekap Honorarium Asleb',
                 'description': 'Rekap honor, pembayaran, dan ringkasan penggajian asleb akan tersedia di modul ini.',
                 'url': '',
@@ -249,8 +259,8 @@ class DashboardView(TemplateView):
             },
             {
                 'time': '08:55',
-                'title': 'Pengguna baru ditambahkan',
-                'detail': f'{asleb_qs.filter(status="aktif").count()} asleb aktif tercatat di sistem.',
+                'title': 'Data asleb diperbarui',
+                'detail': f'{asleb_qs.filter(status="aktif").count()} asleb aktif dan {pendaftaran_asleb_qs.filter(status="diajukan").count()} pendaftar menunggu seleksi.',
                 'tone': 'green',
             },
         ]
@@ -296,6 +306,13 @@ class DashboardView(TemplateView):
                 'url': 'asleb:asleb_create',
                 'icon': 'user-plus',
                 'tone': 'green',
+            },
+            {
+                'title': 'Tambah Pendaftaran Asleb',
+                'description': 'Catat calon asleb baru beserta matkul yang diminati.',
+                'url': 'pendaftaran_asleb:pendaftaran_create',
+                'icon': 'clipboard-user',
+                'tone': 'teal',
             },
             {
                 'title': 'Tambah Kegiatan Kalender',

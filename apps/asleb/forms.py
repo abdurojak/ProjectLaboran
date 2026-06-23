@@ -12,6 +12,7 @@ class AslebForm(forms.ModelForm):
             'no_hp',
             'email',
             'program_studi',
+            'matkul',
             'semester',
             'status',
             'tanggal_bergabung',
@@ -22,6 +23,7 @@ class AslebForm(forms.ModelForm):
             'nim': forms.TextInput(attrs={'placeholder': 'NIM mahasiswa'}),
             'no_hp': forms.TextInput(attrs={'placeholder': 'Nomor HP aktif'}),
             'program_studi': forms.TextInput(attrs={'placeholder': 'Contoh: Rekayasa Perangkat Lunak'}),
+            'matkul': forms.TextInput(attrs={'placeholder': 'Contoh: Pemrograman Web'}),
             'tanggal_bergabung': forms.DateInput(attrs={'type': 'date'}),
             'catatan': forms.Textarea(attrs={'rows': 4}),
         }

@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Kelola Matkul Asleb{% endblock %}
+
+{% block content %}
+<section class="space-y-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <p class="text-sm font-bold uppercase tracking-[0.2em] text-teal-700">Pendaftaran</p>
+            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Kelola Matkul Asleb</h2>
+            <p class="mt-2 text-sm text-slate-500">Tambah, edit, atau hapus pilihan mata kuliah yang muncul di form pendaftaran mahasiswa.</p>
+        </div>
+        <div class="flex flex-wrap gap-3">
+            <a class="btn-secondary" href="{% url 'pendaftaran_asleb:pendaftaran_list' %}">
+                <i data-lucide="arrow-left" class="h-4 w-4"></i>
+                <span>Kembali</span>
+            </a>
+            <a class="btn-primary bg-teal-700 hover:bg-teal-800 shadow-teal-900/15" href="{% url 'pendaftaran_asleb:matkul_create' %}">
+                <i data-lucide="plus" class="h-4 w-4"></i>
+                <span>Tambah Matkul</span>
+            </a>
+        </div>
+    </div>
+
+    <div class="surface-card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table>
+                <thead class="bg-slate-50">
+                    <tr>
+                        <th>Kode</th>
+                        <th>Mata Kuliah</th>
+                        <th>Dosen</th>
+                        <th>Kelas</th>
+                        <th>Status</th>
+                        <th>Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for matkul in matkul_list %}
+                    <tr class="hover:bg-slate-50/70">
+                        <td class="font-semibold text-slate-600">{{ matkul.kode }}</td>
+                        <td class="font-semibold text-slate-900">{{ matkul.nama }}</td>
+                        <td>{{ matkul.dosen }}</td>
+                        <td>{{ matkul.kelas }}</td>
+                        <td>
+                            <span class="{% if matkul.aktif %}bg-emerald-100 text-emerald-700{% else %}bg-slate-100 text-slate-600{% endif %} inline-flex rounded-full px-3 py-1 text-xs font-bold">
+                                {% if matkul.aktif %}Aktif{% else %}Nonaktif{% endif %}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="flex flex-wrap gap-3 text-sm font-semibold">
+                                <a class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700" href="{% url 'pendaftaran_asleb:matkul_update' matkul.pk %}">
+                                    <i data-lucide="pencil" class="h-4 w-4"></i><span>Edit</span>
+                                </a>
+                                <a class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700" href="{% url 'pendaftaran_asleb:matkul_delete' matkul.pk %}">
+                                    <i data-lucide="trash-2" class="h-4 w-4"></i><span>Hapus</span>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="py-12 text-center text-slate-500">Belum ada pilihan matkul.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+{% endblock %}

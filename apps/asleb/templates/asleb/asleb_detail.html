@@ -25,6 +25,7 @@
         <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">No HP</div><div class="mt-2 text-xl font-bold text-slate-900">{{ asleb.no_hp }}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Email</div><div class="mt-2 text-xl font-bold text-slate-900">{{ asleb.email|default:"-" }}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Program Studi</div><div class="mt-2 text-xl font-bold text-slate-900">{{ asleb.program_studi }}</div></div>
+        <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Matkul</div><div class="mt-2 text-xl font-bold text-slate-900">{{ asleb.matkul|default:"-" }}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Semester</div><div class="mt-2 text-xl font-bold text-slate-900">{{ asleb.semester }}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Status</div><div class="mt-2 text-xl font-bold text-slate-900">{{ asleb.get_status_display }}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5 md:col-span-2"><div class="text-sm font-semibold text-slate-500">Tanggal Bergabung</div><div class="mt-2 text-xl font-bold text-slate-900">{{ asleb.tanggal_bergabung|date:"d M Y" }}</div></div>

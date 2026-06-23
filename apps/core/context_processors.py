@@ -36,6 +36,7 @@ SIDEBAR_LINKS = [
     {'title': 'Peminjaman Alat', 'icon': 'arrow-left-right', 'url': 'peminjaman:peminjaman_list', 'namespace': 'peminjaman'},
     {'title': 'Jadwal Praktikum', 'icon': 'calendar-days', 'url': 'jadwal:jadwal_list', 'namespace': 'jadwal'},
     {'title': 'Data Asleb', 'icon': 'users', 'url': 'asleb:asleb_list', 'namespace': 'asleb'},
+    {'title': 'Pendaftaran Asleb', 'icon': 'clipboard-user', 'url': 'pendaftaran_asleb:pendaftaran_list', 'namespace': 'pendaftaran_asleb'},
     {'title': 'Rekap Honorarium Asleb', 'icon': 'file-chart-column', 'url': '', 'namespace': ''},
     {'title': 'Pengguna', 'icon': 'user-round', 'url': 'pengguna:list', 'namespace': 'pengguna'},
     {'title': 'Ruangan', 'icon': 'door-open', 'url': 'ruangan:ruangan_list', 'namespace': 'ruangan'},

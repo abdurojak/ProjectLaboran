@@ -21,7 +21,8 @@ class AslebListView(ListView):
                 Q(nama__icontains=search) |
                 Q(nim__icontains=search) |
                 Q(no_hp__icontains=search) |
-                Q(program_studi__icontains=search)
+                Q(program_studi__icontains=search) |
+                Q(matkul__icontains=search)
             )
 
         if status:

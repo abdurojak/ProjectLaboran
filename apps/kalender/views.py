@@ -1,11 +1,12 @@
 from datetime import datetime, timedelta
 
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
 from .forms import KegiatanKalenderForm
 from .models import KegiatanKalender
+from .utils import build_manual_notification, get_perayaan_calendar_events, get_perayaan_notifications
 
 
 class KegiatanKalenderListView(ListView):
@@ -42,6 +43,8 @@ class KegiatanKalenderListView(ListView):
                     },
                 }
             )
+
+        calendar_events.extend(get_perayaan_calendar_events(timezone.localdate().year))
 
         context['calendar_events'] = calendar_events
         context['upcoming_kegiatan'] = context['kegiatan_list'][:5]
@@ -91,3 +94,20 @@ class NotifikasiListView(ListView):
             )
             .order_by('tanggal', 'waktu_mulai')
         )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        today = timezone.localdate()
+        manual_notifications = [
+            build_manual_notification(
+                kegiatan,
+                reverse('kalender:kegiatan_detail', kwargs={'pk': kegiatan.pk}),
+            )
+            for kegiatan in context['notifikasi_list']
+        ]
+        perayaan_notifications = get_perayaan_notifications(today)
+        context['notifikasi_list'] = sorted(
+            manual_notifications + perayaan_notifications,
+            key=lambda item: (item['tanggal'], item['judul']),
+        )
+        return context

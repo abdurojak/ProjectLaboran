@@ -1,0 +1,84 @@
+from django.db import models
+
+
+class MataKuliahAsleb(models.Model):
+    MATKUL_CHOICES = [
+        ('JK_IF01_IR_ADRIAN', 'Jaringan Komputer - Ir. Adrian Syamsul Gamar, MTI - TIF-01'),
+        ('JK_TIF02_IR_GATOT', 'Jaringan Komputer - Ir. Gatot Budi Santoso, M.Kom - TIF-02'),
+        ('MDI_TIF01_SYANDRA', 'Manajemen Data dan Informasi - Syandra Sari, M.Kom - TIF-01'),
+        ('MDI_TIF02_ANUNG', 'Manajemen Data dan Informasi - Anung B. Attibowo, M.Kom - TIF-02'),
+        ('MDI_BI01_AGUS', 'Manajemen Data dan Informasi - Agus Salim, S.T., MTI - BI-01'),
+        ('MDI_BI02_SYANDRA', 'Manajemen Data dan Informasi - Syandra Sari, M.Kom - BI-02'),
+        ('ERP_BI01_DINI', 'Enterprise Resource Planning - Ir. Dini Solihah, S.T., M.Kom - BI-01'),
+        ('ERP_BI02_IR_TEDDY', 'Enterprise Resource Planning - Dr. Ir. Teddy Bickwanto, M.MSI - BI-02'),
+        ('DW_BI01_IR_TEDDY', 'Data Warehouse - Dr. Ir. Teddy Bickwanto, M.MSI - BI-01'),
+        ('DW_BI02_SYANDRA', 'Data Warehouse - Syandra Sari, M.Kom, MTI - BI-02'),
+        ('SDA_TIF01_ABDUL', 'Struktur Data dan Algoritma - Abdul Roohman, M.Kom - TIF-01'),
+        ('SDA_TIF02_ANUNG', 'Struktur Data dan Algoritma - Anung B. Attibowo, M.Kom - TIF-02'),
+        ('SDA_BI01_ANUNG', 'Struktur Data dan Algoritma - Anung B. Attibowo, M.Kom - BI-01'),
+        ('SDA_BI02_ABDUL', 'Struktur Data dan Algoritma - Abdul Roohman, M.Kom - BI-02'),
+        ('PS_TIF01_DR_DEDY', 'Probabilitas dan Statistika - Dr. Dedy Sugiharto, S.Si., M.M., M.Kom - TIF-01'),
+        ('PS_BI01_DRS_AYUDIN', 'Probabilitas dan Statistika - Drs. Ayfuddin, M.Si., Ph.D - BI-01'),
+        ('PS_BI02_IR_JOKO', 'Probabilitas dan Statistika - Dr. Joko Putroto, M.MSI - BI-02'),
+        ('PW_TIF02_DIAN', 'Pemrograman Web - Dian Pratiwi, S.T., MTI - TIF-02'),
+        ('PW_TIF01_YUNIA', 'Pemrograman Web - Yunia Ningish, M.Kom - TIF-01'),
+        ('PW_TIF01_DR_BINTI', 'Pemrograman Web - Dr. Binti Solihah, S.T., M.Kom - TIF-01'),
+        ('PM_TIF01_RIFDAH', 'Pemrograman Mobile - Rifdah Amelia, M.Kom - TIF-01'),
+        ('PM_TIF01_DIAN', 'Pemrograman Mobile - Dian Pratiwi, S.T., MTI - TIF-01'),
+        ('PBO_TIF01_ABDUL', 'Pemrograman Berorientasi Objek - Abdul Roohman, M.Kom - TIF-01'),
+        ('PBO_TIF02_DR_BINTI', 'Pemrograman Berorientasi Objek - Dr. Binti Solihah, S.T., M.Kom - TIF-02'),
+        ('PBO_TIF02_DR_AHMAD', 'Pemrograman Berorientasi Objek - Dr Ahmad Zuhdi, S.Si., M.Kom - TIF-02'),
+        ('AD_BI01_SYANDRA', 'Analitik Data - Syandra Sari, M.Kom - BI-01'),
+        ('AD_BI02_DR_DEDY', 'Analitik Data - Dr. Dedy Sugiharto, S.Si., M.M., M.Kom - BI-02'),
+        ('ML_BI01_ANUNG', 'Machine Learning - Anung B. Attibowo, M.Kom - BI-01'),
+        ('KK_BI01_DR_BINTI', 'Keamanan Komputasi - Dr. Binti Solihah, S.T., M.Kom - BI-01'),
+        ('KK_BI02_IR_WARDIANTO', 'Keamanan Komputasi - Ir. Wardianto, S.Si., M.Kom - BI-02'),
+        ('KK_BI02_IR_ADRIAN', 'Keamanan Komputasi - Ir. Adrian Syamsul Gamar, MTI - BI-02'),
+    ]
+
+    kode = models.CharField(max_length=80, unique=True)
+    nama = models.CharField(max_length=200)
+    dosen = models.CharField(max_length=200)
+    kelas = models.CharField(max_length=50)
+    aktif = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['nama', 'kelas', 'dosen']
+        verbose_name = 'Mata Kuliah Asleb'
+        verbose_name_plural = 'Mata Kuliah Asleb'
+
+    def __str__(self):
+        return f'{self.nama} - {self.dosen} - {self.kelas}'
+
+
+class PendaftaranAsleb(models.Model):
+    STATUS_CHOICES = [
+        ('diajukan', 'Diajukan'),
+        ('diterima', 'Diterima'),
+        ('ditolak', 'Ditolak'),
+        ('digenerate', 'Masuk Data Asleb'),
+    ]
+
+    nama = models.CharField(max_length=150)
+    nim = models.CharField('NIM', max_length=30)
+    no_hp = models.CharField('No HP', max_length=30)
+    email = models.EmailField(blank=True)
+    program_studi = models.CharField(max_length=120)
+    semester = models.PositiveSmallIntegerField()
+    matkul = models.ForeignKey(MataKuliahAsleb, on_delete=models.PROTECT, related_name='pendaftaran')
+    cv = models.FileField('CV', upload_to='pendaftaran_asleb/cv/', blank=True)
+    transkrip = models.FileField('Transkrip', upload_to='pendaftaran_asleb/transkrip/', blank=True)
+    rekening = models.CharField(max_length=150, blank=True)
+    alasan = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='diajukan')
+    tanggal_daftar = models.DateField(auto_now_add=True)
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+    diperbarui_pada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-tanggal_daftar', 'nama']
+        verbose_name = 'Pendaftaran Asleb'
+        verbose_name_plural = 'Pendaftaran Asleb'
+
+    def __str__(self):
+        return f'{self.nama} - {self.matkul}'

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Hapus Pendaftaran Asleb{% endblock %}
+
+{% block content %}
+<section class="mx-auto max-w-2xl space-y-6">
+    <div>
+        <p class="text-sm font-bold uppercase tracking-[0.2em] text-rose-600">Hapus</p>
+        <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Hapus Pendaftaran Asleb</h2>
+        <p class="mt-2 text-sm text-slate-500">Konfirmasi penghapusan data pendaftaran.</p>
+    </div>
+    <form method="post" class="surface-card space-y-5 p-6 md:p-8">
+        {% csrf_token %}
+        <p class="text-slate-700">
+            Yakin ingin menghapus pendaftaran <strong>{{ pendaftaran.nama }}</strong> untuk matkul <strong>{{ pendaftaran.get_matkul_display }}</strong>?
+        </p>
+        <div class="flex flex-wrap gap-3">
+            <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-2xl bg-rose-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-rose-700/20 transition hover:-translate-y-0.5 hover:bg-rose-700">
+                <i data-lucide="trash-2" class="h-4 w-4"></i><span>Hapus</span>
+            </button>
+            <a class="btn-secondary" href="{% url 'pendaftaran_asleb:pendaftaran_list' %}">
+                <i data-lucide="arrow-left" class="h-4 w-4"></i><span>Batal</span>
+            </a>
+        </div>
+    </form>
+</section>
+{% endblock %}

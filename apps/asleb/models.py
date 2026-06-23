@@ -12,6 +12,7 @@ class Asleb(models.Model):
     no_hp = models.CharField('No HP', max_length=30)
     email = models.EmailField(blank=True)
     program_studi = models.CharField(max_length=120)
+    matkul = models.CharField('Matkul', max_length=200, blank=True)
     semester = models.PositiveSmallIntegerField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='aktif')
     tanggal_bergabung = models.DateField()
