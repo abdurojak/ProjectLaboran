@@ -48,6 +48,12 @@
 {% block extra_script %}
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('#id_nim_nik, #id_no_hp').forEach(function (input) {
+            input.addEventListener('input', function () {
+                input.value = input.value.replace(/\D/g, '');
+            });
+        });
+
         document.querySelectorAll('[data-file-upload]').forEach(function (component) {
             const fileInput = component.querySelector('input[type="file"]');
             const previewWrapper = component.querySelector('[data-preview-wrapper]');

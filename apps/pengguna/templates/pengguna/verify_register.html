@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Verifikasi Register{% endblock %}
+
+{% block content %}
+<section class="mx-auto max-w-xl space-y-6">
+    <div>
+        <p class="text-sm font-bold uppercase tracking-[0.2em] text-brand-700">Verifikasi Akun</p>
+        <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Masukkan kode verifikasi</h2>
+        <p class="mt-2 text-sm text-slate-500">Kode berlaku 10 menit. Setelah benar, akun mahasiswa akan aktif dan langsung masuk dashboard.</p>
+    </div>
+
+    <form method="post" class="surface-card space-y-5 p-6 md:p-8">
+        {% csrf_token %}
+        {% for field in form %}
+        <div>
+            {{ field.label_tag }}
+            {{ field }}
+            {% if field.errors %}
+            <div class="mt-2 text-sm font-semibold text-rose-600">{{ field.errors|striptags }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+        <div class="flex flex-wrap gap-3">
+            <button type="submit" class="btn-primary gap-2">
+                <i data-lucide="badge-check" class="h-4 w-4"></i>
+                <span>Verifikasi</span>
+            </button>
+            <a href="{% url 'pengguna:register' %}" class="btn-secondary gap-2">
+                <i data-lucide="rotate-ccw" class="h-4 w-4"></i>
+                <span>Registrasi ulang</span>
+            </a>
+        </div>
+    </form>
+</section>
+{% endblock %}
