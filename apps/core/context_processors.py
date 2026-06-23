@@ -31,6 +31,7 @@ TONES = {
 
 SIDEBAR_LINKS = [
     {'title': 'Dashboard', 'icon': 'layout-grid', 'url': 'dashboard:home', 'namespace': 'dashboard'},
+    {'title': 'Kalender', 'icon': 'calendar-days', 'url': 'kalender:kegiatan_list', 'namespace': 'kalender'},
     {'title': 'Inventaris', 'icon': 'package', 'url': 'inventaris:barang_list', 'namespace': 'inventaris'},
     {'title': 'Barang Tertinggal', 'icon': 'briefcase', 'url': 'barang_tertinggal:list', 'namespace': 'barang_tertinggal'},
     {'title': 'Peminjaman Alat', 'icon': 'arrow-left-right', 'url': 'peminjaman:peminjaman_list', 'namespace': 'peminjaman'},

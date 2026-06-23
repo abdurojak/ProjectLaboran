@@ -42,14 +42,21 @@ class PenggunaLoginRequiredMiddleware:
                 return redirect(f'{login_url}?next={path}')
 
             request.current_pengguna = pengguna
-            namespace = resolve(path).namespace
-            if pengguna.role == 'mahasiswa' and not self.mahasiswa_can_access(namespace, path):
+            resolved = resolve(path)
+            namespace = resolved.namespace
+            if pengguna.role == 'mahasiswa' and not self.mahasiswa_can_access(namespace, path, resolved, pengguna):
                 return redirect('dashboard:home')
 
         return self.get_response(request)
 
-    def mahasiswa_can_access(self, namespace, path):
+    def mahasiswa_can_access(self, namespace, path, resolved, pengguna):
+        if namespace == 'kalender':
+            return resolved.url_name == 'notifikasi_list'
+
         if namespace != 'pengguna':
             return namespace in self.MAHASISWA_ALLOWED_NAMESPACES
 
-        return path in self.MAHASISWA_ALLOWED_PENGGUNA_PATHS
+        if path in self.MAHASISWA_ALLOWED_PENGGUNA_PATHS:
+            return True
+
+        return resolved.url_name == 'detail' and resolved.kwargs.get('pk') == pengguna.pk
