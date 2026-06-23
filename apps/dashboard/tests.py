@@ -313,7 +313,7 @@ class DashboardViewTests(TestCase):
 
         self.assertContains(response, 'Pendaftaran asleb sedang dibuka')
         self.assertContains(response, 'QR pendaftaran asleb')
-        self.assertContains(response, 'http://10.24.80.214:8001/pendaftaran-asleb/daftar/')
+        self.assertContains(response, 'http://10.24.80.245:8001/pendaftaran-asleb/daftar/')
 
     def test_dashboard_mahasiswa_menyembunyikan_qr_pendaftaran_asleb_saat_ditutup(self):
         mahasiswa = Pengguna.objects.create(

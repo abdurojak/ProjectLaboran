@@ -31,11 +31,11 @@ DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = [
     host.strip()
-    for host in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,10.24.80.214').split(',')
+    for host in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,10.24.80.245').split(',')
     if host.strip()
 ]
 
-PUBLIC_ACCESS_BASE_URL = os.getenv('PUBLIC_ACCESS_BASE_URL', 'http://10.24.80.214:8001')
+PUBLIC_ACCESS_BASE_URL = os.getenv('PUBLIC_ACCESS_BASE_URL', 'http://10.24.80.245:8001')
 
 
 # Application definition

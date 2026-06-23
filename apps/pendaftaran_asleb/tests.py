@@ -45,7 +45,7 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertContains(response, 'Rizki Pratama')
         self.assertContains(response, 'Status: Ditutup')
         self.assertContains(response, 'Buka Pendaftaran')
-        self.assertContains(response, 'http://10.24.80.214:8001/pendaftaran-asleb/daftar/')
+        self.assertContains(response, 'http://10.24.80.245:8001/pendaftaran-asleb/daftar/')
 
     def test_toggle_pendaftaran_membuka_dan_menutup_form(self):
         response = self.client.post(reverse('pendaftaran_asleb:pendaftaran_toggle_status'))
