@@ -14,20 +14,20 @@
                     <span class="{{ link.icon_bg }} {{ link.icon_text }} flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl">
                         <i data-lucide="{{ link.icon }}" class="h-5 w-5"></i>
                     </span>
-                    <span data-sidebar-label class="hidden min-w-0 truncate xl:inline">{{ link.title }}</span>
+                    <span data-sidebar-label class="hidden min-w-0 truncate">{{ link.title }}</span>
                 </a>
                 {% else %}
                 <div class="flex h-14 items-center gap-4 rounded-2xl px-3 text-slate-500" title="{{ link.title }}">
                     <span class="{{ link.icon_bg }} {{ link.icon_text }} flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl">
                         <i data-lucide="{{ link.icon }}" class="h-5 w-5"></i>
                     </span>
-                    <span data-sidebar-label class="hidden min-w-0 truncate xl:inline">{{ link.title }}</span>
+                    <span data-sidebar-label class="hidden min-w-0 truncate">{{ link.title }}</span>
                 </div>
                 {% endif %}
             {% endfor %}
         </nav>
 
-        <div data-sidebar-profile class="mt-6 hidden rounded-[24px] border border-slate-200 bg-gradient-to-b from-white to-brand-50/40 p-5 xl:block">
+        <div data-sidebar-profile class="mt-6 hidden rounded-[24px] border border-slate-200 bg-gradient-to-b from-white to-brand-50/40 p-5">
             <div class="text-sm font-medium text-slate-500">{{ today|date:"l, d F Y" }}</div>
             <p class="mt-8 text-sm text-slate-500">Selamat datang,</p>
             <p class="text-xl font-bold text-brand-800">Lab Admin</p>
@@ -72,16 +72,18 @@
 
             sidebar.classList.toggle('-translate-x-full', collapsed && !isMedium);
             sidebar.classList.toggle('translate-x-0', !collapsed || isMedium);
-            sidebar.classList.toggle('w-[300px]', !collapsed && !desktopQuery.matches);
+            sidebar.classList.toggle('w-[300px]', !collapsed && !isMedium);
+            sidebar.classList.toggle('md:w-[300px]', isMedium && !collapsed && !desktopQuery.matches);
             sidebar.classList.toggle('w-[96px]', collapsed || (isMedium && !desktopQuery.matches));
-            sidebar.classList.toggle('md:w-[96px]', collapsed || !desktopQuery.matches);
+            sidebar.classList.toggle('md:w-[96px]', collapsed || desktopQuery.matches);
             sidebar.classList.toggle('xl:w-[280px]', !collapsed && desktopQuery.matches);
             sidebar.classList.toggle('xl:w-[96px]', collapsed && desktopQuery.matches);
             if (shell) {
                 shell.classList.toggle('w-0', !isMedium);
                 shell.classList.toggle('w-[300px]', isMedium && !collapsed && !desktopQuery.matches);
+                shell.classList.toggle('md:w-[300px]', isMedium && !collapsed && !desktopQuery.matches);
                 shell.classList.toggle('w-[96px]', isMedium && (collapsed || !desktopQuery.matches));
-                shell.classList.toggle('md:w-[96px]', isMedium && (collapsed || !desktopQuery.matches));
+                shell.classList.toggle('md:w-[96px]', isMedium && (collapsed || desktopQuery.matches));
                 shell.classList.toggle('xl:w-[280px]', isMedium && !collapsed && desktopQuery.matches);
                 shell.classList.toggle('xl:w-[96px]', isMedium && collapsed && desktopQuery.matches);
             }
@@ -105,10 +107,7 @@
 
             labels.forEach(function (label) {
                 label.classList.toggle('hidden', collapsed);
-                label.classList.toggle('inline', !collapsed);
                 label.classList.toggle('block', !collapsed);
-                label.classList.toggle('xl:inline', !collapsed);
-                label.classList.toggle('xl:hidden', collapsed);
             });
 
             if (brandShell) {
@@ -121,8 +120,6 @@
             if (profile) {
                 profile.classList.toggle('hidden', collapsed);
                 profile.classList.toggle('block', !collapsed);
-                profile.classList.toggle('xl:block', !collapsed);
-                profile.classList.toggle('xl:hidden', collapsed);
             }
 
             setToggleIcon(collapsed ? 'menu' : 'x');

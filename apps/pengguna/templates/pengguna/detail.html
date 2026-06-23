@@ -11,14 +11,14 @@
             <p class="mt-2 text-sm text-slate-500">Detail identitas dan kontak pengguna.</p>
         </div>
         <div class="flex flex-wrap gap-3">
-            <a class="btn-primary gap-2" href="{% url 'pengguna:update' pengguna.pk %}">
+            <button type="button" data-profile-modal-open class="btn-primary gap-2">
                 <i data-lucide="pencil" class="h-4 w-4"></i>
                 <span>Edit</span>
-            </a>
-            <a data-confirmation-trigger data-confirm-message="Lanjut ke halaman konfirmasi hapus pengguna {{ pengguna.nama_pengguna }}?" class="inline-flex items-center justify-center gap-2 rounded-2xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-rose-700" href="{% url 'pengguna:delete' pengguna.pk %}">
-                <i data-lucide="trash-2" class="h-4 w-4"></i>
-                <span>Hapus</span>
-            </a>
+            </button>
+            <button type="button" data-password-modal-open class="btn-secondary gap-2">
+                <i data-lucide="key-round" class="h-4 w-4"></i>
+                <span>Ganti Password</span>
+            </button>
             <a class="btn-secondary gap-2" href="{% url 'pengguna:list' %}">
                 <i data-lucide="arrow-left" class="h-4 w-4"></i>
                 <span>Kembali</span>
@@ -77,8 +77,226 @@
         </article>
     </div>
 </section>
+
+<div data-profile-modal class="fixed inset-0 z-[70] hidden items-center justify-center bg-slate-950/50 px-4 py-6 backdrop-blur-sm">
+    <div class="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-[28px] border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-950/20">
+        <div class="flex items-start justify-between gap-4">
+            <div>
+                <p class="text-xs font-extrabold uppercase tracking-[0.18em] text-brand-700">Profil Pengguna</p>
+                <h3 class="mt-2 text-2xl font-black tracking-tight text-slate-900">Edit Profil</h3>
+                <p class="mt-2 text-sm leading-6 text-slate-500">Perbarui identitas, kontak, foto, dan data akademik pengguna.</p>
+            </div>
+            <button type="button" data-profile-modal-close class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 text-slate-500 transition hover:bg-slate-50">
+                <i data-lucide="x" class="h-4 w-4"></i>
+            </button>
+        </div>
+
+        <form method="post" action="{% url 'pengguna:update_profile' pengguna.pk %}" enctype="multipart/form-data" class="mt-6 grid gap-5 md:grid-cols-2">
+            {% csrf_token %}
+            <input type="hidden" id="id_profile_hapus_foto" name="hapus_foto" value="0">
+            {% for field in profile_form %}
+            <div class="{% if field.name == 'foto' or field.name == 'nama_pengguna' or field.name == 'alamat' %}md:col-span-2{% endif %}">
+                {{ field.label_tag }}
+                {% if field.name == 'foto' %}
+                {% include "components/file_upload.html" with field=field current_file=pengguna.foto button_label="Pilih Foto" title="Upload foto pengguna" empty_label="Belum ada foto dipilih" delete_label="Foto akan dihapus saat disimpan" preview_label="Preview foto" preview_alt="Preview foto pengguna" delete_input_id="id_profile_hapus_foto" delete_button_label="Hapus Foto" %}
+                {% else %}
+                {{ field }}
+                {% endif %}
+                {% if field.help_text %}
+                <p class="mt-2 text-sm text-slate-500">{{ field.help_text }}</p>
+                {% endif %}
+                {% if field.errors %}
+                <div class="mt-2 text-sm font-semibold text-rose-600">{{ field.errors|striptags }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+            <div class="flex flex-wrap justify-end gap-3 md:col-span-2">
+                <button type="button" data-profile-modal-close class="btn-secondary">Batal</button>
+                <button type="submit" class="btn-primary gap-2">
+                    <i data-lucide="save" class="h-4 w-4"></i>
+                    <span>Simpan Profil</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div data-password-modal class="fixed inset-0 z-[70] hidden items-center justify-center bg-slate-950/50 px-4 py-6 backdrop-blur-sm">
+    <div class="w-full max-w-lg rounded-[28px] border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-950/20">
+        <div class="flex items-start justify-between gap-4">
+            <div>
+                <p class="text-xs font-extrabold uppercase tracking-[0.18em] text-brand-700">Keamanan Akun</p>
+                <h3 class="mt-2 text-2xl font-black tracking-tight text-slate-900">Ganti Password</h3>
+                <p class="mt-2 text-sm leading-6 text-slate-500">Password baru akan langsung aktif untuk akun {{ pengguna.nama_pengguna }}.</p>
+            </div>
+            <button type="button" data-password-modal-close class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 text-slate-500 transition hover:bg-slate-50">
+                <i data-lucide="x" class="h-4 w-4"></i>
+            </button>
+        </div>
+
+        <form method="post" action="{% url 'pengguna:change_password' pengguna.pk %}" class="mt-6 grid gap-4">
+            {% csrf_token %}
+            <div>
+                <label for="id_password">Password baru</label>
+                <input id="id_password" name="password" type="password" required autocomplete="new-password">
+            </div>
+            <div>
+                <label for="id_password_confirmation">Konfirmasi password baru</label>
+                <input id="id_password_confirmation" name="password_confirmation" type="password" required autocomplete="new-password">
+            </div>
+            <div class="mt-2 flex flex-wrap justify-end gap-3">
+                <button type="button" data-password-modal-close class="btn-secondary">Batal</button>
+                <button type="submit" class="btn-primary gap-2">
+                    <i data-lucide="save" class="h-4 w-4"></i>
+                    <span>Simpan Password</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_script %}
-{% include "components/confirmation_modal.html" with title="Konfirmasi Hapus Pengguna" confirm_label="Lanjutkan" confirm_icon="arrow-right" %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const profileModal = document.querySelector('[data-profile-modal]');
+        const profileOpenButton = document.querySelector('[data-profile-modal-open]');
+        const profileCloseButtons = document.querySelectorAll('[data-profile-modal-close]');
+        const modal = document.querySelector('[data-password-modal]');
+        const openButton = document.querySelector('[data-password-modal-open]');
+        const closeButtons = document.querySelectorAll('[data-password-modal-close]');
+
+        function setProfileOpen(isOpen) {
+            if (!profileModal) {
+                return;
+            }
+            profileModal.classList.toggle('hidden', !isOpen);
+            profileModal.classList.toggle('flex', isOpen);
+        }
+
+        function setOpen(isOpen) {
+            if (!modal) {
+                return;
+            }
+            modal.classList.toggle('hidden', !isOpen);
+            modal.classList.toggle('flex', isOpen);
+        }
+
+        if (profileOpenButton) {
+            profileOpenButton.addEventListener('click', function () {
+                setProfileOpen(true);
+            });
+        }
+
+        profileCloseButtons.forEach(function (button) {
+            button.addEventListener('click', function () {
+                setProfileOpen(false);
+            });
+        });
+
+        if (profileModal) {
+            profileModal.addEventListener('click', function (event) {
+                if (event.target === profileModal) {
+                    setProfileOpen(false);
+                }
+            });
+        }
+
+        if (openButton) {
+            openButton.addEventListener('click', function () {
+                setOpen(true);
+            });
+        }
+
+        closeButtons.forEach(function (button) {
+            button.addEventListener('click', function () {
+                setOpen(false);
+            });
+        });
+
+        if (modal) {
+            modal.addEventListener('click', function (event) {
+                if (event.target === modal) {
+                    setOpen(false);
+                }
+            });
+        }
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') {
+                setProfileOpen(false);
+                setOpen(false);
+            }
+        });
+    });
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const hapusFotoInput = document.getElementById('id_profile_hapus_foto');
+
+        document.querySelectorAll('[data-file-upload]').forEach(function (component) {
+            const fileInput = component.querySelector('input[type="file"]');
+            const previewWrapper = component.querySelector('[data-preview-wrapper]');
+            const previewImage = component.querySelector('[data-preview-image]');
+            const deleteButton = component.querySelector('[data-delete-button]');
+            const fileName = component.querySelector('[data-file-name]');
+            const emptyLabel = component.dataset.emptyLabel || 'Belum ada file dipilih';
+            const deleteLabel = component.dataset.deleteLabel || 'File akan dihapus saat disimpan';
+            let previewUrl = null;
+
+            if (!fileInput || !fileName) {
+                return;
+            }
+
+            fileInput.addEventListener('change', function () {
+                const file = fileInput.files && fileInput.files[0];
+
+                if (previewUrl) {
+                    URL.revokeObjectURL(previewUrl);
+                    previewUrl = null;
+                }
+
+                if (!file) {
+                    if (previewImage) {
+                        previewImage.removeAttribute('src');
+                    }
+                    if (previewWrapper) {
+                        previewWrapper.classList.add('hidden');
+                    }
+                    fileName.textContent = emptyLabel;
+                    return;
+                }
+
+                if (hapusFotoInput) {
+                    hapusFotoInput.value = '0';
+                }
+                fileName.textContent = file.name;
+
+                if (previewImage && previewWrapper) {
+                    previewUrl = URL.createObjectURL(file);
+                    previewImage.src = previewUrl;
+                    previewWrapper.classList.remove('hidden');
+                }
+            });
+
+            if (deleteButton && hapusFotoInput) {
+                deleteButton.addEventListener('click', function () {
+                    if (previewUrl) {
+                        URL.revokeObjectURL(previewUrl);
+                        previewUrl = null;
+                    }
+
+                    fileInput.value = '';
+                    hapusFotoInput.value = '1';
+                    fileName.textContent = deleteLabel;
+                    if (previewImage) {
+                        previewImage.removeAttribute('src');
+                    }
+                    if (previewWrapper) {
+                        previewWrapper.classList.add('hidden');
+                    }
+                });
+            }
+        });
+    });
+</script>
 {% endblock %}

@@ -11,9 +11,11 @@ from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, UpdateView, View
 
 from .forms import (
+    ChangePasswordForm,
     ForgotPasswordRequestForm,
     LoginPenggunaForm,
     PenggunaForm,
+    PenggunaProfileForm,
     RegisterPenggunaForm,
     ResetPasswordForm,
     VerificationCodeForm,
@@ -88,6 +90,14 @@ class PenggunaDetailView(DetailView):
     template_name = 'pengguna/detail.html'
     context_object_name = 'pengguna'
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['profile_form'] = PenggunaProfileForm(
+            instance=self.object,
+            current_pengguna=getattr(self.request, 'current_pengguna', None),
+        )
+        return context
+
 
 class PenggunaCreateView(CreateView):
     model = Pengguna
@@ -109,6 +119,44 @@ class PenggunaDeleteView(DeleteView):
     template_name = 'pengguna/confirm_delete.html'
     context_object_name = 'pengguna'
     success_url = reverse_lazy('pengguna:list')
+
+
+class PenggunaChangePasswordView(View):
+    def post(self, request, pk, *args, **kwargs):
+        pengguna = Pengguna.objects.get(pk=pk)
+        form = ChangePasswordForm(request.POST)
+
+        if form.is_valid():
+            pengguna.password = make_password(form.cleaned_data['password'])
+            pengguna.save(update_fields=['password', 'diperbarui_pada'])
+            messages.success(request, 'Password pengguna berhasil diganti.')
+        else:
+            for field_errors in form.errors.values():
+                for error in field_errors:
+                    messages.error(request, error)
+
+        return redirect('pengguna:detail', pk=pk)
+
+
+class PenggunaUpdateProfileView(View):
+    def post(self, request, pk, *args, **kwargs):
+        pengguna = Pengguna.objects.get(pk=pk)
+        form = PenggunaProfileForm(
+            request.POST,
+            request.FILES,
+            instance=pengguna,
+            current_pengguna=getattr(request, 'current_pengguna', None),
+        )
+
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Profil pengguna berhasil diperbarui.')
+        else:
+            for field_errors in form.errors.values():
+                for error in field_errors:
+                    messages.error(request, error)
+
+        return redirect('pengguna:detail', pk=pk)
 
 
 class PenggunaLoginView(FormView):

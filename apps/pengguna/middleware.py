@@ -62,4 +62,4 @@ class PenggunaLoginRequiredMiddleware:
         if path in self.MAHASISWA_ALLOWED_PENGGUNA_PATHS:
             return True
 
-        return resolved.url_name == 'detail' and resolved.kwargs.get('pk') == pengguna.pk
+        return resolved.url_name in {'detail', 'update_profile', 'change_password'} and resolved.kwargs.get('pk') == pengguna.pk

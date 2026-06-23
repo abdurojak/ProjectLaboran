@@ -51,6 +51,64 @@ class PenggunaForm(forms.ModelForm):
         return instance
 
 
+class PenggunaProfileForm(forms.ModelForm):
+    class Meta:
+        model = Pengguna
+        fields = [
+            'foto',
+            'nama_pengguna',
+            'nim_nik',
+            'email',
+            'gender',
+            'no_hp',
+            'alamat',
+            'fakultas',
+            'prodi',
+            'role',
+        ]
+        widgets = {
+            'foto': forms.FileInput(attrs={'class': 'hidden', 'accept': 'image/*'}),
+            'alamat': forms.Textarea(attrs={'rows': 4}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        self.current_pengguna = kwargs.pop('current_pengguna', None)
+        super().__init__(*args, **kwargs)
+        if self.current_pengguna and self.current_pengguna.role == 'mahasiswa':
+            self.fields.pop('role', None)
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        hapus_foto = self.data.get('hapus_foto') == '1'
+
+        if self.current_pengguna and self.current_pengguna.role == 'mahasiswa':
+            instance.role = self.instance.role
+
+        if hapus_foto:
+            instance.foto = None
+
+        if commit:
+            instance.save()
+            self.save_m2m()
+
+        return instance
+
+
+class ChangePasswordForm(forms.Form):
+    password = forms.CharField(label='Password baru', widget=forms.PasswordInput)
+    password_confirmation = forms.CharField(label='Konfirmasi password baru', widget=forms.PasswordInput)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        password = cleaned_data.get('password')
+        password_confirmation = cleaned_data.get('password_confirmation')
+
+        if password and password_confirmation and password != password_confirmation:
+            self.add_error('password_confirmation', 'Konfirmasi password tidak sama.')
+
+        return cleaned_data
+
+
 class LoginPenggunaForm(forms.Form):
     nim_nik = forms.CharField(label='NIM/NIK', max_length=40)
     password = forms.CharField(widget=forms.PasswordInput)

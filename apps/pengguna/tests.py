@@ -135,6 +135,90 @@ class PenggunaViewTests(TestCase):
         self.assertEqual(self.pengguna.password, password_lama)
         self.assertEqual(self.pengguna.role, 'laboran')
 
+    def test_detail_pengguna_tidak_menampilkan_tombol_hapus(self):
+        response = self.client.get(reverse('pengguna:detail', args=[self.pengguna.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Edit Profil')
+        self.assertContains(response, 'Ganti Password')
+        self.assertNotContains(response, 'Konfirmasi Hapus Pengguna')
+        self.assertNotContains(response, f'href="{reverse("pengguna:delete", args=[self.pengguna.pk])}"')
+
+    def test_update_profile_mengubah_data_pengguna(self):
+        response = self.client.post(
+            reverse('pengguna:update_profile', args=[self.pengguna.pk]),
+            {
+                'nama_pengguna': 'Andi Profil Baru',
+                'nim_nik': '2201001',
+                'email': 'andi.profil@example.com',
+                'gender': 'laki_laki',
+                'no_hp': '089999999999',
+                'alamat': 'Bekasi',
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Sistem Informasi',
+                'role': 'laboran',
+                'hapus_foto': '0',
+            },
+        )
+
+        self.pengguna.refresh_from_db()
+        self.assertRedirects(response, reverse('pengguna:detail', args=[self.pengguna.pk]))
+        self.assertEqual(self.pengguna.nama_pengguna, 'Andi Profil Baru')
+        self.assertEqual(self.pengguna.email, 'andi.profil@example.com')
+        self.assertEqual(self.pengguna.no_hp, '089999999999')
+        self.assertEqual(self.pengguna.role, 'laboran')
+
+    def test_mahasiswa_tidak_bisa_mengubah_role_lewat_update_profile(self):
+        self.pengguna.role = 'mahasiswa'
+        self.pengguna.save(update_fields=['role'])
+        response = self.client.post(
+            reverse('pengguna:update_profile', args=[self.pengguna.pk]),
+            {
+                'nama_pengguna': 'Andi Mahasiswa',
+                'nim_nik': '2201001',
+                'email': 'andi.mahasiswa@example.com',
+                'gender': 'laki_laki',
+                'no_hp': '081234567890',
+                'alamat': 'Jakarta',
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Informatika',
+                'role': 'admin',
+                'hapus_foto': '0',
+            },
+        )
+
+        self.pengguna.refresh_from_db()
+        self.assertRedirects(response, reverse('pengguna:detail', args=[self.pengguna.pk]))
+        self.assertEqual(self.pengguna.nama_pengguna, 'Andi Mahasiswa')
+        self.assertEqual(self.pengguna.role, 'mahasiswa')
+
+    def test_change_password_mengganti_password_pengguna(self):
+        response = self.client.post(
+            reverse('pengguna:change_password', args=[self.pengguna.pk]),
+            {
+                'password': 'passwordbaru123',
+                'password_confirmation': 'passwordbaru123',
+            },
+        )
+
+        self.pengguna.refresh_from_db()
+        self.assertRedirects(response, reverse('pengguna:detail', args=[self.pengguna.pk]))
+        self.assertTrue(check_password('passwordbaru123', self.pengguna.password))
+
+    def test_change_password_menolak_konfirmasi_tidak_sama(self):
+        password_lama = self.pengguna.password
+        response = self.client.post(
+            reverse('pengguna:change_password', args=[self.pengguna.pk]),
+            {
+                'password': 'passwordbaru123',
+                'password_confirmation': 'berbeda123',
+            },
+        )
+
+        self.pengguna.refresh_from_db()
+        self.assertRedirects(response, reverse('pengguna:detail', args=[self.pengguna.pk]))
+        self.assertEqual(self.pengguna.password, password_lama)
+
     def test_delete_pengguna(self):
         response = self.client.post(reverse('pengguna:delete', args=[self.pengguna.pk]))
 

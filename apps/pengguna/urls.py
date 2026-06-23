@@ -2,6 +2,7 @@ from django.urls import path
 
 from .views import (
     ForgotPasswordRequestView,
+    PenggunaChangePasswordView,
     PenggunaCreateView,
     PenggunaDeleteView,
     PenggunaDetailView,
@@ -9,6 +10,7 @@ from .views import (
     PenggunaLoginView,
     PenggunaLogoutView,
     PenggunaRegisterView,
+    PenggunaUpdateProfileView,
     PenggunaUpdateView,
     PenggunaVerifyRegisterView,
     ResetPasswordView,
@@ -27,5 +29,7 @@ urlpatterns = [
     path('tambah/', PenggunaCreateView.as_view(), name='create'),
     path('<int:pk>/', PenggunaDetailView.as_view(), name='detail'),
     path('<int:pk>/edit/', PenggunaUpdateView.as_view(), name='update'),
+    path('<int:pk>/edit-profil/', PenggunaUpdateProfileView.as_view(), name='update_profile'),
+    path('<int:pk>/ganti-password/', PenggunaChangePasswordView.as_view(), name='change_password'),
     path('<int:pk>/hapus/', PenggunaDeleteView.as_view(), name='delete'),
 ]

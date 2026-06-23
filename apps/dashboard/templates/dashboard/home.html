@@ -37,6 +37,7 @@
         </div>
         {% endcomment %}
 
+        {% if not is_mahasiswa_dashboard %}
         <div class="grid gap-4 md:grid-cols-4">
             {% for stat in stats_cards %}
             <article class="surface-card flex items-center gap-4 p-4">
@@ -50,6 +51,7 @@
             </article>
             {% endfor %}
         </div>
+        {% endif %}
 
         {% if is_mahasiswa_dashboard %}
         {% if pendaftaran_asleb_dibuka %}
