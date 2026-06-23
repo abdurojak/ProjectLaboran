@@ -1,7 +1,7 @@
 from django.db.models import Q
 from django.contrib import messages
-from django.shortcuts import get_object_or_404, redirect
-from django.urls import reverse, reverse_lazy
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse_lazy
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
@@ -9,7 +9,8 @@ from django.views.generic import CreateView, DeleteView, DetailView, ListView, U
 from apps.asleb.models import Asleb
 
 from .forms import MataKuliahAslebForm, PendaftaranAslebForm, PendaftaranAslebPublicForm
-from .models import MataKuliahAsleb, PendaftaranAsleb
+from .models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb
+from .utils import get_public_registration_url
 
 
 class PendaftaranAslebListView(ListView):
@@ -44,9 +45,8 @@ class PendaftaranAslebListView(ListView):
         context['search_query'] = self.request.GET.get('q', '').strip()
         context['selected_status'] = self.request.GET.get('status', '').strip()
         context['status_choices'] = PendaftaranAsleb.STATUS_CHOICES
-        context['public_registration_url'] = self.request.build_absolute_uri(
-            reverse('pendaftaran_asleb:pendaftaran_public')
-        )
+        context['public_registration_url'] = get_public_registration_url()
+        context['pengaturan_pendaftaran'] = PengaturanPendaftaranAsleb.get_solo()
         return context
 
 
@@ -92,6 +92,12 @@ class PendaftaranAslebPublicCreateView(CreateView):
     form_class = PendaftaranAslebPublicForm
     template_name = 'pendaftaran_asleb/pendaftaran_public_form.html'
     success_url = reverse_lazy('pendaftaran_asleb:pendaftaran_success')
+
+    def dispatch(self, request, *args, **kwargs):
+        if not PengaturanPendaftaranAsleb.get_solo().dibuka:
+            return render(request, 'pendaftaran_asleb/pendaftaran_closed.html')
+
+        return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -158,6 +164,17 @@ def generate_all_accepted_asleb(request):
         messages.warning(request, 'Belum ada pendaftar berstatus diterima untuk digenerate.')
 
     return redirect('asleb:asleb_list' if generated_count else 'pendaftaran_asleb:pendaftaran_list')
+
+
+@require_POST
+def toggle_pendaftaran_status(request):
+    pengaturan = PengaturanPendaftaranAsleb.get_solo()
+    pengaturan.dibuka = not pengaturan.dibuka
+    pengaturan.save(update_fields=['dibuka', 'diperbarui_pada'])
+
+    status = 'dibuka' if pengaturan.dibuka else 'ditutup'
+    messages.success(request, f'Pendaftaran asleb berhasil {status}.')
+    return redirect('pendaftaran_asleb:pendaftaran_list')
 
 
 def create_or_update_asleb_from_pendaftaran(pendaftaran):

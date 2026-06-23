@@ -11,7 +11,8 @@ from apps.inventaris.models import Barang, InventarisBarang
 from apps.jadwal.models import JadwalPraktikum
 from apps.kalender.models import KegiatanKalender
 from apps.peminjaman.models import PeminjamanAlat
-from apps.pendaftaran_asleb.models import PendaftaranAsleb
+from apps.pendaftaran_asleb.models import PendaftaranAsleb, PengaturanPendaftaranAsleb
+from apps.pendaftaran_asleb.utils import get_public_registration_url
 
 
 class DashboardView(TemplateView):
@@ -70,10 +71,13 @@ class DashboardView(TemplateView):
         context['is_mahasiswa_dashboard'] = bool(pengguna and pengguna.role == 'mahasiswa')
 
         if context['is_mahasiswa_dashboard']:
+            pengaturan_pendaftaran = PengaturanPendaftaranAsleb.get_solo()
             peminjaman_saya = peminjaman_qs.filter(nim=pengguna.nim_nik)
             context['today'] = timezone.localdate()
             context['peminjaman_saya'] = peminjaman_saya[:6]
             context['jadwal_hari_ini'] = jadwal_qs.filter(tanggal=context['today'])[:6]
+            context['pendaftaran_asleb_dibuka'] = pengaturan_pendaftaran.dibuka
+            context['public_registration_url'] = get_public_registration_url()
             context['stats_cards'] = self._decorate_items([
                 {
                     'label': 'Peminjaman Saya',

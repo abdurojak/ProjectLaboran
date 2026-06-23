@@ -4,6 +4,7 @@ from django.utils import timezone
 
 from apps.inventaris.models import Barang
 from apps.peminjaman.models import PeminjamanAlat
+from apps.pendaftaran_asleb.models import PengaturanPendaftaranAsleb
 from apps.pengguna.models import Pengguna
 
 
@@ -287,3 +288,51 @@ class DashboardViewTests(TestCase):
         self.assertNotContains(response, 'Inventaris Terbaru')
         self.assertNotContains(response, 'Akses Cepat')
         self.assertNotContains(response, 'Aktivitas Terbaru')
+
+    def test_dashboard_mahasiswa_menampilkan_qr_pendaftaran_asleb_saat_dibuka(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Siti Aminah',
+            nim_nik='2201002',
+            email='siti@example.com',
+            password='rahasia123',
+            no_hp='081111111111',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='mahasiswa',
+        )
+        pengaturan = PengaturanPendaftaranAsleb.get_solo()
+        pengaturan.dibuka = True
+        pengaturan.save(update_fields=['dibuka'])
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+
+        response = self.client.get(reverse('dashboard:home'))
+
+        self.assertContains(response, 'Pendaftaran asleb sedang dibuka')
+        self.assertContains(response, 'QR pendaftaran asleb')
+        self.assertContains(response, 'http://10.24.80.214:8001/pendaftaran-asleb/daftar/')
+
+    def test_dashboard_mahasiswa_menyembunyikan_qr_pendaftaran_asleb_saat_ditutup(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Siti Aminah',
+            nim_nik='2201002',
+            email='siti@example.com',
+            password='rahasia123',
+            no_hp='081111111111',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='mahasiswa',
+        )
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+
+        response = self.client.get(reverse('dashboard:home'))
+
+        self.assertNotContains(response, 'Pendaftaran asleb sedang dibuka')
+        self.assertNotContains(response, 'QR pendaftaran asleb')

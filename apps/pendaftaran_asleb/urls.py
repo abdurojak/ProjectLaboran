@@ -16,6 +16,7 @@ from .views import (
     generate_all_accepted_asleb,
     generate_asleb,
     reject_pendaftaran,
+    toggle_pendaftaran_status,
 )
 
 app_name = 'pendaftaran_asleb'
@@ -36,4 +37,5 @@ urlpatterns = [
     path('<int:pk>/tolak/', reject_pendaftaran, name='pendaftaran_reject'),
     path('<int:pk>/generate-asleb/', generate_asleb, name='pendaftaran_generate_asleb'),
     path('generate-diterima/', generate_all_accepted_asleb, name='pendaftaran_generate_all_accepted'),
+    path('toggle-status/', toggle_pendaftaran_status, name='pendaftaran_toggle_status'),
 ]

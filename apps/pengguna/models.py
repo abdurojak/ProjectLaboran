@@ -28,6 +28,7 @@ class Pengguna(models.Model):
     prodi = models.CharField(max_length=120)
     gender = models.CharField(max_length=20, choices=GENDER_CHOICES)
     role = models.CharField(max_length=30, choices=ROLE_CHOICES, default='mahasiswa')
+    is_verified = models.BooleanField('Terverifikasi', default=True)
     dibuat_pada = models.DateTimeField(auto_now_add=True)
     diperbarui_pada = models.DateTimeField(auto_now=True)
 

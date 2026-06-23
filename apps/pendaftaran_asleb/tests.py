@@ -4,7 +4,7 @@ from django.urls import reverse
 from apps.asleb.models import Asleb
 from apps.pengguna.models import Pengguna
 
-from .models import MataKuliahAsleb, PendaftaranAsleb
+from .models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb
 
 
 class PendaftaranAslebViewTests(TestCase):
@@ -43,6 +43,28 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Pendaftaran Asleb')
         self.assertContains(response, 'Rizki Pratama')
+        self.assertContains(response, 'Status: Ditutup')
+        self.assertContains(response, 'Buka Pendaftaran')
+        self.assertContains(response, 'http://10.24.80.214:8001/pendaftaran-asleb/daftar/')
+
+    def test_toggle_pendaftaran_membuka_dan_menutup_form(self):
+        response = self.client.post(reverse('pendaftaran_asleb:pendaftaran_toggle_status'))
+
+        self.assertRedirects(response, reverse('pendaftaran_asleb:pendaftaran_list'))
+        self.assertTrue(PengaturanPendaftaranAsleb.get_solo().dibuka)
+
+        response = self.client.post(reverse('pendaftaran_asleb:pendaftaran_toggle_status'))
+
+        self.assertRedirects(response, reverse('pendaftaran_asleb:pendaftaran_list'))
+        self.assertFalse(PengaturanPendaftaranAsleb.get_solo().dibuka)
+
+    def test_public_form_ditutup_jika_pendaftaran_belum_dibuka(self):
+        self.client.session.flush()
+
+        response = self.client.get(reverse('pendaftaran_asleb:pendaftaran_public'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Pendaftaran sedang ditutup')
 
     def test_pendaftaran_search_filters_data(self):
         response = self.client.get(reverse('pendaftaran_asleb:pendaftaran_list'), {'q': 'SDA'})

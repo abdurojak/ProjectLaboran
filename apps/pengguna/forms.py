@@ -72,6 +72,9 @@ class LoginPenggunaForm(forms.Form):
         except Pengguna.DoesNotExist:
             raise forms.ValidationError(self.error_messages['invalid_login'])
 
+        if not pengguna.is_verified:
+            raise forms.ValidationError('Akun belum diverifikasi. Selesaikan verifikasi terlebih dahulu.')
+
         if not check_password(password, pengguna.password):
             raise forms.ValidationError(self.error_messages['invalid_login'])
 
@@ -80,7 +83,17 @@ class LoginPenggunaForm(forms.Form):
 
 
 class RegisterPenggunaForm(forms.ModelForm):
+    VERIFICATION_METHOD_CHOICES = [
+        ('email', 'Email Trisakti'),
+        ('no_hp', 'No HP'),
+    ]
+
     password_confirmation = forms.CharField(label='Konfirmasi password', widget=forms.PasswordInput)
+    verification_method = forms.ChoiceField(
+        label='Verifikasi lewat',
+        choices=VERIFICATION_METHOD_CHOICES,
+        widget=forms.RadioSelect,
+    )
 
     class Meta:
         model = Pengguna
@@ -91,6 +104,7 @@ class RegisterPenggunaForm(forms.ModelForm):
             'email',
             'password',
             'password_confirmation',
+            'verification_method',
             'gender',
             'no_hp',
             'alamat',
@@ -100,8 +114,28 @@ class RegisterPenggunaForm(forms.ModelForm):
         widgets = {
             'foto': forms.FileInput(attrs={'class': 'hidden', 'accept': 'image/*'}),
             'password': forms.PasswordInput(render_value=False),
+            'nim_nik': forms.TextInput(attrs={'inputmode': 'numeric', 'pattern': '[0-9]*'}),
+            'no_hp': forms.TextInput(attrs={'inputmode': 'numeric', 'pattern': '[0-9]*'}),
             'alamat': forms.Textarea(attrs={'rows': 4}),
         }
+
+    def clean_nim_nik(self):
+        nim_nik = self.cleaned_data['nim_nik'].strip()
+        if not nim_nik.isdigit():
+            raise forms.ValidationError('NIM/NIK hanya boleh berisi angka.')
+        return nim_nik
+
+    def clean_no_hp(self):
+        no_hp = self.cleaned_data['no_hp'].strip()
+        if not no_hp.isdigit():
+            raise forms.ValidationError('No HP hanya boleh berisi angka.')
+        return no_hp
+
+    def clean_email(self):
+        email = self.cleaned_data['email'].strip().lower()
+        if not email.endswith('@std.trisakti.ac.id'):
+            raise forms.ValidationError('Email harus menggunakan domain @std.trisakti.ac.id.')
+        return email
 
     def clean(self):
         cleaned_data = super().clean()
@@ -116,9 +150,63 @@ class RegisterPenggunaForm(forms.ModelForm):
     def save(self, commit=True):
         instance = super().save(commit=False)
         instance.role = 'mahasiswa'
+        instance.is_verified = False
 
         if commit:
             instance.save()
             self.save_m2m()
 
         return instance
+
+
+class VerificationCodeForm(forms.Form):
+    kode = forms.CharField(
+        label='Kode verifikasi',
+        min_length=6,
+        max_length=6,
+        widget=forms.TextInput(attrs={'inputmode': 'numeric', 'pattern': '[0-9]*', 'autocomplete': 'one-time-code'}),
+    )
+
+    def clean_kode(self):
+        kode = self.cleaned_data['kode'].strip()
+        if not kode.isdigit():
+            raise forms.ValidationError('Kode verifikasi hanya boleh angka.')
+        return kode
+
+
+class ForgotPasswordRequestForm(forms.Form):
+    VERIFICATION_METHOD_CHOICES = [
+        ('email', 'Email Trisakti'),
+        ('no_hp', 'No HP'),
+    ]
+
+    nim_nik = forms.CharField(label='NIM/NIK', max_length=40, widget=forms.TextInput(attrs={
+        'inputmode': 'numeric',
+        'pattern': '[0-9]*',
+    }))
+    verification_method = forms.ChoiceField(
+        label='Kirim kode lewat',
+        choices=VERIFICATION_METHOD_CHOICES,
+        widget=forms.RadioSelect,
+    )
+
+    def clean_nim_nik(self):
+        nim_nik = self.cleaned_data['nim_nik'].strip()
+        if not nim_nik.isdigit():
+            raise forms.ValidationError('NIM/NIK hanya boleh berisi angka.')
+        return nim_nik
+
+
+class ResetPasswordForm(VerificationCodeForm):
+    password = forms.CharField(label='Password baru', widget=forms.PasswordInput)
+    password_confirmation = forms.CharField(label='Konfirmasi password baru', widget=forms.PasswordInput)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        password = cleaned_data.get('password')
+        password_confirmation = cleaned_data.get('password_confirmation')
+
+        if password and password_confirmation and password != password_confirmation:
+            self.add_error('password_confirmation', 'Konfirmasi password tidak sama.')
+
+        return cleaned_data

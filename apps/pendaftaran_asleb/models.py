@@ -51,6 +51,23 @@ class MataKuliahAsleb(models.Model):
         return f'{self.nama} - {self.dosen} - {self.kelas}'
 
 
+class PengaturanPendaftaranAsleb(models.Model):
+    dibuka = models.BooleanField(default=False)
+    diperbarui_pada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Pengaturan Pendaftaran Asleb'
+        verbose_name_plural = 'Pengaturan Pendaftaran Asleb'
+
+    @classmethod
+    def get_solo(cls):
+        pengaturan, _ = cls.objects.get_or_create(pk=1)
+        return pengaturan
+
+    def __str__(self):
+        return 'Pendaftaran Asleb Dibuka' if self.dibuka else 'Pendaftaran Asleb Ditutup'
+
+
 class PendaftaranAsleb(models.Model):
     STATUS_CHOICES = [
         ('diajukan', 'Diajukan'),
