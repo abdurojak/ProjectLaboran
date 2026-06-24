@@ -1,10 +1,12 @@
 from django.test import TestCase
 from django.urls import reverse
+from django.core import mail
 
 from apps.asleb.models import Asleb
 from apps.pengguna.models import Pengguna
 
 from .models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb
+from .utils import get_public_registration_url
 
 
 class PendaftaranAslebViewTests(TestCase):
@@ -45,13 +47,29 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertContains(response, 'Rizki Pratama')
         self.assertContains(response, 'Status: Ditutup')
         self.assertContains(response, 'Buka Pendaftaran')
-        self.assertContains(response, 'http://10.24.80.245:8001/pendaftaran-asleb/daftar/')
+        self.assertContains(response, get_public_registration_url())
 
     def test_toggle_pendaftaran_membuka_dan_menutup_form(self):
+        Pengguna.objects.create(
+            nama_pengguna='Mahasiswa Pendaftar',
+            nim_nik='2401999',
+            email='mahasiswa@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081234567899',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+            is_verified=True,
+        )
+
         response = self.client.post(reverse('pendaftaran_asleb:pendaftaran_toggle_status'))
 
         self.assertRedirects(response, reverse('pendaftaran_asleb:pendaftaran_list'))
         self.assertTrue(PengaturanPendaftaranAsleb.get_solo().dibuka)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('Pendaftaran asisten laboratorium sudah dibuka', mail.outbox[0].body)
 
         response = self.client.post(reverse('pendaftaran_asleb:pendaftaran_toggle_status'))
 
@@ -65,6 +83,33 @@ class PendaftaranAslebViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Pendaftaran sedang ditutup')
+
+    def test_public_form_mengisi_nama_dan_nim_dari_akun_login(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Siti Aminah',
+            nim_nik='2201002',
+            email='siti@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081111111111',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='mahasiswa',
+            is_verified=True,
+        )
+        pengaturan = PengaturanPendaftaranAsleb.get_solo()
+        pengaturan.dibuka = True
+        pengaturan.save(update_fields=['dibuka'])
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+
+        response = self.client.get(reverse('pendaftaran_asleb:pendaftaran_public'))
+
+        self.assertContains(response, 'value="Siti Aminah"')
+        self.assertContains(response, 'value="2201002"')
+        self.assertContains(response, 'disabled')
 
     def test_pendaftaran_search_filters_data(self):
         response = self.client.get(reverse('pendaftaran_asleb:pendaftaran_list'), {'q': 'SDA'})

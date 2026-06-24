@@ -37,6 +37,25 @@ class PendaftaranAslebForm(forms.ModelForm):
 
 
 class PendaftaranAslebPublicForm(PendaftaranAslebForm):
+    def __init__(self, *args, **kwargs):
+        self.current_pengguna = kwargs.pop('current_pengguna', None)
+        super().__init__(*args, **kwargs)
+
+        if self.current_pengguna:
+            auto_values = {
+                'nama': self.current_pengguna.nama_pengguna,
+                'nim': self.current_pengguna.nim_nik,
+                'email': self.current_pengguna.email,
+                'program_studi': self.current_pengguna.prodi,
+            }
+
+            for field_name, value in auto_values.items():
+                self.fields[field_name].initial = value
+
+            for field_name in ['nama', 'nim']:
+                self.fields[field_name].disabled = True
+                self.fields[field_name].help_text = 'Otomatis dari akun login.'
+
     class Meta(PendaftaranAslebForm.Meta):
         fields = [
             'nama',
@@ -51,6 +70,21 @@ class PendaftaranAslebPublicForm(PendaftaranAslebForm):
             'rekening',
             'alasan',
         ]
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+
+        if self.current_pengguna:
+            instance.nama = self.current_pengguna.nama_pengguna
+            instance.nim = self.current_pengguna.nim_nik
+            instance.email = self.current_pengguna.email
+            instance.program_studi = self.current_pengguna.prodi
+
+        if commit:
+            instance.save()
+            self.save_m2m()
+
+        return instance
 
 
 class MataKuliahAslebForm(forms.ModelForm):

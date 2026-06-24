@@ -1,5 +1,7 @@
-from django.db.models import Q
 from django.contrib import messages
+from django.conf import settings
+from django.core.mail import send_mail
+from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.utils import timezone
@@ -8,6 +10,7 @@ from django.views.generic import CreateView, DeleteView, DetailView, ListView, U
 
 from apps.asleb.models import Asleb
 from apps.core.views import PostOnlyDeleteMixin
+from apps.pengguna.models import Pengguna
 
 from .forms import MataKuliahAslebForm, PendaftaranAslebForm, PendaftaranAslebPublicForm
 from .models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb
@@ -103,6 +106,7 @@ class PendaftaranAslebPublicCreateView(CreateView):
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs['files'] = self.request.FILES or None
+        kwargs['current_pengguna'] = get_session_pengguna(self.request)
         return kwargs
 
 
@@ -174,8 +178,52 @@ def toggle_pendaftaran_status(request):
     pengaturan.save(update_fields=['dibuka', 'diperbarui_pada'])
 
     status = 'dibuka' if pengaturan.dibuka else 'ditutup'
-    messages.success(request, f'Pendaftaran asleb berhasil {status}.')
+    notified_count = notify_pendaftaran_dibuka() if pengaturan.dibuka else 0
+
+    if notified_count:
+        messages.success(request, f'Pendaftaran asleb berhasil {status}. Notifikasi email dikirim ke {notified_count} akun.')
+    else:
+        messages.success(request, f'Pendaftaran asleb berhasil {status}.')
     return redirect('pendaftaran_asleb:pendaftaran_list')
+
+
+def get_session_pengguna(request):
+    pengguna_id = request.session.get('pengguna_id')
+    if not pengguna_id:
+        return None
+
+    return Pengguna.objects.filter(pk=pengguna_id).first()
+
+
+def notify_pendaftaran_dibuka():
+    recipients = list(
+        Pengguna.objects.filter(
+            role__in=['mahasiswa', 'asisten_lab'],
+            is_verified=True,
+        ).exclude(email='').values_list('email', flat=True).distinct()
+    )
+
+    if not recipients:
+        return 0
+
+    registration_url = get_public_registration_url()
+    sent_count = 0
+
+    for email in recipients:
+        sent = send_mail(
+            subject='Pendaftaran Asleb Project Laboran Dibuka',
+            message=(
+                'Pendaftaran asisten laboratorium sudah dibuka.\n\n'
+                f'Silakan daftar melalui link berikut:\n{registration_url}\n\n'
+                'Jika Anda membuka link dalam kondisi sudah login, nama dan NIM akan otomatis terisi dari akun.'
+            ),
+            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None),
+            recipient_list=[email],
+            fail_silently=True,
+        )
+        sent_count += sent
+
+    return sent_count
 
 
 def create_or_update_asleb_from_pendaftaran(pendaftaran):
