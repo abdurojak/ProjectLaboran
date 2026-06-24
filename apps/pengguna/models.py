@@ -29,6 +29,7 @@ class Pengguna(models.Model):
     gender = models.CharField(max_length=20, choices=GENDER_CHOICES)
     role = models.CharField(max_length=30, choices=ROLE_CHOICES, default='mahasiswa')
     is_verified = models.BooleanField('Terverifikasi', default=True)
+    notifikasi_dibaca_pada = models.DateTimeField(blank=True, null=True)
     dibuat_pada = models.DateTimeField(auto_now_add=True)
     diperbarui_pada = models.DateTimeField(auto_now=True)
 

@@ -83,8 +83,8 @@ class PeminjamanViewsTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-confirmation-modal')
-        self.assertContains(response, 'data-confirmation-trigger')
-        self.assertContains(response, 'Lanjut ke halaman konfirmasi hapus peminjaman Andi Pratama?')
+        self.assertContains(response, 'data-confirm-message="Yakin ingin menghapus peminjaman Andi Pratama?"')
+        self.assertContains(response, 'method="post"')
         self.assertContains(response, reverse('peminjaman:peminjaman_delete', args=[self.peminjaman.pk]))
 
     def test_detail_page_loads(self):
@@ -100,8 +100,8 @@ class PeminjamanViewsTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-confirmation-modal')
-        self.assertContains(response, 'data-confirmation-trigger')
-        self.assertContains(response, 'Lanjut ke halaman konfirmasi hapus peminjaman Andi Pratama?')
+        self.assertContains(response, 'data-confirm-message="Yakin ingin menghapus peminjaman Andi Pratama?"')
+        self.assertContains(response, 'method="post"')
 
     def test_create_menolak_detail_barang_rusak_berat(self):
         response = self.client.post(

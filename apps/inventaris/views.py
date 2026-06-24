@@ -1,11 +1,14 @@
+from django.db import transaction
 from django.db.models import Q, Sum
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
+from apps.core.views import PostOnlyDeleteMixin
+
 from .forms import BarangForm, InventarisBarangCreateForm, InventarisBarangUpdateForm
-from .models import Barang, InventarisBarang, Lokasi
+from .models import ACTIVE_PEMINJAMAN_STATUSES, Barang, InventarisBarang, Lokasi
 
 
 class BarangListView(ListView):
@@ -18,7 +21,7 @@ class BarangListView(ListView):
             jumlah_dipinjam_aktif=Coalesce(
                 Sum(
                     'detail_barang__peminjaman__jumlah',
-                    filter=Q(detail_barang__peminjaman__status__in=['dipinjam', 'hilang', 'rusak']),
+                    filter=Q(detail_barang__peminjaman__status__in=ACTIVE_PEMINJAMAN_STATUSES),
                 ),
                 0,
             ),
@@ -59,7 +62,9 @@ class DetailBarangCreateView(CreateView):
         form.instance.inventaris = self.inventaris
         form.instance.nama = self.inventaris.nama
         form.instance.jumlah = self.inventaris.jumlah
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        self.inventaris.sync_jumlah_from_detail()
+        return response
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -85,10 +90,18 @@ class DetailBarangUpdateView(UpdateView):
         return reverse('inventaris:inventaris_detail', args=[self.object.inventaris_id])
 
 
-class DetailBarangDeleteView(DeleteView):
+class DetailBarangDeleteView(PostOnlyDeleteMixin, DeleteView):
     model = Barang
     template_name = 'inventaris/detail_barang_confirm_delete.html'
     context_object_name = 'barang'
+
+    def form_valid(self, form):
+        inventaris = self.object.inventaris
+        with transaction.atomic():
+            response = super().form_valid(form)
+            if inventaris:
+                inventaris.sync_jumlah_from_detail()
+        return response
 
     def get_success_url(self):
         return reverse('inventaris:inventaris_detail', args=[self.object.inventaris_id])
@@ -104,7 +117,7 @@ class InventarisBarangDetailView(DetailView):
             jumlah_dipinjam_aktif=Coalesce(
                 Sum(
                     'detail_barang__peminjaman__jumlah',
-                    filter=Q(detail_barang__peminjaman__status__in=['dipinjam', 'hilang', 'rusak']),
+                    filter=Q(detail_barang__peminjaman__status__in=ACTIVE_PEMINJAMAN_STATUSES),
                 ),
                 0,
             ),
@@ -169,7 +182,7 @@ class BarangUpdateView(UpdateView):
     success_url = reverse_lazy('inventaris:barang_list')
 
 
-class BarangDeleteView(DeleteView):
+class BarangDeleteView(PostOnlyDeleteMixin, DeleteView):
     model = InventarisBarang
     template_name = 'inventaris/barang_confirm_delete.html'
     context_object_name = 'barang'
@@ -202,7 +215,7 @@ class LokasiUpdateView(UpdateView):
     success_url = reverse_lazy('inventaris:lokasi_list')
 
 
-class LokasiDeleteView(DeleteView):
+class LokasiDeleteView(PostOnlyDeleteMixin, DeleteView):
     model = Lokasi
     template_name = 'inventaris/lokasi_confirm_delete.html'
     context_object_name = 'lokasi'

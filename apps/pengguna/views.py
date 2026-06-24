@@ -10,6 +10,8 @@ from django.urls import reverse_lazy
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, UpdateView, View
 
+from apps.core.views import PostOnlyDeleteMixin
+
 from .forms import (
     ChangePasswordForm,
     ForgotPasswordRequestForm,
@@ -114,7 +116,7 @@ class PenggunaUpdateView(UpdateView):
     success_url = reverse_lazy('pengguna:list')
 
 
-class PenggunaDeleteView(DeleteView):
+class PenggunaDeleteView(PostOnlyDeleteMixin, DeleteView):
     model = Pengguna
     template_name = 'pengguna/confirm_delete.html'
     context_object_name = 'pengguna'

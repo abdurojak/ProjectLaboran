@@ -1,6 +1,8 @@
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
+from apps.core.views import PostOnlyDeleteMixin
+
 from .forms import BarangTertinggalForm
 from .models import BarangTertinggal
 
@@ -37,7 +39,7 @@ class BarangTertinggalUpdateView(UpdateView):
     success_url = reverse_lazy('barang_tertinggal:list')
 
 
-class BarangTertinggalDeleteView(DeleteView):
+class BarangTertinggalDeleteView(PostOnlyDeleteMixin, DeleteView):
     model = BarangTertinggal
     template_name = 'barang_tertinggal/confirm_delete.html'
     context_object_name = 'barang'

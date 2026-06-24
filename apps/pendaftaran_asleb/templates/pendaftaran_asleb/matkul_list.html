@@ -52,9 +52,13 @@
                                 <a class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700" href="{% url 'pendaftaran_asleb:matkul_update' matkul.pk %}">
                                     <i data-lucide="pencil" class="h-4 w-4"></i><span>Edit</span>
                                 </a>
-                                <a class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700" href="{% url 'pendaftaran_asleb:matkul_delete' matkul.pk %}">
-                                    <i data-lucide="trash-2" class="h-4 w-4"></i><span>Hapus</span>
-                                </a>
+                                <form method="post" action="{% url 'pendaftaran_asleb:matkul_delete' matkul.pk %}" data-confirm-message="Yakin ingin menghapus data ini?" class="inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700">
+                                        <i data-lucide="trash-2" class="h-4 w-4"></i>
+                                        <span>Hapus</span>
+                                    </button>
+                                </form>
                             </div>
                         </td>
                     </tr>
@@ -68,4 +72,8 @@
         </div>
     </div>
 </section>
+{% endblock %}
+
+{% block extra_script %}
+{% include "components/confirmation_modal.html" with title="Konfirmasi Hapus Mata Kuliah" confirm_label="Hapus" confirm_icon="trash-2" %}
 {% endblock %}

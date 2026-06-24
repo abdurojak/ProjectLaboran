@@ -1,8 +1,14 @@
 from datetime import datetime, timedelta
 
+from django.core.paginator import Paginator
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
+
+from apps.core.views import PostOnlyDeleteMixin
+from apps.peminjaman.models import PeminjamanAlat
+from apps.pendaftaran_asleb.models import PendaftaranAsleb, PengaturanPendaftaranAsleb
+from apps.pendaftaran_asleb.utils import get_public_registration_url
 
 from .forms import KegiatanKalenderForm
 from .models import KegiatanKalender
@@ -71,7 +77,7 @@ class KegiatanKalenderUpdateView(UpdateView):
     success_url = reverse_lazy('kalender:kegiatan_list')
 
 
-class KegiatanKalenderDeleteView(DeleteView):
+class KegiatanKalenderDeleteView(PostOnlyDeleteMixin, DeleteView):
     model = KegiatanKalender
     template_name = 'kalender/kegiatan_confirm_delete.html'
     context_object_name = 'kegiatan'
@@ -82,6 +88,7 @@ class NotifikasiListView(ListView):
     model = KegiatanKalender
     template_name = 'kalender/notifikasi_list.html'
     context_object_name = 'notifikasi_list'
+    notifications_per_page = 20
 
     def get_queryset(self):
         today = timezone.localdate()
@@ -106,8 +113,169 @@ class NotifikasiListView(ListView):
             for kegiatan in context['notifikasi_list']
         ]
         perayaan_notifications = get_perayaan_notifications(today)
-        context['notifikasi_list'] = sorted(
-            manual_notifications + perayaan_notifications,
-            key=lambda item: (item['tanggal'], item['judul']),
+        peminjaman_notifications = self.get_peminjaman_notifications()
+        pendaftaran_asleb_notifications = self.get_pendaftaran_asleb_notifications()
+        pendaftaran_asleb_acceptance_notifications = self.get_pendaftaran_asleb_acceptance_notifications()
+        notifications = sorted(
+            (
+                manual_notifications
+                + perayaan_notifications
+                + peminjaman_notifications
+                + pendaftaran_asleb_notifications
+                + pendaftaran_asleb_acceptance_notifications
+            ),
+            key=lambda item: (item['tanggal'], item.get('waktu_label', ''), item['judul']),
+            reverse=True,
         )
+        paginator = Paginator(notifications, self.notifications_per_page)
+        page_obj = paginator.get_page(self.request.GET.get('page'))
+        context['notifikasi_list'] = page_obj.object_list
+        context['page_obj'] = page_obj
+        context['paginator'] = paginator
+        self.mark_notifications_as_read()
         return context
+
+    def mark_notifications_as_read(self):
+        pengguna = getattr(self.request, 'current_pengguna', None)
+        if not pengguna:
+            return
+
+        pengguna.notifikasi_dibaca_pada = timezone.now()
+        pengguna.save(update_fields=['notifikasi_dibaca_pada', 'diperbarui_pada'])
+
+    def get_peminjaman_notifications(self):
+        pengguna = getattr(self.request, 'current_pengguna', None)
+        if not pengguna or pengguna.role != 'mahasiswa':
+            return []
+
+        status_meta = {
+            'dipinjam': {
+                'badge': 'Dipinjam',
+                'icon': 'check-circle-2',
+                'icon_class': 'bg-blue-50 text-blue-700',
+                'description': 'Pengajuan peminjaman Anda sudah disetujui dan barang tercatat sedang dipinjam.',
+            },
+            'dikembalikan': {
+                'badge': 'Dikembalikan',
+                'icon': 'undo-2',
+                'icon_class': 'bg-emerald-50 text-emerald-700',
+                'description': 'Peminjaman Anda sudah ditandai selesai dan barang kembali tersedia.',
+            },
+            'hilang': {
+                'badge': 'Hilang',
+                'icon': 'circle-alert',
+                'icon_class': 'bg-rose-50 text-rose-700',
+                'description': 'Peminjaman Anda ditandai hilang dan perlu tindak lanjut dari laboratorium.',
+            },
+            'rusak': {
+                'badge': 'Rusak',
+                'icon': 'wrench',
+                'icon_class': 'bg-orange-50 text-orange-700',
+                'description': 'Peminjaman Anda ditandai rusak dan perlu tindak lanjut dari laboratorium.',
+            },
+            'digantikan': {
+                'badge': 'Digantikan',
+                'icon': 'refresh-cw',
+                'icon_class': 'bg-brand-50 text-brand-700',
+                'description': 'Barang pada peminjaman Anda sudah ditandai digantikan.',
+            },
+        }
+
+        peminjaman_list = (
+            PeminjamanAlat.objects.select_related('barang')
+            .filter(nim=pengguna.nim_nik, status__in=status_meta.keys())
+            .order_by('-diperbarui_pada')
+        )
+        notifications = []
+
+        for peminjaman in peminjaman_list:
+            meta = status_meta[peminjaman.status]
+            is_read = bool(
+                pengguna.notifikasi_dibaca_pada
+                and peminjaman.diperbarui_pada <= pengguna.notifikasi_dibaca_pada
+            )
+            notifications.append({
+                'judul': f'Status peminjaman {peminjaman.barang.nama}: {meta["badge"]}',
+                'deskripsi': meta['description'],
+                'tanggal': peminjaman.diperbarui_pada.date(),
+                'waktu_label': peminjaman.diperbarui_pada.strftime('%H:%M'),
+                'lokasi': peminjaman.barang.lokasi.nama_lokasi if peminjaman.barang.lokasi_id else '-',
+                'url': reverse('peminjaman:peminjaman_detail', kwargs={'pk': peminjaman.pk}),
+                'badge': meta['badge'],
+                'icon': meta['icon'],
+                'icon_class': meta['icon_class'],
+                'is_read': is_read,
+            })
+
+        return notifications
+
+    def get_pendaftaran_asleb_notifications(self):
+        pengguna = getattr(self.request, 'current_pengguna', None)
+        if not pengguna or pengguna.role != 'mahasiswa':
+            return []
+
+        pengaturan = PengaturanPendaftaranAsleb.get_solo()
+
+        is_read = bool(
+            pengguna.notifikasi_dibaca_pada
+            and pengaturan.diperbarui_pada <= pengguna.notifikasi_dibaca_pada
+        )
+        if pengaturan.dibuka:
+            title = 'Pendaftaran aslab sedang dibuka'
+            description = 'Form pendaftaran asisten laboratorium sudah tersedia. Silakan lengkapi data diri, berkas, rekening, dan pilihan mata kuliah.'
+            icon = 'user-plus'
+            icon_class = 'bg-emerald-50 text-emerald-700'
+            url = get_public_registration_url()
+            badge = 'Dibuka'
+        else:
+            title = 'Pendaftaran aslab sudah ditutup'
+            description = 'Form pendaftaran asisten laboratorium sudah ditutup. Silakan menunggu informasi pembukaan periode berikutnya.'
+            icon = 'lock'
+            icon_class = 'bg-slate-100 text-slate-600'
+            url = ''
+            badge = 'Ditutup'
+
+        return [{
+            'judul': title,
+            'deskripsi': description,
+            'tanggal': pengaturan.diperbarui_pada.date(),
+            'waktu_label': pengaturan.diperbarui_pada.strftime('%H:%M'),
+            'lokasi': 'Lab JTIF Usakti',
+            'url': url,
+            'badge': badge,
+            'icon': icon,
+            'icon_class': icon_class,
+            'is_read': is_read,
+        }]
+
+    def get_pendaftaran_asleb_acceptance_notifications(self):
+        pengguna = getattr(self.request, 'current_pengguna', None)
+        if not pengguna or pengguna.role != 'mahasiswa':
+            return []
+
+        pendaftaran_list = (
+            PendaftaranAsleb.objects.select_related('matkul')
+            .filter(nim=pengguna.nim_nik, status='diterima')
+            .order_by('-diperbarui_pada')
+        )
+        notifications = []
+
+        for pendaftaran in pendaftaran_list:
+            is_read = bool(
+                pengguna.notifikasi_dibaca_pada
+                and pendaftaran.diperbarui_pada <= pengguna.notifikasi_dibaca_pada
+            )
+            notifications.append({
+                'judul': 'Pendaftaran aslab Anda diterima',
+                'deskripsi': f'Selamat, pengajuan asisten laboratorium untuk {pendaftaran.matkul} sudah diterima. Silakan menunggu arahan berikutnya dari laboratorium.',
+                'tanggal': pendaftaran.diperbarui_pada.date(),
+                'waktu_label': pendaftaran.diperbarui_pada.strftime('%H:%M'),
+                'lokasi': 'Lab JTIF Usakti',
+                'url': '',
+                'badge': 'Diterima',
+                'icon': 'badge-check',
+                'icon_class': 'bg-emerald-50 text-emerald-700',
+                'is_read': is_read,
+            })
+
+        return notifications

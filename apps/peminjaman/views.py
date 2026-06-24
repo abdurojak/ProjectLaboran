@@ -4,6 +4,7 @@ from django.urls import reverse_lazy
 from django.shortcuts import redirect
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
+from apps.core.views import PostOnlyDeleteMixin
 from apps.inventaris.models import Barang
 from .forms import PeminjamanAlatForm
 from .models import PeminjamanAlat
@@ -155,7 +156,7 @@ class PeminjamanAlatUpdateView(UpdateView):
         return context
 
 
-class PeminjamanAlatDeleteView(DeleteView):
+class PeminjamanAlatDeleteView(PostOnlyDeleteMixin, DeleteView):
     model = PeminjamanAlat
     template_name = 'peminjaman/peminjaman_confirm_delete.html'
     context_object_name = 'peminjaman'

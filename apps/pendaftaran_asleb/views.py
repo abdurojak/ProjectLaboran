@@ -7,6 +7,7 @@ from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
 from apps.asleb.models import Asleb
+from apps.core.views import PostOnlyDeleteMixin
 
 from .forms import MataKuliahAslebForm, PendaftaranAslebForm, PendaftaranAslebPublicForm
 from .models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb
@@ -80,7 +81,7 @@ class PendaftaranAslebUpdateView(UpdateView):
         return kwargs
 
 
-class PendaftaranAslebDeleteView(DeleteView):
+class PendaftaranAslebDeleteView(PostOnlyDeleteMixin, DeleteView):
     model = PendaftaranAsleb
     template_name = 'pendaftaran_asleb/pendaftaran_confirm_delete.html'
     context_object_name = 'pendaftaran'
@@ -214,7 +215,7 @@ class MataKuliahAslebUpdateView(UpdateView):
     success_url = reverse_lazy('pendaftaran_asleb:matkul_list')
 
 
-class MataKuliahAslebDeleteView(DeleteView):
+class MataKuliahAslebDeleteView(PostOnlyDeleteMixin, DeleteView):
     model = MataKuliahAsleb
     template_name = 'pendaftaran_asleb/matkul_confirm_delete.html'
     context_object_name = 'matkul'

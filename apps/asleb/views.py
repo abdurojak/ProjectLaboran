@@ -2,6 +2,8 @@ from django.db.models import Q
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
+from apps.core.views import PostOnlyDeleteMixin
+
 from .forms import AslebForm
 from .models import Asleb
 
@@ -58,7 +60,7 @@ class AslebUpdateView(UpdateView):
     success_url = reverse_lazy('asleb:asleb_list')
 
 
-class AslebDeleteView(DeleteView):
+class AslebDeleteView(PostOnlyDeleteMixin, DeleteView):
     model = Asleb
     template_name = 'asleb/asleb_confirm_delete.html'
     context_object_name = 'asleb'

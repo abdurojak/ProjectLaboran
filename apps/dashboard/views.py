@@ -7,7 +7,7 @@ from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
 from apps.asleb.models import Asleb
-from apps.inventaris.models import Barang, InventarisBarang
+from apps.inventaris.models import ACTIVE_PEMINJAMAN_STATUSES, Barang, InventarisBarang
 from apps.jadwal.models import JadwalPraktikum
 from apps.kalender.models import KegiatanKalender
 from apps.peminjaman.models import PeminjamanAlat
@@ -65,7 +65,7 @@ class DashboardView(TemplateView):
         jadwal_qs = JadwalPraktikum.objects.all()
         kegiatan_qs = KegiatanKalender.objects.all()
         peminjaman_qs = PeminjamanAlat.objects.select_related('barang')
-        peminjaman_aktif = peminjaman_qs.exclude(status='dikembalikan')
+        peminjaman_aktif = peminjaman_qs.filter(status__in=ACTIVE_PEMINJAMAN_STATUSES)
         asleb_qs = Asleb.objects.all()
         pendaftaran_asleb_qs = PendaftaranAsleb.objects.all()
         context['is_mahasiswa_dashboard'] = bool(pengguna and pengguna.role == 'mahasiswa')

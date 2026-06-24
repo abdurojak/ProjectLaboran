@@ -4,6 +4,9 @@ from django.db.models import Sum
 from django.db import models
 
 
+ACTIVE_PEMINJAMAN_STATUSES = ['dipinjam', 'hilang', 'rusak']
+
+
 class Lokasi(models.Model):
     kode_lokasi = models.CharField(max_length=8, unique=True, editable=False, blank=True)
     nama_lokasi = models.CharField(max_length=150)
@@ -51,12 +54,18 @@ class InventarisBarang(models.Model):
 
         return Barang.objects.filter(
             inventaris=self,
-            peminjaman__status__in=['dipinjam', 'hilang', 'rusak'],
+            peminjaman__status__in=ACTIVE_PEMINJAMAN_STATUSES,
         ).aggregate(total=Sum('peminjaman__jumlah'))['total'] or 0
 
     @property
     def stok_tersedia(self):
         return max(self.jumlah - self.jumlah_dipinjam, 0)
+
+    def sync_jumlah_from_detail(self):
+        jumlah_detail = self.detail_barang.count()
+        if self.jumlah != jumlah_detail:
+            self.jumlah = jumlah_detail
+            self.save(update_fields=['jumlah', 'diperbarui_pada'])
 
     def save(self, *args, **kwargs):
         if not self.kode_inventaris:
@@ -126,7 +135,7 @@ class Barang(models.Model):
             return self.jumlah_dipinjam_aktif or 0
 
         return self.peminjaman.filter(
-            status__in=['dipinjam', 'hilang', 'rusak'],
+            status__in=ACTIVE_PEMINJAMAN_STATUSES,
         ).aggregate(total=Sum('jumlah'))['total'] or 0
 
     @property
@@ -138,7 +147,7 @@ class Barang(models.Model):
 
     @property
     def sedang_dipinjam(self):
-        return self.peminjaman.filter(status__in=['dipinjam', 'hilang', 'rusak']).exists()
+        return self.peminjaman.filter(status__in=ACTIVE_PEMINJAMAN_STATUSES).exists()
 
     @property
     def status_pinjam(self):

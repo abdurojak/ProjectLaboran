@@ -15,10 +15,13 @@
                 <i data-lucide="pencil" class="h-4 w-4"></i>
                 <span>Edit</span>
             </a>
-            <a data-confirmation-trigger data-confirm-message="Lanjut ke halaman konfirmasi hapus barang tertinggal {{ barang.nama_barang }}?" class="inline-flex items-center justify-center gap-2 rounded-2xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-rose-700" href="{% url 'barang_tertinggal:delete' barang.pk %}">
-                <i data-lucide="trash-2" class="h-4 w-4"></i>
-                <span>Hapus</span>
-            </a>
+            <form method="post" action="{% url 'barang_tertinggal:delete' barang.pk %}" data-confirm-message="Yakin ingin menghapus barang tertinggal {{ barang.nama_barang }}?" class="inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-2xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-rose-700">
+                                        <i data-lucide="trash-2" class="h-4 w-4"></i>
+                                        <span>Hapus</span>
+                                    </button>
+                                </form>
             <a class="btn-secondary gap-2" href="{% url 'barang_tertinggal:list' %}">
                 <i data-lucide="arrow-left" class="h-4 w-4"></i>
                 <span>Kembali</span>

@@ -202,6 +202,9 @@ class DashboardViewTests(TestCase):
 
         self.assertRedirects(response, reverse('dashboard:home'))
         self.assertEqual(peminjaman.status, 'dikembalikan')
+        self.assertFalse(self.barang.sedang_dipinjam)
+        self.assertEqual(self.barang.status_pinjam, 'Tersedia')
+        self.assertEqual(self.barang.stok_tersedia, self.barang.jumlah)
 
     def test_mark_borrowed_as_lost_changes_status_to_hilang(self):
         peminjaman = PeminjamanAlat.objects.create(
@@ -250,6 +253,28 @@ class DashboardViewTests(TestCase):
 
         self.assertRedirects(response, reverse('dashboard:home'))
         self.assertEqual(peminjaman.status, 'digantikan')
+        self.assertFalse(self.barang.sedang_dipinjam)
+        self.assertEqual(self.barang.status_pinjam, 'Tersedia')
+        self.assertEqual(self.barang.stok_tersedia, self.barang.jumlah)
+
+    def test_delete_active_peminjaman_makes_barang_available_again(self):
+        peminjaman = PeminjamanAlat.objects.create(
+            barang=self.barang,
+            nama_peminjam='Budi',
+            jumlah=1,
+            tanggal_pinjam=timezone.localdate(),
+            tanggal_kembali=timezone.localdate(),
+            status='dipinjam',
+        )
+
+        self.assertTrue(self.barang.sedang_dipinjam)
+        response = self.client.post(reverse('peminjaman:peminjaman_delete', args=[peminjaman.pk]))
+
+        self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
+        self.assertFalse(PeminjamanAlat.objects.filter(pk=peminjaman.pk).exists())
+        self.assertFalse(self.barang.sedang_dipinjam)
+        self.assertEqual(self.barang.status_pinjam, 'Tersedia')
+        self.assertEqual(self.barang.stok_tersedia, self.barang.jumlah)
 
     def test_dashboard_mahasiswa_menyembunyikan_panel_operasional_admin(self):
         mahasiswa = Pengguna.objects.create(

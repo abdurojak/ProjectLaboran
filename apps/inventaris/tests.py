@@ -3,6 +3,7 @@ from django.urls import reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from apps.peminjaman.models import PeminjamanAlat
+from apps.pengguna.models import Pengguna
 from .models import Barang, InventarisBarang, Lokasi
 
 
@@ -28,8 +29,8 @@ class LokasiViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-confirmation-modal')
-        self.assertContains(response, 'data-confirmation-trigger')
-        self.assertContains(response, 'Lanjut ke halaman konfirmasi hapus lokasi Lab Kimia?')
+        self.assertContains(response, 'data-confirm-message="Yakin ingin menghapus lokasi Lab Kimia?"')
+        self.assertContains(response, 'method="post"')
         self.assertContains(response, reverse('inventaris:lokasi_delete', args=[lokasi.pk]))
 
 
@@ -236,7 +237,8 @@ class BarangListViewTests(TestCase):
     def test_daftar_barang_mengarahkan_hapus_ke_komponen_konfirmasi(self):
         response = self.client.get(reverse('inventaris:barang_list'))
 
-        self.assertContains(response, 'data-confirmation-trigger')
+        self.assertContains(response, 'data-confirm-message="Yakin ingin menghapus barang Keyboard?"')
+        self.assertContains(response, 'method="post"')
         self.assertContains(response, reverse('inventaris:barang_delete', args=[self.keyboard_inventaris.pk]))
 
     def test_detail_inventaris_menampilkan_list_detail_barang(self):
@@ -252,12 +254,28 @@ class BarangListViewTests(TestCase):
     def test_detail_inventaris_mengarahkan_hapus_detail_ke_komponen_konfirmasi(self):
         response = self.client.get(reverse('inventaris:inventaris_detail', args=[self.keyboard_inventaris.pk]))
 
-        self.assertContains(response, 'data-confirmation-trigger')
+        self.assertContains(response, 'data-confirm-message="Yakin ingin menghapus detail barang')
+        self.assertContains(response, 'method="post"')
         self.assertContains(response, reverse('inventaris:detail_barang_delete', args=[self.keyboard_barang.pk]))
 
 
 class DetailBarangCrudTests(TestCase):
     def setUp(self):
+        self.pengguna = Pengguna.objects.create(
+            nama_pengguna='Lab Admin',
+            nim_nik='ADM001',
+            email='admin@example.com',
+            password='rahasia123',
+            no_hp='080000000000',
+            alamat='Kampus',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='laboran',
+        )
+        session = self.client.session
+        session['pengguna_id'] = self.pengguna.pk
+        session.save()
         self.inventaris = InventarisBarang.objects.create(nama='Mikroskop', jumlah=3)
         self.lokasi_awal = Lokasi.objects.create(nama_lokasi='Ruang Alat')
         self.lokasi_baru = Lokasi.objects.create(nama_lokasi='Lab Biologi')
@@ -286,10 +304,11 @@ class DetailBarangCrudTests(TestCase):
         )
 
         detail = Barang.objects.exclude(pk=self.barang.pk).get()
+        self.inventaris.refresh_from_db()
         self.assertRedirects(response, reverse('inventaris:inventaris_detail', args=[self.inventaris.pk]))
         self.assertEqual(detail.inventaris, self.inventaris)
         self.assertEqual(detail.nama, self.inventaris.nama)
-        self.assertEqual(detail.jumlah, self.inventaris.jumlah)
+        self.assertEqual(self.inventaris.jumlah, self.inventaris.detail_barang.count())
         self.assertEqual(detail.lokasi, self.lokasi_baru)
         self.assertEqual(detail.kondisi, 'rusak_ringan')
 
@@ -310,11 +329,23 @@ class DetailBarangCrudTests(TestCase):
         self.assertEqual(self.barang.keterangan, 'Perlu dicek')
 
     def test_delete_detail_barang_menghapus_child_saja(self):
+        Barang.objects.create(
+            inventaris=self.inventaris,
+            nama='Mikroskop',
+            jumlah=3,
+            lokasi=self.lokasi_baru,
+            kondisi='baik',
+        )
+        self.inventaris.sync_jumlah_from_detail()
+        self.assertEqual(self.inventaris.jumlah, 2)
+
         response = self.client.post(reverse('inventaris:detail_barang_delete', args=[self.barang.pk]))
+        self.inventaris.refresh_from_db()
 
         self.assertRedirects(response, reverse('inventaris:inventaris_detail', args=[self.inventaris.pk]))
         self.assertFalse(Barang.objects.filter(pk=self.barang.pk).exists())
         self.assertTrue(InventarisBarang.objects.filter(pk=self.inventaris.pk).exists())
+        self.assertEqual(self.inventaris.jumlah, 1)
 
     def test_detail_barang_menampilkan_status_pinjam_tersedia(self):
         response = self.client.get(reverse('inventaris:barang_detail', args=[self.barang.pk]))
@@ -384,7 +415,4 @@ class InventarisCrudTests(TestCase):
 
         response = self.client.get(reverse('inventaris:barang_delete', args=[inventaris.pk]))
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'data-confirmation-component')
-        self.assertContains(response, 'Yakin ingin menghapus barang <strong>Osiloskop</strong>?')
-        self.assertContains(response, reverse('inventaris:barang_list'))
+        self.assertRedirects(response, reverse('inventaris:barang_list'), fetch_redirect_response=False)

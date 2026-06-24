@@ -15,10 +15,13 @@
                 <i data-lucide="pencil" class="h-4 w-4"></i>
                 <span>Edit</span>
             </a>
-            <a data-confirmation-trigger data-confirm-message="Lanjut ke halaman konfirmasi hapus peminjaman {{ peminjaman.nama_peminjam }}?" class="inline-flex items-center justify-center gap-2 rounded-2xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-rose-700" href="{% url 'peminjaman:peminjaman_delete' peminjaman.pk %}">
-                <i data-lucide="trash-2" class="h-4 w-4"></i>
-                <span>Hapus</span>
-            </a>
+            <form method="post" action="{% url 'peminjaman:peminjaman_delete' peminjaman.pk %}" data-confirm-message="Yakin ingin menghapus peminjaman {{ peminjaman.nama_peminjam }}?" class="inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-2xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-rose-700">
+                                        <i data-lucide="trash-2" class="h-4 w-4"></i>
+                                        <span>Hapus</span>
+                                    </button>
+                                </form>
             <a class="btn-secondary" href="{% url 'peminjaman:peminjaman_list' %}">
                 <i data-lucide="arrow-left" class="h-4 w-4"></i>
                 <span>Kembali</span>

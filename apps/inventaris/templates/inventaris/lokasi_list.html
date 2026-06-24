@@ -49,10 +49,13 @@
                                     <i data-lucide="pencil" class="h-4 w-4"></i>
                                     <span>Edit</span>
                                 </a>
-                                <a data-confirmation-trigger data-confirm-message="Lanjut ke halaman konfirmasi hapus lokasi {{ lokasi.nama_lokasi }}?" class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700" href="{% url 'inventaris:lokasi_delete' lokasi.pk %}">
-                                    <i data-lucide="trash-2" class="h-4 w-4"></i>
-                                    <span>Hapus</span>
-                                </a>
+                                <form method="post" action="{% url 'inventaris:lokasi_delete' lokasi.pk %}" data-confirm-message="Yakin ingin menghapus lokasi {{ lokasi.nama_lokasi }}?" class="inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700">
+                                        <i data-lucide="trash-2" class="h-4 w-4"></i>
+                                        <span>Hapus</span>
+                                    </button>
+                                </form>
                             </div>
                         </td>
                     </tr>

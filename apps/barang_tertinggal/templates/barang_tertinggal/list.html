@@ -80,10 +80,13 @@
                                     <i data-lucide="pencil" class="h-4 w-4"></i>
                                     <span>Edit</span>
                                 </a>
-                                <a data-confirmation-trigger data-confirm-message="Lanjut ke halaman konfirmasi hapus barang tertinggal {{ barang.nama_barang }}?" class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700" href="{% url 'barang_tertinggal:delete' barang.pk %}">
-                                    <i data-lucide="trash-2" class="h-4 w-4"></i>
-                                    <span>Hapus</span>
-                                </a>
+                                <form method="post" action="{% url 'barang_tertinggal:delete' barang.pk %}" data-confirm-message="Yakin ingin menghapus barang tertinggal {{ barang.nama_barang }}?" class="inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700">
+                                        <i data-lucide="trash-2" class="h-4 w-4"></i>
+                                        <span>Hapus</span>
+                                    </button>
+                                </form>
                             </div>
                         </td>
                     </tr>

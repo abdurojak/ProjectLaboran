@@ -1,6 +1,8 @@
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
+from apps.core.views import PostOnlyDeleteMixin
+
 from .forms import JadwalPraktikumForm
 from .models import JadwalPraktikum
 
@@ -31,7 +33,7 @@ class JadwalPraktikumUpdateView(UpdateView):
     success_url = reverse_lazy('jadwal:jadwal_list')
 
 
-class JadwalPraktikumDeleteView(DeleteView):
+class JadwalPraktikumDeleteView(PostOnlyDeleteMixin, DeleteView):
     model = JadwalPraktikum
     template_name = 'jadwal/jadwal_confirm_delete.html'
     context_object_name = 'jadwal'
