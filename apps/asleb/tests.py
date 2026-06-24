@@ -5,7 +5,7 @@ from django.urls import reverse
 
 from apps.pengguna.models import Pengguna
 
-from .models import Asleb
+from .models import Asleb, HonorAsleb
 
 
 class AslebViewTests(TestCase):
@@ -56,3 +56,37 @@ class AslebViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Siti Nurhaliza')
+
+    def test_honor_asleb_mengikuti_rumus_excel(self):
+        honor = HonorAsleb.objects.create(
+            asleb=self.asleb,
+            bulan=date(2026, 4, 1),
+            level='senior',
+            jumlah_praktikum=2,
+            total_pertemuan=10,
+            pic_transfer='Faiz',
+            status='diproses',
+        )
+
+        self.assertEqual(honor.total_jam_terealisasi, 70)
+        self.assertEqual(honor.total_akhir, 60)
+        self.assertEqual(honor.honor_per_jam, 8000)
+        self.assertEqual(honor.jumlah, 480000)
+
+    def test_honor_list_page_loads(self):
+        HonorAsleb.objects.create(
+            asleb=self.asleb,
+            bulan=date(2026, 4, 1),
+            level='junior',
+            jumlah_praktikum=1,
+            total_pertemuan=3,
+            pic_transfer='Faiz',
+            status='diproses',
+        )
+
+        response = self.client.get(reverse('asleb:honor_list'), {'bulan': '2026-04'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Rekap Honorarium Asleb')
+        self.assertContains(response, 'Siti Nurhaliza')
+        self.assertContains(response, 'Rp 147.000')

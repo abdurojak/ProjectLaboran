@@ -1,6 +1,20 @@
 from django.contrib import admin
 
-from .models import Pengguna
+from .models import Fakultas, Pengguna, Prodi
+
+
+@admin.register(Fakultas)
+class FakultasAdmin(admin.ModelAdmin):
+    list_display = ('nama', 'aktif', 'diperbarui_pada')
+    list_filter = ('aktif',)
+    search_fields = ('nama',)
+
+
+@admin.register(Prodi)
+class ProdiAdmin(admin.ModelAdmin):
+    list_display = ('nama', 'aktif', 'diperbarui_pada')
+    list_filter = ('aktif',)
+    search_fields = ('nama',)
 
 
 @admin.register(Pengguna)

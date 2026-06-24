@@ -1,41 +1,22 @@
 from django import forms
 from django.contrib.auth.hashers import check_password
+from django.db import OperationalError, ProgrammingError
 
-from .models import Pengguna
+from .models import Fakultas, Pengguna, Prodi
 
 
-FAKULTAS_CHOICES = [
-    ('', 'Pilih fakultas'),
-    ('Teknologi Industri', 'Teknologi Industri'),
-    ('Ekonomi', 'Ekonomi'),
-    ('Teknologi Kebumian dan Energi', 'Teknologi Kebumian dan Energi'),
-    ('Arsitektur Lanskap dan Teknologi Lingkungan', 'Arsitektur Lanskap dan Teknologi Lingkungan'),
-    ('Teknik Sipil dan Perencanaan', 'Teknik Sipil dan Perencanaan'),
-    ('Kedokteran Gigi', 'Kedokteran Gigi'),
-    ('Kedokteran', 'Kedokteran'),
-    ('Hukum', 'Hukum'),
-    ('Seni Rupa dan Desain', 'Seni Rupa dan Desain'),
-]
+def active_name_choices(model, empty_label):
+    try:
+        choices = list(model.objects.filter(aktif=True).values_list('nama', 'nama'))
+    except (OperationalError, ProgrammingError):
+        choices = []
 
-PRODI_CHOICES = [
-    ('', 'Pilih prodi'),
-    ('Informatika', 'Informatika'),
-    ('Sistem Informasi', 'Sistem Informasi'),
-    ('Rekayasa Perangkat Lunak', 'Rekayasa Perangkat Lunak'),
-    ('Sistem Keamanan Informasi', 'Sistem Keamanan Informasi'),
-    ('Rekayasa Data', 'Rekayasa Data'),
-    ('Manajemen', 'Manajemen'),
-    ('Akuntansi', 'Akuntansi'),
-    ('Teknik Industri', 'Teknik Industri'),
-    ('Teknik Elektro', 'Teknik Elektro'),
-    ('Teknik Mesin', 'Teknik Mesin'),
-    ('Teknik Sipil', 'Teknik Sipil'),
-]
+    return [('', empty_label), *choices]
 
 
 def apply_fakultas_prodi_choices(form):
-    form.fields['fakultas'].widget = forms.Select(choices=FAKULTAS_CHOICES)
-    form.fields['prodi'].widget = forms.Select(choices=PRODI_CHOICES)
+    form.fields['fakultas'].widget = forms.Select(choices=active_name_choices(Fakultas, 'Pilih fakultas'))
+    form.fields['prodi'].widget = forms.Select(choices=active_name_choices(Prodi, 'Pilih prodi'))
 
 
 class PenggunaForm(forms.ModelForm):
@@ -261,20 +242,10 @@ class VerificationCodeForm(forms.Form):
 
 
 class ForgotPasswordRequestForm(forms.Form):
-    VERIFICATION_METHOD_CHOICES = [
-        ('email', 'Email Trisakti'),
-        ('no_hp', 'No HP'),
-    ]
-
     nim_nik = forms.CharField(label='NIM/NIK', max_length=40, widget=forms.TextInput(attrs={
         'inputmode': 'numeric',
         'pattern': '[0-9]*',
     }))
-    verification_method = forms.ChoiceField(
-        label='Kirim kode lewat',
-        choices=VERIFICATION_METHOD_CHOICES,
-        widget=forms.RadioSelect,
-    )
 
     def clean_nim_nik(self):
         nim_nik = self.cleaned_data['nim_nik'].strip()
