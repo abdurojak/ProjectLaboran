@@ -3,7 +3,7 @@ from datetime import date
 from django.test import TestCase
 from django.urls import reverse
 
-from apps.inventaris.models import Barang, Lokasi
+from apps.inventaris.models import Barang, InventarisBarang, Lokasi
 from apps.pengguna.models import Pengguna
 from .models import PeminjamanAlat
 
@@ -153,6 +153,33 @@ class PeminjamanViewsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Foto Barang')
         self.assertContains(response, 'Foto barang belum tersedia.')
+
+    def test_preview_dan_detail_memakai_foto_parent_inventaris(self):
+        inventaris = InventarisBarang.objects.create(
+            nama='Kamera Induk',
+            jumlah=1,
+            foto='barang/kamera-parent.jpg',
+        )
+        barang = Barang.objects.create(
+            inventaris=inventaris,
+            nama='Kamera Induk',
+            kode_barang='LAB-099',
+            jumlah=1,
+            lokasi=self.lokasi,
+            kondisi='baik',
+        )
+        peminjaman = PeminjamanAlat.objects.create(
+            barang=barang,
+            nama_peminjam='Ari',
+            tanggal_pinjam=date(2026, 6, 21),
+            tanggal_kembali=date(2026, 6, 22),
+        )
+
+        form_response = self.client.get(reverse('peminjaman:peminjaman_create'))
+        detail_response = self.client.get(reverse('peminjaman:peminjaman_detail', args=[peminjaman.pk]))
+
+        self.assertContains(form_response, 'data-barang-photo-url="/media/barang/kamera-parent.jpg"')
+        self.assertContains(detail_response, '/media/barang/kamera-parent.jpg')
 
     def test_form_edit_menampilkan_detail_barang_terpilih_sebagai_badge(self):
         response = self.client.get(reverse('peminjaman:peminjaman_update', args=[self.peminjaman.pk]))
