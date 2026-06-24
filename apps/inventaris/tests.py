@@ -221,7 +221,6 @@ class BarangListViewTests(TestCase):
         PeminjamanAlat.objects.create(
             barang=self.keyboard_barang,
             nama_peminjam='Budi',
-            jumlah=2,
             tanggal_pinjam='2026-06-21',
             tanggal_kembali='2026-06-22',
             status='dipinjam',
@@ -357,7 +356,6 @@ class DetailBarangCrudTests(TestCase):
         PeminjamanAlat.objects.create(
             barang=self.barang,
             nama_peminjam='Budi',
-            jumlah=1,
             tanggal_pinjam='2026-06-21',
             tanggal_kembali='2026-06-22',
             status='dipinjam',

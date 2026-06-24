@@ -66,7 +66,6 @@ class PeminjamanViewsTests(TestCase):
             nama_peminjam='Andi Pratama',
             nim='2201001',
             no_hp='081234567890',
-            jumlah=2,
             tanggal_pinjam=date(2026, 6, 18),
             tanggal_kembali=date(2026, 6, 20),
             status='dipinjam',
@@ -111,7 +110,6 @@ class PeminjamanViewsTests(TestCase):
                 'nama_peminjam': 'Budi',
                 'nim': '2201002',
                 'no_hp': '081111111111',
-                'jumlah': 1,
                 'tanggal_pinjam': '2026-06-21',
                 'tanggal_kembali': '2026-06-22',
                 'status': 'diajukan',
@@ -168,7 +166,6 @@ class PeminjamanViewsTests(TestCase):
                 'nama_peminjam': 'Budi',
                 'nim': '2201002',
                 'no_hp': '081111111111',
-                'jumlah': 2,
                 'tanggal_pinjam': '2026-06-21',
                 'tanggal_kembali': '2026-06-22',
                 'status': 'diajukan',
@@ -180,7 +177,6 @@ class PeminjamanViewsTests(TestCase):
         peminjaman = PeminjamanAlat.objects.filter(nama_peminjam='Budi').order_by('barang__kode_barang')
         self.assertEqual(peminjaman.count(), 2)
         self.assertEqual([item.barang for item in peminjaman], [self.barang_lain, self.barang_rusak])
-        self.assertEqual([item.jumlah for item in peminjaman], [1, 1])
 
     def test_create_menolak_detail_barang_yang_sedang_dipinjam(self):
         response = self.client.post(
@@ -190,7 +186,6 @@ class PeminjamanViewsTests(TestCase):
                 'nama_peminjam': 'Budi',
                 'nim': '2201002',
                 'no_hp': '081111111111',
-                'jumlah': 1,
                 'tanggal_pinjam': '2026-06-21',
                 'tanggal_kembali': '2026-06-22',
                 'status': 'diajukan',
@@ -220,7 +215,6 @@ class PeminjamanViewsTests(TestCase):
             nama_peminjam='Siti Aminah',
             nim='2201002',
             no_hp='081111111111',
-            jumlah=1,
             tanggal_pinjam=date(2026, 6, 23),
             tanggal_kembali=date(2026, 6, 24),
             status='diajukan',
@@ -230,7 +224,6 @@ class PeminjamanViewsTests(TestCase):
             nama_peminjam='Budi',
             nim='2201003',
             no_hp='081222222222',
-            jumlah=1,
             tanggal_pinjam=date(2026, 7, 1),
             tanggal_kembali=date(2026, 7, 2),
             status='dikembalikan',
@@ -294,7 +287,6 @@ class PeminjamanMahasiswaTests(TestCase):
                 'nama_peminjam': 'Siti Aminah',
                 'nim': '2201002',
                 'no_hp': '081111111111',
-                'jumlah': 1,
                 'tanggal_pinjam': '2026-06-21',
                 'tanggal_kembali': '2026-06-22',
                 'status': 'dipinjam',
@@ -306,6 +298,16 @@ class PeminjamanMahasiswaTests(TestCase):
         self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
         self.assertEqual(peminjaman.status, 'diajukan')
         self.assertEqual(peminjaman.nim, self.mahasiswa.nim_nik)
+        self.assertEqual(peminjaman.nama_peminjam, self.mahasiswa.nama_pengguna)
+        self.assertEqual(peminjaman.no_hp, self.mahasiswa.no_hp)
+
+    def test_form_mahasiswa_tidak_menampilkan_input_identitas(self):
+        response = self.client.get(reverse('peminjaman:peminjaman_create'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'type="text" name="nama_peminjam"')
+        self.assertNotContains(response, 'type="text" name="nim"')
+        self.assertNotContains(response, 'type="text" name="no_hp"')
 
     def test_mahasiswa_bisa_edit_atau_hapus_peminjaman_miliknya_yang_masih_diajukan(self):
         peminjaman = PeminjamanAlat.objects.create(
@@ -313,7 +315,6 @@ class PeminjamanMahasiswaTests(TestCase):
             nama_peminjam='Siti Aminah',
             nim='2201002',
             no_hp='081111111111',
-            jumlah=1,
             tanggal_pinjam=date(2026, 6, 21),
             tanggal_kembali=date(2026, 6, 22),
             status='diajukan',
@@ -329,7 +330,6 @@ class PeminjamanMahasiswaTests(TestCase):
             nama_peminjam='Siti Aminah',
             nim='2201002',
             no_hp='081111111111',
-            jumlah=1,
             tanggal_pinjam=date(2026, 6, 21),
             tanggal_kembali=date(2026, 6, 22),
             status='dipinjam',
@@ -348,7 +348,6 @@ class PeminjamanMahasiswaTests(TestCase):
             nama_peminjam='Budi',
             nim='2201003',
             no_hp='081222222222',
-            jumlah=1,
             tanggal_pinjam=date(2026, 6, 21),
             tanggal_kembali=date(2026, 6, 22),
             status='diajukan',
@@ -373,7 +372,6 @@ class PeminjamanAlatModelTests(TestCase):
         peminjaman = PeminjamanAlat.objects.create(
             barang=barang,
             nama_peminjam='Andi Pratama',
-            jumlah=1,
             tanggal_pinjam=date(2026, 6, 22),
             tanggal_kembali=date(2026, 6, 23),
         )

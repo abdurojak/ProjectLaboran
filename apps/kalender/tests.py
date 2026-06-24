@@ -75,7 +75,6 @@ class KalenderViewsTests(TestCase):
             barang=barang,
             nama_peminjam='Siti Aminah',
             nim='2201002',
-            jumlah=1,
             tanggal_pinjam=date.today(),
             tanggal_kembali=date.today(),
             status='dipinjam',
@@ -84,7 +83,6 @@ class KalenderViewsTests(TestCase):
             barang=barang,
             nama_peminjam='Budi',
             nim='2201003',
-            jumlah=1,
             tanggal_pinjam=date.today(),
             tanggal_kembali=date.today(),
             status='dikembalikan',
@@ -126,7 +124,6 @@ class KalenderViewsTests(TestCase):
             barang=barang,
             nama_peminjam='Siti Aminah',
             nim='2201002',
-            jumlah=1,
             tanggal_pinjam=date.today(),
             tanggal_kembali=date.today(),
             status='dipinjam',
@@ -280,7 +277,6 @@ class KalenderViewsTests(TestCase):
                 barang=barang,
                 nama_peminjam='Raka Saputra',
                 nim='2201006',
-                jumlah=1,
                 tanggal_pinjam=date.today() - timedelta(days=index),
                 tanggal_kembali=date.today(),
                 status='dipinjam',
@@ -306,4 +302,5 @@ class KalenderViewsTests(TestCase):
 
         titles = [notification['judul'] for notification in notifications]
         self.assertIn('Hari Kemerdekaan Republik Indonesia', titles)
+
 

@@ -174,7 +174,7 @@
                             <div class="min-w-0">
                                 <a class="block truncate font-bold text-brand-700 hover:text-brand-800" href="{% url 'peminjaman:peminjaman_detail' peminjaman.pk %}">{{ peminjaman.barang.nama }}</a>
                                 <p class="mt-1 truncate text-sm font-semibold text-slate-700">{{ peminjaman.nama_peminjam }}</p>
-                                <p class="mt-1 text-xs text-slate-500">{{ peminjaman.jumlah }} unit · {{ peminjaman.tanggal_pinjam|date:"d M" }} - {{ peminjaman.tanggal_kembali|date:"d M Y" }}</p>
+                                <p class="mt-1 text-xs text-slate-500">{{ peminjaman.tanggal_pinjam|date:"d M" }} - {{ peminjaman.tanggal_kembali|date:"d M Y" }}</p>
                             </div>
                         </div>
 
@@ -224,7 +224,7 @@
                             <div class="min-w-0">
                                 <a class="block truncate font-bold text-brand-700 hover:text-brand-800" href="{% url 'peminjaman:peminjaman_detail' peminjaman.pk %}">{{ peminjaman.barang.nama }}</a>
                                 <p class="mt-1 truncate text-sm font-semibold text-slate-700">{{ peminjaman.nama_peminjam }}</p>
-                                <p class="mt-1 text-xs text-slate-500">{{ peminjaman.jumlah }} unit Â· {{ peminjaman.tanggal_pinjam|date:"d M" }} - {{ peminjaman.tanggal_kembali|date:"d M Y" }}</p>
+                                <p class="mt-1 text-xs text-slate-500">{{ peminjaman.tanggal_pinjam|date:"d M" }} - {{ peminjaman.tanggal_kembali|date:"d M Y" }}</p>
                             </div>
                         </div>
 
@@ -284,7 +284,7 @@
                                 <a class="block truncate font-bold text-brand-700 hover:text-brand-800" href="{% url 'peminjaman:peminjaman_detail' peminjaman.pk %}">{{ peminjaman.barang.nama }}</a>
                                 <p class="mt-1 truncate text-sm font-semibold text-slate-700">{{ peminjaman.nama_peminjam }}</p>
                                 <span class="{% if peminjaman.status == 'hilang' %}bg-rose-100 text-rose-700{% else %}bg-orange-100 text-orange-700{% endif %} mt-2 inline-flex rounded-full px-3 py-1 text-xs font-bold">
-                                    {{ peminjaman.get_status_display }} · {{ peminjaman.jumlah }} unit
+                                    {{ peminjaman.get_status_display }}
                                 </span>
                             </div>
                         </div>
@@ -463,7 +463,6 @@
                         <tr>
                             <th>Barang</th>
                             <th>Peminjam</th>
-                            <th>Jumlah</th>
                             <th>Status</th>
                         </tr>
                     </thead>
@@ -474,7 +473,6 @@
                                 <a class="font-semibold text-brand-700 hover:text-brand-800" href="{% url 'peminjaman:peminjaman_detail' peminjaman.pk %}">{{ peminjaman.barang.nama }}</a>
                             </td>
                             <td>{{ peminjaman.nama_peminjam }}</td>
-                            <td>{{ peminjaman.jumlah }}</td>
                             <td>{{ peminjaman.get_status_display }}</td>
                         </tr>
                         {% empty %}

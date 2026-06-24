@@ -349,10 +349,8 @@ def accept_peminjaman(request, pk):
             return redirect('dashboard:home')
 
         barang = Barang.objects.select_for_update().get(pk=peminjaman.barang_id)
-        stok_tersedia = barang.stok_tersedia
-
-        if peminjaman.jumlah > stok_tersedia:
-            messages.error(request, f'Stok {barang.nama} tidak cukup. Tersedia {stok_tersedia} unit.')
+        if barang.sedang_dipinjam:
+            messages.error(request, f'{barang.nama} sedang dipinjam.')
             return redirect('dashboard:home')
 
         peminjaman.status = 'dipinjam'

@@ -69,7 +69,6 @@
                         <th>Kode Pinjam</th>
                         <th>Barang</th>
                         <th>Peminjam</th>
-                        <th>Jumlah</th>
                         <th>Tanggal Pinjam</th>
                         <th>Tanggal Kembali</th>
                         <th>Status</th>
@@ -89,7 +88,6 @@
                             <div class="text-xs text-slate-500">NIM: {{ peminjaman.nim|default:"-" }}</div>
                             <div class="text-xs text-slate-500">No HP: {{ peminjaman.no_hp|default:"-" }}</div>
                         </td>
-                        <td>{{ peminjaman.jumlah }}</td>
                         <td>{{ peminjaman.tanggal_pinjam|date:"d M Y" }}</td>
                         <td>{{ peminjaman.tanggal_kembali|date:"d M Y" }}</td>
                         <td>
@@ -128,7 +126,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="8" class="py-12 text-center text-slate-500">Belum ada data peminjaman alat.</td>
+                        <td colspan="7" class="py-12 text-center text-slate-500">Belum ada data peminjaman alat.</td>
                     </tr>
                     {% endfor %}
                 </tbody>

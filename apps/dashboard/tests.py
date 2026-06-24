@@ -5,6 +5,7 @@ from django.utils import timezone
 from apps.inventaris.models import Barang
 from apps.peminjaman.models import PeminjamanAlat
 from apps.pendaftaran_asleb.models import PengaturanPendaftaranAsleb
+from apps.pendaftaran_asleb.utils import get_public_registration_url
 from apps.pengguna.models import Pengguna
 
 
@@ -37,7 +38,6 @@ class DashboardViewTests(TestCase):
         PeminjamanAlat.objects.create(
             barang=self.barang,
             nama_peminjam='Budi',
-            jumlah=1,
             tanggal_pinjam=timezone.localdate(),
             tanggal_kembali=timezone.localdate(),
             status='diajukan',
@@ -54,7 +54,6 @@ class DashboardViewTests(TestCase):
         PeminjamanAlat.objects.create(
             barang=self.barang,
             nama_peminjam='Budi',
-            jumlah=1,
             tanggal_pinjam=timezone.localdate(),
             tanggal_kembali=timezone.localdate(),
             status='diajukan',
@@ -70,7 +69,6 @@ class DashboardViewTests(TestCase):
         peminjaman = PeminjamanAlat.objects.create(
             barang=self.barang,
             nama_peminjam='Budi',
-            jumlah=1,
             tanggal_pinjam=timezone.localdate(),
             tanggal_kembali=timezone.localdate(),
             status='diajukan',
@@ -87,7 +85,6 @@ class DashboardViewTests(TestCase):
         accepted = PeminjamanAlat.objects.create(
             barang=barang,
             nama_peminjam='Budi',
-            jumlah=1,
             tanggal_pinjam=timezone.localdate(),
             tanggal_kembali=timezone.localdate(),
             status='diajukan',
@@ -95,7 +92,6 @@ class DashboardViewTests(TestCase):
         waiting = PeminjamanAlat.objects.create(
             barang=barang,
             nama_peminjam='Siti',
-            jumlah=1,
             tanggal_pinjam=timezone.localdate(),
             tanggal_kembali=timezone.localdate(),
             status='diajukan',
@@ -108,13 +104,12 @@ class DashboardViewTests(TestCase):
         self.assertRedirects(response, reverse('dashboard:home'))
         self.assertEqual(waiting.status, 'diajukan')
         self.assertEqual(barang.stok_tersedia, 0)
-        self.assertContains(response, 'Stok Proyektor tidak cukup. Tersedia 0 unit.')
+        self.assertContains(response, 'Proyektor sedang dipinjam.')
 
     def test_reject_pending_peminjaman_deletes_record(self):
         peminjaman = PeminjamanAlat.objects.create(
             barang=self.barang,
             nama_peminjam='Budi',
-            jumlah=1,
             tanggal_pinjam=timezone.localdate(),
             tanggal_kembali=timezone.localdate(),
             status='diajukan',
@@ -129,7 +124,6 @@ class DashboardViewTests(TestCase):
         PeminjamanAlat.objects.create(
             barang=self.barang,
             nama_peminjam='Budi',
-            jumlah=1,
             tanggal_pinjam=timezone.localdate(),
             tanggal_kembali=timezone.localdate(),
             status='hilang',
@@ -145,7 +139,6 @@ class DashboardViewTests(TestCase):
         PeminjamanAlat.objects.create(
             barang=self.barang,
             nama_peminjam='Siti',
-            jumlah=1,
             tanggal_pinjam=timezone.localdate(),
             tanggal_kembali=timezone.localdate(),
             status='dipinjam',
@@ -163,7 +156,6 @@ class DashboardViewTests(TestCase):
         PeminjamanAlat.objects.create(
             barang=self.barang,
             nama_peminjam='Siti',
-            jumlah=1,
             tanggal_pinjam=timezone.localdate(),
             tanggal_kembali=timezone.localdate(),
             status='dipinjam',
@@ -171,7 +163,6 @@ class DashboardViewTests(TestCase):
         PeminjamanAlat.objects.create(
             barang=self.barang,
             nama_peminjam='Budi',
-            jumlah=1,
             tanggal_pinjam=timezone.localdate(),
             tanggal_kembali=timezone.localdate(),
             status='rusak',
@@ -191,7 +182,6 @@ class DashboardViewTests(TestCase):
         peminjaman = PeminjamanAlat.objects.create(
             barang=self.barang,
             nama_peminjam='Siti',
-            jumlah=1,
             tanggal_pinjam=timezone.localdate(),
             tanggal_kembali=timezone.localdate(),
             status='dipinjam',
@@ -210,7 +200,6 @@ class DashboardViewTests(TestCase):
         peminjaman = PeminjamanAlat.objects.create(
             barang=self.barang,
             nama_peminjam='Siti',
-            jumlah=1,
             tanggal_pinjam=timezone.localdate(),
             tanggal_kembali=timezone.localdate(),
             status='dipinjam',
@@ -226,7 +215,6 @@ class DashboardViewTests(TestCase):
         peminjaman = PeminjamanAlat.objects.create(
             barang=self.barang,
             nama_peminjam='Siti',
-            jumlah=1,
             tanggal_pinjam=timezone.localdate(),
             tanggal_kembali=timezone.localdate(),
             status='dipinjam',
@@ -242,7 +230,6 @@ class DashboardViewTests(TestCase):
         peminjaman = PeminjamanAlat.objects.create(
             barang=self.barang,
             nama_peminjam='Budi',
-            jumlah=1,
             tanggal_pinjam=timezone.localdate(),
             tanggal_kembali=timezone.localdate(),
             status='rusak',
@@ -261,7 +248,6 @@ class DashboardViewTests(TestCase):
         peminjaman = PeminjamanAlat.objects.create(
             barang=self.barang,
             nama_peminjam='Budi',
-            jumlah=1,
             tanggal_pinjam=timezone.localdate(),
             tanggal_kembali=timezone.localdate(),
             status='dipinjam',
@@ -293,7 +279,6 @@ class DashboardViewTests(TestCase):
             barang=self.barang,
             nama_peminjam='Siti Aminah',
             nim='2201002',
-            jumlah=1,
             tanggal_pinjam=timezone.localdate(),
             tanggal_kembali=timezone.localdate(),
             status='diajukan',
@@ -338,7 +323,7 @@ class DashboardViewTests(TestCase):
 
         self.assertContains(response, 'Pendaftaran asleb sedang dibuka')
         self.assertContains(response, 'QR pendaftaran asleb')
-        self.assertContains(response, 'http://10.24.80.245:8001/pendaftaran-asleb/daftar/')
+        self.assertContains(response, get_public_registration_url())
 
     def test_dashboard_mahasiswa_menyembunyikan_qr_pendaftaran_asleb_saat_ditutup(self):
         mahasiswa = Pengguna.objects.create(
@@ -361,3 +346,4 @@ class DashboardViewTests(TestCase):
 
         self.assertNotContains(response, 'Pendaftaran asleb sedang dibuka')
         self.assertNotContains(response, 'QR pendaftaran asleb')
+
