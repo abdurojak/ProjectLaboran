@@ -428,3 +428,29 @@ class DashboardViewTests(TestCase):
         self.assertNotContains(response, 'Inventaris')
         self.assertNotContains(response, 'Data Asleb')
         self.assertNotContains(response, 'Pendaftaran Asleb')
+
+    def test_dashboard_asisten_lab_menampilkan_tombol_daftar_saat_pendaftaran_dibuka(self):
+        asisten = Pengguna.objects.create(
+            nama_pengguna='Ricardo Dharma Saputra',
+            nim_nik='20260001',
+            email='ricardo.dharma@trisakti.ac.id',
+            password='rahasia123',
+            no_hp='',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='asisten_lab',
+        )
+        pengaturan = PengaturanPendaftaranAsleb.get_solo()
+        pengaturan.dibuka = True
+        pengaturan.save(update_fields=['dibuka'])
+        session = self.client.session
+        session['pengguna_id'] = asisten.pk
+        session.save()
+
+        response = self.client.get(reverse('dashboard:home'))
+
+        self.assertContains(response, 'Pendaftaran asleb sedang dibuka')
+        self.assertContains(response, 'Buka Form Pendaftaran')
+        self.assertContains(response, get_public_registration_url())

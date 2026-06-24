@@ -1,5 +1,6 @@
 from django.test import TestCase
 from django.urls import reverse
+from django.core import mail
 
 from apps.asleb.models import Asleb
 from apps.pengguna.models import Pengguna
@@ -49,10 +50,26 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertContains(response, get_public_registration_url())
 
     def test_toggle_pendaftaran_membuka_dan_menutup_form(self):
+        Pengguna.objects.create(
+            nama_pengguna='Mahasiswa Pendaftar',
+            nim_nik='2401999',
+            email='mahasiswa@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081234567899',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+            is_verified=True,
+        )
+
         response = self.client.post(reverse('pendaftaran_asleb:pendaftaran_toggle_status'))
 
         self.assertRedirects(response, reverse('pendaftaran_asleb:pendaftaran_list'))
         self.assertTrue(PengaturanPendaftaranAsleb.get_solo().dibuka)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('Pendaftaran asisten laboratorium sudah dibuka', mail.outbox[0].body)
 
         response = self.client.post(reverse('pendaftaran_asleb:pendaftaran_toggle_status'))
 
@@ -71,7 +88,7 @@ class PendaftaranAslebViewTests(TestCase):
         mahasiswa = Pengguna.objects.create(
             nama_pengguna='Siti Aminah',
             nim_nik='2201002',
-            email='siti@example.com',
+            email='siti@std.trisakti.ac.id',
             password='rahasia123',
             no_hp='081111111111',
             alamat='Jakarta',
@@ -79,6 +96,7 @@ class PendaftaranAslebViewTests(TestCase):
             prodi='Informatika',
             gender='perempuan',
             role='mahasiswa',
+            is_verified=True,
         )
         pengaturan = PengaturanPendaftaranAsleb.get_solo()
         pengaturan.dibuka = True
@@ -90,7 +108,7 @@ class PendaftaranAslebViewTests(TestCase):
         response = self.client.get(reverse('pendaftaran_asleb:pendaftaran_public'))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Data mahasiswa otomatis digunakan dari akun Anda.')
+        self.assertContains(response, 'Data akun otomatis digunakan untuk pendaftaran Anda.')
         self.assertContains(response, 'Peminjaman Alat')
         self.assertContains(response, 'Jadwal Praktikum')
         self.assertContains(response, 'Ruangan')

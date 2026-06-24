@@ -12,9 +12,9 @@
         </div>
         <form method="post" enctype="multipart/form-data" class="space-y-5 p-6 md:p-8">
             {% csrf_token %}
-            {% if current_pengguna and current_pengguna.role == 'mahasiswa' %}
+            {% if current_pengguna and current_pengguna.role == 'mahasiswa' or current_pengguna and current_pengguna.role == 'asisten_lab' %}
             <div class="rounded-3xl border border-teal-100 bg-teal-50 p-5">
-                <p class="text-sm font-bold text-teal-800">Data mahasiswa otomatis digunakan dari akun Anda.</p>
+                <p class="text-sm font-bold text-teal-800">Data akun otomatis digunakan untuk pendaftaran Anda.</p>
                 <div class="mt-3 grid gap-3 text-sm text-teal-900 md:grid-cols-2">
                     <div><span class="font-semibold">Nama:</span> {{ current_pengguna.nama_pengguna }}</div>
                     <div><span class="font-semibold">NIM:</span> {{ current_pengguna.nim_nik }}</div>

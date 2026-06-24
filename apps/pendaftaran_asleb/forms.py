@@ -40,7 +40,7 @@ class PendaftaranAslebPublicForm(PendaftaranAslebForm):
     def __init__(self, *args, **kwargs):
         self.current_pengguna = kwargs.pop('current_pengguna', None)
         super().__init__(*args, **kwargs)
-        if self.current_pengguna and self.current_pengguna.role == 'mahasiswa':
+        if self.current_pengguna and self.current_pengguna.role in ['mahasiswa', 'asisten_lab']:
             self.fields['nama'].initial = self.current_pengguna.nama_pengguna
             self.fields['nim'].initial = self.current_pengguna.nim_nik
             self.fields['no_hp'].initial = self.current_pengguna.no_hp
@@ -53,7 +53,7 @@ class PendaftaranAslebPublicForm(PendaftaranAslebForm):
 
     def clean(self):
         cleaned_data = super().clean()
-        if self.current_pengguna and self.current_pengguna.role == 'mahasiswa':
+        if self.current_pengguna and self.current_pengguna.role in ['mahasiswa', 'asisten_lab']:
             cleaned_data['nama'] = self.current_pengguna.nama_pengguna
             cleaned_data['nim'] = self.current_pengguna.nim_nik
             cleaned_data['no_hp'] = self.current_pengguna.no_hp
@@ -75,6 +75,22 @@ class PendaftaranAslebPublicForm(PendaftaranAslebForm):
             'rekening',
             'alasan',
         ]
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+
+        if self.current_pengguna:
+            instance.nama = self.current_pengguna.nama_pengguna
+            instance.nim = self.current_pengguna.nim_nik
+            instance.no_hp = self.current_pengguna.no_hp
+            instance.email = self.current_pengguna.email
+            instance.program_studi = self.current_pengguna.prodi
+
+        if commit:
+            instance.save()
+            self.save_m2m()
+
+        return instance
 
 
 class MataKuliahAslebForm(forms.ModelForm):

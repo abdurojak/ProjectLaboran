@@ -88,7 +88,7 @@ class DashboardView(TemplateView):
             context['today'] = timezone.localdate()
             context['peminjaman_saya'] = peminjaman_saya[:6]
             context['jadwal_hari_ini'] = jadwal_qs.filter(tanggal=context['today'])[:6]
-            context['pendaftaran_asleb_dibuka'] = is_mahasiswa and pengaturan_pendaftaran.dibuka
+            context['pendaftaran_asleb_dibuka'] = (is_mahasiswa or is_asisten_lab) and pengaturan_pendaftaran.dibuka
             context['kegiatan_kalender_mahasiswa'] = kegiatan_qs.filter(tanggal__gte=context['today'])[:6]
             context['public_registration_url'] = get_public_registration_url()
             stats_cards = [
