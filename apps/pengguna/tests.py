@@ -298,6 +298,7 @@ class PenggunaAuthTests(TestCase):
                 'prodi': 'Manajemen',
                 'gender': 'perempuan',
             },
+            follow=True,
         )
 
         pengguna = Pengguna.objects.get(nim_nik='2201002')
@@ -306,6 +307,7 @@ class PenggunaAuthTests(TestCase):
         self.assertEqual(pengguna.role, 'mahasiswa')
         self.assertFalse(pengguna.is_verified)
         self.assertNotIn('pengguna_id', self.client.session)
+        self.assertContains(response, 'http://10.24.80.245:8001/pengguna/register/verifikasi/')
 
         kode = self.client.session['pengguna_otp']['code']
         response = self.client.post(reverse('pengguna:verify_register'), {'kode': kode})
