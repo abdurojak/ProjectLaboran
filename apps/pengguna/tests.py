@@ -317,6 +317,27 @@ class PenggunaAuthTests(TestCase):
         self.assertTrue(pengguna.is_verified)
         self.assertEqual(self.client.session['pengguna_id'], pengguna.pk)
 
+    def test_register_menerima_email_domain_trisakti_tanpa_std(self):
+        response = self.client.post(
+            reverse('pengguna:register'),
+            {
+                'nama_pengguna': 'Dina Pratama',
+                'nim_nik': '2201003',
+                'email': 'dina@trisakti.ac.id',
+                'password': 'passwordku123',
+                'password_confirmation': 'passwordku123',
+                'verification_method': 'email',
+                'no_hp': '081111111112',
+                'alamat': 'Jakarta',
+                'fakultas': 'Ekonomi',
+                'prodi': 'Manajemen',
+                'gender': 'perempuan',
+            },
+        )
+
+        self.assertRedirects(response, reverse('pengguna:verify_register'))
+        self.assertTrue(Pengguna.objects.filter(nim_nik='2201003', email='dina@trisakti.ac.id').exists())
+
     def test_register_menolak_email_non_trisakti(self):
         response = self.client.post(
             reverse('pengguna:register'),
@@ -336,7 +357,7 @@ class PenggunaAuthTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Email harus menggunakan domain @std.trisakti.ac.id.')
+        self.assertContains(response, 'Email harus menggunakan domain @std.trisakti.ac.id atau @trisakti.ac.id.')
         self.assertFalse(Pengguna.objects.filter(nim_nik='2201002').exists())
 
     def test_register_menolak_nim_dan_no_hp_berhuruf(self):

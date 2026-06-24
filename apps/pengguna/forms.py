@@ -173,9 +173,9 @@ class RegisterPenggunaForm(forms.ModelForm):
             'foto': forms.FileInput(attrs={'class': 'hidden', 'accept': 'image/*'}),
             'password': forms.PasswordInput(render_value=False),
             'email': forms.EmailInput(attrs={
-                'placeholder': 'nama@student.std.trisakti.ac.id',
-                'pattern': '.+@std\\.trisakti\\.ac\\.id',
-                'title': 'Gunakan email dengan akhiran @std.trisakti.ac.id',
+                'placeholder': 'nama@std.trisakti.ac.id atau nama@trisakti.ac.id',
+                'pattern': '.+@(std\\.trisakti\\.ac\\.id|trisakti\\.ac\\.id)',
+                'title': 'Gunakan email dengan akhiran @std.trisakti.ac.id atau @trisakti.ac.id',
             }),
             'nim_nik': forms.TextInput(attrs={'inputmode': 'numeric', 'pattern': '[0-9]*', 'placeholder': 'Angka saja'}),
             'no_hp': forms.TextInput(attrs={'inputmode': 'numeric', 'pattern': '[0-9]*', 'placeholder': 'Angka saja'}),
@@ -196,8 +196,9 @@ class RegisterPenggunaForm(forms.ModelForm):
 
     def clean_email(self):
         email = self.cleaned_data['email'].strip().lower()
-        if not email.endswith('@std.trisakti.ac.id'):
-            raise forms.ValidationError('Email harus menggunakan domain @std.trisakti.ac.id.')
+        valid_domains = ('@std.trisakti.ac.id', '@trisakti.ac.id')
+        if not email.endswith(valid_domains):
+            raise forms.ValidationError('Email harus menggunakan domain @std.trisakti.ac.id atau @trisakti.ac.id.')
         return email
 
     def clean(self):
