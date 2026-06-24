@@ -1,13 +1,17 @@
 from django import forms
 
 from .models import MataKuliahAsleb, PendaftaranAsleb
+from .utils import extract_grade_from_transcript
 
 
 class PendaftaranAslebForm(forms.ModelForm):
+    SEMESTER_CHOICES = [(semester, f'Semester {semester}') for semester in range(3, 9)]
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['matkul'].queryset = MataKuliahAsleb.objects.filter(aktif=True)
         self.fields['matkul'].empty_label = 'Pilih mata kuliah'
+        self.fields['semester'].widget = forms.Select(choices=self.SEMESTER_CHOICES)
 
     class Meta:
         model = PendaftaranAsleb
@@ -21,7 +25,9 @@ class PendaftaranAslebForm(forms.ModelForm):
             'matkul',
             'cv',
             'transkrip',
+            'metode_rekening',
             'rekening',
+            'nilai_transkrip',
             'alasan',
             'status',
         ]
@@ -31,9 +37,40 @@ class PendaftaranAslebForm(forms.ModelForm):
             'no_hp': forms.TextInput(attrs={'placeholder': 'Nomor HP aktif'}),
             'program_studi': forms.TextInput(attrs={'placeholder': 'Contoh: Rekayasa Perangkat Lunak'}),
             'matkul': forms.Select(attrs={'class': 'min-h-12'}),
-            'rekening': forms.TextInput(attrs={'placeholder': 'Contoh: BCA 123456789 a.n. Nama Mahasiswa'}),
+            'rekening': forms.TextInput(attrs={'placeholder': 'Contoh: BCA 123456789 / DANA 0812xxxx / OVO 0812xxxx'}),
             'alasan': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Alasan atau catatan pendaftaran'}),
         }
+
+    def clean_semester(self):
+        semester = self.cleaned_data['semester']
+        if semester < 3 or semester > 8:
+            raise forms.ValidationError('Semester hanya boleh 3 sampai 8.')
+        return semester
+
+    def clean(self):
+        cleaned_data = super().clean()
+        transcript = cleaned_data.get('transkrip') or getattr(self.instance, 'transkrip', None)
+        detected_grade = extract_grade_from_transcript(transcript)
+
+        if detected_grade:
+            cleaned_data['nilai_transkrip'] = detected_grade
+        elif not cleaned_data.get('nilai_transkrip'):
+            cleaned_data['nilai_transkrip'] = 'tidak_terbaca'
+
+        cleaned_data['skor_nilai'] = PendaftaranAsleb.grade_to_score(cleaned_data['nilai_transkrip'])
+        return cleaned_data
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        detected_grade = self.cleaned_data.get('nilai_transkrip') or instance.nilai_transkrip
+        instance.nilai_transkrip = detected_grade
+        instance.skor_nilai = PendaftaranAsleb.grade_to_score(detected_grade)
+
+        if commit:
+            instance.save()
+            self.save_m2m()
+
+        return instance
 
 
 class PendaftaranAslebPublicForm(PendaftaranAslebForm):
@@ -72,6 +109,7 @@ class PendaftaranAslebPublicForm(PendaftaranAslebForm):
             'matkul',
             'cv',
             'transkrip',
+            'metode_rekening',
             'rekening',
             'alasan',
         ]

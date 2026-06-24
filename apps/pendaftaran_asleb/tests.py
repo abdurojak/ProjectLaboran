@@ -1,10 +1,12 @@
 from django.test import TestCase
 from django.urls import reverse
 from django.core import mail
+from django.core.files.uploadedfile import SimpleUploadedFile
 
 from apps.asleb.models import Asleb
 from apps.pengguna.models import Pengguna
 
+from .forms import PendaftaranAslebPublicForm
 from .models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb
 from .utils import get_public_registration_url
 
@@ -123,6 +125,7 @@ class PendaftaranAslebViewTests(TestCase):
         post_response = self.client.post(reverse('pendaftaran_asleb:pendaftaran_public'), {
             'semester': 4,
             'matkul': self.matkul.pk,
+            'metode_rekening': 'rekening_bank',
             'rekening': 'BCA 123456789',
             'alasan': 'Ingin membantu praktikum.',
         })
@@ -133,6 +136,57 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertEqual(pendaftaran.no_hp, mahasiswa.no_hp)
         self.assertEqual(pendaftaran.email, mahasiswa.email)
         self.assertEqual(pendaftaran.program_studi, mahasiswa.prodi)
+
+    def test_public_form_semester_hanya_tiga_sampai_delapan(self):
+        form = PendaftaranAslebPublicForm(data={
+            'nama': 'Andi',
+            'nim': '2201003',
+            'no_hp': '081111111112',
+            'email': 'andi@std.trisakti.ac.id',
+            'program_studi': 'Informatika',
+            'semester': 2,
+            'matkul': self.matkul.pk,
+            'metode_rekening': 'dana',
+            'rekening': '081111111112',
+        })
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('semester', form.errors)
+
+    def test_public_form_mendeteksi_nilai_transkrip(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Dian Putri',
+            nim_nik='2201004',
+            email='dian@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081111111113',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='mahasiswa',
+            is_verified=True,
+        )
+        transcript = SimpleUploadedFile(
+            'transkrip-nilai-a.txt',
+            b'Mata kuliah Struktur Data dan Algoritma\nNilai: A',
+            content_type='text/plain',
+        )
+        form = PendaftaranAslebPublicForm(
+            data={
+                'semester': 4,
+                'matkul': self.matkul.pk,
+                'metode_rekening': 'ovo',
+                'rekening': '081111111113',
+            },
+            files={'transkrip': transcript},
+            current_pengguna=mahasiswa,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        pendaftaran = form.save()
+        self.assertEqual(pendaftaran.nilai_transkrip, 'A')
+        self.assertEqual(pendaftaran.skor_nilai, 3)
 
     def test_pendaftaran_search_filters_data(self):
         response = self.client.get(reverse('pendaftaran_asleb:pendaftaran_list'), {'q': 'SDA'})
@@ -181,6 +235,29 @@ class PendaftaranAslebViewTests(TestCase):
         self.pendaftaran.refresh_from_db()
         self.assertEqual(self.pendaftaran.status, 'diterima')
         self.assertFalse(Asleb.objects.filter(nim='2401001').exists())
+
+    def test_terima_pendaftaran_mengubah_role_mahasiswa_jadi_asisten_lab(self):
+        pengguna = Pengguna.objects.create(
+            nama_pengguna='Rizki Pratama',
+            nim_nik='2401001',
+            email='rizki@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081234567891',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Rekayasa Perangkat Lunak',
+            gender='laki_laki',
+            role='mahasiswa',
+            is_verified=True,
+        )
+
+        response = self.client.post(
+            reverse('pendaftaran_asleb:pendaftaran_accept', args=[self.pendaftaran.pk])
+        )
+
+        self.assertEqual(response.status_code, 302)
+        pengguna.refresh_from_db()
+        self.assertEqual(pengguna.role, 'asisten_lab')
 
     def test_generate_semua_diterima_masuk_ke_data_asleb(self):
         self.pendaftaran.status = 'diterima'

@@ -75,6 +75,17 @@ class PendaftaranAsleb(models.Model):
         ('ditolak', 'Ditolak'),
         ('digenerate', 'Masuk Data Asleb'),
     ]
+    METODE_REKENING_CHOICES = [
+        ('rekening_bank', 'Rekening Bank'),
+        ('dana', 'DANA'),
+        ('ovo', 'OVO'),
+    ]
+    NILAI_CHOICES = [
+        ('A', 'A'),
+        ('B', 'B'),
+        ('C', 'C'),
+        ('tidak_terbaca', 'Tidak terbaca'),
+    ]
 
     nama = models.CharField(max_length=150)
     nim = models.CharField('NIM', max_length=30)
@@ -85,7 +96,18 @@ class PendaftaranAsleb(models.Model):
     matkul = models.ForeignKey(MataKuliahAsleb, on_delete=models.PROTECT, related_name='pendaftaran')
     cv = models.FileField('CV', upload_to='pendaftaran_asleb/cv/', blank=True)
     transkrip = models.FileField('Transkrip', upload_to='pendaftaran_asleb/transkrip/', blank=True)
+    metode_rekening = models.CharField(
+        max_length=30,
+        choices=METODE_REKENING_CHOICES,
+        default='rekening_bank',
+    )
     rekening = models.CharField(max_length=150, blank=True)
+    nilai_transkrip = models.CharField(
+        max_length=20,
+        choices=NILAI_CHOICES,
+        default='tidak_terbaca',
+    )
+    skor_nilai = models.PositiveSmallIntegerField(default=0)
     alasan = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='diajukan')
     tanggal_daftar = models.DateField(auto_now_add=True)
@@ -93,9 +115,17 @@ class PendaftaranAsleb(models.Model):
     diperbarui_pada = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['-tanggal_daftar', 'nama']
+        ordering = ['matkul__nama', 'matkul__kelas', '-skor_nilai', 'dibuat_pada', 'nama']
         verbose_name = 'Pendaftaran Asleb'
         verbose_name_plural = 'Pendaftaran Asleb'
 
     def __str__(self):
         return f'{self.nama} - {self.matkul}'
+
+    @staticmethod
+    def grade_to_score(grade):
+        return {
+            'A': 3,
+            'B': 2,
+            'C': 1,
+        }.get(grade, 0)

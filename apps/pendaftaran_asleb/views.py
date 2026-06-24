@@ -124,6 +124,7 @@ def accept_pendaftaran(request, pk):
     pendaftaran = get_object_or_404(PendaftaranAsleb, pk=pk)
     pendaftaran.status = 'diterima'
     pendaftaran.save(update_fields=['status', 'diperbarui_pada'])
+    promote_pengguna_to_asisten_lab(pendaftaran)
     messages.success(request, 'Pendaftaran asleb ditandai diterima.')
     return redirect('pendaftaran_asleb:pendaftaran_list')
 
@@ -241,6 +242,14 @@ def create_or_update_asleb_from_pendaftaran(pendaftaran):
             'catatan': f'Digenerate dari pendaftaran asleb tanggal {pendaftaran.tanggal_daftar:%d-%m-%Y}.',
         },
     )
+    promote_pengguna_to_asisten_lab(pendaftaran)
+
+
+def promote_pengguna_to_asisten_lab(pendaftaran):
+    Pengguna.objects.filter(
+        nim_nik=pendaftaran.nim,
+        role='mahasiswa',
+    ).update(role='asisten_lab')
 
 
 class MataKuliahAslebListView(ListView):
