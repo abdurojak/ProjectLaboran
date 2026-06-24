@@ -78,6 +78,44 @@
         {% endif %}
 
         <section class="surface-card min-w-0 overflow-hidden p-6">
+            <div class="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-center">
+                <div class="rounded-[28px] border border-blue-100 bg-blue-50/70 p-5 text-center">
+                    <p class="text-sm font-bold uppercase tracking-[0.18em] text-blue-700">{{ today|date:"F" }}</p>
+                    <div class="mt-2 text-6xl font-black tracking-tight text-slate-900">{{ today|date:"d" }}</div>
+                    <p class="mt-2 text-sm font-semibold text-slate-600">{{ today|date:"l, Y" }}</p>
+                </div>
+                <div class="min-w-0">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <p class="text-xs font-black uppercase tracking-[0.22em] text-blue-700">Kalender</p>
+                            <h3 class="mt-2 text-2xl font-bold tracking-tight text-slate-900">Kegiatan Terdekat</h3>
+                        </div>
+                        <a href="{% url 'kalender:kegiatan_list' %}" class="btn-secondary">Buka Kalender</a>
+                    </div>
+                    <div class="mt-4 grid gap-3">
+                        {% for kegiatan in kegiatan_kalender_mahasiswa %}
+                        <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <div class="min-w-0">
+                                    <p class="truncate text-sm font-bold text-slate-900">{{ kegiatan.judul }}</p>
+                                    <p class="mt-1 text-xs text-slate-500">{{ kegiatan.tanggal|date:"d M Y" }} · {{ kegiatan.lokasi|default:"Lokasi belum diisi" }}</p>
+                                </div>
+                                <span class="shrink-0 rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
+                                    {{ kegiatan.waktu_mulai|time:"H:i" }}{% if kegiatan.waktu_selesai %} - {{ kegiatan.waktu_selesai|time:"H:i" }}{% endif %}
+                                </span>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div class="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500">
+                            Belum ada kegiatan kalender terdekat.
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="surface-card min-w-0 overflow-hidden p-6">
             <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
                 <div>
                     <h3 class="text-2xl font-bold tracking-tight text-slate-900">Peminjaman Saya</h3>
@@ -138,10 +176,10 @@
                     <tbody>
                         {% for jadwal in jadwal_hari_ini %}
                         <tr>
-                            <td class="font-semibold text-slate-900">{{ jadwal.mata_praktikum }}</td>
+                            <td class="font-semibold text-slate-900">{{ jadwal.mata_kuliah }}</td>
                             <td>{{ jadwal.kelas }}</td>
-                            <td>{{ jadwal.ruangan }}</td>
-                            <td>{{ jadwal.waktu_mulai|time:"H:i" }} - {{ jadwal.waktu_selesai|time:"H:i" }}</td>
+                            <td>{{ jadwal.letak_ruangan }}</td>
+                            <td>{{ jadwal.waktu_mulai|time:"H:i" }}{% if jadwal.waktu_selesai %} - {{ jadwal.waktu_selesai|time:"H:i" }}{% endif %}</td>
                         </tr>
                         {% empty %}
                         <tr>

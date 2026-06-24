@@ -5,7 +5,7 @@ from .models import Pengguna
 
 
 class PenggunaLoginRequiredMiddleware:
-    MAHASISWA_ALLOWED_NAMESPACES = {'dashboard', 'peminjaman', 'jadwal', 'pengguna'}
+    MAHASISWA_ALLOWED_NAMESPACES = {'dashboard', 'peminjaman', 'jadwal', 'pengguna', 'ruangan'}
     MAHASISWA_ALLOWED_PENGGUNA_PATHS = {'/pengguna/logout/'}
 
     EXEMPT_PREFIXES = (

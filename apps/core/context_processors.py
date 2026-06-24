@@ -44,7 +44,7 @@ SIDEBAR_LINKS = [
     {'title': 'Pengaturan', 'icon': 'settings', 'url': '', 'namespace': ''},
 ]
 
-MAHASISWA_VISIBLE_NAMESPACES = {'dashboard', 'peminjaman', 'jadwal'}
+MAHASISWA_VISIBLE_NAMESPACES = {'dashboard', 'peminjaman', 'jadwal', 'ruangan'}
 
 
 def dashboard_sidebar(request):

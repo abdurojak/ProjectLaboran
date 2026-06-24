@@ -12,6 +12,11 @@ class JadwalPraktikumListView(ListView):
     template_name = 'jadwal/jadwal_list.html'
     context_object_name = 'jadwal_list'
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['current_pengguna'] = getattr(self.request, 'current_pengguna', None)
+        return context
+
 
 class JadwalPraktikumDetailView(DetailView):
     model = JadwalPraktikum

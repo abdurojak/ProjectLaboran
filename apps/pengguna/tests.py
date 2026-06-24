@@ -431,12 +431,16 @@ class PenggunaAuthTests(TestCase):
         session.save()
 
         allowed_response = self.client.get(reverse('peminjaman:peminjaman_list'))
+        ruangan_response = self.client.get(reverse('ruangan:ruangan_list'))
         blocked_response = self.client.get(reverse('inventaris:barang_list'))
 
         self.assertEqual(allowed_response.status_code, 200)
+        self.assertEqual(ruangan_response.status_code, 200)
         self.assertContains(allowed_response, 'Dashboard')
         self.assertContains(allowed_response, 'Peminjaman Alat')
         self.assertContains(allowed_response, 'Jadwal Praktikum')
+        self.assertContains(allowed_response, 'Ruangan')
+        self.assertContains(ruangan_response, 'Daftar Lab')
         self.assertNotContains(allowed_response, 'Inventaris')
         self.assertNotContains(allowed_response, 'Pengguna')
         self.assertRedirects(blocked_response, reverse('dashboard:home'))

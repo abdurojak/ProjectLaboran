@@ -77,6 +77,14 @@ class PeminjamanViewsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Peminjaman Alat')
 
+    def test_list_page_membatasi_scroll_horizontal_di_card_tabel(self):
+        response = self.client.get(reverse('peminjaman:peminjaman_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'min-w-0 max-w-full space-y-6 overflow-x-hidden')
+        self.assertContains(response, 'max-w-full overflow-x-auto overscroll-x-contain')
+        self.assertContains(response, 'w-full min-w-[920px]')
+
     def test_list_page_memakai_modal_konfirmasi_hapus(self):
         response = self.client.get(reverse('peminjaman:peminjaman_list'))
 

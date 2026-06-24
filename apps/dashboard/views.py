@@ -76,6 +76,7 @@ class DashboardView(TemplateView):
             context['today'] = timezone.localdate()
             context['peminjaman_saya'] = peminjaman_saya[:6]
             context['jadwal_hari_ini'] = jadwal_qs.filter(tanggal=context['today'])[:6]
+            context['kegiatan_kalender_mahasiswa'] = kegiatan_qs.filter(tanggal__gte=context['today'])[:6]
             context['pendaftaran_asleb_dibuka'] = pengaturan_pendaftaran.dibuka
             context['public_registration_url'] = get_public_registration_url()
             context['stats_cards'] = self._decorate_items([
@@ -124,6 +125,14 @@ class DashboardView(TemplateView):
                     'status': 'Aktif',
                     'icon': 'calendar-days',
                     'tone': 'blue',
+                },
+                {
+                    'title': 'Ruangan',
+                    'description': 'Lihat daftar lab dan informasi ruangan yang tersedia.',
+                    'url': 'ruangan:ruangan_list',
+                    'status': 'Aktif',
+                    'icon': 'door-open',
+                    'tone': 'orange',
                 },
             ])
             return context

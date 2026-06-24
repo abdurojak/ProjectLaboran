@@ -3,6 +3,8 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.inventaris.models import Barang
+from apps.jadwal.models import JadwalPraktikum
+from apps.kalender.models import KegiatanKalender
 from apps.peminjaman.models import PeminjamanAlat
 from apps.pendaftaran_asleb.models import PengaturanPendaftaranAsleb
 from apps.pendaftaran_asleb.utils import get_public_registration_url
@@ -292,12 +294,48 @@ class DashboardViewTests(TestCase):
         self.assertContains(response, 'Peminjaman Saya')
         self.assertContains(response, 'Mikroskop')
         self.assertContains(response, 'Jadwal Praktikum')
+        self.assertContains(response, 'Ruangan')
+        self.assertContains(response, reverse('ruangan:ruangan_list'))
         self.assertNotContains(response, 'Peminjaman Alat Diajukan')
         self.assertNotContains(response, 'Barang Yang Dipinjam')
         self.assertNotContains(response, 'Peminjaman Perlu Diganti')
         self.assertNotContains(response, 'Inventaris Terbaru')
         self.assertNotContains(response, 'Akses Cepat')
         self.assertNotContains(response, 'Aktivitas Terbaru')
+
+    def test_dashboard_mahasiswa_menampilkan_kalender_kegiatan_di_atas_peminjaman_saya(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Siti Aminah',
+            nim_nik='2201002',
+            email='siti-kalender@example.com',
+            password='rahasia123',
+            no_hp='081111111111',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='mahasiswa',
+        )
+        KegiatanKalender.objects.create(
+            judul='Workshop Keamanan Data',
+            tanggal=timezone.localdate(),
+            waktu_mulai=timezone.datetime.strptime('08:00', '%H:%M').time(),
+            waktu_selesai=timezone.datetime.strptime('10:00', '%H:%M').time(),
+            lokasi='Aula Laboratorium',
+        )
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+
+        response = self.client.get(reverse('dashboard:home'))
+        content = response.content.decode()
+
+        self.assertContains(response, 'Kalender')
+        self.assertContains(response, 'Kegiatan Terdekat')
+        self.assertContains(response, 'Workshop Keamanan Data')
+        self.assertContains(response, 'Aula Laboratorium')
+        self.assertContains(response, reverse('kalender:kegiatan_list'))
+        self.assertLess(content.index('Kegiatan Terdekat'), content.index('Peminjaman Saya'))
 
     def test_dashboard_mahasiswa_menampilkan_qr_pendaftaran_asleb_saat_dibuka(self):
         mahasiswa = Pengguna.objects.create(
