@@ -36,17 +36,21 @@ class PenggunaLoginRequiredMiddleware:
 
         pengguna_id = request.session.get('pengguna_id')
 
-        if not pengguna_id and not is_exempt:
-            return redirect(f'{login_url}?next={path}')
-
-        if pengguna_id and not is_exempt:
+        if pengguna_id:
             try:
                 pengguna = Pengguna.objects.get(pk=pengguna_id)
             except Pengguna.DoesNotExist:
                 request.session.pop('pengguna_id', None)
+                if is_exempt:
+                    return self.get_response(request)
                 return redirect(f'{login_url}?next={path}')
 
             request.current_pengguna = pengguna
+
+        if not pengguna_id and not is_exempt:
+            return redirect(f'{login_url}?next={path}')
+
+        if pengguna_id and not is_exempt:
             resolved = resolve(path)
             namespace = resolved.namespace
             if pengguna.role == 'mahasiswa' and not self.mahasiswa_can_access(namespace, path, resolved, pengguna):

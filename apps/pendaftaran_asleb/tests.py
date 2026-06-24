@@ -84,7 +84,7 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Pendaftaran sedang ditutup')
 
-    def test_public_form_mengisi_nama_dan_nim_dari_akun_login(self):
+    def test_public_form_mahasiswa_memakai_sidebar_dan_identitas_akun(self):
         mahasiswa = Pengguna.objects.create(
             nama_pengguna='Siti Aminah',
             nim_nik='2201002',
@@ -107,9 +107,32 @@ class PendaftaranAslebViewTests(TestCase):
 
         response = self.client.get(reverse('pendaftaran_asleb:pendaftaran_public'))
 
-        self.assertContains(response, 'value="Siti Aminah"')
-        self.assertContains(response, 'value="2201002"')
-        self.assertContains(response, 'disabled')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Data akun otomatis digunakan untuk pendaftaran Anda.')
+        self.assertContains(response, 'Peminjaman Alat')
+        self.assertContains(response, 'Jadwal Praktikum')
+        self.assertContains(response, 'Ruangan')
+        self.assertNotContains(response, f'href="{reverse("inventaris:barang_list")}"')
+        self.assertNotContains(response, f'href="{reverse("pendaftaran_asleb:pendaftaran_list")}"')
+        self.assertNotContains(response, 'name="nama" type="text"')
+        self.assertNotContains(response, 'name="nim" type="text"')
+        self.assertNotContains(response, 'name="no_hp" type="text"')
+        self.assertNotContains(response, 'name="email" type="email"')
+        self.assertNotContains(response, 'name="program_studi" type="text"')
+
+        post_response = self.client.post(reverse('pendaftaran_asleb:pendaftaran_public'), {
+            'semester': 4,
+            'matkul': self.matkul.pk,
+            'rekening': 'BCA 123456789',
+            'alasan': 'Ingin membantu praktikum.',
+        })
+
+        self.assertRedirects(post_response, reverse('pendaftaran_asleb:pendaftaran_success'))
+        pendaftaran = PendaftaranAsleb.objects.get(nim=mahasiswa.nim_nik)
+        self.assertEqual(pendaftaran.nama, mahasiswa.nama_pengguna)
+        self.assertEqual(pendaftaran.no_hp, mahasiswa.no_hp)
+        self.assertEqual(pendaftaran.email, mahasiswa.email)
+        self.assertEqual(pendaftaran.program_studi, mahasiswa.prodi)
 
     def test_pendaftaran_search_filters_data(self):
         response = self.client.get(reverse('pendaftaran_asleb:pendaftaran_list'), {'q': 'SDA'})

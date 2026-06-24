@@ -40,21 +40,26 @@ class PendaftaranAslebPublicForm(PendaftaranAslebForm):
     def __init__(self, *args, **kwargs):
         self.current_pengguna = kwargs.pop('current_pengguna', None)
         super().__init__(*args, **kwargs)
+        if self.current_pengguna and self.current_pengguna.role in ['mahasiswa', 'asisten_lab']:
+            self.fields['nama'].initial = self.current_pengguna.nama_pengguna
+            self.fields['nim'].initial = self.current_pengguna.nim_nik
+            self.fields['no_hp'].initial = self.current_pengguna.no_hp
+            self.fields['email'].initial = self.current_pengguna.email
+            self.fields['program_studi'].initial = self.current_pengguna.prodi
 
-        if self.current_pengguna:
-            auto_values = {
-                'nama': self.current_pengguna.nama_pengguna,
-                'nim': self.current_pengguna.nim_nik,
-                'email': self.current_pengguna.email,
-                'program_studi': self.current_pengguna.prodi,
-            }
+            for field_name in ['nama', 'nim', 'no_hp', 'email', 'program_studi']:
+                self.fields[field_name].required = False
+                self.fields[field_name].widget = forms.HiddenInput()
 
-            for field_name, value in auto_values.items():
-                self.fields[field_name].initial = value
-
-            for field_name in ['nama', 'nim']:
-                self.fields[field_name].disabled = True
-                self.fields[field_name].help_text = 'Otomatis dari akun login.'
+    def clean(self):
+        cleaned_data = super().clean()
+        if self.current_pengguna and self.current_pengguna.role in ['mahasiswa', 'asisten_lab']:
+            cleaned_data['nama'] = self.current_pengguna.nama_pengguna
+            cleaned_data['nim'] = self.current_pengguna.nim_nik
+            cleaned_data['no_hp'] = self.current_pengguna.no_hp
+            cleaned_data['email'] = self.current_pengguna.email
+            cleaned_data['program_studi'] = self.current_pengguna.prodi
+        return cleaned_data
 
     class Meta(PendaftaranAslebForm.Meta):
         fields = [
@@ -77,6 +82,7 @@ class PendaftaranAslebPublicForm(PendaftaranAslebForm):
         if self.current_pengguna:
             instance.nama = self.current_pengguna.nama_pengguna
             instance.nim = self.current_pengguna.nim_nik
+            instance.no_hp = self.current_pengguna.no_hp
             instance.email = self.current_pengguna.email
             instance.program_studi = self.current_pengguna.prodi
 

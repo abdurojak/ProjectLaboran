@@ -106,7 +106,7 @@ class PendaftaranAslebPublicCreateView(CreateView):
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs['files'] = self.request.FILES or None
-        kwargs['current_pengguna'] = get_session_pengguna(self.request)
+        kwargs['current_pengguna'] = getattr(self.request, 'current_pengguna', None) or get_session_pengguna(self.request)
         return kwargs
 
 
