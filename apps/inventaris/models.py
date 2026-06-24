@@ -1,6 +1,5 @@
 import re
 
-from django.db.models import Sum
 from django.db import models
 
 
@@ -55,7 +54,7 @@ class InventarisBarang(models.Model):
         return Barang.objects.filter(
             inventaris=self,
             peminjaman__status__in=ACTIVE_PEMINJAMAN_STATUSES,
-        ).aggregate(total=Sum('peminjaman__jumlah'))['total'] or 0
+        ).count()
 
     @property
     def stok_tersedia(self):
@@ -136,7 +135,7 @@ class Barang(models.Model):
 
         return self.peminjaman.filter(
             status__in=ACTIVE_PEMINJAMAN_STATUSES,
-        ).aggregate(total=Sum('jumlah'))['total'] or 0
+        ).count()
 
     @property
     def stok_tersedia(self):

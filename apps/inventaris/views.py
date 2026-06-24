@@ -1,5 +1,5 @@
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import Count, Q
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
@@ -19,8 +19,8 @@ class BarangListView(ListView):
     def get_queryset(self):
         queryset = super().get_queryset().annotate(
             jumlah_dipinjam_aktif=Coalesce(
-                Sum(
-                    'detail_barang__peminjaman__jumlah',
+                Count(
+                    'detail_barang__peminjaman',
                     filter=Q(detail_barang__peminjaman__status__in=ACTIVE_PEMINJAMAN_STATUSES),
                 ),
                 0,
@@ -115,8 +115,8 @@ class InventarisBarangDetailView(DetailView):
     def get_queryset(self):
         return super().get_queryset().annotate(
             jumlah_dipinjam_aktif=Coalesce(
-                Sum(
-                    'detail_barang__peminjaman__jumlah',
+                Count(
+                    'detail_barang__peminjaman',
                     filter=Q(detail_barang__peminjaman__status__in=ACTIVE_PEMINJAMAN_STATUSES),
                 ),
                 0,

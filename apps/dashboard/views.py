@@ -89,6 +89,7 @@ class DashboardView(TemplateView):
             context['peminjaman_saya'] = peminjaman_saya[:6]
             context['jadwal_hari_ini'] = jadwal_qs.filter(tanggal=context['today'])[:6]
             context['pendaftaran_asleb_dibuka'] = is_mahasiswa and pengaturan_pendaftaran.dibuka
+            context['kegiatan_kalender_mahasiswa'] = kegiatan_qs.filter(tanggal__gte=context['today'])[:6]
             context['public_registration_url'] = get_public_registration_url()
             stats_cards = [
                 {
@@ -177,6 +178,15 @@ class DashboardView(TemplateView):
                         'tone': 'green',
                     },
                 ])
+            else:
+                menu_modules.append({
+                    'title': 'Ruangan',
+                    'description': 'Lihat daftar lab dan informasi ruangan yang tersedia.',
+                    'url': 'ruangan:ruangan_list',
+                    'status': 'Aktif',
+                    'icon': 'door-open',
+                    'tone': 'orange',
+                })
 
             context['menu_modules'] = self._decorate_items(menu_modules)
             return context
@@ -402,10 +412,8 @@ def accept_peminjaman(request, pk):
             return redirect('dashboard:home')
 
         barang = Barang.objects.select_for_update().get(pk=peminjaman.barang_id)
-        stok_tersedia = barang.stok_tersedia
-
-        if peminjaman.jumlah > stok_tersedia:
-            messages.error(request, f'Stok {barang.nama} tidak cukup. Tersedia {stok_tersedia} unit.')
+        if barang.sedang_dipinjam:
+            messages.error(request, f'{barang.nama} sedang dipinjam.')
             return redirect('dashboard:home')
 
         peminjaman.status = 'dipinjam'

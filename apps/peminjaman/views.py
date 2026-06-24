@@ -116,7 +116,6 @@ class PeminjamanAlatCreateView(CreateView):
                 nama_peminjam=pengguna.nama_pengguna if pengguna and pengguna.role == 'mahasiswa' else form.cleaned_data['nama_peminjam'],
                 nim=pengguna.nim_nik if pengguna and pengguna.role == 'mahasiswa' else form.cleaned_data['nim'],
                 no_hp=pengguna.no_hp if pengguna and pengguna.role == 'mahasiswa' else form.cleaned_data['no_hp'],
-                jumlah=1,
                 tanggal_pinjam=form.cleaned_data['tanggal_pinjam'],
                 tanggal_kembali=form.cleaned_data['tanggal_kembali'],
                 status='diajukan' if pengguna and pengguna.role == 'mahasiswa' else form.cleaned_data['status'],

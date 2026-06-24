@@ -5,7 +5,7 @@ from .models import Pengguna
 
 
 class PenggunaLoginRequiredMiddleware:
-    MAHASISWA_ALLOWED_NAMESPACES = {'dashboard', 'peminjaman', 'jadwal', 'pengguna'}
+    MAHASISWA_ALLOWED_NAMESPACES = {'dashboard', 'peminjaman', 'jadwal', 'pengguna', 'ruangan'}
     MAHASISWA_ALLOWED_PENGGUNA_PATHS = {'/pengguna/logout/'}
     ASISTEN_LAB_BLOCKED_NAMESPACES = {'inventaris', 'barang_tertinggal', 'pendaftaran_asleb'}
     ASISTEN_LAB_ALLOWED_ASLEB_URLS = {'absensi_list', 'absensi_create'}

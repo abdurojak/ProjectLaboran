@@ -21,7 +21,6 @@ class PeminjamanAlat(models.Model):
     nama_peminjam = models.CharField(max_length=150)
     nim = models.CharField('NIM', max_length=30, blank=True)
     no_hp = models.CharField('No HP', max_length=30, blank=True)
-    jumlah = models.PositiveIntegerField(default=1)
     tanggal_pinjam = models.DateField()
     tanggal_kembali = models.DateField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='diajukan')
@@ -38,8 +37,14 @@ class PeminjamanAlat(models.Model):
         if self.tanggal_kembali and self.tanggal_pinjam and self.tanggal_kembali < self.tanggal_pinjam:
             raise ValidationError({'tanggal_kembali': 'Tanggal kembali tidak boleh lebih awal dari tanggal pinjam.'})
 
-        if self.barang_id and self.jumlah and self.jumlah > self.barang.stok_tersedia:
-            raise ValidationError({'jumlah': 'Jumlah pinjam tidak boleh melebihi stok tersedia.'})
+        barang_sedang_dipinjam = False
+        if self.barang_id:
+            barang_sedang_dipinjam = self.barang.peminjaman.exclude(pk=self.pk).filter(
+                status__in=['dipinjam', 'hilang', 'rusak'],
+            ).exists()
+
+        if self.barang_id and barang_sedang_dipinjam and self.status in ['diajukan', 'dipinjam']:
+            raise ValidationError({'barang': 'Barang ini sedang dipinjam.'})
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)

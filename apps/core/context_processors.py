@@ -45,7 +45,7 @@ SIDEBAR_LINKS = [
     {'title': 'Pengaturan', 'icon': 'settings', 'url': '', 'namespace': ''},
 ]
 
-MAHASISWA_VISIBLE_NAMESPACES = {'dashboard', 'peminjaman', 'jadwal'}
+MAHASISWA_VISIBLE_NAMESPACES = {'dashboard', 'peminjaman', 'jadwal', 'ruangan'}
 ASISTEN_LAB_HIDDEN_TITLES = {'Rekap Honorarium Asleb', 'Pengaturan'}
 ASISTEN_LAB_HIDDEN_NAMESPACES = {'inventaris', 'barang_tertinggal', 'asleb', 'pendaftaran_asleb', 'pengguna'}
 

@@ -10,10 +10,12 @@
             <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Jadwal Praktikum</h2>
             <p class="mt-2 text-sm text-slate-500">Kelola jadwal praktikum terpisah dari kalender kegiatan umum.</p>
         </div>
+        {% if not current_pengguna or current_pengguna.role != 'mahasiswa' %}
         <a class="btn-primary bg-blue-700 hover:bg-blue-800 shadow-blue-900/15" href="{% url 'jadwal:jadwal_create' %}">
             <i data-lucide="plus" class="h-4 w-4"></i>
             <span>Tambah Jadwal</span>
         </a>
+        {% endif %}
     </div>
 
     <div class="surface-card overflow-hidden">

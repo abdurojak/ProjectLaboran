@@ -3,7 +3,7 @@
 {% block title %}Peminjaman Alat{% endblock %}
 
 {% block content %}
-<section class="space-y-6">
+<section class="min-w-0 max-w-full space-y-6 overflow-x-hidden">
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
             <p class="text-sm font-bold uppercase tracking-[0.2em] text-amber-600">Peminjaman</p>
@@ -16,8 +16,8 @@
         </a>
     </div>
 
-    <form method="get" class="surface-card min-w-0 p-5">
-        <div class="grid gap-4 lg:grid-cols-[minmax(220px,1.3fr)_minmax(160px,0.8fr)_minmax(160px,0.8fr)_minmax(180px,0.9fr)]">
+    <form method="get" class="surface-card min-w-0 max-w-full p-5">
+        <div class="grid min-w-0 gap-4 lg:grid-cols-[minmax(220px,1.3fr)_minmax(160px,0.8fr)_minmax(160px,0.8fr)_minmax(180px,0.9fr)]">
             <div>
                 <label for="id_barang_filter">Nama barang</label>
                 <input id="id_barang_filter" name="barang" type="text" value="{{ filter_barang }}" placeholder="Cari nama atau kode barang" autocomplete="off">
@@ -61,15 +61,14 @@
         </div>
     </form>
 
-    <div class="surface-card min-w-0 overflow-hidden">
-        <div class="overflow-x-auto">
-            <table class="min-w-max">
+    <div class="surface-card min-w-0 max-w-full overflow-hidden">
+        <div class="max-w-full overflow-x-auto overscroll-x-contain">
+            <table class="w-full min-w-[920px]">
                 <thead class="bg-slate-50">
                     <tr>
                         <th>Kode Pinjam</th>
                         <th>Barang</th>
                         <th>Peminjam</th>
-                        <th>Jumlah</th>
                         <th>Tanggal Pinjam</th>
                         <th>Tanggal Kembali</th>
                         <th>Status</th>
@@ -89,7 +88,6 @@
                             <div class="text-xs text-slate-500">NIM: {{ peminjaman.nim|default:"-" }}</div>
                             <div class="text-xs text-slate-500">No HP: {{ peminjaman.no_hp|default:"-" }}</div>
                         </td>
-                        <td>{{ peminjaman.jumlah }}</td>
                         <td>{{ peminjaman.tanggal_pinjam|date:"d M Y" }}</td>
                         <td>{{ peminjaman.tanggal_kembali|date:"d M Y" }}</td>
                         <td>
@@ -128,7 +126,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="8" class="py-12 text-center text-slate-500">Belum ada data peminjaman alat.</td>
+                        <td colspan="7" class="py-12 text-center text-slate-500">Belum ada data peminjaman alat.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
