@@ -36,15 +36,18 @@ SIDEBAR_LINKS = [
     {'title': 'Barang Tertinggal', 'icon': 'briefcase', 'url': 'barang_tertinggal:list', 'namespace': 'barang_tertinggal'},
     {'title': 'Peminjaman Alat', 'icon': 'arrow-left-right', 'url': 'peminjaman:peminjaman_list', 'namespace': 'peminjaman'},
     {'title': 'Jadwal Praktikum', 'icon': 'calendar-days', 'url': 'jadwal:jadwal_list', 'namespace': 'jadwal'},
+    {'title': 'Absensi Asleb', 'icon': 'clipboard-check', 'url': 'asleb:absensi_list', 'namespace': 'asleb_absensi'},
     {'title': 'Data Asleb', 'icon': 'users', 'url': 'asleb:asleb_list', 'namespace': 'asleb'},
     {'title': 'Pendaftaran Asleb', 'icon': 'user-round-plus', 'url': 'pendaftaran_asleb:pendaftaran_list', 'namespace': 'pendaftaran_asleb'},
-    {'title': 'Rekap Honorarium Asleb', 'icon': 'file-chart-column', 'url': '', 'namespace': ''},
+    {'title': 'Rekap Honorarium Asleb', 'icon': 'file-chart-column', 'url': 'asleb:honor_list', 'namespace': 'asleb'},
     {'title': 'Pengguna', 'icon': 'user-round', 'url': 'pengguna:list', 'namespace': 'pengguna'},
     {'title': 'Ruangan', 'icon': 'door-open', 'url': 'ruangan:ruangan_list', 'namespace': 'ruangan'},
     {'title': 'Pengaturan', 'icon': 'settings', 'url': '', 'namespace': ''},
 ]
 
 MAHASISWA_VISIBLE_NAMESPACES = {'dashboard', 'peminjaman', 'jadwal'}
+ASISTEN_LAB_HIDDEN_TITLES = {'Rekap Honorarium Asleb', 'Pengaturan'}
+ASISTEN_LAB_HIDDEN_NAMESPACES = {'inventaris', 'barang_tertinggal', 'asleb', 'pendaftaran_asleb', 'pengguna'}
 
 
 def dashboard_sidebar(request):
@@ -55,6 +58,10 @@ def dashboard_sidebar(request):
         current_pengguna = getattr(request, 'current_pengguna', None)
         if current_pengguna and current_pengguna.role == 'mahasiswa' and link['namespace'] not in MAHASISWA_VISIBLE_NAMESPACES:
             continue
+
+        if current_pengguna and current_pengguna.role == 'asisten_lab':
+            if link['namespace'] in ASISTEN_LAB_HIDDEN_NAMESPACES or link['title'] in ASISTEN_LAB_HIDDEN_TITLES:
+                continue
 
         item = link.copy()
         item['active'] = bool(item['namespace'] and item['namespace'] == current_namespace)

@@ -4,7 +4,7 @@ from datetime import timedelta
 from urllib.parse import urljoin
 
 from django.contrib import messages
-from django.contrib.auth.hashers import make_password
+from django.contrib.auth.hashers import check_password, make_password
 from django.core.mail import send_mail
 from django.conf import settings
 from django.shortcuts import redirect
@@ -259,7 +259,7 @@ class ForgotPasswordRequestView(FormView):
         send_verification_code(
             self.request,
             pengguna,
-            form.cleaned_data['verification_method'],
+            'email',
             'reset_password',
         )
         messages.success(self.request, 'Kode reset password berhasil dibuat.')
@@ -284,6 +284,10 @@ class ResetPasswordView(FormView):
             return self.form_invalid(form)
 
         pengguna = Pengguna.objects.get(pk=otp['pengguna_id'])
+        if check_password(form.cleaned_data['password'], pengguna.password):
+            form.add_error('password', 'Password baru tidak boleh sama dengan password yang sedang digunakan.')
+            return self.form_invalid(form)
+
         pengguna.password = make_password(form.cleaned_data['password'])
         pengguna.is_verified = True
         pengguna.save(update_fields=['password', 'is_verified', 'diperbarui_pada'])

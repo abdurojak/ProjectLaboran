@@ -7,6 +7,8 @@ from .models import Pengguna
 class PenggunaLoginRequiredMiddleware:
     MAHASISWA_ALLOWED_NAMESPACES = {'dashboard', 'peminjaman', 'jadwal', 'pengguna'}
     MAHASISWA_ALLOWED_PENGGUNA_PATHS = {'/pengguna/logout/'}
+    ASISTEN_LAB_BLOCKED_NAMESPACES = {'inventaris', 'barang_tertinggal', 'pendaftaran_asleb'}
+    ASISTEN_LAB_ALLOWED_ASLEB_URLS = {'absensi_list', 'absensi_create'}
 
     EXEMPT_PREFIXES = (
         '/admin/',
@@ -50,6 +52,17 @@ class PenggunaLoginRequiredMiddleware:
             if pengguna.role == 'mahasiswa' and not self.mahasiswa_can_access(namespace, path, resolved, pengguna):
                 return redirect('dashboard:home')
 
+            if pengguna.role == 'asisten_lab' and namespace in self.ASISTEN_LAB_BLOCKED_NAMESPACES:
+                return redirect('dashboard:home')
+
+            if pengguna.role == 'asisten_lab' and namespace == 'asleb':
+                if resolved.url_name not in self.ASISTEN_LAB_ALLOWED_ASLEB_URLS:
+                    return redirect('dashboard:home')
+
+            if pengguna.role == 'asisten_lab' and namespace == 'pengguna':
+                if not self.asisten_lab_can_access_pengguna(path, resolved, pengguna):
+                    return redirect('dashboard:home')
+
         return self.get_response(request)
 
     def mahasiswa_can_access(self, namespace, path, resolved, pengguna):
@@ -59,6 +72,12 @@ class PenggunaLoginRequiredMiddleware:
         if namespace != 'pengguna':
             return namespace in self.MAHASISWA_ALLOWED_NAMESPACES
 
+        if path in self.MAHASISWA_ALLOWED_PENGGUNA_PATHS:
+            return True
+
+        return resolved.url_name in {'detail', 'update_profile', 'change_password'} and resolved.kwargs.get('pk') == pengguna.pk
+
+    def asisten_lab_can_access_pengguna(self, path, resolved, pengguna):
         if path in self.MAHASISWA_ALLOWED_PENGGUNA_PATHS:
             return True
 

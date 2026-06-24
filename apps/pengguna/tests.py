@@ -4,7 +4,7 @@ from django.db import IntegrityError
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import Pengguna
+from .models import Fakultas, Pengguna, Prodi
 
 
 class PenggunaModelTests(TestCase):
@@ -291,6 +291,16 @@ class PenggunaAuthTests(TestCase):
         self.assertContains(response, 'Teknologi Industri')
         self.assertContains(response, 'Informatika')
 
+    def test_register_dropdown_fakultas_prodi_mengambil_data_database(self):
+        Fakultas.objects.create(nama='Fakultas Baru')
+        Prodi.objects.create(nama='Prodi Baru')
+
+        response = self.client.get(reverse('pengguna:register'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Fakultas Baru')
+        self.assertContains(response, 'Prodi Baru')
+
     def test_register_membuat_pengguna_lalu_verifikasi_otp(self):
         response = self.client.post(
             reverse('pengguna:register'),
@@ -386,7 +396,7 @@ class PenggunaAuthTests(TestCase):
     def test_forgot_password_mengganti_password_dengan_otp(self):
         response = self.client.post(
             reverse('pengguna:forgot_password'),
-            {'nim_nik': '2201001', 'verification_method': 'no_hp'},
+            {'nim_nik': '2201001'},
         )
 
         self.assertRedirects(response, reverse('pengguna:reset_password'))
@@ -400,6 +410,25 @@ class PenggunaAuthTests(TestCase):
 
         self.assertRedirects(response, reverse('pengguna:login'))
         self.assertTrue(check_password('passwordbaru123', self.pengguna.password))
+
+    def test_reset_password_menolak_password_lama(self):
+        response = self.client.post(
+            reverse('pengguna:forgot_password'),
+            {'nim_nik': '2201001'},
+        )
+
+        self.assertRedirects(response, reverse('pengguna:reset_password'))
+        kode = self.client.session['pengguna_otp']['code']
+        response = self.client.post(reverse('pengguna:reset_password'), {
+            'kode': kode,
+            'password': 'rahasia123',
+            'password_confirmation': 'rahasia123',
+        })
+        self.pengguna.refresh_from_db()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Password baru tidak boleh sama dengan password yang sedang digunakan.')
+        self.assertTrue(check_password('rahasia123', self.pengguna.password))
 
     def test_logout_menghapus_session_pengguna(self):
         session = self.client.session
@@ -440,6 +469,43 @@ class PenggunaAuthTests(TestCase):
         self.assertNotContains(allowed_response, 'Inventaris')
         self.assertNotContains(allowed_response, 'Pengguna')
         self.assertRedirects(blocked_response, reverse('dashboard:home'))
+
+    def test_asisten_lab_tidak_melihat_menu_admin_asleb(self):
+        self.pengguna.role = 'asisten_lab'
+        self.pengguna.save(update_fields=['role'])
+        session = self.client.session
+        session['pengguna_id'] = self.pengguna.pk
+        session.save()
+
+        response = self.client.get(reverse('dashboard:home'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Inventaris')
+        self.assertNotContains(response, 'Barang Tertinggal')
+        self.assertNotContains(response, 'Data Asleb')
+        self.assertNotContains(response, 'Pendaftaran Asleb')
+        self.assertNotContains(response, 'Rekap Honorarium Asleb')
+        self.assertNotContains(response, 'Pengguna')
+
+    def test_asisten_lab_tidak_bisa_membuka_menu_admin_asleb_langsung(self):
+        self.pengguna.role = 'asisten_lab'
+        self.pengguna.save(update_fields=['role'])
+        session = self.client.session
+        session['pengguna_id'] = self.pengguna.pk
+        session.save()
+
+        blocked_urls = [
+            reverse('inventaris:barang_list'),
+            reverse('barang_tertinggal:list'),
+            reverse('asleb:asleb_list'),
+            reverse('pendaftaran_asleb:pendaftaran_list'),
+            reverse('pengguna:list'),
+        ]
+
+        for url in blocked_urls:
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertRedirects(response, reverse('dashboard:home'))
 
     def test_laboran_bisa_membuka_menu_inventaris(self):
         self.pengguna.role = 'laboran'

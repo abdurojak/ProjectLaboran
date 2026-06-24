@@ -3,6 +3,36 @@ from django.db import models
 from django.urls import reverse
 
 
+class Fakultas(models.Model):
+    nama = models.CharField(max_length=120, unique=True)
+    aktif = models.BooleanField(default=True)
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+    diperbarui_pada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['nama']
+        verbose_name = 'Fakultas'
+        verbose_name_plural = 'Fakultas'
+
+    def __str__(self):
+        return self.nama
+
+
+class Prodi(models.Model):
+    nama = models.CharField(max_length=120, unique=True)
+    aktif = models.BooleanField(default=True)
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+    diperbarui_pada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['nama']
+        verbose_name = 'Prodi'
+        verbose_name_plural = 'Prodi'
+
+    def __str__(self):
+        return self.nama
+
+
 class Pengguna(models.Model):
     ROLE_CHOICES = [
         ('admin', 'Admin'),

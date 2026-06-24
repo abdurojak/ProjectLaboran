@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}Rekap Honorarium Asleb{% endblock %}
+
+{% block content %}
+<section class="space-y-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <p class="text-sm font-bold uppercase tracking-[0.2em] text-violet-700">Honorarium</p>
+            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Rekap Honorarium Asleb</h2>
+            <p class="mt-2 text-sm text-slate-500">{{ formula_note }}</p>
+        </div>
+        <a class="btn-primary bg-violet-700 hover:bg-violet-800 shadow-violet-900/20" href="{% url 'asleb:honor_create' %}">
+            <i data-lucide="plus" class="h-4 w-4"></i>
+            <span>Tambah Rekap</span>
+        </a>
+    </div>
+
+    <div class="grid gap-4 md:grid-cols-3">
+        <article class="surface-card p-5">
+            <div class="text-sm font-semibold text-slate-500">Total Honor Terfilter</div>
+            <div class="mt-2 text-3xl font-black tracking-tight text-violet-700">{{ total_honor }}</div>
+        </article>
+        <article class="surface-card p-5">
+            <div class="text-sm font-semibold text-slate-500">Tarif Junior</div>
+            <div class="mt-2 text-3xl font-black tracking-tight text-slate-900">Rp 7.000</div>
+        </article>
+        <article class="surface-card p-5">
+            <div class="text-sm font-semibold text-slate-500">Tarif Senior</div>
+            <div class="mt-2 text-3xl font-black tracking-tight text-slate-900">Rp 8.000</div>
+        </article>
+    </div>
+
+    <form id="honor-filter-form" method="get" class="surface-card grid gap-4 p-5 md:grid-cols-[minmax(0,1.4fr)_180px_180px_auto] md:items-end">
+        <div>
+            <label for="id_q">Cari asleb</label>
+            <input id="id_q" name="q" type="text" value="{{ search_query }}" placeholder="Cari nama, NIM, matkul, atau PIC transfer" autocomplete="off">
+        </div>
+        <div>
+            <label for="id_bulan">Bulan</label>
+            <input id="id_bulan" name="bulan" type="month" value="{{ selected_bulan }}">
+        </div>
+        <div>
+            <label for="id_status">Status</label>
+            <select id="id_status" name="status">
+                <option value="">Semua status</option>
+                {% for value, label in status_choices %}
+                <option value="{{ value }}"{% if selected_status == value %} selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="flex flex-wrap gap-3">
+            <button type="submit" class="btn-primary bg-violet-700 hover:bg-violet-800 shadow-violet-900/20">
+                <i data-lucide="search" class="h-4 w-4"></i>
+                <span>Terapkan</span>
+            </button>
+            <a href="{% url 'asleb:honor_list' %}" class="btn-secondary">
+                <i data-lucide="rotate-ccw" class="h-4 w-4"></i>
+                <span>Reset</span>
+            </a>
+        </div>
+    </form>
+
+    <div class="surface-card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-max">
+                <thead class="bg-slate-50">
+                    <tr>
+                        <th>Nama Mahasiswa</th>
+                        <th>Status</th>
+                        <th>Jumlah Praktikum</th>
+                        <th>Total Pertemuan</th>
+                        <th>Total Jam Terealisasi</th>
+                        <th>Total Akhir (Max 60)</th>
+                        <th>Honor/Jam</th>
+                        <th>Total Honor</th>
+                        <th>PIC Transfer</th>
+                        <th>Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for honor in honor_list %}
+                    <tr class="hover:bg-slate-50/70">
+                        <td>
+                            <div class="font-semibold text-slate-900">{{ honor.asleb.nama }}</div>
+                            <div class="text-xs text-slate-500">{{ honor.asleb.nim }} · {{ honor.asleb.matkul|default:"Matkul belum diisi" }}</div>
+                        </td>
+                        <td>{{ honor.get_level_display }}</td>
+                        <td>{{ honor.jumlah_praktikum }}</td>
+                        <td>{{ honor.total_pertemuan }}</td>
+                        <td>{{ honor.total_jam_terealisasi }}</td>
+                        <td>{{ honor.total_akhir }}</td>
+                        <td>{{ honor.honor_per_jam_rupiah }}</td>
+                        <td class="font-black text-violet-700">{{ honor.jumlah_rupiah }}</td>
+                        <td>{{ honor.pic_transfer|default:"-" }}</td>
+                        <td>
+                            <div class="flex flex-wrap gap-3 text-sm font-semibold">
+                                <a class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700" href="{% url 'asleb:honor_update' honor.pk %}">
+                                    <i data-lucide="pencil" class="h-4 w-4"></i><span>Edit</span>
+                                </a>
+                                <form method="post" action="{% url 'asleb:honor_delete' honor.pk %}" data-confirm-message="Yakin ingin menghapus rekap honor ini?" class="inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700">
+                                        <i data-lucide="trash-2" class="h-4 w-4"></i>
+                                        <span>Hapus</span>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="10" class="py-12 text-center text-slate-500">Belum ada rekap honor asleb.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+{% include "components/confirmation_modal.html" with title="Konfirmasi Hapus Rekap" confirm_label="Hapus" confirm_icon="trash-2" %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('honor-filter-form');
+        const searchInput = document.getElementById('id_q');
+        const bulanInput = document.getElementById('id_bulan');
+        const statusSelect = document.getElementById('id_status');
+        let searchTimer = null;
+
+        if (searchInput) {
+            searchInput.addEventListener('input', function () {
+                clearTimeout(searchTimer);
+                searchTimer = setTimeout(function () {
+                    form.submit();
+                }, 350);
+            });
+        }
+
+        [bulanInput, statusSelect].forEach(function (input) {
+            if (input) {
+                input.addEventListener('change', function () {
+                    form.submit();
+                });
+            }
+        });
+    });
+</script>
+{% endblock %}

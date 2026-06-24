@@ -44,6 +44,12 @@
                         <div class="truncate text-sm text-slate-500">{{ current_pengguna.get_role_display }}</div>
                     </div>
                     <div class="grid p-2 text-sm font-semibold">
+                        {% if request.resolver_match.namespace == "pengguna" and request.resolver_match.url_name in "register forgot_password reset_password verify_register" %}
+                        <a href="{% url 'dashboard:home' %}" class="flex items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-slate-50">
+                            <i data-lucide="arrow-left" class="h-4 w-4 text-brand-700"></i>
+                            <span>Kembali</span>
+                        </a>
+                        {% else %}
                         <a href="{% url 'pengguna:detail' current_pengguna.pk %}" class="flex items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-slate-50">
                             <i data-lucide="user-round" class="h-4 w-4 text-brand-700"></i>
                             <span>Profil Saya</span>
@@ -62,6 +68,7 @@
                                 <span>Logout</span>
                             </button>
                         </form>
+                        {% endif %}
                     </div>
                     {% else %}
                     <div class="grid p-2 text-sm font-semibold">

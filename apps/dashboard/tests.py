@@ -2,6 +2,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.asleb.models import Asleb, HonorAsleb
 from apps.inventaris.models import Barang
 from apps.peminjaman.models import PeminjamanAlat
 from apps.pendaftaran_asleb.models import PengaturanPendaftaranAsleb
@@ -338,7 +339,7 @@ class DashboardViewTests(TestCase):
 
         self.assertContains(response, 'Pendaftaran asleb sedang dibuka')
         self.assertContains(response, 'QR pendaftaran asleb')
-        self.assertContains(response, 'http://10.24.80.245:8001/pendaftaran-asleb/daftar/')
+        self.assertContains(response, 'http://10.24.80.245:8000/pendaftaran-asleb/daftar/')
 
     def test_dashboard_mahasiswa_menyembunyikan_qr_pendaftaran_asleb_saat_ditutup(self):
         mahasiswa = Pengguna.objects.create(
@@ -361,3 +362,46 @@ class DashboardViewTests(TestCase):
 
         self.assertNotContains(response, 'Pendaftaran asleb sedang dibuka')
         self.assertNotContains(response, 'QR pendaftaran asleb')
+
+    def test_dashboard_asisten_lab_menampilkan_total_honor_bulan_ini(self):
+        asisten = Pengguna.objects.create(
+            nama_pengguna='Ricardo Dharma Saputra',
+            nim_nik='20260001',
+            email='ricardo.dharma@trisakti.ac.id',
+            password='rahasia123',
+            no_hp='',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='asisten_lab',
+        )
+        data_asleb = Asleb.objects.create(
+            nama='Ricardo Dharma Saputra',
+            nim='20260001',
+            no_hp='',
+            email='ricardo.dharma@trisakti.ac.id',
+            program_studi='Informatika',
+            matkul='Pemrograman Web',
+            semester=4,
+            tanggal_bergabung=timezone.localdate(),
+        )
+        HonorAsleb.objects.create(
+            asleb=data_asleb,
+            bulan=timezone.localdate().replace(day=1),
+            level='senior',
+            jumlah_praktikum=2,
+            total_pertemuan=8,
+            status='diproses',
+        )
+        session = self.client.session
+        session['pengguna_id'] = asisten.pk
+        session.save()
+
+        response = self.client.get(reverse('dashboard:home'))
+
+        self.assertContains(response, 'Honor Bulan Ini')
+        self.assertContains(response, 'Rp 448.000')
+        self.assertNotContains(response, 'Inventaris')
+        self.assertNotContains(response, 'Data Asleb')
+        self.assertNotContains(response, 'Pendaftaran Asleb')

@@ -6,7 +6,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
-from apps.asleb.models import Asleb
+from apps.asleb.models import Asleb, HonorAsleb
 from apps.inventaris.models import ACTIVE_PEMINJAMAN_STATUSES, Barang, InventarisBarang
 from apps.jadwal.models import JadwalPraktikum
 from apps.kalender.models import KegiatanKalender
@@ -57,6 +57,9 @@ class DashboardView(TemplateView):
             item.update(tone)
         return items
 
+    def format_rupiah(self, value):
+        return f'Rp {value:,.0f}'.replace(',', '.')
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         pengguna = getattr(self.request, 'current_pengguna', None)
@@ -68,17 +71,26 @@ class DashboardView(TemplateView):
         peminjaman_aktif = peminjaman_qs.filter(status__in=ACTIVE_PEMINJAMAN_STATUSES)
         asleb_qs = Asleb.objects.all()
         pendaftaran_asleb_qs = PendaftaranAsleb.objects.all()
-        context['is_mahasiswa_dashboard'] = bool(pengguna and pengguna.role == 'mahasiswa')
+        is_mahasiswa = bool(pengguna and pengguna.role == 'mahasiswa')
+        is_asisten_lab = bool(pengguna and pengguna.role == 'asisten_lab')
+        context['is_mahasiswa_dashboard'] = is_mahasiswa or is_asisten_lab
+        context['is_asisten_lab_dashboard'] = is_asisten_lab
 
         if context['is_mahasiswa_dashboard']:
             pengaturan_pendaftaran = PengaturanPendaftaranAsleb.get_solo()
             peminjaman_saya = peminjaman_qs.filter(nim=pengguna.nim_nik)
+            awal_bulan = timezone.localdate().replace(day=1)
+            honor_bulan_ini = HonorAsleb.objects.filter(
+                asleb__nim=pengguna.nim_nik,
+                bulan__year=awal_bulan.year,
+                bulan__month=awal_bulan.month,
+            ).aggregate(total=Sum('jumlah'))['total'] or 0
             context['today'] = timezone.localdate()
             context['peminjaman_saya'] = peminjaman_saya[:6]
             context['jadwal_hari_ini'] = jadwal_qs.filter(tanggal=context['today'])[:6]
-            context['pendaftaran_asleb_dibuka'] = pengaturan_pendaftaran.dibuka
+            context['pendaftaran_asleb_dibuka'] = is_mahasiswa and pengaturan_pendaftaran.dibuka
             context['public_registration_url'] = get_public_registration_url()
-            context['stats_cards'] = self._decorate_items([
+            stats_cards = [
                 {
                     'label': 'Peminjaman Saya',
                     'value': peminjaman_saya.count(),
@@ -107,8 +119,19 @@ class DashboardView(TemplateView):
                     'icon': 'calendar-days',
                     'tone': 'green',
                 },
-            ])
-            context['menu_modules'] = self._decorate_items([
+            ]
+
+            if is_asisten_lab:
+                stats_cards.insert(0, {
+                    'label': 'Honor Bulan Ini',
+                    'value': self.format_rupiah(honor_bulan_ini),
+                    'note': f'Periode {awal_bulan:%B %Y}',
+                    'icon': 'wallet-cards',
+                    'tone': 'purple',
+                })
+
+            context['stats_cards'] = self._decorate_items(stats_cards)
+            menu_modules = [
                 {
                     'title': 'Peminjaman Alat',
                     'description': 'Ajukan peminjaman alat dan pantau status pengajuan Anda.',
@@ -125,7 +148,37 @@ class DashboardView(TemplateView):
                     'icon': 'calendar-days',
                     'tone': 'blue',
                 },
-            ])
+            ]
+
+            if is_asisten_lab:
+                menu_modules.extend([
+                    {
+                        'title': 'Absensi Asleb',
+                        'description': 'Isi absensi praktikum, upload modul, dan bukti video kegiatan.',
+                        'url': 'asleb:absensi_list',
+                        'status': 'Aktif',
+                        'icon': 'clipboard-check',
+                        'tone': 'teal',
+                    },
+                    {
+                        'title': 'Kalender',
+                        'description': 'Lihat agenda kegiatan laboratorium dan notifikasi yang relevan.',
+                        'url': 'kalender:kegiatan_list',
+                        'status': 'Aktif',
+                        'icon': 'calendar-range',
+                        'tone': 'purple',
+                    },
+                    {
+                        'title': 'Ruangan',
+                        'description': 'Lihat daftar ruangan laboratorium dan kapasitasnya.',
+                        'url': 'ruangan:ruangan_list',
+                        'status': 'Aktif',
+                        'icon': 'door-open',
+                        'tone': 'green',
+                    },
+                ])
+
+            context['menu_modules'] = self._decorate_items(menu_modules)
             return context
 
         context['total_barang'] = inventaris_qs.count()
@@ -211,9 +264,9 @@ class DashboardView(TemplateView):
             },
             {
                 'title': 'Rekap Honorarium Asleb',
-                'description': 'Rekap honor, pembayaran, dan ringkasan penggajian asleb akan tersedia di modul ini.',
-                'url': '',
-                'status': 'Segera Hadir',
+                'description': 'Hitung honor asleb per bulan berdasarkan total pertemuan, batas 60 jam, dan tarif Junior/Senior.',
+                'url': 'asleb:honor_list',
+                'status': 'Aktif',
                 'icon': 'file-chart-column',
                 'tone': 'purple',
             },
