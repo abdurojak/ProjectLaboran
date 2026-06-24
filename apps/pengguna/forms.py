@@ -172,8 +172,13 @@ class RegisterPenggunaForm(forms.ModelForm):
         widgets = {
             'foto': forms.FileInput(attrs={'class': 'hidden', 'accept': 'image/*'}),
             'password': forms.PasswordInput(render_value=False),
-            'nim_nik': forms.TextInput(attrs={'inputmode': 'numeric', 'pattern': '[0-9]*'}),
-            'no_hp': forms.TextInput(attrs={'inputmode': 'numeric', 'pattern': '[0-9]*'}),
+            'email': forms.EmailInput(attrs={
+                'placeholder': 'nama@student.std.trisakti.ac.id',
+                'pattern': '.+@std\\.trisakti\\.ac\\.id',
+                'title': 'Gunakan email dengan akhiran @std.trisakti.ac.id',
+            }),
+            'nim_nik': forms.TextInput(attrs={'inputmode': 'numeric', 'pattern': '[0-9]*', 'placeholder': 'Angka saja'}),
+            'no_hp': forms.TextInput(attrs={'inputmode': 'numeric', 'pattern': '[0-9]*', 'placeholder': 'Angka saja'}),
             'alamat': forms.Textarea(attrs={'rows': 4}),
         }
 

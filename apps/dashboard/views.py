@@ -206,7 +206,7 @@ class DashboardView(TemplateView):
                 'description': 'Kelola calon asleb yang mendaftar berdasarkan matkul, kontak, dan status seleksi.',
                 'url': 'pendaftaran_asleb:pendaftaran_list',
                 'status': 'Aktif',
-                'icon': 'clipboard-user',
+                'icon': 'user-round-plus',
                 'tone': 'teal',
             },
             {
@@ -315,7 +315,7 @@ class DashboardView(TemplateView):
                 'title': 'Tambah Pendaftaran Asleb',
                 'description': 'Catat calon asleb baru beserta matkul yang diminati.',
                 'url': 'pendaftaran_asleb:pendaftaran_create',
-                'icon': 'clipboard-user',
+                'icon': 'user-round-plus',
                 'tone': 'teal',
             },
             {

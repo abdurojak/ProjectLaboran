@@ -1,12 +1,14 @@
 import random
+from smtplib import SMTPException
 from datetime import timedelta
+from urllib.parse import urljoin
 
 from django.contrib import messages
 from django.contrib.auth.hashers import make_password
 from django.core.mail import send_mail
 from django.conf import settings
 from django.shortcuts import redirect
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, UpdateView, View
 
@@ -31,6 +33,11 @@ OTP_EXPIRE_MINUTES = 10
 
 def generate_otp_code():
     return f'{random.randint(0, 999999):06d}'
+
+
+def build_public_url(route_name):
+    base_url = settings.PUBLIC_ACCESS_BASE_URL.rstrip('/') + '/'
+    return urljoin(base_url, reverse(route_name).lstrip('/'))
 
 
 def store_otp(request, purpose, pengguna, method):
@@ -64,20 +71,40 @@ def get_pending_otp(request, purpose):
 
 def send_verification_code(request, pengguna, method, purpose):
     code = store_otp(request, purpose, pengguna, method)
+    target_route = 'pengguna:verify_register' if purpose == 'register' else 'pengguna:reset_password'
+    verification_url = build_public_url(target_route)
 
     if method == 'email':
-        send_mail(
-            subject='Kode Verifikasi Project Laboran',
-            message=f'Kode verifikasi Anda adalah {code}. Kode berlaku {OTP_EXPIRE_MINUTES} menit.',
-            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@project-laboran.local'),
-            recipient_list=[pengguna.email],
-            fail_silently=True,
+        is_simulated_email = (
+            settings.EMAIL_BACKEND == 'django.core.mail.backends.console.EmailBackend'
+            or not settings.EMAIL_HOST_PASSWORD
+            or settings.EMAIL_HOST_PASSWORD == 'change-me'
         )
-        messages.info(request, f'Kode verifikasi dikirim ke email {pengguna.email}.')
+        if is_simulated_email:
+            messages.info(
+                request,
+                f'Kode verifikasi email untuk simulasi lokal: {code}. Link verifikasi: {verification_url}. SMTP belum aktif sampai EMAIL_HOST_PASSWORD diganti dari change-me.',
+            )
+        else:
+            try:
+                send_mail(
+                    subject='Kode Verifikasi Project Laboran',
+                    message=(
+                        f'Kode verifikasi Anda adalah {code}.\n'
+                        f'Kode berlaku {OTP_EXPIRE_MINUTES} menit.\n\n'
+                        f'Buka halaman verifikasi: {verification_url}'
+                    ),
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'ricardo.dharma@trisakti.ac.id'),
+                    recipient_list=[pengguna.email],
+                    fail_silently=False,
+                )
+                messages.info(request, f'Kode verifikasi dikirim ke email {pengguna.email}. Link verifikasi memakai {verification_url}.')
+            except (OSError, SMTPException) as exc:
+                messages.error(request, f'Email verifikasi gagal dikirim: {exc}. Periksa EMAIL_HOST_PASSWORD/app-password SMTP.')
     else:
         messages.info(
             request,
-            f'Kode verifikasi No HP untuk simulasi lokal: {code}. Integrasi SMS/WhatsApp bisa ditambahkan nanti.',
+            f'Kode verifikasi No HP untuk simulasi lokal: {code}. Link verifikasi: {verification_url}. Integrasi SMS/WhatsApp bisa ditambahkan nanti.',
         )
 
 
