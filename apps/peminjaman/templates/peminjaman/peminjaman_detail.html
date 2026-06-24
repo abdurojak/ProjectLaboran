@@ -30,6 +30,16 @@
     </div>
 
     <div class="surface-card grid gap-5 p-6 md:grid-cols-2 md:p-8">
+        <div class="rounded-3xl bg-slate-50 p-5 md:col-span-2">
+            <div class="text-sm font-semibold text-slate-500">Foto Barang</div>
+            {% if peminjaman.barang.foto %}
+            <img src="{{ peminjaman.barang.foto.url }}" alt="Foto {{ peminjaman.barang.nama }}" class="mt-3 max-h-80 w-full rounded-2xl border border-slate-200 bg-white object-contain">
+            {% else %}
+            <div class="mt-3 rounded-2xl border border-dashed border-slate-200 bg-white px-5 py-12 text-center text-sm font-semibold text-slate-500">
+                Foto barang belum tersedia.
+            </div>
+            {% endif %}
+        </div>
         <div class="rounded-3xl bg-slate-50 p-5">
             <div class="text-sm font-semibold text-slate-500">Kode Pinjam</div>
             <div class="mt-2 text-xl font-bold text-slate-900">{{ peminjaman.kode_pinjam }}</div>

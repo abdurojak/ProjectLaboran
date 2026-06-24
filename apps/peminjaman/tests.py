@@ -140,8 +140,19 @@ class PeminjamanViewsTests(TestCase):
         self.assertContains(response, f'{self.barang.kode_barang} - {self.barang.nama}')
         self.assertContains(response, 'name="selected_barang_ids"')
         self.assertContains(response, 'data-barang-picker-done')
+        self.assertContains(response, '<th>Foto</th>')
+        self.assertContains(response, 'data-barang-photo-preview')
+        self.assertContains(response, 'data-barang-photo-modal')
+        self.assertContains(response, 'Foto barang belum tersedia.')
         self.assertNotContains(response, '<select name="barang"')
         self.assertNotContains(response, 'id="id_barang_display"')
+
+    def test_detail_page_menampilkan_foto_barang(self):
+        response = self.client.get(reverse('peminjaman:peminjaman_detail', args=[self.peminjaman.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Foto Barang')
+        self.assertContains(response, 'Foto barang belum tersedia.')
 
     def test_form_edit_menampilkan_detail_barang_terpilih_sebagai_badge(self):
         response = self.client.get(reverse('peminjaman:peminjaman_update', args=[self.peminjaman.pk]))
