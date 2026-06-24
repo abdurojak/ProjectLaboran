@@ -35,7 +35,7 @@ ALLOWED_HOSTS = [
     if host.strip()
 ]
 
-PUBLIC_ACCESS_BASE_URL = os.getenv('PUBLIC_ACCESS_BASE_URL', 'http://10.24.80.245:8001')
+PUBLIC_ACCESS_BASE_URL = os.getenv('PUBLIC_ACCESS_BASE_URL', 'http://10.24.80.245:8000')
 
 
 # Application definition

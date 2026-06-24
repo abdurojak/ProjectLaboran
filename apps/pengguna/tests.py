@@ -282,6 +282,15 @@ class PenggunaAuthTests(TestCase):
         self.assertContains(response, 'Akun belum diverifikasi')
         self.assertNotIn('pengguna_id', self.client.session)
 
+    def test_register_fakultas_dan_prodi_berupa_dropdown(self):
+        response = self.client.get(reverse('pengguna:register'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '<select name="fakultas"', html=False)
+        self.assertContains(response, '<select name="prodi"', html=False)
+        self.assertContains(response, 'Teknologi Industri')
+        self.assertContains(response, 'Informatika')
+
     def test_register_membuat_pengguna_lalu_verifikasi_otp(self):
         response = self.client.post(
             reverse('pengguna:register'),
@@ -291,8 +300,6 @@ class PenggunaAuthTests(TestCase):
                 'email': 'siti@std.trisakti.ac.id',
                 'password': 'passwordku123',
                 'password_confirmation': 'passwordku123',
-                'verification_method': 'email',
-                'no_hp': '081111111111',
                 'alamat': 'Jakarta',
                 'fakultas': 'Ekonomi',
                 'prodi': 'Manajemen',
@@ -305,9 +312,10 @@ class PenggunaAuthTests(TestCase):
         self.assertRedirects(response, reverse('pengguna:verify_register'))
         self.assertTrue(check_password('passwordku123', pengguna.password))
         self.assertEqual(pengguna.role, 'mahasiswa')
+        self.assertEqual(pengguna.no_hp, '')
         self.assertFalse(pengguna.is_verified)
         self.assertNotIn('pengguna_id', self.client.session)
-        self.assertContains(response, 'http://10.24.80.245:8001/pengguna/register/verifikasi/')
+        self.assertContains(response, 'http://10.24.80.245:8000/pengguna/register/verifikasi/')
 
         kode = self.client.session['pengguna_otp']['code']
         response = self.client.post(reverse('pengguna:verify_register'), {'kode': kode})
@@ -326,8 +334,6 @@ class PenggunaAuthTests(TestCase):
                 'email': 'dina@trisakti.ac.id',
                 'password': 'passwordku123',
                 'password_confirmation': 'passwordku123',
-                'verification_method': 'email',
-                'no_hp': '081111111112',
                 'alamat': 'Jakarta',
                 'fakultas': 'Ekonomi',
                 'prodi': 'Manajemen',
@@ -347,8 +353,6 @@ class PenggunaAuthTests(TestCase):
                 'email': 'siti@gmail.com',
                 'password': 'passwordku123',
                 'password_confirmation': 'passwordku123',
-                'verification_method': 'email',
-                'no_hp': '081111111111',
                 'alamat': 'Jakarta',
                 'fakultas': 'Ekonomi',
                 'prodi': 'Manajemen',
@@ -360,7 +364,7 @@ class PenggunaAuthTests(TestCase):
         self.assertContains(response, 'Email harus menggunakan domain @std.trisakti.ac.id atau @trisakti.ac.id.')
         self.assertFalse(Pengguna.objects.filter(nim_nik='2201002').exists())
 
-    def test_register_menolak_nim_dan_no_hp_berhuruf(self):
+    def test_register_menolak_nim_berhuruf(self):
         response = self.client.post(
             reverse('pengguna:register'),
             {
@@ -369,8 +373,6 @@ class PenggunaAuthTests(TestCase):
                 'email': 'siti@std.trisakti.ac.id',
                 'password': 'passwordku123',
                 'password_confirmation': 'passwordku123',
-                'verification_method': 'no_hp',
-                'no_hp': '081ABC',
                 'alamat': 'Jakarta',
                 'fakultas': 'Ekonomi',
                 'prodi': 'Manajemen',
@@ -380,7 +382,6 @@ class PenggunaAuthTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'NIM/NIK hanya boleh berisi angka.')
-        self.assertContains(response, 'No HP hanya boleh berisi angka.')
 
     def test_forgot_password_mengganti_password_dengan_otp(self):
         response = self.client.post(

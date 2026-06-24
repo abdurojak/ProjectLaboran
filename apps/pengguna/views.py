@@ -211,7 +211,7 @@ class PenggunaRegisterView(CreateView):
         send_verification_code(
             self.request,
             self.object,
-            form.cleaned_data['verification_method'],
+            'email',
             'register',
         )
         messages.success(self.request, 'Registrasi berhasil. Masukkan kode verifikasi untuk mengaktifkan akun.')

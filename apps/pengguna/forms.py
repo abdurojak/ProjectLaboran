@@ -4,6 +4,40 @@ from django.contrib.auth.hashers import check_password
 from .models import Pengguna
 
 
+FAKULTAS_CHOICES = [
+    ('', 'Pilih fakultas'),
+    ('Teknologi Industri', 'Teknologi Industri'),
+    ('Ekonomi', 'Ekonomi'),
+    ('Teknologi Kebumian dan Energi', 'Teknologi Kebumian dan Energi'),
+    ('Arsitektur Lanskap dan Teknologi Lingkungan', 'Arsitektur Lanskap dan Teknologi Lingkungan'),
+    ('Teknik Sipil dan Perencanaan', 'Teknik Sipil dan Perencanaan'),
+    ('Kedokteran Gigi', 'Kedokteran Gigi'),
+    ('Kedokteran', 'Kedokteran'),
+    ('Hukum', 'Hukum'),
+    ('Seni Rupa dan Desain', 'Seni Rupa dan Desain'),
+]
+
+PRODI_CHOICES = [
+    ('', 'Pilih prodi'),
+    ('Informatika', 'Informatika'),
+    ('Sistem Informasi', 'Sistem Informasi'),
+    ('Rekayasa Perangkat Lunak', 'Rekayasa Perangkat Lunak'),
+    ('Sistem Keamanan Informasi', 'Sistem Keamanan Informasi'),
+    ('Rekayasa Data', 'Rekayasa Data'),
+    ('Manajemen', 'Manajemen'),
+    ('Akuntansi', 'Akuntansi'),
+    ('Teknik Industri', 'Teknik Industri'),
+    ('Teknik Elektro', 'Teknik Elektro'),
+    ('Teknik Mesin', 'Teknik Mesin'),
+    ('Teknik Sipil', 'Teknik Sipil'),
+]
+
+
+def apply_fakultas_prodi_choices(form):
+    form.fields['fakultas'].widget = forms.Select(choices=FAKULTAS_CHOICES)
+    form.fields['prodi'].widget = forms.Select(choices=PRODI_CHOICES)
+
+
 class PenggunaForm(forms.ModelForm):
     class Meta:
         model = Pengguna
@@ -28,6 +62,7 @@ class PenggunaForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        apply_fakultas_prodi_choices(self)
         self.initial_password = self.instance.password
         if self.instance.pk:
             self.fields['password'].required = False
@@ -74,6 +109,7 @@ class PenggunaProfileForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.current_pengguna = kwargs.pop('current_pengguna', None)
         super().__init__(*args, **kwargs)
+        apply_fakultas_prodi_choices(self)
         if self.current_pengguna and self.current_pengguna.role == 'mahasiswa':
             self.fields.pop('role', None)
 
@@ -141,17 +177,7 @@ class LoginPenggunaForm(forms.Form):
 
 
 class RegisterPenggunaForm(forms.ModelForm):
-    VERIFICATION_METHOD_CHOICES = [
-        ('email', 'Email Trisakti'),
-        ('no_hp', 'No HP'),
-    ]
-
     password_confirmation = forms.CharField(label='Konfirmasi password', widget=forms.PasswordInput)
-    verification_method = forms.ChoiceField(
-        label='Verifikasi lewat',
-        choices=VERIFICATION_METHOD_CHOICES,
-        widget=forms.RadioSelect,
-    )
 
     class Meta:
         model = Pengguna
@@ -162,9 +188,7 @@ class RegisterPenggunaForm(forms.ModelForm):
             'email',
             'password',
             'password_confirmation',
-            'verification_method',
             'gender',
-            'no_hp',
             'alamat',
             'fakultas',
             'prodi',
@@ -178,21 +202,18 @@ class RegisterPenggunaForm(forms.ModelForm):
                 'title': 'Gunakan email dengan akhiran @std.trisakti.ac.id atau @trisakti.ac.id',
             }),
             'nim_nik': forms.TextInput(attrs={'inputmode': 'numeric', 'pattern': '[0-9]*', 'placeholder': 'Angka saja'}),
-            'no_hp': forms.TextInput(attrs={'inputmode': 'numeric', 'pattern': '[0-9]*', 'placeholder': 'Angka saja'}),
             'alamat': forms.Textarea(attrs={'rows': 4}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        apply_fakultas_prodi_choices(self)
 
     def clean_nim_nik(self):
         nim_nik = self.cleaned_data['nim_nik'].strip()
         if not nim_nik.isdigit():
             raise forms.ValidationError('NIM/NIK hanya boleh berisi angka.')
         return nim_nik
-
-    def clean_no_hp(self):
-        no_hp = self.cleaned_data['no_hp'].strip()
-        if not no_hp.isdigit():
-            raise forms.ValidationError('No HP hanya boleh berisi angka.')
-        return no_hp
 
     def clean_email(self):
         email = self.cleaned_data['email'].strip().lower()
@@ -215,6 +236,7 @@ class RegisterPenggunaForm(forms.ModelForm):
         instance = super().save(commit=False)
         instance.role = 'mahasiswa'
         instance.is_verified = False
+        instance.no_hp = ''
 
         if commit:
             instance.save()
