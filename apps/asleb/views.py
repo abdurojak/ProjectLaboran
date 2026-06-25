@@ -1,6 +1,6 @@
 from django.contrib import messages
 from django.db.models import Q, Sum
-from django.shortcuts import redirect
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -8,7 +8,7 @@ from django.views.generic import CreateView, DeleteView, DetailView, ListView, U
 
 from apps.core.views import PostOnlyDeleteMixin
 
-from .forms import AbsensiAslebForm, AslebForm, HonorAslebForm
+from .forms import AbsensiAslebForm, AslebForm, HonorAslebForm, KonfirmasiTransferHonorForm
 from .models import AbsensiAsleb, Asleb, HonorAsleb, PengaturanAbsensiAsleb
 
 
@@ -109,7 +109,7 @@ class HonorAslebListView(ListView):
         context['selected_status'] = self.request.GET.get('status', '').strip()
         context['status_choices'] = HonorAsleb.STATUS_CHOICES
         context['total_honor'] = f'Rp {total_honor:,.0f}'.replace(',', '.')
-        context['formula_note'] = 'Total Honor = min(7 x Total Pertemuan, 60) x Honor/Jam. Junior Rp7.000, Senior Rp8.000.'
+        context['formula_note'] = 'Total Honor = min(7 x Total Pertemuan, 60) x Honor/Jam. Level otomatis: periode asleb ke-1 dan ke-2 Junior Rp7.000, mulai ke-3 Senior Rp8.000.'
         return context
 
 
@@ -233,6 +233,31 @@ def toggle_absensi_status(request):
     return redirect('asleb:absensi_list')
 
 
+@require_POST
+def confirm_honor_transfer(request, pk):
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not pengguna or pengguna.role not in {'admin', 'laboran'}:
+        messages.error(request, 'Hanya admin dan laboran yang bisa mengonfirmasi transfer honor.')
+        return redirect('asleb:honor_list')
+
+    honor = get_object_or_404(HonorAsleb, pk=pk)
+    form = KonfirmasiTransferHonorForm(request.POST, request.FILES, instance=honor)
+
+    if not form.is_valid():
+        messages.error(request, 'Konfirmasi transfer gagal. Pastikan tanggal, PIC, dan bukti transfer sudah diisi dengan benar.')
+        return redirect('asleb:honor_list')
+
+    honor = form.save(commit=False)
+    if not honor.tanggal_transfer:
+        honor.tanggal_transfer = timezone.localdate()
+    if not honor.pic_transfer:
+        honor.pic_transfer = pengguna.nama_pengguna
+    honor.status = 'dibayar'
+    honor.save()
+    messages.success(request, f'Honor {honor.asleb.nama} berhasil dikonfirmasi sudah ditransfer.')
+    return redirect('asleb:honor_list')
+
+
 def sync_honor_from_absensi(absensi):
     bulan = absensi.tanggal_praktikum.replace(day=1)
     total_pertemuan = AbsensiAsleb.objects.filter(
@@ -245,7 +270,6 @@ def sync_honor_from_absensi(absensi):
         asleb=absensi.asleb,
         bulan=bulan,
         defaults={
-            'level': 'junior',
             'jumlah_praktikum': 1,
             'pic_transfer': '',
             'status': 'diproses',

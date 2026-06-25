@@ -7,7 +7,7 @@ from apps.inventaris.models import Barang
 from apps.jadwal.models import JadwalPraktikum
 from apps.kalender.models import KegiatanKalender
 from apps.peminjaman.models import PeminjamanAlat
-from apps.pendaftaran_asleb.models import PengaturanPendaftaranAsleb
+from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb
 from apps.pendaftaran_asleb.utils import get_public_registration_url
 from apps.pengguna.models import Pengguna
 
@@ -409,6 +409,20 @@ class DashboardViewTests(TestCase):
             semester=4,
             tanggal_bergabung=timezone.localdate(),
         )
+        matkul = MataKuliahAsleb.objects.get(kode='SDA_TIF01_ABDUL')
+        for index in range(3):
+            PendaftaranAsleb.objects.create(
+                nama='Ricardo Dharma Saputra',
+                nim='20260001',
+                no_hp='',
+                email=f'ricardo{index}@std.trisakti.ac.id',
+                program_studi='Informatika',
+                semester=4,
+                matkul=matkul,
+                metode_rekening='rekening_bank',
+                rekening='BCA 123456789',
+                status='digenerate',
+            )
         HonorAsleb.objects.create(
             asleb=data_asleb,
             bulan=timezone.localdate().replace(day=1),
@@ -428,6 +442,47 @@ class DashboardViewTests(TestCase):
         self.assertNotContains(response, 'Inventaris')
         self.assertNotContains(response, 'Data Asleb')
         self.assertNotContains(response, 'Pendaftaran Asleb')
+
+    def test_dashboard_asisten_lab_honor_dibayar_reset_saldo_bulan_ini(self):
+        asisten = Pengguna.objects.create(
+            nama_pengguna='Siti Asisten',
+            nim_nik='20260002',
+            email='siti.asisten@trisakti.ac.id',
+            password='rahasia123',
+            no_hp='',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='asisten_lab',
+        )
+        data_asleb = Asleb.objects.create(
+            nama='Siti Asisten',
+            nim='20260002',
+            no_hp='',
+            email='siti.asisten@trisakti.ac.id',
+            program_studi='Informatika',
+            matkul='Pemrograman Web',
+            semester=4,
+            tanggal_bergabung=timezone.localdate(),
+        )
+        HonorAsleb.objects.create(
+            asleb=data_asleb,
+            bulan=timezone.localdate().replace(day=1),
+            jumlah_praktikum=1,
+            total_pertemuan=3,
+            status='dibayar',
+        )
+        session = self.client.session
+        session['pengguna_id'] = asisten.pk
+        session.save()
+
+        response = self.client.get(reverse('dashboard:home'))
+
+        self.assertContains(response, 'Honor Bulan Ini')
+        self.assertContains(response, 'Rp 0')
+        self.assertContains(response, 'Riwayat Honor Saya')
+        self.assertContains(response, 'Dibayar')
 
     def test_dashboard_asisten_lab_menampilkan_tombol_daftar_saat_pendaftaran_dibuka(self):
         asisten = Pengguna.objects.create(

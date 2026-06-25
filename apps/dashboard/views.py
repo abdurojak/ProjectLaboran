@@ -84,9 +84,13 @@ class DashboardView(TemplateView):
                 asleb__nim=pengguna.nim_nik,
                 bulan__year=awal_bulan.year,
                 bulan__month=awal_bulan.month,
-            ).aggregate(total=Sum('jumlah'))['total'] or 0
+            ).exclude(status='dibayar').aggregate(total=Sum('jumlah'))['total'] or 0
+            riwayat_honor_saya = HonorAsleb.objects.filter(
+                asleb__nim=pengguna.nim_nik,
+            ).select_related('asleb')[:6]
             context['today'] = timezone.localdate()
             context['peminjaman_saya'] = peminjaman_saya[:6]
+            context['riwayat_honor_saya'] = riwayat_honor_saya
             context['jadwal_hari_ini'] = jadwal_qs.filter(tanggal=context['today'])[:6]
             context['pendaftaran_asleb_dibuka'] = (is_mahasiswa or is_asisten_lab) and pengaturan_pendaftaran.dibuka
             context['kegiatan_kalender_mahasiswa'] = kegiatan_qs.filter(tanggal__gte=context['today'])[:6]

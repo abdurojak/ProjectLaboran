@@ -74,6 +74,7 @@
                         <th>Total Akhir (Max 60)</th>
                         <th>Honor/Jam</th>
                         <th>Total Honor</th>
+                        <th>Data TF Gaji</th>
                         <th>PIC Transfer</th>
                         <th>Aksi</th>
                     </tr>
@@ -92,12 +93,37 @@
                         <td>{{ honor.total_akhir }}</td>
                         <td>{{ honor.honor_per_jam_rupiah }}</td>
                         <td class="font-black text-violet-700">{{ honor.jumlah_rupiah }}</td>
+                        <td>
+                            <div class="font-semibold text-slate-900">{{ honor.tujuan_transfer }}</div>
+                            <div class="text-xs text-slate-500">
+                                {% if honor.tanggal_transfer %}
+                                TF: {{ honor.tanggal_transfer|date:"d M Y" }}
+                                {% else %}
+                                Tanggal TF belum diisi
+                                {% endif %}
+                            </div>
+                            {% if honor.bukti_transfer %}
+                            <a class="mt-1 inline-flex text-xs font-bold text-brand-700 hover:text-brand-800" href="{{ honor.bukti_transfer.url }}" target="_blank" rel="noreferrer">Lihat bukti TF</a>
+                            {% endif %}
+                        </td>
                         <td>{{ honor.pic_transfer|default:"-" }}</td>
                         <td>
                             <div class="flex flex-wrap gap-3 text-sm font-semibold">
                                 <a class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700" href="{% url 'asleb:honor_update' honor.pk %}">
                                     <i data-lucide="pencil" class="h-4 w-4"></i><span>Edit</span>
                                 </a>
+                                {% if honor.status != 'dibayar' %}
+                                <form method="post" enctype="multipart/form-data" action="{% url 'asleb:honor_confirm_transfer' honor.pk %}" class="grid gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 p-3">
+                                    {% csrf_token %}
+                                    <input type="date" name="tanggal_transfer" value="{% now 'Y-m-d' %}" class="min-h-10 rounded-xl bg-white text-xs">
+                                    <input type="text" name="pic_transfer" value="{{ current_pengguna.nama_pengguna }}" class="min-h-10 rounded-xl bg-white text-xs" placeholder="PIC transfer">
+                                    <input type="file" name="bukti_transfer" accept="image/*,.pdf" class="text-xs">
+                                    <button type="submit" class="inline-flex items-center justify-center gap-1 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700">
+                                        <i data-lucide="badge-check" class="h-4 w-4"></i>
+                                        <span>Sudah di TF</span>
+                                    </button>
+                                </form>
+                                {% endif %}
                                 <form method="post" action="{% url 'asleb:honor_delete' honor.pk %}" data-confirm-message="Yakin ingin menghapus rekap honor ini?" class="inline">
                                     {% csrf_token %}
                                     <button type="submit" class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700">
@@ -110,7 +136,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="10" class="py-12 text-center text-slate-500">Belum ada rekap honor asleb.</td>
+                        <td colspan="11" class="py-12 text-center text-slate-500">Belum ada rekap honor asleb.</td>
                     </tr>
                     {% endfor %}
                 </tbody>

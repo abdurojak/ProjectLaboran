@@ -77,6 +77,53 @@
         </section>
         {% endif %}
 
+        {% if is_asisten_lab_dashboard %}
+        <section class="surface-card min-w-0 overflow-hidden p-6">
+            <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h3 class="text-2xl font-bold tracking-tight text-slate-900">Riwayat Honor Saya</h3>
+                    <p class="mt-1 text-sm text-slate-500">Honor tetap tersimpan per bulan. Jika sudah ditransfer, saldo bulan berjalan otomatis menjadi Rp 0.</p>
+                </div>
+                <a href="{% url 'asleb:absensi_list' %}" class="btn-secondary">Buka Absensi</a>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-max">
+                    <thead class="bg-slate-50">
+                        <tr>
+                            <th>Bulan</th>
+                            <th>Total Honor</th>
+                            <th>Status</th>
+                            <th>Tanggal TF</th>
+                            <th>Bukti TF</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for honor in riwayat_honor_saya %}
+                        <tr>
+                            <td class="font-semibold text-slate-900">{{ honor.bulan|date:"F Y" }}</td>
+                            <td class="font-black text-violet-700">{{ honor.jumlah_rupiah }}</td>
+                            <td>{{ honor.get_status_display }}</td>
+                            <td>{{ honor.tanggal_transfer|date:"d M Y"|default:"-" }}</td>
+                            <td>
+                                {% if honor.bukti_transfer %}
+                                <a class="font-semibold text-brand-700 hover:text-brand-800" href="{{ honor.bukti_transfer.url }}" target="_blank" rel="noreferrer">Lihat bukti</a>
+                                {% else %}
+                                <span class="text-slate-400">Belum ada</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="py-10 text-center text-slate-500">Belum ada riwayat honor.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        {% endif %}
+
         <section class="surface-card min-w-0 overflow-hidden p-6">
             <div class="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-center">
                 <div class="rounded-[28px] border border-blue-100 bg-blue-50/70 p-5 text-center">

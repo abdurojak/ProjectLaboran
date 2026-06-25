@@ -1,3 +1,5 @@
+import hashlib
+
 from django import forms
 
 from .models import AbsensiAsleb, Asleb, HonorAsleb
@@ -35,17 +37,42 @@ class HonorAslebForm(forms.ModelForm):
         fields = [
             'asleb',
             'bulan',
-            'level',
             'jumlah_praktikum',
             'total_pertemuan',
+            'metode_transfer',
+            'nomor_transfer',
+            'nama_pemilik_transfer',
+            'tanggal_transfer',
+            'bukti_transfer',
             'pic_transfer',
             'status',
             'keterangan',
         ]
         widgets = {
             'bulan': forms.DateInput(attrs={'type': 'date'}),
+            'tanggal_transfer': forms.DateInput(attrs={'type': 'date'}),
+            'bukti_transfer': forms.FileInput(attrs={'accept': 'image/*,.pdf'}),
+            'nomor_transfer': forms.TextInput(attrs={'placeholder': 'Contoh: BCA 123456789 / DANA 0812xxxx'}),
+            'nama_pemilik_transfer': forms.TextInput(attrs={'placeholder': 'Nama sesuai rekening/e-wallet'}),
             'keterangan': forms.Textarea(attrs={'rows': 3}),
         }
+
+
+class KonfirmasiTransferHonorForm(forms.ModelForm):
+    class Meta:
+        model = HonorAsleb
+        fields = ['tanggal_transfer', 'pic_transfer', 'bukti_transfer']
+        widgets = {
+            'tanggal_transfer': forms.DateInput(attrs={'type': 'date'}),
+            'bukti_transfer': forms.FileInput(attrs={'accept': 'image/*,.pdf'}),
+            'pic_transfer': forms.TextInput(attrs={'placeholder': 'Nama petugas yang melakukan transfer'}),
+        }
+
+    def clean_bukti_transfer(self):
+        bukti_transfer = self.cleaned_data.get('bukti_transfer')
+        if not bukti_transfer and not self.instance.bukti_transfer:
+            raise forms.ValidationError('Bukti screenshot transfer wajib diupload.')
+        return bukti_transfer
 
 
 class AbsensiAslebForm(forms.ModelForm):
@@ -88,3 +115,34 @@ class AbsensiAslebForm(forms.ModelForm):
             raise forms.ValidationError('Modul ini sudah pernah diabsen. Pilih modul lain.')
 
         return modul
+
+    def clean_file_modul(self):
+        file_modul = self.cleaned_data['file_modul']
+        file_hash = hash_uploaded_file(file_modul)
+        duplicate = AbsensiAsleb.objects.filter(file_modul_hash=file_hash)
+
+        if self.instance and self.instance.pk:
+            duplicate = duplicate.exclude(pk=self.instance.pk)
+
+        if duplicate.exists():
+            raise forms.ValidationError('Berkas modul ini sudah pernah diupload. Gunakan file modul yang berbeda.')
+
+        self.cleaned_data['file_modul_hash'] = file_hash
+        return file_modul
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        instance.file_modul_hash = self.cleaned_data.get('file_modul_hash', instance.file_modul_hash)
+
+        if commit:
+            instance.save()
+
+        return instance
+
+
+def hash_uploaded_file(uploaded_file):
+    digest = hashlib.sha256()
+    for chunk in uploaded_file.chunks():
+        digest.update(chunk)
+    uploaded_file.seek(0)
+    return digest.hexdigest()
