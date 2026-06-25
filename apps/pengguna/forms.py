@@ -90,6 +90,7 @@ class PenggunaProfileForm(forms.ModelForm):
         ]
         widgets = {
             'foto': forms.FileInput(attrs={'class': 'hidden', 'accept': 'image/*'}),
+            'no_hp': forms.TextInput(attrs={'inputmode': 'numeric', 'pattern': '[0-9]*', 'placeholder': 'Angka saja'}),
             'alamat': forms.Textarea(attrs={'rows': 4}),
         }
 
@@ -104,6 +105,12 @@ class PenggunaProfileForm(forms.ModelForm):
         foto = self.cleaned_data.get('foto')
         validate_human_face_photo(foto)
         return foto
+
+    def clean_no_hp(self):
+        no_hp = self.cleaned_data.get('no_hp', '').strip()
+        if no_hp and not no_hp.isdigit():
+            raise forms.ValidationError('No HP hanya boleh berisi angka.')
+        return no_hp
 
     def save(self, commit=True):
         instance = super().save(commit=False)

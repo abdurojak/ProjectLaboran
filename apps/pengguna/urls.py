@@ -10,6 +10,7 @@ from .views import (
     PenggunaLoginView,
     PenggunaLogoutView,
     PenggunaRegisterView,
+    PenggunaVerifyProfilePhoneView,
     PenggunaUpdateProfileView,
     PenggunaUpdateView,
     PenggunaVerifyRegisterView,
@@ -30,6 +31,7 @@ urlpatterns = [
     path('<int:pk>/', PenggunaDetailView.as_view(), name='detail'),
     path('<int:pk>/edit/', PenggunaUpdateView.as_view(), name='update'),
     path('<int:pk>/edit-profil/', PenggunaUpdateProfileView.as_view(), name='update_profile'),
+    path('<int:pk>/verifikasi-no-hp/', PenggunaVerifyProfilePhoneView.as_view(), name='verify_profile_phone'),
     path('<int:pk>/ganti-password/', PenggunaChangePasswordView.as_view(), name='change_password'),
     path('<int:pk>/hapus/', PenggunaDeleteView.as_view(), name='delete'),
 ]

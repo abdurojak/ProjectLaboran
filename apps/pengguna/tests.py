@@ -159,7 +159,7 @@ class PenggunaViewTests(TestCase):
                 'nim_nik': '2201001',
                 'email': 'andi.profil@example.com',
                 'gender': 'laki_laki',
-                'no_hp': '089999999999',
+                'no_hp': '081234567890',
                 'alamat': 'Bekasi',
                 'fakultas': 'Teknologi Industri',
                 'prodi': 'Sistem Informasi',
@@ -172,8 +172,63 @@ class PenggunaViewTests(TestCase):
         self.assertRedirects(response, reverse('pengguna:detail', args=[self.pengguna.pk]))
         self.assertEqual(self.pengguna.nama_pengguna, 'Andi Profil Baru')
         self.assertEqual(self.pengguna.email, 'andi.profil@example.com')
-        self.assertEqual(self.pengguna.no_hp, '089999999999')
+        self.assertEqual(self.pengguna.no_hp, '081234567890')
         self.assertEqual(self.pengguna.role, 'laboran')
+
+    def test_update_profile_no_hp_baru_menunggu_verifikasi_otp(self):
+        response = self.client.post(
+            reverse('pengguna:update_profile', args=[self.pengguna.pk]),
+            {
+                'nama_pengguna': 'Andi Profil Baru',
+                'nim_nik': '2201001',
+                'email': 'andi.profil@example.com',
+                'gender': 'laki_laki',
+                'no_hp': '089999999999',
+                'alamat': 'Bekasi',
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Sistem Informasi',
+                'role': 'laboran',
+                'hapus_foto': '0',
+            },
+        )
+
+        self.pengguna.refresh_from_db()
+        self.assertRedirects(response, reverse('pengguna:verify_profile_phone', args=[self.pengguna.pk]))
+        self.assertEqual(self.pengguna.nama_pengguna, 'Andi Profil Baru')
+        self.assertEqual(self.pengguna.email, 'andi.profil@example.com')
+        self.assertEqual(self.pengguna.no_hp, '081234567890')
+        self.assertEqual(self.client.session['pengguna_otp']['purpose'], 'profile_phone')
+        self.assertEqual(self.client.session['pengguna_otp']['new_no_hp'], '089999999999')
+
+        kode = self.client.session['pengguna_otp']['code']
+        response = self.client.post(reverse('pengguna:verify_profile_phone', args=[self.pengguna.pk]), {'kode': kode})
+        self.pengguna.refresh_from_db()
+
+        self.assertRedirects(response, reverse('pengguna:detail', args=[self.pengguna.pk]))
+        self.assertEqual(self.pengguna.no_hp, '089999999999')
+        self.assertNotIn('pengguna_otp', self.client.session)
+
+    def test_update_profile_no_hp_menolak_huruf(self):
+        response = self.client.post(
+            reverse('pengguna:update_profile', args=[self.pengguna.pk]),
+            {
+                'nama_pengguna': 'Andi Profil Baru',
+                'nim_nik': '2201001',
+                'email': 'andi.profil@example.com',
+                'gender': 'laki_laki',
+                'no_hp': '08ABC',
+                'alamat': 'Bekasi',
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Sistem Informasi',
+                'role': 'laboran',
+                'hapus_foto': '0',
+            },
+        )
+
+        self.pengguna.refresh_from_db()
+        self.assertRedirects(response, reverse('pengguna:detail', args=[self.pengguna.pk]))
+        self.assertEqual(self.pengguna.no_hp, '081234567890')
+        self.assertNotIn('pengguna_otp', self.client.session)
 
     @patch('apps.pengguna.forms.validate_human_face_photo')
     def test_update_profile_menolak_foto_tanpa_wajah(self, mock_validate_face):

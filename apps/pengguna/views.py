@@ -35,20 +35,24 @@ def generate_otp_code():
     return f'{random.randint(0, 999999):06d}'
 
 
-def build_public_url(route_name):
+def build_public_url(route_name, *args):
     base_url = settings.PUBLIC_ACCESS_BASE_URL.rstrip('/') + '/'
-    return urljoin(base_url, reverse(route_name).lstrip('/'))
+    return urljoin(base_url, reverse(route_name, args=args).lstrip('/'))
 
 
-def store_otp(request, purpose, pengguna, method):
+def store_otp(request, purpose, pengguna, method, extra=None):
     code = generate_otp_code()
-    request.session[OTP_SESSION_KEY] = {
+    otp_data = {
         'purpose': purpose,
         'pengguna_id': pengguna.pk,
         'method': method,
         'code': code,
         'expires_at': (timezone.now() + timedelta(minutes=OTP_EXPIRE_MINUTES)).isoformat(),
     }
+    if extra:
+        otp_data.update(extra)
+
+    request.session[OTP_SESSION_KEY] = otp_data
     request.session.modified = True
     return code
 
@@ -69,10 +73,14 @@ def get_pending_otp(request, purpose):
     return otp
 
 
-def send_verification_code(request, pengguna, method, purpose):
-    code = store_otp(request, purpose, pengguna, method)
-    target_route = 'pengguna:verify_register' if purpose == 'register' else 'pengguna:reset_password'
-    verification_url = build_public_url(target_route)
+def send_verification_code(request, pengguna, method, purpose, extra=None):
+    code = store_otp(request, purpose, pengguna, method, extra=extra)
+    if purpose == 'register':
+        verification_url = build_public_url('pengguna:verify_register')
+    elif purpose == 'profile_phone':
+        verification_url = build_public_url('pengguna:verify_profile_phone', pengguna.pk)
+    else:
+        verification_url = build_public_url('pengguna:reset_password')
 
     if method == 'email':
         is_simulated_email = (
@@ -170,6 +178,7 @@ class PenggunaChangePasswordView(View):
 class PenggunaUpdateProfileView(View):
     def post(self, request, pk, *args, **kwargs):
         pengguna = Pengguna.objects.get(pk=pk)
+        nomor_hp_lama = pengguna.no_hp
         form = PenggunaProfileForm(
             request.POST,
             request.FILES,
@@ -178,7 +187,30 @@ class PenggunaUpdateProfileView(View):
         )
 
         if form.is_valid():
-            form.save()
+            nomor_hp_baru = form.cleaned_data.get('no_hp', '')
+            nomor_hp_berubah = nomor_hp_baru != nomor_hp_lama
+            pengguna = form.save(commit=False)
+
+            if nomor_hp_berubah:
+                pengguna.no_hp = nomor_hp_lama
+
+            pengguna.save()
+            form.save_m2m()
+
+            if nomor_hp_berubah:
+                send_verification_code(
+                    request,
+                    pengguna,
+                    'email',
+                    'profile_phone',
+                    extra={'new_no_hp': nomor_hp_baru},
+                )
+                messages.success(
+                    request,
+                    'Profil berhasil diperbarui. Masukkan OTP yang dikirim ke email untuk mengaktifkan No HP baru.',
+                )
+                return redirect('pengguna:verify_profile_phone', pk=pengguna.pk)
+
             messages.success(request, 'Profil pengguna berhasil diperbarui.')
         else:
             for field_errors in form.errors.values():
@@ -186,6 +218,31 @@ class PenggunaUpdateProfileView(View):
                     messages.error(request, error)
 
         return redirect('pengguna:detail', pk=pk)
+
+
+class PenggunaVerifyProfilePhoneView(FormView):
+    template_name = 'pengguna/verify_profile_phone.html'
+    form_class = VerificationCodeForm
+
+    def dispatch(self, request, *args, **kwargs):
+        otp = get_pending_otp(request, 'profile_phone')
+        if not otp or otp.get('pengguna_id') != self.kwargs['pk']:
+            messages.warning(request, 'Tidak ada proses verifikasi No HP aktif.')
+            return redirect('pengguna:detail', pk=self.kwargs['pk'])
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        otp = get_pending_otp(self.request, 'profile_phone')
+        if form.cleaned_data['kode'] != otp['code']:
+            form.add_error('kode', 'Kode verifikasi tidak sesuai.')
+            return self.form_invalid(form)
+
+        pengguna = Pengguna.objects.get(pk=otp['pengguna_id'])
+        pengguna.no_hp = otp.get('new_no_hp', pengguna.no_hp)
+        pengguna.save(update_fields=['no_hp', 'diperbarui_pada'])
+        self.request.session.pop(OTP_SESSION_KEY, None)
+        messages.success(self.request, 'No HP baru berhasil diverifikasi dan disimpan.')
+        return redirect('pengguna:detail', pk=pengguna.pk)
 
 
 class PenggunaLoginView(FormView):

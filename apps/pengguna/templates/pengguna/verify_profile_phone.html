@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}Verifikasi No HP{% endblock %}
+
+{% block content %}
+<section class="mx-auto max-w-2xl space-y-6">
+    <div class="surface-card overflow-hidden p-0">
+        <div class="bg-gradient-to-r from-teal-50 via-cyan-50 to-white p-6 md:p-8">
+            <div class="flex items-start gap-4">
+                <span class="flex h-14 w-14 shrink-0 items-center justify-center rounded-3xl bg-white text-teal-700 shadow-sm ring-1 ring-teal-100">
+                    <i data-lucide="smartphone" class="h-7 w-7"></i>
+                </span>
+                <div>
+                    <p class="text-xs font-extrabold uppercase tracking-[0.18em] text-teal-700">Keamanan Profil</p>
+                    <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Verifikasi No HP Baru</h2>
+                    <p class="mt-2 text-sm leading-7 text-slate-600">Masukkan kode OTP yang dikirim ke email akun. No HP baru akan disimpan setelah kode benar.</p>
+                </div>
+            </div>
+        </div>
+
+        <form method="post" class="space-y-5 p-6 md:p-8">
+            {% csrf_token %}
+            <div>
+                <label for="{{ form.kode.id_for_label }}" class="mb-2 block text-sm font-bold text-slate-800">Kode OTP</label>
+                {{ form.kode }}
+                {% if form.kode.errors %}
+                <p class="mt-2 text-sm font-semibold text-rose-600">{{ form.kode.errors|striptags }}</p>
+                {% endif %}
+            </div>
+
+            <div class="rounded-3xl border border-blue-100 bg-blue-50 p-4 text-sm leading-7 text-blue-900">
+                Kode berlaku 10 menit. Jika kode tidak masuk, periksa konfigurasi SMTP atau ulangi simpan profil untuk membuat kode baru.
+            </div>
+
+            <div class="flex flex-wrap gap-3">
+                <button type="submit" class="btn-primary bg-teal-700 hover:bg-teal-800 shadow-teal-900/15">
+                    <i data-lucide="badge-check" class="h-4 w-4"></i>
+                    <span>Verifikasi</span>
+                </button>
+                <a class="btn-secondary" href="{% url 'pengguna:detail' view.kwargs.pk %}">
+                    <i data-lucide="arrow-left" class="h-4 w-4"></i>
+                    <span>Kembali</span>
+                </a>
+            </div>
+        </form>
+    </div>
+</section>
+{% endblock %}

@@ -99,10 +99,20 @@ class PenggunaLoginRequiredMiddleware:
         if path in self.MAHASISWA_ALLOWED_PENGGUNA_PATHS:
             return True
 
-        return resolved.url_name in {'detail', 'update_profile', 'change_password'} and resolved.kwargs.get('pk') == pengguna.pk
+        return resolved.url_name in {
+            'detail',
+            'update_profile',
+            'verify_profile_phone',
+            'change_password',
+        } and resolved.kwargs.get('pk') == pengguna.pk
 
     def asisten_lab_can_access_pengguna(self, path, resolved, pengguna):
         if path in self.MAHASISWA_ALLOWED_PENGGUNA_PATHS:
             return True
 
-        return resolved.url_name in {'detail', 'update_profile', 'change_password'} and resolved.kwargs.get('pk') == pengguna.pk
+        return resolved.url_name in {
+            'detail',
+            'update_profile',
+            'verify_profile_phone',
+            'change_password',
+        } and resolved.kwargs.get('pk') == pengguna.pk
