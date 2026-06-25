@@ -1,6 +1,8 @@
 from datetime import time
+from unittest.mock import patch
 
 from django.contrib.auth.hashers import check_password
+from django import forms
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError
 from django.test import TestCase
@@ -85,7 +87,8 @@ class PenggunaViewTests(TestCase):
         self.assertContains(response, 'Admin')
         self.assertContains(response, 'data-confirmation-modal')
 
-    def test_create_pengguna_menyimpan_password_hash_dan_foto(self):
+    @patch('apps.pengguna.forms.validate_human_face_photo')
+    def test_create_pengguna_menyimpan_password_hash_dan_foto(self, mock_validate_face):
         foto = SimpleUploadedFile(
             'andi.gif',
             b'GIF87a\x01\x00\x01\x00\x80\x01\x00\x00\x00\x00ccc,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;',
@@ -171,6 +174,32 @@ class PenggunaViewTests(TestCase):
         self.assertEqual(self.pengguna.email, 'andi.profil@example.com')
         self.assertEqual(self.pengguna.no_hp, '089999999999')
         self.assertEqual(self.pengguna.role, 'laboran')
+
+    @patch('apps.pengguna.forms.validate_human_face_photo')
+    def test_update_profile_menolak_foto_tanpa_wajah(self, mock_validate_face):
+        mock_validate_face.side_effect = forms.ValidationError('Foto harus menampilkan wajah manusia yang jelas.')
+        foto = SimpleUploadedFile('pemandangan.jpg', b'not a face', content_type='image/jpeg')
+
+        response = self.client.post(
+            reverse('pengguna:update_profile', args=[self.pengguna.pk]),
+            {
+                'foto': foto,
+                'nama_pengguna': 'Andi Profil Baru',
+                'nim_nik': '2201001',
+                'email': 'andi.profil@example.com',
+                'gender': 'laki_laki',
+                'no_hp': '089999999999',
+                'alamat': 'Bekasi',
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Sistem Informasi',
+                'role': 'laboran',
+                'hapus_foto': '0',
+            },
+        )
+
+        self.assertRedirects(response, reverse('pengguna:detail', args=[self.pengguna.pk]))
+        self.pengguna.refresh_from_db()
+        self.assertFalse(self.pengguna.foto)
 
     def test_mahasiswa_tidak_bisa_mengubah_role_lewat_update_profile(self):
         self.pengguna.role = 'mahasiswa'

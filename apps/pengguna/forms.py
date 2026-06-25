@@ -50,6 +50,11 @@ class PenggunaForm(forms.ModelForm):
             self.fields['password'].required = False
             self.fields['password'].help_text = 'Kosongkan jika tidak ingin mengganti password.'
 
+    def clean_foto(self):
+        foto = self.cleaned_data.get('foto')
+        validate_human_face_photo(foto)
+        return foto
+
     def save(self, commit=True):
         instance = super().save(commit=False)
         password = self.cleaned_data.get('password')
@@ -94,6 +99,11 @@ class PenggunaProfileForm(forms.ModelForm):
         apply_fakultas_prodi_choices(self)
         if self.current_pengguna and self.current_pengguna.role == 'mahasiswa':
             self.fields.pop('role', None)
+
+    def clean_foto(self):
+        foto = self.cleaned_data.get('foto')
+        validate_human_face_photo(foto)
+        return foto
 
     def save(self, commit=True):
         instance = super().save(commit=False)
