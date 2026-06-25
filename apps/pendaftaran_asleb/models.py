@@ -96,6 +96,7 @@ class PendaftaranAsleb(models.Model):
     matkul = models.ForeignKey(MataKuliahAsleb, on_delete=models.PROTECT, related_name='pendaftaran')
     cv = models.FileField('CV', upload_to='pendaftaran_asleb/cv/', blank=True)
     transkrip = models.FileField('Transkrip', upload_to='pendaftaran_asleb/transkrip/', blank=True)
+    tanda_tangan = models.ImageField('Tanda Tangan', upload_to='pendaftaran_asleb/tanda_tangan/', blank=True)
     metode_rekening = models.CharField(
         max_length=30,
         choices=METODE_REKENING_CHOICES,

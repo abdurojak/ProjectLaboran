@@ -148,7 +148,8 @@
                             <div class="flex flex-wrap gap-2 text-xs font-bold">
                                 {% if pendaftaran.cv %}<a class="rounded-full bg-blue-50 px-3 py-1 text-blue-700" href="{{ pendaftaran.cv.url }}">CV</a>{% endif %}
                                 {% if pendaftaran.transkrip %}<a class="rounded-full bg-purple-50 px-3 py-1 text-purple-700" href="{{ pendaftaran.transkrip.url }}">Transkrip</a>{% endif %}
-                                {% if not pendaftaran.cv and not pendaftaran.transkrip %}<span class="text-slate-400">-</span>{% endif %}
+                                {% if pendaftaran.tanda_tangan %}<a class="rounded-full bg-teal-50 px-3 py-1 text-teal-700" href="{{ pendaftaran.tanda_tangan.url }}">TTD</a>{% endif %}
+                                {% if not pendaftaran.cv and not pendaftaran.transkrip and not pendaftaran.tanda_tangan %}<span class="text-slate-400">-</span>{% endif %}
                             </div>
                         </td>
                         <td>{{ pendaftaran.program_studi }}</td>

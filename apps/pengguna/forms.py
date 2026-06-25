@@ -3,6 +3,7 @@ from django.contrib.auth.hashers import check_password
 from django.db import OperationalError, ProgrammingError
 
 from .models import Fakultas, Pengguna, Prodi
+from .utils import validate_human_face_photo
 
 
 def active_name_choices(model, empty_label):
@@ -202,6 +203,11 @@ class RegisterPenggunaForm(forms.ModelForm):
         if not email.endswith(valid_domains):
             raise forms.ValidationError('Email harus menggunakan domain @std.trisakti.ac.id atau @trisakti.ac.id.')
         return email
+
+    def clean_foto(self):
+        foto = self.cleaned_data.get('foto')
+        validate_human_face_photo(foto)
+        return foto
 
     def clean(self):
         cleaned_data = super().clean()

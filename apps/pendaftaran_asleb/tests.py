@@ -1,3 +1,5 @@
+import base64
+
 from django.test import TestCase
 from django.urls import reverse
 from django.core import mail
@@ -128,6 +130,7 @@ class PendaftaranAslebViewTests(TestCase):
             'metode_rekening': 'rekening_bank',
             'rekening': 'BCA 123456789',
             'alasan': 'Ingin membantu praktikum.',
+            'signature_data': make_signature_data(),
         })
 
         self.assertRedirects(post_response, reverse('pendaftaran_asleb:pendaftaran_success'))
@@ -136,6 +139,7 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertEqual(pendaftaran.no_hp, mahasiswa.no_hp)
         self.assertEqual(pendaftaran.email, mahasiswa.email)
         self.assertEqual(pendaftaran.program_studi, mahasiswa.prodi)
+        self.assertTrue(pendaftaran.tanda_tangan)
 
     def test_public_form_semester_hanya_tiga_sampai_delapan(self):
         form = PendaftaranAslebPublicForm(data={
@@ -148,6 +152,7 @@ class PendaftaranAslebViewTests(TestCase):
             'matkul': self.matkul.pk,
             'metode_rekening': 'dana',
             'rekening': '081111111112',
+            'signature_data': make_signature_data(),
         })
 
         self.assertFalse(form.is_valid())
@@ -178,6 +183,7 @@ class PendaftaranAslebViewTests(TestCase):
                 'matkul': self.matkul.pk,
                 'metode_rekening': 'ovo',
                 'rekening': '081111111113',
+                'signature_data': make_signature_data(),
             },
             files={'transkrip': transcript},
             current_pengguna=mahasiswa,
@@ -187,6 +193,22 @@ class PendaftaranAslebViewTests(TestCase):
         pendaftaran = form.save()
         self.assertEqual(pendaftaran.nilai_transkrip, 'A')
         self.assertEqual(pendaftaran.skor_nilai, 3)
+
+    def test_public_form_wajib_tanda_tangan(self):
+        form = PendaftaranAslebPublicForm(data={
+            'nama': 'Andi',
+            'nim': '2201005',
+            'no_hp': '081111111114',
+            'email': 'andi@std.trisakti.ac.id',
+            'program_studi': 'Informatika',
+            'semester': 4,
+            'matkul': self.matkul.pk,
+            'metode_rekening': 'dana',
+            'rekening': '081111111114',
+        })
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('signature_data', form.errors)
 
     def test_pendaftaran_search_filters_data(self):
         response = self.client.get(reverse('pendaftaran_asleb:pendaftaran_list'), {'q': 'SDA'})
@@ -284,3 +306,7 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertEqual(self.pendaftaran.status, 'digenerate')
         self.assertEqual(pengguna.role, 'asisten_lab')
         self.assertTrue(Asleb.objects.filter(nim='2401001', nama='Rizki Pratama').exists())
+
+
+def make_signature_data():
+    return 'data:image/png;base64,' + base64.b64encode(b'signature-bytes' * 80).decode()
