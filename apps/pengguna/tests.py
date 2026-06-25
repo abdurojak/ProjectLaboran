@@ -1,9 +1,13 @@
+from datetime import time
+
 from django.contrib.auth.hashers import check_password
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
+from apps.kalender.models import KegiatanKalender
 from .models import Fakultas, Pengguna, Prodi
 
 
@@ -460,19 +464,45 @@ class PenggunaAuthTests(TestCase):
         session.save()
 
         allowed_response = self.client.get(reverse('peminjaman:peminjaman_list'))
+        kalender_response = self.client.get(reverse('kalender:kegiatan_list'))
         ruangan_response = self.client.get(reverse('ruangan:ruangan_list'))
         blocked_response = self.client.get(reverse('inventaris:barang_list'))
 
         self.assertEqual(allowed_response.status_code, 200)
+        self.assertEqual(kalender_response.status_code, 200)
         self.assertEqual(ruangan_response.status_code, 200)
         self.assertContains(allowed_response, 'Dashboard')
+        self.assertContains(allowed_response, 'Kalender')
         self.assertContains(allowed_response, 'Peminjaman Alat')
         self.assertContains(allowed_response, 'Jadwal Praktikum')
         self.assertContains(allowed_response, 'Ruangan')
+        self.assertContains(kalender_response, 'Kalender Kegiatan')
         self.assertContains(ruangan_response, 'Daftar Lab')
         self.assertNotContains(allowed_response, 'Inventaris')
         self.assertNotContains(allowed_response, 'Pengguna')
         self.assertRedirects(blocked_response, reverse('dashboard:home'))
+
+    def test_mahasiswa_tidak_bisa_mengelola_kalender(self):
+        kegiatan = KegiatanKalender.objects.create(
+            judul='Workshop IoT',
+            tanggal=timezone.localdate(),
+            waktu_mulai=time(9, 0),
+            waktu_selesai=time(11, 0),
+        )
+        session = self.client.session
+        session['pengguna_id'] = self.pengguna.pk
+        session.save()
+
+        blocked_urls = [
+            reverse('kalender:kegiatan_create'),
+            reverse('kalender:kegiatan_update', args=[kegiatan.pk]),
+            reverse('kalender:kegiatan_delete', args=[kegiatan.pk]),
+        ]
+
+        for url in blocked_urls:
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertRedirects(response, reverse('dashboard:home'))
 
     def test_asisten_lab_tidak_melihat_menu_admin_asleb(self):
         self.pengguna.role = 'asisten_lab'

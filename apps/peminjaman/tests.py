@@ -143,6 +143,7 @@ class PeminjamanViewsTests(TestCase):
         self.assertContains(response, '<th>Foto</th>')
         self.assertContains(response, 'data-barang-photo-preview')
         self.assertContains(response, 'data-barang-photo-modal')
+        self.assertContains(response, 'data-barang-photo-heading')
         self.assertContains(response, 'Foto barang belum tersedia.')
         self.assertNotContains(response, '<select name="barang"')
         self.assertNotContains(response, 'id="id_barang_display"')

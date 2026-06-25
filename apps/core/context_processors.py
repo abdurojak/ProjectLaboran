@@ -35,7 +35,7 @@ SIDEBAR_LINKS = [
     {'title': 'Inventaris', 'icon': 'package', 'url': 'inventaris:barang_list', 'namespace': 'inventaris'},
     {'title': 'Barang Tertinggal', 'icon': 'briefcase', 'url': 'barang_tertinggal:list', 'namespace': 'barang_tertinggal'},
     {'title': 'Peminjaman Alat', 'icon': 'arrow-left-right', 'url': 'peminjaman:peminjaman_list', 'namespace': 'peminjaman'},
-    {'title': 'Jadwal Praktikum', 'icon': 'calendar-days', 'url': 'jadwal:jadwal_list', 'namespace': 'jadwal'},
+    {'title': 'Jadwal Praktikum', 'icon': 'calendar-clock', 'url': 'jadwal:jadwal_list', 'namespace': 'jadwal'},
     {'title': 'Absensi Asleb', 'icon': 'clipboard-check', 'url': 'asleb:absensi_list', 'namespace': 'asleb_absensi'},
     {'title': 'Data Asleb', 'icon': 'users', 'url': 'asleb:asleb_list', 'namespace': 'asleb'},
     {'title': 'Pendaftaran Asleb', 'icon': 'user-round-plus', 'url': 'pendaftaran_asleb:pendaftaran_list', 'namespace': 'pendaftaran_asleb'},
@@ -45,7 +45,7 @@ SIDEBAR_LINKS = [
     {'title': 'Pengaturan', 'icon': 'settings', 'url': '', 'namespace': ''},
 ]
 
-MAHASISWA_VISIBLE_NAMESPACES = {'dashboard', 'peminjaman', 'jadwal', 'ruangan'}
+MAHASISWA_VISIBLE_NAMESPACES = {'dashboard', 'kalender', 'peminjaman', 'jadwal', 'ruangan'}
 ASISTEN_LAB_HIDDEN_TITLES = {'Rekap Honorarium Asleb', 'Pengaturan'}
 ASISTEN_LAB_HIDDEN_NAMESPACES = {'inventaris', 'barang_tertinggal', 'asleb', 'pendaftaran_asleb', 'pengguna'}
 

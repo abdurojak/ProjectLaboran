@@ -1,3 +1,5 @@
+from django.contrib import messages
+from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
@@ -5,6 +7,16 @@ from apps.core.views import PostOnlyDeleteMixin
 
 from .forms import JadwalPraktikumForm
 from .models import JadwalPraktikum
+
+
+class MahasiswaJadwalReadOnlyMixin:
+    def dispatch(self, request, *args, **kwargs):
+        pengguna = getattr(request, 'current_pengguna', None)
+        if pengguna and pengguna.role == 'mahasiswa':
+            messages.warning(request, 'Mahasiswa hanya dapat melihat jadwal praktikum.')
+            return redirect('jadwal:jadwal_list')
+
+        return super().dispatch(request, *args, **kwargs)
 
 
 class JadwalPraktikumListView(ListView):
@@ -24,21 +36,21 @@ class JadwalPraktikumDetailView(DetailView):
     context_object_name = 'jadwal'
 
 
-class JadwalPraktikumCreateView(CreateView):
+class JadwalPraktikumCreateView(MahasiswaJadwalReadOnlyMixin, CreateView):
     model = JadwalPraktikum
     form_class = JadwalPraktikumForm
     template_name = 'jadwal/jadwal_form.html'
     success_url = reverse_lazy('jadwal:jadwal_list')
 
 
-class JadwalPraktikumUpdateView(UpdateView):
+class JadwalPraktikumUpdateView(MahasiswaJadwalReadOnlyMixin, UpdateView):
     model = JadwalPraktikum
     form_class = JadwalPraktikumForm
     template_name = 'jadwal/jadwal_form.html'
     success_url = reverse_lazy('jadwal:jadwal_list')
 
 
-class JadwalPraktikumDeleteView(PostOnlyDeleteMixin, DeleteView):
+class JadwalPraktikumDeleteView(MahasiswaJadwalReadOnlyMixin, PostOnlyDeleteMixin, DeleteView):
     model = JadwalPraktikum
     template_name = 'jadwal/jadwal_confirm_delete.html'
     context_object_name = 'jadwal'

@@ -260,6 +260,19 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertEqual(pengguna.role, 'asisten_lab')
 
     def test_generate_semua_diterima_masuk_ke_data_asleb(self):
+        pengguna = Pengguna.objects.create(
+            nama_pengguna='Rizki Pratama',
+            nim_nik='2401001',
+            email='rizki@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081234567891',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Rekayasa Perangkat Lunak',
+            gender='laki_laki',
+            role='mahasiswa',
+            is_verified=True,
+        )
         self.pendaftaran.status = 'diterima'
         self.pendaftaran.save(update_fields=['status'])
 
@@ -267,5 +280,7 @@ class PendaftaranAslebViewTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.pendaftaran.refresh_from_db()
+        pengguna.refresh_from_db()
         self.assertEqual(self.pendaftaran.status, 'digenerate')
+        self.assertEqual(pengguna.role, 'asisten_lab')
         self.assertTrue(Asleb.objects.filter(nim='2401001', nama='Rizki Pratama').exists())

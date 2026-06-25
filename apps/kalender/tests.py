@@ -46,10 +46,40 @@ class KalenderViewsTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Kalender Kegiatan')
+        self.assertContains(response, 'Tambah Kegiatan')
+        self.assertContains(response, 'Hari Perayaan Otomatis')
+        self.assertContains(response, 'Peringatan Universitas Trisakti')
+        self.assertContains(response, 'Keterangan Notifikasi')
         self.assertContains(response, 'Hari Kemerdekaan Republik Indonesia')
         self.assertContains(response, 'Tahun Baru Imlek')
         self.assertContains(response, 'Peringatan Tragedi Trisakti')
         self.assertContains(response, 'Dies Natalis Universitas Trisakti')
+
+    def test_mahasiswa_kalender_hanya_menampilkan_agenda_terdekat(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Siti Aminah',
+            nim_nik='2201002',
+            email='siti@example.com',
+            password='rahasia123',
+            no_hp='081111111111',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='mahasiswa',
+        )
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+
+        response = self.client.get(reverse('kalender:kegiatan_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Agenda Terdekat')
+        self.assertNotContains(response, 'Tambah Kegiatan')
+        self.assertNotContains(response, 'Hari Perayaan Otomatis')
+        self.assertNotContains(response, 'Peringatan Universitas Trisakti')
+        self.assertNotContains(response, 'Keterangan Notifikasi')
 
     def test_notifikasi_page_loads(self):
         response = self.client.get(reverse('kalender:notifikasi_list'))

@@ -46,6 +46,7 @@
                                 <a class="inline-flex items-center gap-1 text-brand-700 hover:text-brand-800" href="{% url 'jadwal:jadwal_detail' jadwal.pk %}">
                                     <i data-lucide="eye" class="h-4 w-4"></i><span>Detail</span>
                                 </a>
+                                {% if not current_pengguna or current_pengguna.role != 'mahasiswa' %}
                                 <a class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700" href="{% url 'jadwal:jadwal_update' jadwal.pk %}">
                                     <i data-lucide="pencil" class="h-4 w-4"></i><span>Edit</span>
                                 </a>
@@ -56,6 +57,7 @@
                                         <span>Hapus</span>
                                     </button>
                                 </form>
+                                {% endif %}
                             </div>
                         </td>
                     </tr>
