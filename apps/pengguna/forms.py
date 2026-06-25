@@ -145,12 +145,22 @@ class ChangePasswordForm(forms.Form):
 
 
 class LoginPenggunaForm(forms.Form):
-    nim_nik = forms.CharField(label='NIM/NIK', max_length=40)
+    nim_nik = forms.CharField(
+        label='NIM/NIK',
+        max_length=40,
+        widget=forms.TextInput(attrs={'inputmode': 'numeric', 'pattern': '[0-9]*', 'placeholder': 'NIM/NIK terdaftar'}),
+    )
     password = forms.CharField(widget=forms.PasswordInput)
 
     error_messages = {
         'invalid_login': 'NIM/NIK atau password tidak sesuai.',
     }
+
+    def clean_nim_nik(self):
+        nim_nik = self.cleaned_data['nim_nik'].strip()
+        if not nim_nik.isdigit():
+            raise forms.ValidationError('NIM/NIK hanya boleh berisi angka.')
+        return nim_nik
 
     def clean(self):
         cleaned_data = super().clean()

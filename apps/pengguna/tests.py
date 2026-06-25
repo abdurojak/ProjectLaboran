@@ -354,6 +354,36 @@ class PenggunaAuthTests(TestCase):
         self.assertContains(response, 'NIM/NIK atau password tidak sesuai.')
         self.assertNotIn('pengguna_id', self.client.session)
 
+    def test_login_nim_belum_terdaftar_tidak_membuat_pengguna_baru(self):
+        jumlah_awal = Pengguna.objects.count()
+
+        response = self.client.post(
+            reverse('pengguna:login'),
+            {
+                'nim_nik': '9999999',
+                'password': 'passwordasal',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'NIM/NIK atau password tidak sesuai.')
+        self.assertEqual(Pengguna.objects.count(), jumlah_awal)
+        self.assertFalse(Pengguna.objects.filter(nim_nik='9999999').exists())
+        self.assertNotIn('pengguna_id', self.client.session)
+
+    def test_login_nim_berhuruf_ditolak(self):
+        response = self.client.post(
+            reverse('pengguna:login'),
+            {
+                'nim_nik': 'ABC123',
+                'password': 'passwordasal',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'NIM/NIK hanya boleh berisi angka.')
+        self.assertNotIn('pengguna_id', self.client.session)
+
     def test_login_menolak_akun_belum_terverifikasi(self):
         self.pengguna.is_verified = False
         self.pengguna.save(update_fields=['is_verified'])
@@ -413,15 +443,45 @@ class PenggunaAuthTests(TestCase):
         self.assertEqual(pengguna.no_hp, '')
         self.assertFalse(pengguna.is_verified)
         self.assertNotIn('pengguna_id', self.client.session)
-        self.assertContains(response, 'http://10.24.80.245:8000/pengguna/register/verifikasi/')
-
         kode = self.client.session['pengguna_otp']['code']
+        self.assertContains(response, f'http://10.24.80.245:8000/pengguna/register/verifikasi/?kode={kode}')
+
         response = self.client.post(reverse('pengguna:verify_register'), {'kode': kode})
         pengguna.refresh_from_db()
 
         self.assertRedirects(response, reverse('dashboard:home'))
         self.assertTrue(pengguna.is_verified)
         self.assertEqual(self.client.session['pengguna_id'], pengguna.pk)
+
+    def test_register_link_verifikasi_langsung_mengaktifkan_akun(self):
+        response = self.client.post(
+            reverse('pengguna:register'),
+            {
+                'nama_pengguna': 'Link Verifikasi',
+                'nim_nik': '2201008',
+                'email': 'link@std.trisakti.ac.id',
+                'password': 'passwordku123',
+                'password_confirmation': 'passwordku123',
+                'alamat': 'Jakarta',
+                'fakultas': 'Ekonomi',
+                'prodi': 'Manajemen',
+                'gender': 'laki_laki',
+            },
+        )
+
+        pengguna = Pengguna.objects.get(nim_nik='2201008')
+        kode = self.client.session['pengguna_otp']['code']
+
+        self.assertRedirects(response, reverse('pengguna:verify_register'))
+        self.assertFalse(pengguna.is_verified)
+
+        response = self.client.get(reverse('pengguna:verify_register'), {'kode': kode})
+        pengguna.refresh_from_db()
+
+        self.assertRedirects(response, reverse('dashboard:home'))
+        self.assertTrue(pengguna.is_verified)
+        self.assertEqual(self.client.session['pengguna_id'], pengguna.pk)
+        self.assertNotIn('pengguna_otp', self.client.session)
 
     def test_register_menerima_email_domain_trisakti_tanpa_std(self):
         response = self.client.post(

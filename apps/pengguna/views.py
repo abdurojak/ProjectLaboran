@@ -1,7 +1,7 @@
 import random
 from smtplib import SMTPException
 from datetime import timedelta
-from urllib.parse import urljoin
+from urllib.parse import urlencode, urljoin
 
 from django.contrib import messages
 from django.contrib.auth.hashers import check_password, make_password
@@ -40,6 +40,10 @@ def build_public_url(route_name, *args):
     return urljoin(base_url, reverse(route_name, args=args).lstrip('/'))
 
 
+def build_public_url_with_query(route_name, query, *args):
+    return f'{build_public_url(route_name, *args)}?{urlencode(query)}'
+
+
 def store_otp(request, purpose, pengguna, method, extra=None):
     code = generate_otp_code()
     otp_data = {
@@ -76,7 +80,7 @@ def get_pending_otp(request, purpose):
 def send_verification_code(request, pengguna, method, purpose, extra=None):
     code = store_otp(request, purpose, pengguna, method, extra=extra)
     if purpose == 'register':
-        verification_url = build_public_url('pengguna:verify_register')
+        verification_url = build_public_url_with_query('pengguna:verify_register', {'kode': code})
     elif purpose == 'profile_phone':
         verification_url = build_public_url('pengguna:verify_profile_phone', pengguna.pk)
     else:
@@ -285,6 +289,16 @@ class PenggunaVerifyRegisterView(FormView):
             messages.warning(request, 'Tidak ada proses verifikasi aktif. Silakan registrasi ulang.')
             return redirect('pengguna:register')
         return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        kode = request.GET.get('kode', '').strip()
+        if kode:
+            form = self.form_class(data={'kode': kode})
+            if form.is_valid():
+                return self.form_valid(form)
+            return self.form_invalid(form)
+
+        return super().get(request, *args, **kwargs)
 
     def form_valid(self, form):
         otp = get_pending_otp(self.request, 'register')
