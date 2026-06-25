@@ -11,10 +11,12 @@
             <p class="mt-2 text-sm text-slate-500">Detail kegiatan dan status notifikasinya.</p>
         </div>
         <div class="flex flex-wrap gap-3">
+            {% if not request.current_pengguna or request.current_pengguna.role == 'admin' or request.current_pengguna.role == 'laboran' or kegiatan.dibuat_oleh_id == request.current_pengguna.pk %}
             <a class="btn-primary bg-blue-700 hover:bg-blue-800 shadow-blue-900/15" href="{% url 'kalender:kegiatan_update' kegiatan.pk %}">
                 <i data-lucide="pencil" class="h-4 w-4"></i>
                 <span>Edit</span>
             </a>
+            {% endif %}
             <a class="btn-secondary" href="{% url 'kalender:kegiatan_list' %}">
                 <i data-lucide="arrow-left" class="h-4 w-4"></i>
                 <span>Kembali</span>
@@ -40,6 +42,14 @@
         <div class="rounded-3xl bg-slate-50 p-5">
             <div class="text-sm font-semibold text-slate-500">Notifikasi</div>
             <div class="mt-2 text-xl font-bold text-slate-900">{% if kegiatan.tampilkan_notifikasi %}Aktif{% else %}Nonaktif{% endif %}</div>
+        </div>
+        <div class="rounded-3xl bg-slate-50 p-5">
+            <div class="text-sm font-semibold text-slate-500">Dibuat Oleh</div>
+            <div class="mt-2 text-xl font-bold text-slate-900">{{ kegiatan.dibuat_oleh.nama_pengguna|default:"-" }}</div>
+        </div>
+        <div class="rounded-3xl bg-slate-50 p-5">
+            <div class="text-sm font-semibold text-slate-500">Dibagikan Ke</div>
+            <div class="mt-2 text-xl font-bold text-slate-900">{{ kegiatan.target_role_display }}</div>
         </div>
         <div class="rounded-3xl bg-slate-50 p-5 md:col-span-2">
             <div class="text-sm font-semibold text-slate-500">Deskripsi</div>
