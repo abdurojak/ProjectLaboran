@@ -6,6 +6,7 @@ from .models import Pengguna
 
 class PenggunaLoginRequiredMiddleware:
     MAHASISWA_ALLOWED_NAMESPACES = {'dashboard', 'peminjaman', 'jadwal', 'pengguna', 'ruangan'}
+    MAHASISWA_ALLOWED_KALENDER_URLS = {'kegiatan_list', 'kegiatan_detail', 'notifikasi_list'}
     MAHASISWA_ALLOWED_PENGGUNA_PATHS = {'/pengguna/logout/'}
     ASISTEN_LAB_BLOCKED_NAMESPACES = {'inventaris', 'barang_tertinggal', 'pendaftaran_asleb'}
     ASISTEN_LAB_ALLOWED_ASLEB_URLS = {'absensi_list', 'absensi_create'}
@@ -71,7 +72,7 @@ class PenggunaLoginRequiredMiddleware:
 
     def mahasiswa_can_access(self, namespace, path, resolved, pengguna):
         if namespace == 'kalender':
-            return resolved.url_name == 'notifikasi_list'
+            return resolved.url_name in self.MAHASISWA_ALLOWED_KALENDER_URLS
 
         if namespace != 'pengguna':
             return namespace in self.MAHASISWA_ALLOWED_NAMESPACES

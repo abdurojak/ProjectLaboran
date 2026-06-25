@@ -45,7 +45,7 @@ class JadwalViewTests(TestCase):
         self.assertContains(response, 'Praktikum Basis Data')
         self.assertContains(response, 'Lab Rekayasa Data')
 
-    def test_tombol_tambah_jadwal_disembunyikan_untuk_mahasiswa(self):
+    def login_as_mahasiswa(self):
         mahasiswa = Pengguna.objects.create(
             nama_pengguna='Siti Aminah',
             nim_nik='2201002',
@@ -61,12 +61,32 @@ class JadwalViewTests(TestCase):
         session = self.client.session
         session['pengguna_id'] = mahasiswa.pk
         session.save()
+        return mahasiswa
+
+    def test_aksi_kelola_jadwal_disembunyikan_untuk_mahasiswa(self):
+        self.login_as_mahasiswa()
 
         response = self.client.get(reverse('jadwal:jadwal_list'))
 
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, 'Tambah Jadwal')
         self.assertNotContains(response, reverse('jadwal:jadwal_create'))
+        self.assertNotContains(response, 'Edit')
+        self.assertNotContains(response, reverse('jadwal:jadwal_update', args=[JadwalPraktikum.objects.first().pk]))
+        self.assertNotContains(response, f'action="{reverse("jadwal:jadwal_delete", args=[JadwalPraktikum.objects.first().pk])}"')
+
+    def test_mahasiswa_tidak_bisa_create_update_delete_jadwal_lewat_url(self):
+        self.login_as_mahasiswa()
+        jadwal = JadwalPraktikum.objects.first()
+
+        create_response = self.client.get(reverse('jadwal:jadwal_create'))
+        update_response = self.client.get(reverse('jadwal:jadwal_update', args=[jadwal.pk]))
+        delete_response = self.client.post(reverse('jadwal:jadwal_delete', args=[jadwal.pk]))
+
+        self.assertRedirects(create_response, reverse('jadwal:jadwal_list'))
+        self.assertRedirects(update_response, reverse('jadwal:jadwal_list'))
+        self.assertRedirects(delete_response, reverse('jadwal:jadwal_list'))
+        self.assertTrue(JadwalPraktikum.objects.filter(pk=jadwal.pk).exists())
 
     def test_jadwal_tidak_bisa_bentrok_ruangan_dan_waktu(self):
         jadwal_bentrok = JadwalPraktikum(
