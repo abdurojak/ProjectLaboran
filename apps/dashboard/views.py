@@ -12,6 +12,7 @@ from apps.inventaris.models import ACTIVE_PEMINJAMAN_STATUSES, Barang, Inventari
 from apps.jadwal.models import JadwalPraktikum
 from apps.kalender.models import KegiatanKalender
 from apps.peminjaman.models import PeminjamanAlat
+from apps.peminjaman.notifications import send_peminjaman_approved_notification
 from apps.pendaftaran_asleb.models import PendaftaranAsleb, PengaturanPendaftaranAsleb
 from apps.pendaftaran_asleb.utils import get_public_registration_url
 
@@ -439,6 +440,7 @@ def accept_peminjaman(request, pk):
 
         peminjaman.status = 'dipinjam'
         peminjaman.save(update_fields=['status', 'diperbarui_pada'])
+        send_peminjaman_approved_notification(peminjaman)
         messages.success(request, 'Pengajuan peminjaman diterima.')
 
     return redirect('dashboard:home')

@@ -1,11 +1,14 @@
 from datetime import datetime, timedelta
 
 from django.core.paginator import Paginator
+from django.db.models import Q
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
+from apps.asleb.models import Asleb
 from apps.core.views import PostOnlyDeleteMixin
+from apps.jadwal.models import JadwalPraktikum
 from apps.peminjaman.models import PeminjamanAlat
 from apps.pendaftaran_asleb.models import PendaftaranAsleb, PengaturanPendaftaranAsleb
 from apps.pendaftaran_asleb.utils import get_public_registration_url
@@ -15,13 +18,98 @@ from .models import KegiatanKalender
 from .utils import build_manual_notification, get_perayaan_calendar_events, get_perayaan_notifications
 
 
+DAY_TO_FULLCALENDAR = {
+    'senin': 1,
+    'selasa': 2,
+    'rabu': 3,
+    'kamis': 4,
+    'jumat': 5,
+    'sabtu': 6,
+}
+
+
+def get_visible_kegiatan_queryset(pengguna):
+    queryset = KegiatanKalender.objects.select_related('dibuat_oleh')
+    if not pengguna or pengguna.role in {'admin', 'laboran'}:
+        return queryset
+
+    return queryset.filter(
+        Q(dibuat_oleh=pengguna) |
+        Q(target_role__contains=pengguna.role) |
+        Q(dibuat_oleh__isnull=True, target_role='')
+    )
+
+
+def get_manageable_kegiatan_queryset(pengguna):
+    queryset = KegiatanKalender.objects.select_related('dibuat_oleh')
+    if not pengguna or pengguna.role in {'admin', 'laboran'}:
+        return queryset
+
+    return queryset.filter(dibuat_oleh=pengguna)
+
+
+def parse_asleb_matkul(matkul_text):
+    parts = [part.strip() for part in matkul_text.split(' - ') if part.strip()]
+    if not parts:
+        return '', ''
+
+    mata_kuliah = parts[0]
+    kelas = parts[-1] if len(parts) >= 3 else ''
+    return mata_kuliah, kelas
+
+
+def get_asisten_lab_jadwal_queryset(pengguna):
+    if not pengguna or pengguna.role != 'asisten_lab':
+        return JadwalPraktikum.objects.none()
+
+    asleb_list = Asleb.objects.filter(nim=pengguna.nim_nik, status='aktif').exclude(matkul='')
+    query = Q()
+
+    for asleb in asleb_list:
+        mata_kuliah, kelas = parse_asleb_matkul(asleb.matkul)
+        if mata_kuliah and kelas:
+            query |= Q(mata_kuliah__iexact=mata_kuliah, kelas__iexact=kelas)
+        elif mata_kuliah:
+            query |= Q(mata_kuliah__iexact=mata_kuliah)
+
+    if not query:
+        return JadwalPraktikum.objects.none()
+
+    return JadwalPraktikum.objects.select_related('ruangan').filter(query).distinct()
+
+
+def build_jadwal_calendar_events(jadwal_queryset):
+    events = []
+    for jadwal in jadwal_queryset:
+        day_number = DAY_TO_FULLCALENDAR.get(jadwal.hari)
+        if not day_number:
+            continue
+
+        end_time = jadwal.waktu_selesai or jadwal.waktu_mulai
+        events.append({
+            'title': f'Praktikum {jadwal.mata_kuliah} - {jadwal.kelas}',
+            'daysOfWeek': [day_number],
+            'startTime': jadwal.waktu_mulai.strftime('%H:%M:%S'),
+            'endTime': end_time.strftime('%H:%M:%S'),
+            'backgroundColor': '#0f766e',
+            'borderColor': '#0f766e',
+            'textColor': '#ffffff',
+            'extendedProps': {
+                'lokasi': jadwal.ruangan.nama if jadwal.ruangan_id else '-',
+                'notifikasi': 'Jadwal praktikum otomatis',
+            },
+        })
+    return events
+
+
 class KegiatanKalenderListView(ListView):
     model = KegiatanKalender
     template_name = 'kalender/kegiatan_list.html'
     context_object_name = 'kegiatan_list'
 
     def get_queryset(self):
-        return KegiatanKalender.objects.all().order_by('tanggal', 'waktu_mulai')
+        pengguna = getattr(self.request, 'current_pengguna', None)
+        return get_visible_kegiatan_queryset(pengguna).order_by('tanggal', 'waktu_mulai')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -50,10 +138,14 @@ class KegiatanKalenderListView(ListView):
                 }
             )
 
+        pengguna = getattr(self.request, 'current_pengguna', None)
+        jadwal_praktikum_saya = get_asisten_lab_jadwal_queryset(pengguna)
+        calendar_events.extend(build_jadwal_calendar_events(jadwal_praktikum_saya))
         calendar_events.extend(get_perayaan_calendar_events(timezone.localdate().year))
 
         context['calendar_events'] = calendar_events
         context['upcoming_kegiatan'] = context['kegiatan_list'][:5]
+        context['jadwal_praktikum_saya'] = jadwal_praktikum_saya
         return context
 
 
@@ -62,12 +154,28 @@ class KegiatanKalenderDetailView(DetailView):
     template_name = 'kalender/kegiatan_detail.html'
     context_object_name = 'kegiatan'
 
+    def get_queryset(self):
+        pengguna = getattr(self.request, 'current_pengguna', None)
+        return get_visible_kegiatan_queryset(pengguna)
+
 
 class KegiatanKalenderCreateView(CreateView):
     model = KegiatanKalender
     form_class = KegiatanKalenderForm
     template_name = 'kalender/kegiatan_form.html'
     success_url = reverse_lazy('kalender:kegiatan_list')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['current_pengguna'] = getattr(self.request, 'current_pengguna', None)
+        return kwargs
+
+    def form_valid(self, form):
+        pengguna = getattr(self.request, 'current_pengguna', None)
+        form.instance.dibuat_oleh = pengguna
+        if not pengguna or pengguna.role not in {'admin', 'laboran'}:
+            form.instance.target_role = ''
+        return super().form_valid(form)
 
 
 class KegiatanKalenderUpdateView(UpdateView):
@@ -76,12 +184,31 @@ class KegiatanKalenderUpdateView(UpdateView):
     template_name = 'kalender/kegiatan_form.html'
     success_url = reverse_lazy('kalender:kegiatan_list')
 
+    def get_queryset(self):
+        pengguna = getattr(self.request, 'current_pengguna', None)
+        return get_manageable_kegiatan_queryset(pengguna)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['current_pengguna'] = getattr(self.request, 'current_pengguna', None)
+        return kwargs
+
+    def form_valid(self, form):
+        pengguna = getattr(self.request, 'current_pengguna', None)
+        if not pengguna or pengguna.role not in {'admin', 'laboran'}:
+            form.instance.target_role = ''
+        return super().form_valid(form)
+
 
 class KegiatanKalenderDeleteView(PostOnlyDeleteMixin, DeleteView):
     model = KegiatanKalender
     template_name = 'kalender/kegiatan_confirm_delete.html'
     context_object_name = 'kegiatan'
     success_url = reverse_lazy('kalender:kegiatan_list')
+
+    def get_queryset(self):
+        pengguna = getattr(self.request, 'current_pengguna', None)
+        return get_manageable_kegiatan_queryset(pengguna)
 
 
 class NotifikasiListView(ListView):
@@ -93,8 +220,9 @@ class NotifikasiListView(ListView):
     def get_queryset(self):
         today = timezone.localdate()
         limit_date = today + timedelta(days=7)
+        pengguna = getattr(self.request, 'current_pengguna', None)
         return (
-            KegiatanKalender.objects.filter(
+            get_visible_kegiatan_queryset(pengguna).filter(
                 tampilkan_notifikasi=True,
                 tanggal__gte=today,
                 tanggal__lte=limit_date,
@@ -145,7 +273,13 @@ class NotifikasiListView(ListView):
 
     def get_peminjaman_notifications(self):
         pengguna = getattr(self.request, 'current_pengguna', None)
-        if not pengguna or pengguna.role != 'mahasiswa':
+        if not pengguna:
+            return []
+
+        if pengguna.role in {'admin', 'laboran'}:
+            return self.get_admin_peminjaman_request_notifications(pengguna)
+
+        if pengguna.role not in {'mahasiswa', 'asisten_lab'}:
             return []
 
         status_meta = {
@@ -204,6 +338,34 @@ class NotifikasiListView(ListView):
                 'badge': meta['badge'],
                 'icon': meta['icon'],
                 'icon_class': meta['icon_class'],
+                'is_read': is_read,
+            })
+
+        return notifications
+
+    def get_admin_peminjaman_request_notifications(self, pengguna):
+        peminjaman_list = (
+            PeminjamanAlat.objects.select_related('barang', 'barang__lokasi')
+            .filter(status='diajukan')
+            .order_by('-dibuat_pada')
+        )
+        notifications = []
+
+        for peminjaman in peminjaman_list:
+            is_read = bool(
+                pengguna.notifikasi_dibaca_pada
+                and peminjaman.dibuat_pada <= pengguna.notifikasi_dibaca_pada
+            )
+            notifications.append({
+                'judul': f'Pengajuan peminjaman baru: {peminjaman.barang.nama}',
+                'deskripsi': f'{peminjaman.nama_peminjam} mengajukan peminjaman alat dan menunggu persetujuan.',
+                'tanggal': peminjaman.dibuat_pada.date(),
+                'waktu_label': peminjaman.dibuat_pada.strftime('%H:%M'),
+                'lokasi': peminjaman.barang.lokasi.nama_lokasi if peminjaman.barang.lokasi_id else '-',
+                'url': reverse('peminjaman:peminjaman_detail', kwargs={'pk': peminjaman.pk}),
+                'badge': 'Diajukan',
+                'icon': 'clipboard-list',
+                'icon_class': 'bg-amber-50 text-amber-700',
                 'is_read': is_read,
             })
 

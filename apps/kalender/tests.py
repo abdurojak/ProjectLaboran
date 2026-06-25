@@ -4,11 +4,14 @@ from django.test import TestCase
 from django.utils import timezone
 from django.urls import reverse
 
+from apps.asleb.models import Asleb
 from apps.pengguna.models import Pengguna
 from apps.inventaris.models import Barang
 from apps.peminjaman.models import PeminjamanAlat
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb
 from apps.kalender.context_processors import get_unread_notification_count, get_unread_peminjaman_notification_count
+from apps.jadwal.models import JadwalPraktikum
+from apps.ruangan.models import RuanganLab
 
 from .models import KegiatanKalender
 from .utils import get_perayaan_notifications
@@ -40,6 +43,7 @@ class KalenderViewsTests(TestCase):
             lokasi='Lab Sistem Keamanan Informasi',
             tampilkan_notifikasi=True,
         )
+        self.barang = Barang.objects.create(nama='Kamera', kode_barang='CAM-001', jumlah=1, kondisi='baik')
 
     def test_kalender_page_loads(self):
         response = self.client.get(reverse('kalender:kegiatan_list'))
@@ -76,7 +80,8 @@ class KalenderViewsTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Agenda Terdekat')
-        self.assertNotContains(response, 'Tambah Kegiatan')
+        self.assertContains(response, 'Tambah Kegiatan')
+        self.assertContains(response, 'Kegiatan Pribadi')
         self.assertNotContains(response, 'Hari Perayaan Otomatis')
         self.assertNotContains(response, 'Peringatan Universitas Trisakti')
         self.assertNotContains(response, 'Keterangan Notifikasi')
@@ -102,10 +107,155 @@ class KalenderViewsTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Agenda Terdekat')
-        self.assertNotContains(response, 'Tambah Kegiatan')
+        self.assertContains(response, 'Tambah Kegiatan')
+        self.assertContains(response, 'Jadwal Praktikum Saya')
         self.assertNotContains(response, 'Hari Perayaan Otomatis')
         self.assertNotContains(response, 'Peringatan Universitas Trisakti')
         self.assertNotContains(response, 'Keterangan Notifikasi')
+
+    def test_admin_bisa_share_kegiatan_ke_role_tertentu(self):
+        response = self.client.post(reverse('kalender:kegiatan_create'), {
+            'judul': 'Briefing Praktikum',
+            'tanggal': date.today() + timedelta(days=2),
+            'waktu_mulai': '09:00',
+            'waktu_selesai': '10:00',
+            'lokasi': 'Lab Pemrograman',
+            'deskripsi': 'Briefing untuk asisten lab.',
+            'tampilkan_notifikasi': 'on',
+            'target_role': ['asisten_lab', 'laboran'],
+        })
+
+        self.assertRedirects(response, reverse('kalender:kegiatan_list'))
+        kegiatan = KegiatanKalender.objects.get(judul='Briefing Praktikum')
+        self.assertEqual(kegiatan.target_role_list, ['asisten_lab', 'laboran'])
+        self.assertEqual(kegiatan.target_role_display, 'Asisten Lab, Laboran')
+
+    def test_mahasiswa_membuat_kegiatan_pribadi(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Siti Aminah',
+            nim_nik='2201002',
+            email='siti.private@example.com',
+            password='rahasia123',
+            no_hp='081111111111',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='mahasiswa',
+        )
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+
+        response = self.client.post(reverse('kalender:kegiatan_create'), {
+            'judul': 'Belajar Struktur Data',
+            'tanggal': date.today() + timedelta(days=2),
+            'waktu_mulai': '19:00',
+            'waktu_selesai': '20:00',
+            'lokasi': 'Rumah',
+            'deskripsi': 'Catatan pribadi.',
+            'tampilkan_notifikasi': 'on',
+            'target_role': ['admin', 'laboran', 'mahasiswa'],
+        })
+
+        self.assertRedirects(response, reverse('kalender:kegiatan_list'))
+        kegiatan = KegiatanKalender.objects.get(judul='Belajar Struktur Data')
+        self.assertEqual(kegiatan.dibuat_oleh, mahasiswa)
+        self.assertEqual(kegiatan.target_role, '')
+
+    def test_mahasiswa_tidak_melihat_kegiatan_pribadi_mahasiswa_lain(self):
+        pemilik = Pengguna.objects.create(
+            nama_pengguna='Pemilik Agenda',
+            nim_nik='2201010',
+            email='pemilik@example.com',
+            password='rahasia123',
+            no_hp='081111111110',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='mahasiswa',
+        )
+        penonton = Pengguna.objects.create(
+            nama_pengguna='Penonton Agenda',
+            nim_nik='2201011',
+            email='penonton@example.com',
+            password='rahasia123',
+            no_hp='081111111119',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+        )
+        KegiatanKalender.objects.create(
+            judul='Agenda Pribadi Pemilik',
+            tanggal=date.today() + timedelta(days=3),
+            waktu_mulai=time(8, 0),
+            dibuat_oleh=pemilik,
+        )
+        KegiatanKalender.objects.create(
+            judul='Pengumuman Untuk Mahasiswa',
+            tanggal=date.today() + timedelta(days=3),
+            waktu_mulai=time(9, 0),
+            target_role='mahasiswa',
+        )
+        session = self.client.session
+        session['pengguna_id'] = penonton.pk
+        session.save()
+
+        response = self.client.get(reverse('kalender:kegiatan_list'))
+
+        self.assertNotContains(response, 'Agenda Pribadi Pemilik')
+        self.assertContains(response, 'Pengumuman Untuk Mahasiswa')
+
+    def test_jadwal_praktikum_asisten_lab_muncul_otomatis_di_kalender(self):
+        asisten = Pengguna.objects.create(
+            nama_pengguna='Asisten SDA',
+            nim_nik='2202001',
+            email='asisten.sda@example.com',
+            password='rahasia123',
+            no_hp='081222222222',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='asisten_lab',
+        )
+        Asleb.objects.create(
+            nama='Asisten SDA',
+            nim='2202001',
+            no_hp='081222222222',
+            email='asisten.sda@example.com',
+            program_studi='Informatika',
+            matkul='Struktur Data dan Algoritma - Abdul Roohman, M.Kom - TIF-01',
+            semester=5,
+            tanggal_bergabung=date.today(),
+        )
+        ruangan = RuanganLab.objects.create(
+            nama='Lab Pemrograman',
+            kode='LAB-PROG-KAL',
+            kapasitas=39,
+            warna='blue',
+        )
+        JadwalPraktikum.objects.create(
+            mata_kuliah='Struktur Data dan Algoritma',
+            kelas='TIF-01',
+            ruangan=ruangan,
+            pengampu='Abdul Roohman, M.Kom',
+            hari='senin',
+            waktu_mulai=time(10, 0),
+            waktu_selesai=time(12, 0),
+        )
+        session = self.client.session
+        session['pengguna_id'] = asisten.pk
+        session.save()
+
+        response = self.client.get(reverse('kalender:kegiatan_list'))
+
+        event_titles = [event['title'] for event in response.context['calendar_events']]
+        self.assertIn('Praktikum Struktur Data dan Algoritma - TIF-01', event_titles)
+        self.assertContains(response, 'Struktur Data dan Algoritma - TIF-01')
 
     def test_notifikasi_page_loads(self):
         response = self.client.get(reverse('kalender:notifikasi_list'))
@@ -160,7 +310,55 @@ class KalenderViewsTests(TestCase):
 
         second_response = self.client.get(reverse('kalender:notifikasi_list'))
         self.assertContains(second_response, 'Status peminjaman Kamera: Dipinjam')
-        self.assertContains(second_response, 'border-slate-200 bg-slate-50/80')
+
+    def test_notifikasi_admin_menampilkan_pengajuan_peminjaman_baru(self):
+        PeminjamanAlat.objects.create(
+            barang=self.barang,
+            nama_peminjam='Budi',
+            nim='2201002',
+            no_hp='081234567890',
+            tanggal_pinjam=timezone.localdate(),
+            tanggal_kembali=timezone.localdate(),
+            status='diajukan',
+        )
+
+        response = self.client.get(reverse('kalender:notifikasi_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Pengajuan peminjaman baru: Kamera')
+        self.assertContains(response, 'Budi mengajukan peminjaman alat')
+
+    def test_notifikasi_asisten_lab_menampilkan_status_peminjaman_saya(self):
+        asisten = Pengguna.objects.create(
+            nama_pengguna='Siti Asisten',
+            nim_nik='2202001',
+            email='siti.asisten@trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081222222222',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='asisten_lab',
+            is_verified=True,
+        )
+        PeminjamanAlat.objects.create(
+            barang=self.barang,
+            nama_peminjam='Siti Asisten',
+            nim=asisten.nim_nik,
+            no_hp=asisten.no_hp,
+            tanggal_pinjam=timezone.localdate(),
+            tanggal_kembali=timezone.localdate(),
+            status='dipinjam',
+        )
+        session = self.client.session
+        session['pengguna_id'] = asisten.pk
+        session.save()
+
+        response = self.client.get(reverse('kalender:notifikasi_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Status peminjaman Kamera: Dipinjam')
 
     def test_unread_notification_count_menghitung_status_peminjaman_mahasiswa(self):
         mahasiswa = Pengguna.objects.create(

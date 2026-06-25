@@ -1,6 +1,8 @@
 from datetime import time
+from unittest.mock import patch
 
 from django.contrib.auth.hashers import check_password
+from django import forms
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError
 from django.test import TestCase
@@ -85,7 +87,8 @@ class PenggunaViewTests(TestCase):
         self.assertContains(response, 'Admin')
         self.assertContains(response, 'data-confirmation-modal')
 
-    def test_create_pengguna_menyimpan_password_hash_dan_foto(self):
+    @patch('apps.pengguna.forms.validate_human_face_photo')
+    def test_create_pengguna_menyimpan_password_hash_dan_foto(self, mock_validate_face):
         foto = SimpleUploadedFile(
             'andi.gif',
             b'GIF87a\x01\x00\x01\x00\x80\x01\x00\x00\x00\x00ccc,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;',
@@ -171,6 +174,32 @@ class PenggunaViewTests(TestCase):
         self.assertEqual(self.pengguna.email, 'andi.profil@example.com')
         self.assertEqual(self.pengguna.no_hp, '089999999999')
         self.assertEqual(self.pengguna.role, 'laboran')
+
+    @patch('apps.pengguna.forms.validate_human_face_photo')
+    def test_update_profile_menolak_foto_tanpa_wajah(self, mock_validate_face):
+        mock_validate_face.side_effect = forms.ValidationError('Foto harus menampilkan wajah manusia yang jelas.')
+        foto = SimpleUploadedFile('pemandangan.jpg', b'not a face', content_type='image/jpeg')
+
+        response = self.client.post(
+            reverse('pengguna:update_profile', args=[self.pengguna.pk]),
+            {
+                'foto': foto,
+                'nama_pengguna': 'Andi Profil Baru',
+                'nim_nik': '2201001',
+                'email': 'andi.profil@example.com',
+                'gender': 'laki_laki',
+                'no_hp': '089999999999',
+                'alamat': 'Bekasi',
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Sistem Informasi',
+                'role': 'laboran',
+                'hapus_foto': '0',
+            },
+        )
+
+        self.assertRedirects(response, reverse('pengguna:detail', args=[self.pengguna.pk]))
+        self.pengguna.refresh_from_db()
+        self.assertFalse(self.pengguna.foto)
 
     def test_mahasiswa_tidak_bisa_mengubah_role_lewat_update_profile(self):
         self.pengguna.role = 'mahasiswa'
@@ -482,7 +511,7 @@ class PenggunaAuthTests(TestCase):
         self.assertNotContains(allowed_response, 'Pengguna')
         self.assertRedirects(blocked_response, reverse('dashboard:home'))
 
-    def test_mahasiswa_tidak_bisa_mengelola_kalender(self):
+    def test_mahasiswa_bisa_membuat_kegiatan_pribadi_tapi_tidak_mengelola_kegiatan_lain(self):
         kegiatan = KegiatanKalender.objects.create(
             judul='Workshop IoT',
             tanggal=timezone.localdate(),
@@ -493,16 +522,13 @@ class PenggunaAuthTests(TestCase):
         session['pengguna_id'] = self.pengguna.pk
         session.save()
 
-        blocked_urls = [
-            reverse('kalender:kegiatan_create'),
-            reverse('kalender:kegiatan_update', args=[kegiatan.pk]),
-            reverse('kalender:kegiatan_delete', args=[kegiatan.pk]),
-        ]
+        create_response = self.client.get(reverse('kalender:kegiatan_create'))
+        update_response = self.client.get(reverse('kalender:kegiatan_update', args=[kegiatan.pk]))
+        delete_response = self.client.get(reverse('kalender:kegiatan_delete', args=[kegiatan.pk]))
 
-        for url in blocked_urls:
-            with self.subTest(url=url):
-                response = self.client.get(url)
-                self.assertRedirects(response, reverse('dashboard:home'))
+        self.assertEqual(create_response.status_code, 200)
+        self.assertEqual(update_response.status_code, 404)
+        self.assertRedirects(delete_response, reverse('kalender:kegiatan_list'))
 
     def test_asisten_lab_tidak_melihat_menu_admin_asleb(self):
         self.pengguna.role = 'asisten_lab'
@@ -541,7 +567,7 @@ class PenggunaAuthTests(TestCase):
                 response = self.client.get(url)
                 self.assertRedirects(response, reverse('dashboard:home'))
 
-    def test_asisten_lab_hanya_bisa_melihat_kalender(self):
+    def test_asisten_lab_bisa_membuat_kegiatan_pribadi_tapi_tidak_mengelola_kegiatan_lain(self):
         self.pengguna.role = 'asisten_lab'
         self.pengguna.save(update_fields=['role'])
         kegiatan = KegiatanKalender.objects.create(
@@ -559,21 +585,19 @@ class PenggunaAuthTests(TestCase):
             reverse('kalender:kegiatan_detail', args=[kegiatan.pk]),
             reverse('kalender:notifikasi_list'),
         ]
-        blocked_urls = [
-            reverse('kalender:kegiatan_create'),
-            reverse('kalender:kegiatan_update', args=[kegiatan.pk]),
-            reverse('kalender:kegiatan_delete', args=[kegiatan.pk]),
-        ]
 
         for url in allowed_urls:
             with self.subTest(url=url):
                 response = self.client.get(url)
                 self.assertEqual(response.status_code, 200)
 
-        for url in blocked_urls:
-            with self.subTest(url=url):
-                response = self.client.get(url)
-                self.assertRedirects(response, reverse('dashboard:home'))
+        create_response = self.client.get(reverse('kalender:kegiatan_create'))
+        update_response = self.client.get(reverse('kalender:kegiatan_update', args=[kegiatan.pk]))
+        delete_response = self.client.get(reverse('kalender:kegiatan_delete', args=[kegiatan.pk]))
+
+        self.assertEqual(create_response.status_code, 200)
+        self.assertEqual(update_response.status_code, 404)
+        self.assertRedirects(delete_response, reverse('kalender:kegiatan_list'))
 
     def test_laboran_bisa_membuka_menu_inventaris(self):
         self.pengguna.role = 'laboran'

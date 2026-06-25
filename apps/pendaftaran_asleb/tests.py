@@ -194,6 +194,46 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertEqual(pendaftaran.nilai_transkrip, 'A')
         self.assertEqual(pendaftaran.skor_nilai, 3)
 
+    def test_public_form_mendeteksi_nilai_berdasarkan_matkul_dipilih(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Bima Pratama',
+            nim_nik='2201006',
+            email='bima@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081111111116',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+            is_verified=True,
+        )
+        transcript = SimpleUploadedFile(
+            'transkrip-multi-matkul.txt',
+            (
+                b'Pemrograman Web 3 A\n'
+                b'Struktur Data dan Algoritma 3 C\n'
+                b'Jaringan Komputer 3 B\n'
+            ),
+            content_type='text/plain',
+        )
+        form = PendaftaranAslebPublicForm(
+            data={
+                'semester': 4,
+                'matkul': self.matkul.pk,
+                'metode_rekening': 'ovo',
+                'rekening': '081111111116',
+                'signature_data': make_signature_data(),
+            },
+            files={'transkrip': transcript},
+            current_pengguna=mahasiswa,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        pendaftaran = form.save()
+        self.assertEqual(pendaftaran.nilai_transkrip, 'C')
+        self.assertEqual(pendaftaran.skor_nilai, 1)
+
     def test_public_form_wajib_tanda_tangan(self):
         form = PendaftaranAslebPublicForm(data={
             'nama': 'Andi',

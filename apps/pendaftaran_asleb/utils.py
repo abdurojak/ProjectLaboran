@@ -14,15 +14,17 @@ GRADE_PATTERN = re.compile(
     r'(?:nilai|grade|huruf|mutu)\s*[:=\-]?\s*(A|B|C)\b|\b(A|B|C)\s*(?:nilai|grade|huruf|mutu)\b',
     re.IGNORECASE,
 )
+TRANSCRIPT_GRADE_PATTERN = re.compile(r'\b(A|B|C)\b', re.IGNORECASE)
 
 
-def extract_grade_from_transcript(file_obj):
+def extract_grade_from_transcript(file_obj, matkul=None):
     if not file_obj:
         return None
 
     filename = getattr(file_obj, 'name', '') or ''
     text = extract_transcript_text(file_obj)
-    return find_grade(f'{filename}\n{text}')
+    transcript_text = f'{filename}\n{text}'
+    return find_grade_for_course(transcript_text, matkul) or find_grade(transcript_text)
 
 
 def extract_transcript_text(file_obj):
@@ -76,12 +78,31 @@ def extract_pdf_text(file_obj):
     except ImportError:
         return ''
 
+    for pdf_stream in get_pdf_stream_candidates(file_obj):
+        try:
+            reader = PdfReader(pdf_stream, strict=False)
+            return '\n'.join(page.extract_text() or '' for page in reader.pages)
+        except Exception:
+            continue
+
+    return ''
+
+
+def get_pdf_stream_candidates(file_obj):
+    from io import BytesIO
+
     try:
         file_obj.seek(0)
-        reader = PdfReader(file_obj)
-        return '\n'.join(page.extract_text() or '' for page in reader.pages)
-    except Exception:
-        return ''
+        data = file_obj.read()
+    except (AttributeError, OSError):
+        return []
+
+    candidates = [BytesIO(data)]
+    pdf_start = data.find(b'%PDF')
+    if pdf_start > 0:
+        candidates.append(BytesIO(data[pdf_start:]))
+
+    return candidates
 
 
 def ocr_image(file_obj):
@@ -123,3 +144,50 @@ def find_grade(text):
         return None
 
     return next(value.upper() for value in match.groups() if value)
+
+
+def find_grade_for_course(text, matkul):
+    if not text or not matkul:
+        return None
+
+    course_names = get_course_name_candidates(matkul)
+    normalized_lines = [normalize_spaces(line) for line in text.splitlines() if normalize_spaces(line)]
+
+    for line_number, line in enumerate(normalized_lines):
+        normalized_line = line.lower()
+        if not any(course_name in normalized_line for course_name in course_names):
+            continue
+
+        grade = find_grade(line) or find_last_grade(line)
+        if not grade:
+            window = ' '.join(normalized_lines[line_number:line_number + 3])
+            grade = find_grade(window) or find_last_grade(window)
+
+        if grade:
+            return grade
+
+    return None
+
+
+def get_course_name_candidates(matkul):
+    raw_candidates = [
+        getattr(matkul, 'nama', ''),
+        str(matkul).split(' - ')[0],
+    ]
+    return [
+        normalize_spaces(candidate).lower()
+        for candidate in raw_candidates
+        if normalize_spaces(candidate)
+    ]
+
+
+def normalize_spaces(value):
+    return re.sub(r'\s+', ' ', str(value)).strip()
+
+
+def find_last_grade(text):
+    matches = TRANSCRIPT_GRADE_PATTERN.findall(text or '')
+    if not matches:
+        return None
+
+    return matches[-1].upper()
