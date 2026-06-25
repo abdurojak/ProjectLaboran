@@ -57,7 +57,7 @@ class PendaftaranAslebForm(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
         transcript = cleaned_data.get('transkrip') or getattr(self.instance, 'transkrip', None)
-        detected_grade = extract_grade_from_transcript(transcript)
+        detected_grade = extract_grade_from_transcript(transcript, cleaned_data.get('matkul'))
 
         if detected_grade:
             cleaned_data['nilai_transkrip'] = detected_grade
