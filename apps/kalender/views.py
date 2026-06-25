@@ -145,7 +145,13 @@ class NotifikasiListView(ListView):
 
     def get_peminjaman_notifications(self):
         pengguna = getattr(self.request, 'current_pengguna', None)
-        if not pengguna or pengguna.role != 'mahasiswa':
+        if not pengguna:
+            return []
+
+        if pengguna.role in {'admin', 'laboran'}:
+            return self.get_admin_peminjaman_request_notifications(pengguna)
+
+        if pengguna.role not in {'mahasiswa', 'asisten_lab'}:
             return []
 
         status_meta = {
@@ -204,6 +210,34 @@ class NotifikasiListView(ListView):
                 'badge': meta['badge'],
                 'icon': meta['icon'],
                 'icon_class': meta['icon_class'],
+                'is_read': is_read,
+            })
+
+        return notifications
+
+    def get_admin_peminjaman_request_notifications(self, pengguna):
+        peminjaman_list = (
+            PeminjamanAlat.objects.select_related('barang', 'barang__lokasi')
+            .filter(status='diajukan')
+            .order_by('-dibuat_pada')
+        )
+        notifications = []
+
+        for peminjaman in peminjaman_list:
+            is_read = bool(
+                pengguna.notifikasi_dibaca_pada
+                and peminjaman.dibuat_pada <= pengguna.notifikasi_dibaca_pada
+            )
+            notifications.append({
+                'judul': f'Pengajuan peminjaman baru: {peminjaman.barang.nama}',
+                'deskripsi': f'{peminjaman.nama_peminjam} mengajukan peminjaman alat dan menunggu persetujuan.',
+                'tanggal': peminjaman.dibuat_pada.date(),
+                'waktu_label': peminjaman.dibuat_pada.strftime('%H:%M'),
+                'lokasi': peminjaman.barang.lokasi.nama_lokasi if peminjaman.barang.lokasi_id else '-',
+                'url': reverse('peminjaman:peminjaman_detail', kwargs={'pk': peminjaman.pk}),
+                'badge': 'Diajukan',
+                'icon': 'clipboard-list',
+                'icon_class': 'bg-amber-50 text-amber-700',
                 'is_read': is_read,
             })
 

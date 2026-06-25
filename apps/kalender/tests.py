@@ -40,6 +40,7 @@ class KalenderViewsTests(TestCase):
             lokasi='Lab Sistem Keamanan Informasi',
             tampilkan_notifikasi=True,
         )
+        self.barang = Barang.objects.create(nama='Kamera', kode_barang='CAM-001', jumlah=1, kondisi='baik')
 
     def test_kalender_page_loads(self):
         response = self.client.get(reverse('kalender:kegiatan_list'))
@@ -160,7 +161,55 @@ class KalenderViewsTests(TestCase):
 
         second_response = self.client.get(reverse('kalender:notifikasi_list'))
         self.assertContains(second_response, 'Status peminjaman Kamera: Dipinjam')
-        self.assertContains(second_response, 'border-slate-200 bg-slate-50/80')
+
+    def test_notifikasi_admin_menampilkan_pengajuan_peminjaman_baru(self):
+        PeminjamanAlat.objects.create(
+            barang=self.barang,
+            nama_peminjam='Budi',
+            nim='2201002',
+            no_hp='081234567890',
+            tanggal_pinjam=timezone.localdate(),
+            tanggal_kembali=timezone.localdate(),
+            status='diajukan',
+        )
+
+        response = self.client.get(reverse('kalender:notifikasi_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Pengajuan peminjaman baru: Kamera')
+        self.assertContains(response, 'Budi mengajukan peminjaman alat')
+
+    def test_notifikasi_asisten_lab_menampilkan_status_peminjaman_saya(self):
+        asisten = Pengguna.objects.create(
+            nama_pengguna='Siti Asisten',
+            nim_nik='2202001',
+            email='siti.asisten@trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081222222222',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='asisten_lab',
+            is_verified=True,
+        )
+        PeminjamanAlat.objects.create(
+            barang=self.barang,
+            nama_peminjam='Siti Asisten',
+            nim=asisten.nim_nik,
+            no_hp=asisten.no_hp,
+            tanggal_pinjam=timezone.localdate(),
+            tanggal_kembali=timezone.localdate(),
+            status='dipinjam',
+        )
+        session = self.client.session
+        session['pengguna_id'] = asisten.pk
+        session.save()
+
+        response = self.client.get(reverse('kalender:notifikasi_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Status peminjaman Kamera: Dipinjam')
 
     def test_unread_notification_count_menghitung_status_peminjaman_mahasiswa(self):
         mahasiswa = Pengguna.objects.create(

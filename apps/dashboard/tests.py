@@ -1,4 +1,5 @@
 from django.test import TestCase
+from django.core import mail
 from django.urls import reverse
 from django.utils import timezone
 
@@ -69,9 +70,22 @@ class DashboardViewTests(TestCase):
         self.assertNotIn('data-confirm-message', pending_section)
 
     def test_accept_pending_peminjaman_changes_status_to_dipinjam(self):
+        Pengguna.objects.create(
+            nama_pengguna='Budi',
+            nim_nik='2201002',
+            email='budi@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081234567890',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+        )
         peminjaman = PeminjamanAlat.objects.create(
             barang=self.barang,
             nama_peminjam='Budi',
+            nim='2201002',
             tanggal_pinjam=timezone.localdate(),
             tanggal_kembali=timezone.localdate(),
             status='diajukan',
@@ -82,6 +96,8 @@ class DashboardViewTests(TestCase):
 
         self.assertRedirects(response, reverse('dashboard:home'))
         self.assertEqual(peminjaman.status, 'dipinjam')
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('Peminjaman Alat Disetujui', mail.outbox[0].subject)
 
     def test_accept_pending_peminjaman_rejects_when_stock_is_no_longer_available(self):
         barang = Barang.objects.create(nama='Proyektor', jumlah=1)

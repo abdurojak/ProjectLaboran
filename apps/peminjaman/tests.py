@@ -1,5 +1,6 @@
 from datetime import date
 
+from django.core import mail
 from django.test import TestCase
 from django.urls import reverse
 
@@ -302,6 +303,18 @@ class PeminjamanViewsTests(TestCase):
 
 class PeminjamanMahasiswaTests(TestCase):
     def setUp(self):
+        Pengguna.objects.create(
+            nama_pengguna='Lab Admin',
+            nim_nik='ADM-PJM',
+            email='admin-peminjaman@example.com',
+            password='rahasia123',
+            no_hp='080000000000',
+            alamat='Kampus',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='laboran',
+        )
         self.mahasiswa = Pengguna.objects.create(
             nama_pengguna='Siti Aminah',
             nim_nik='2201002',
@@ -347,6 +360,8 @@ class PeminjamanMahasiswaTests(TestCase):
         self.assertEqual(peminjaman.nim, self.mahasiswa.nim_nik)
         self.assertEqual(peminjaman.nama_peminjam, self.mahasiswa.nama_pengguna)
         self.assertEqual(peminjaman.no_hp, self.mahasiswa.no_hp)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('Pengajuan Peminjaman Alat Baru', mail.outbox[0].subject)
 
     def test_form_mahasiswa_tidak_menampilkan_input_identitas(self):
         response = self.client.get(reverse('peminjaman:peminjaman_create'))
@@ -403,6 +418,39 @@ class PeminjamanMahasiswaTests(TestCase):
         response = self.client.get(reverse('peminjaman:peminjaman_update', args=[peminjaman.pk]))
 
         self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
+
+    def test_asisten_lab_melihat_riwayat_peminjaman_milik_saya_setelah_dikembalikan(self):
+        asisten = Pengguna.objects.create(
+            nama_pengguna='Siti Asisten',
+            nim_nik='2202001',
+            email='siti.asisten@trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081222222222',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='asisten_lab',
+            is_verified=True,
+        )
+        PeminjamanAlat.objects.create(
+            barang=self.barang,
+            nama_peminjam=asisten.nama_pengguna,
+            nim=asisten.nim_nik,
+            no_hp=asisten.no_hp,
+            tanggal_pinjam=date(2026, 6, 18),
+            tanggal_kembali=date(2026, 6, 20),
+            status='dikembalikan',
+        )
+        session = self.client.session
+        session['pengguna_id'] = asisten.pk
+        session.save()
+
+        response = self.client.get(reverse('peminjaman:peminjaman_list'), {'milik_saya': '1'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Siti Asisten')
+        self.assertContains(response, 'Dikembalikan')
 
 
 class PeminjamanAlatModelTests(TestCase):

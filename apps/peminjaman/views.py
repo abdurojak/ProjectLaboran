@@ -8,6 +8,10 @@ from apps.core.views import PostOnlyDeleteMixin
 from apps.inventaris.models import Barang
 from .forms import PeminjamanAlatForm
 from .models import PeminjamanAlat
+from .notifications import send_peminjaman_request_notifications
+
+
+BORROWER_ROLES = {'mahasiswa', 'asisten_lab'}
 
 
 class PeminjamanAlatListView(ListView):
@@ -39,14 +43,14 @@ class PeminjamanAlatListView(ListView):
         if status:
             queryset = queryset.filter(status=status)
 
-        if milik_saya and pengguna and pengguna.role == 'mahasiswa':
+        if milik_saya and pengguna and pengguna.role in BORROWER_ROLES:
             queryset = queryset.filter(nim=pengguna.nim_nik)
 
         peminjaman_list = list(queryset)
         for peminjaman in peminjaman_list:
             peminjaman.can_current_pengguna_change = (
                 not pengguna
-                or pengguna.role != 'mahasiswa'
+                or pengguna.role not in BORROWER_ROLES
                 or (peminjaman.nim == pengguna.nim_nik and peminjaman.status == 'diajukan')
             )
 
@@ -110,17 +114,25 @@ class PeminjamanAlatCreateView(CreateView):
             form.add_error('barang', 'Pilih minimal satu detail barang yang tersedia dan tidak rusak berat.')
             return self.form_invalid(form)
 
+        created_peminjaman = []
+        is_borrower = bool(pengguna and pengguna.role in BORROWER_ROLES)
+
         for barang in selectable_barang:
-            PeminjamanAlat.objects.create(
+            peminjaman = PeminjamanAlat.objects.create(
                 barang=barang,
-                nama_peminjam=pengguna.nama_pengguna if pengguna and pengguna.role == 'mahasiswa' else form.cleaned_data['nama_peminjam'],
-                nim=pengguna.nim_nik if pengguna and pengguna.role == 'mahasiswa' else form.cleaned_data['nim'],
-                no_hp=pengguna.no_hp if pengguna and pengguna.role == 'mahasiswa' else form.cleaned_data['no_hp'],
+                nama_peminjam=pengguna.nama_pengguna if is_borrower else form.cleaned_data['nama_peminjam'],
+                nim=pengguna.nim_nik if is_borrower else form.cleaned_data['nim'],
+                no_hp=pengguna.no_hp if is_borrower else form.cleaned_data['no_hp'],
                 tanggal_pinjam=form.cleaned_data['tanggal_pinjam'],
                 tanggal_kembali=form.cleaned_data['tanggal_kembali'],
-                status='diajukan' if pengguna and pengguna.role == 'mahasiswa' else form.cleaned_data['status'],
+                status='diajukan' if is_borrower else form.cleaned_data['status'],
                 catatan=form.cleaned_data['catatan'],
             )
+            created_peminjaman.append(peminjaman)
+
+        for peminjaman in created_peminjaman:
+            if peminjaman.status == 'diajukan':
+                send_peminjaman_request_notifications(peminjaman)
 
         return redirect(self.success_url)
 
@@ -134,8 +146,8 @@ class PeminjamanAlatUpdateView(UpdateView):
     def dispatch(self, request, *args, **kwargs):
         self.object = self.get_object()
         pengguna = getattr(request, 'current_pengguna', None)
-        if pengguna and pengguna.role == 'mahasiswa' and not self.mahasiswa_can_change(pengguna):
-            messages.warning(request, 'Mahasiswa hanya bisa mengedit pengajuan miliknya yang masih berstatus Diajukan.')
+        if pengguna and pengguna.role in BORROWER_ROLES and not self.mahasiswa_can_change(pengguna):
+            messages.warning(request, 'Anda hanya bisa mengedit pengajuan milik sendiri yang masih berstatus Diajukan.')
             return redirect('peminjaman:peminjaman_list')
 
         return super().dispatch(request, *args, **kwargs)
@@ -164,8 +176,8 @@ class PeminjamanAlatDeleteView(PostOnlyDeleteMixin, DeleteView):
     def dispatch(self, request, *args, **kwargs):
         self.object = self.get_object()
         pengguna = getattr(request, 'current_pengguna', None)
-        if pengguna and pengguna.role == 'mahasiswa' and not self.mahasiswa_can_change(pengguna):
-            messages.warning(request, 'Mahasiswa hanya bisa menghapus pengajuan miliknya yang masih berstatus Diajukan.')
+        if pengguna and pengguna.role in BORROWER_ROLES and not self.mahasiswa_can_change(pengguna):
+            messages.warning(request, 'Anda hanya bisa menghapus pengajuan milik sendiri yang masih berstatus Diajukan.')
             return redirect('peminjaman:peminjaman_list')
 
         return super().dispatch(request, *args, **kwargs)

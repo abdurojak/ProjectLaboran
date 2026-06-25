@@ -4,6 +4,9 @@ from apps.inventaris.models import Barang
 from .models import PeminjamanAlat
 
 
+BORROWER_ROLES = {'mahasiswa', 'asisten_lab'}
+
+
 class PeminjamanAlatForm(forms.ModelForm):
     selected_barang_ids = forms.CharField(required=False, widget=forms.HiddenInput())
 
@@ -34,7 +37,7 @@ class PeminjamanAlatForm(forms.ModelForm):
         self.fields['barang'].required = False
         if self.instance.pk and self.instance.barang_id:
             self.fields['barang'].required = True
-        if self.current_pengguna and self.current_pengguna.role == 'mahasiswa':
+        if self.current_pengguna and self.current_pengguna.role in BORROWER_ROLES:
             self.fields['nama_peminjam'].initial = self.current_pengguna.nama_pengguna
             self.fields['nim'].initial = self.current_pengguna.nim_nik
             self.fields['no_hp'].initial = self.current_pengguna.no_hp
@@ -49,7 +52,7 @@ class PeminjamanAlatForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
-        if self.current_pengguna and self.current_pengguna.role == 'mahasiswa':
+        if self.current_pengguna and self.current_pengguna.role in BORROWER_ROLES:
             cleaned_data['nama_peminjam'] = self.current_pengguna.nama_pengguna
             cleaned_data['nim'] = self.current_pengguna.nim_nik
             cleaned_data['no_hp'] = self.current_pengguna.no_hp

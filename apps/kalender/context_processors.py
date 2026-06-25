@@ -14,7 +14,18 @@ PEMINJAMAN_NOTIFICATION_STATUSES = ['dipinjam', 'dikembalikan', 'hilang', 'rusak
 
 
 def get_unread_peminjaman_notification_count(pengguna):
-    if not pengguna or pengguna.role != 'mahasiswa':
+    if not pengguna:
+        return 0
+
+    if pengguna.role in {'admin', 'laboran'}:
+        queryset = PeminjamanAlat.objects.filter(status='diajukan')
+
+        if pengguna.notifikasi_dibaca_pada:
+            queryset = queryset.filter(dibuat_pada__gt=pengguna.notifikasi_dibaca_pada)
+
+        return queryset.count()
+
+    if pengguna.role not in {'mahasiswa', 'asisten_lab'}:
         return 0
 
     queryset = PeminjamanAlat.objects.filter(
@@ -44,13 +55,15 @@ def get_unread_pendaftaran_asleb_acceptance_count(pengguna):
 
 
 def get_unread_notification_count(pengguna):
-    if not pengguna or pengguna.role != 'mahasiswa':
+    if not pengguna:
         return 0
 
-    unread_count = (
-        get_unread_peminjaman_notification_count(pengguna)
-        + get_unread_pendaftaran_asleb_acceptance_count(pengguna)
-    )
+    unread_count = get_unread_peminjaman_notification_count(pengguna)
+
+    if pengguna.role != 'mahasiswa':
+        return unread_count
+
+    unread_count += get_unread_pendaftaran_asleb_acceptance_count(pengguna)
 
     pengaturan_pendaftaran = PengaturanPendaftaranAsleb.get_solo()
     if (
