@@ -1,13 +1,28 @@
+from datetime import time
+
 from django.core.exceptions import ValidationError
 from django.db import models
 
+from apps.ruangan.models import RuanganLab
+
 
 class JadwalPraktikum(models.Model):
+    JAM_KERJA_MULAI = time(7, 30)
+    JAM_KERJA_SELESAI = time(18, 0)
+    HARI_CHOICES = [
+        ('senin', 'Senin'),
+        ('selasa', 'Selasa'),
+        ('rabu', 'Rabu'),
+        ('kamis', 'Kamis'),
+        ('jumat', 'Jumat'),
+        ('sabtu', 'Sabtu'),
+    ]
+
     mata_kuliah = models.CharField('Matkul', max_length=200)
     kelas = models.CharField(max_length=100)
-    letak_ruangan = models.CharField('Letak Ruangan', max_length=150)
+    ruangan = models.ForeignKey(RuanganLab, on_delete=models.PROTECT, related_name='jadwal_praktikum')
     pengampu = models.CharField(max_length=150)
-    tanggal = models.DateField()
+    hari = models.CharField(max_length=10, choices=HARI_CHOICES, default='senin')
     waktu_mulai = models.TimeField('Waktu Mulai')
     waktu_selesai = models.TimeField('Waktu Selesai', blank=True, null=True)
     catatan = models.TextField(blank=True)
@@ -15,7 +30,7 @@ class JadwalPraktikum(models.Model):
     diperbarui_pada = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['tanggal', 'waktu_mulai', 'mata_kuliah']
+        ordering = ['hari', 'waktu_mulai', 'mata_kuliah']
         verbose_name = 'Jadwal Praktikum'
         verbose_name_plural = 'Jadwal Praktikum'
 
@@ -23,16 +38,28 @@ class JadwalPraktikum(models.Model):
         return self.waktu_selesai or self.waktu_mulai
 
     def clean(self):
-        if self.waktu_selesai and self.waktu_selesai < self.waktu_mulai:
-            raise ValidationError({'waktu_selesai': 'Waktu selesai tidak boleh lebih awal dari waktu mulai.'})
+        errors = {}
 
-        if not self.tanggal or not self.letak_ruangan or not self.waktu_mulai:
-            return
+        if self.waktu_selesai and self.waktu_selesai <= self.waktu_mulai:
+            errors['waktu_selesai'] = 'Waktu selesai harus lebih akhir dari waktu mulai.'
+
+        if self.waktu_mulai:
+            if self.waktu_mulai < self.JAM_KERJA_MULAI or self.waktu_mulai >= self.JAM_KERJA_SELESAI:
+                errors['waktu_mulai'] = 'Waktu mulai harus berada dalam jam kerja 07:30-18:00.'
 
         waktu_selesai_baru = self.get_waktu_selesai_efektif()
+        if waktu_selesai_baru and waktu_selesai_baru > self.JAM_KERJA_SELESAI:
+            errors['waktu_selesai'] = 'Waktu selesai tidak boleh melewati jam kerja 18:00.'
+
+        if errors:
+            raise ValidationError(errors)
+
+        if not self.hari or not self.ruangan_id or not self.waktu_mulai:
+            return
+
         jadwal_di_ruangan = JadwalPraktikum.objects.filter(
-            tanggal=self.tanggal,
-            letak_ruangan__iexact=self.letak_ruangan.strip(),
+            hari=self.hari,
+            ruangan=self.ruangan,
         )
 
         if self.pk:
@@ -42,8 +69,8 @@ class JadwalPraktikum(models.Model):
             waktu_selesai_lama = jadwal.get_waktu_selesai_efektif()
             if self.waktu_mulai < waktu_selesai_lama and waktu_selesai_baru > jadwal.waktu_mulai:
                 raise ValidationError({
-                    'letak_ruangan': (
-                        'Ruangan ini sudah dipakai pada tanggal dan rentang waktu tersebut. '
+                    'ruangan': (
+                        'Ruangan ini sudah dipakai pada hari dan rentang waktu tersebut. '
                         'Silakan pilih waktu atau ruangan lain.'
                     )
                 })

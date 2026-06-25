@@ -1,10 +1,11 @@
-from datetime import date, time
+from datetime import time
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 
 from apps.pengguna.models import Pengguna
+from apps.ruangan.models import RuanganLab
 
 from .models import JadwalPraktikum
 
@@ -27,12 +28,19 @@ class JadwalViewTests(TestCase):
         session['pengguna_id'] = pengguna.pk
         session.save()
 
+        self.ruangan = RuanganLab.objects.create(
+            nama='Lab Rekayasa Data',
+            kode='LAB-RD-TEST',
+            deskripsi='Lab untuk pengujian jadwal.',
+            kapasitas=30,
+            warna='violet',
+        )
         JadwalPraktikum.objects.create(
             mata_kuliah='Praktikum Basis Data',
             kelas='XI RPL 1',
-            letak_ruangan='Lab Rekayasa Data',
+            ruangan=self.ruangan,
             pengampu='Ibu Sari',
-            tanggal=date(2026, 6, 18),
+            hari='kamis',
             waktu_mulai=time(8, 0),
             waktu_selesai=time(10, 0),
         )
@@ -44,6 +52,49 @@ class JadwalViewTests(TestCase):
         self.assertContains(response, 'Jadwal Praktikum')
         self.assertContains(response, 'Praktikum Basis Data')
         self.assertContains(response, 'Lab Rekayasa Data')
+        self.assertContains(response, 'Senin')
+        self.assertContains(response, 'Sabtu')
+        self.assertNotContains(response, 'Minggu')
+
+    def test_jadwal_list_menampilkan_grid_berdasarkan_hari_dan_ruangan(self):
+        response = self.client.get(reverse('jadwal:jadwal_list'), {'hari': 'kamis'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '7:30')
+        self.assertContains(response, '18:00')
+        self.assertContains(response, 'Lab Rekayasa Data (30)')
+        self.assertContains(response, 'Praktikum Basis Data')
+        self.assertContains(response, 'XI RPL 1')
+        self.assertContains(response, 'Ibu Sari')
+
+    def test_jadwal_dengan_jam_tidak_persis_slot_tetap_tampil(self):
+        JadwalPraktikum.objects.create(
+            mata_kuliah='Praktikum Jaringan',
+            kelas='TI 4B',
+            ruangan=self.ruangan,
+            pengampu='Pak Dimas',
+            hari='kamis',
+            waktu_mulai=time(10, 19),
+            waktu_selesai=time(11, 19),
+        )
+
+        response = self.client.get(reverse('jadwal:jadwal_list'), {'hari': 'kamis'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Praktikum Jaringan')
+
+    def test_form_jadwal_memakai_hari_bukan_tanggal(self):
+        response = self.client.get(reverse('jadwal:jadwal_create'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="hari"', html=False)
+        self.assertContains(response, 'Senin')
+        self.assertContains(response, 'Sabtu')
+        self.assertContains(response, 'name="ruangan"', html=False)
+        self.assertContains(response, 'step="1800"', html=False)
+        self.assertContains(response, 'min="07:30"', html=False)
+        self.assertContains(response, 'max="18:00"', html=False)
+        self.assertNotContains(response, 'name="tanggal"', html=False)
 
     def login_as_mahasiswa(self):
         mahasiswa = Pengguna.objects.create(
@@ -92,9 +143,9 @@ class JadwalViewTests(TestCase):
         jadwal_bentrok = JadwalPraktikum(
             mata_kuliah='Praktikum Pemrograman',
             kelas='XI RPL 2',
-            letak_ruangan='Lab Rekayasa Data',
+            ruangan=self.ruangan,
             pengampu='Pak Budi',
-            tanggal=date(2026, 6, 18),
+            hari='kamis',
             waktu_mulai=time(9, 0),
             waktu_selesai=time(11, 0),
         )
@@ -106,12 +157,34 @@ class JadwalViewTests(TestCase):
         jadwal_lanjutan = JadwalPraktikum(
             mata_kuliah='Praktikum Jaringan',
             kelas='XI RPL 3',
-            letak_ruangan='Lab Rekayasa Data',
+            ruangan=self.ruangan,
             pengampu='Pak Dimas',
-            tanggal=date(2026, 6, 18),
+            hari='kamis',
             waktu_mulai=time(10, 0),
             waktu_selesai=time(12, 0),
         )
 
         jadwal_lanjutan.full_clean()
+
+    def test_jadwal_tidak_bisa_di_luar_jam_kerja(self):
+        kasus_jam = [
+            (time(7, 0), time(8, 0)),
+            (time(17, 30), time(18, 30)),
+            (time(18, 0), time(18, 30)),
+        ]
+
+        for waktu_mulai, waktu_selesai in kasus_jam:
+            with self.subTest(waktu_mulai=waktu_mulai, waktu_selesai=waktu_selesai):
+                jadwal = JadwalPraktikum(
+                    mata_kuliah='Praktikum Di Luar Jam',
+                    kelas='TI 4C',
+                    ruangan=self.ruangan,
+                    pengampu='Pak Dimas',
+                    hari='kamis',
+                    waktu_mulai=waktu_mulai,
+                    waktu_selesai=waktu_selesai,
+                )
+
+                with self.assertRaises(ValidationError):
+                    jadwal.full_clean()
 

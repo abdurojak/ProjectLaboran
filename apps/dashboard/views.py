@@ -17,6 +17,14 @@ from apps.pendaftaran_asleb.utils import get_public_registration_url
 
 class DashboardView(TemplateView):
     template_name = 'dashboard/home.html'
+    WEEKDAY_TO_HARI = {
+        0: 'senin',
+        1: 'selasa',
+        2: 'rabu',
+        3: 'kamis',
+        4: 'jumat',
+        5: 'sabtu',
+    }
 
     TONES = {
         'teal': {
@@ -89,9 +97,10 @@ class DashboardView(TemplateView):
                 asleb__nim=pengguna.nim_nik,
             ).select_related('asleb')[:6]
             context['today'] = timezone.localdate()
+            hari_ini = self.WEEKDAY_TO_HARI.get(context['today'].weekday())
             context['peminjaman_saya'] = peminjaman_saya[:6]
             context['riwayat_honor_saya'] = riwayat_honor_saya
-            context['jadwal_hari_ini'] = jadwal_qs.filter(tanggal=context['today'])[:6]
+            context['jadwal_hari_ini'] = jadwal_qs.filter(hari=hari_ini)[:6] if hari_ini else jadwal_qs.none()
             context['pendaftaran_asleb_dibuka'] = (is_mahasiswa or is_asisten_lab) and pengaturan_pendaftaran.dibuka
             context['kegiatan_kalender_mahasiswa'] = kegiatan_qs.filter(tanggal__gte=context['today'])[:6]
             context['public_registration_url'] = get_public_registration_url()
@@ -119,7 +128,7 @@ class DashboardView(TemplateView):
                 },
                 {
                     'label': 'Jadwal Hari Ini',
-                    'value': jadwal_qs.filter(tanggal=context['today']).count(),
+                    'value': jadwal_qs.filter(hari=hari_ini).count() if hari_ini else 0,
                     'note': 'Jadwal praktikum hari ini',
                     'icon': 'calendar-days',
                     'tone': 'green',
@@ -205,6 +214,7 @@ class DashboardView(TemplateView):
         context['peminjaman_dipinjam'] = peminjaman_qs.filter(status='dipinjam')[:6]
         context['peminjaman_perlu_diganti'] = peminjaman_qs.filter(status__in=['hilang', 'rusak'])[:6]
         context['today'] = timezone.localdate()
+        hari_ini = self.WEEKDAY_TO_HARI.get(context['today'].weekday())
         context['stats_cards'] = self._decorate_items([
             {
                 'label': 'Total Barang',
@@ -222,7 +232,7 @@ class DashboardView(TemplateView):
             },
             {
                 'label': 'Jadwal Hari Ini',
-                'value': jadwal_qs.filter(tanggal=context['today']).count(),
+                'value': jadwal_qs.filter(hari=hari_ini).count() if hari_ini else 0,
                 'note': 'Jadwal praktikum yang terdaftar hari ini',
                 'icon': 'calendar-days',
                 'tone': 'blue',

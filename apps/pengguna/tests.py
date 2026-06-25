@@ -570,6 +570,40 @@ class PenggunaAuthTests(TestCase):
                 response = self.client.get(url)
                 self.assertRedirects(response, reverse('dashboard:home'))
 
+    def test_asisten_lab_hanya_bisa_melihat_kalender(self):
+        self.pengguna.role = 'asisten_lab'
+        self.pengguna.save(update_fields=['role'])
+        kegiatan = KegiatanKalender.objects.create(
+            judul='Workshop IoT',
+            tanggal=timezone.localdate(),
+            waktu_mulai=time(9, 0),
+            waktu_selesai=time(11, 0),
+        )
+        session = self.client.session
+        session['pengguna_id'] = self.pengguna.pk
+        session.save()
+
+        allowed_urls = [
+            reverse('kalender:kegiatan_list'),
+            reverse('kalender:kegiatan_detail', args=[kegiatan.pk]),
+            reverse('kalender:notifikasi_list'),
+        ]
+        blocked_urls = [
+            reverse('kalender:kegiatan_create'),
+            reverse('kalender:kegiatan_update', args=[kegiatan.pk]),
+            reverse('kalender:kegiatan_delete', args=[kegiatan.pk]),
+        ]
+
+        for url in allowed_urls:
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+
+        for url in blocked_urls:
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertRedirects(response, reverse('dashboard:home'))
+
     def test_laboran_bisa_membuka_menu_inventaris(self):
         self.pengguna.role = 'laboran'
         self.pengguna.save()

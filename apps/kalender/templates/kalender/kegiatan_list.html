@@ -68,7 +68,7 @@
                 <i data-lucide="bell" class="h-4 w-4"></i>
                 <span>Lihat Notifikasi</span>
             </a>
-            {% if not request.current_pengguna or request.current_pengguna.role != 'mahasiswa' %}
+            {% if not request.current_pengguna or request.current_pengguna.role == 'admin' or request.current_pengguna.role == 'laboran' %}
             <a class="btn-primary bg-blue-700 hover:bg-blue-800 shadow-blue-900/15" href="{% url 'kalender:kegiatan_create' %}">
                 <i data-lucide="plus" class="h-4 w-4"></i>
                 <span>Tambah Kegiatan</span>
@@ -89,7 +89,7 @@
         </div>
 
         <aside class="space-y-6">
-            {% if not request.current_pengguna or request.current_pengguna.role != 'mahasiswa' %}
+            {% if not request.current_pengguna or request.current_pengguna.role == 'admin' or request.current_pengguna.role == 'laboran' %}
             <div class="surface-card p-6">
                 <div class="flex items-start gap-4">
                     <span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-50 text-orange-600">
