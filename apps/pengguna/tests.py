@@ -9,7 +9,9 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.asleb.models import Asleb
 from apps.kalender.models import KegiatanKalender
+from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb
 from .models import Fakultas, Pengguna, Prodi
 
 
@@ -150,6 +152,44 @@ class PenggunaViewTests(TestCase):
         self.assertContains(response, 'Ganti Password')
         self.assertNotContains(response, 'Konfirmasi Hapus Pengguna')
         self.assertNotContains(response, f'href="{reverse("pengguna:delete", args=[self.pengguna.pk])}"')
+
+    def test_detail_asisten_lab_menampilkan_status_junior_senior(self):
+        self.pengguna.role = 'asisten_lab'
+        self.pengguna.save(update_fields=['role'])
+        asleb = Asleb.objects.create(
+            nama=self.pengguna.nama_pengguna,
+            nim=self.pengguna.nim_nik,
+            no_hp=self.pengguna.no_hp,
+            email=self.pengguna.email,
+            program_studi='Informatika',
+            matkul='Pemrograman Web',
+            semester=5,
+            tanggal_bergabung=timezone.localdate(),
+        )
+
+        response = self.client.get(reverse('pengguna:detail', args=[self.pengguna.pk]))
+
+        self.assertContains(response, 'Status Asleb')
+        self.assertContains(response, 'Junior')
+        self.assertContains(response, '1 periode sebagai asleb.')
+
+        matkul = MataKuliahAsleb.objects.first()
+        for index in range(3):
+            PendaftaranAsleb.objects.create(
+                nama=f'Riwayat {index + 1}',
+                nim=asleb.nim,
+                no_hp='081234567890',
+                email=f'riwayat{index + 1}@std.trisakti.ac.id',
+                program_studi='Informatika',
+                semester=5,
+                matkul=matkul,
+                status='digenerate',
+            )
+
+        response = self.client.get(reverse('pengguna:detail', args=[self.pengguna.pk]))
+
+        self.assertContains(response, 'Senior')
+        self.assertContains(response, '3 periode sebagai asleb.')
 
     def test_update_profile_mengubah_data_pengguna(self):
         response = self.client.post(

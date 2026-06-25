@@ -12,6 +12,7 @@ from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, UpdateView, View
 
+from apps.asleb.models import Asleb
 from apps.core.views import PostOnlyDeleteMixin
 
 from .forms import (
@@ -137,6 +138,9 @@ class PenggunaDetailView(DetailView):
             instance=self.object,
             current_pengguna=getattr(self.request, 'current_pengguna', None),
         )
+        context['asleb_profile'] = None
+        if self.object.role == 'asisten_lab':
+            context['asleb_profile'] = Asleb.objects.filter(nim=self.object.nim_nik).first()
         return context
 
 
