@@ -11,19 +11,21 @@
             <p class="mt-2 text-sm text-slate-500">Detail jadwal praktikum.</p>
         </div>
         <div class="flex flex-wrap gap-3">
+            {% if can_manage_jadwal %}
             <a class="btn-primary bg-blue-700 hover:bg-blue-800 shadow-blue-900/15" href="{% url 'jadwal:jadwal_update' jadwal.pk %}">
                 <i data-lucide="pencil" class="h-4 w-4"></i><span>Edit</span>
             </a>
+            {% endif %}
             <a class="btn-secondary" href="{% url 'jadwal:jadwal_list' %}">
                 <i data-lucide="arrow-left" class="h-4 w-4"></i><span>Kembali</span>
             </a>
         </div>
     </div>
     <div class="surface-card grid gap-5 p-6 md:grid-cols-2 md:p-8">
-        <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Kelas</div><div class="mt-2 text-xl font-bold text-slate-900">{{ jadwal.kelas }}</div></div>
+        <div class="rounded-3xl bg-slate-50 p-5 md:col-span-2"><div class="text-sm font-semibold text-slate-500">Matkul</div><div class="mt-2 text-xl font-bold text-slate-900">{{ jadwal.mata_kuliah }}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Ruangan</div><div class="mt-2 text-xl font-bold text-slate-900">{{ jadwal.ruangan.nama }}</div></div>
-        <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Pengampu</div><div class="mt-2 text-xl font-bold text-slate-900">{{ jadwal.pengampu }}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Hari</div><div class="mt-2 text-xl font-bold text-slate-900">{{ jadwal.get_hari_display }}</div></div>
+        <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Status</div><div class="mt-2 text-xl font-bold text-slate-900">{{ jadwal.get_status_display }}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5 md:col-span-2"><div class="text-sm font-semibold text-slate-500">Waktu</div><div class="mt-2 text-xl font-bold text-slate-900">{{ jadwal.waktu_mulai|time:"H:i" }}{% if jadwal.waktu_selesai %} - {{ jadwal.waktu_selesai|time:"H:i" }}{% endif %}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5 md:col-span-2"><div class="text-sm font-semibold text-slate-500">Catatan</div><div class="mt-2 text-base leading-7 text-slate-700">{{ jadwal.catatan|default:"-" }}</div></div>
     </div>

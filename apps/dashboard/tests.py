@@ -1,3 +1,5 @@
+from datetime import time
+
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -10,6 +12,7 @@ from apps.peminjaman.models import PeminjamanAlat
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb
 from apps.pendaftaran_asleb.utils import get_public_registration_url
 from apps.pengguna.models import Pengguna
+from apps.ruangan.models import RuanganLab
 
 
 class DashboardViewTests(TestCase):
@@ -122,6 +125,94 @@ class DashboardViewTests(TestCase):
 
         self.assertRedirects(response, reverse('dashboard:home'))
         self.assertFalse(PeminjamanAlat.objects.filter(pk=peminjaman.pk).exists())
+
+    def test_dashboard_shows_pending_jadwal_praktikum(self):
+        ruangan = RuanganLab.objects.create(nama='Lab Dashboard', kode='LAB-DASH', kapasitas=24)
+        jadwal = JadwalPraktikum.objects.create(
+            mata_kuliah='Praktikum Mobile',
+            kelas='TI 5A',
+            ruangan=ruangan,
+            pengampu='Asleb Satu',
+            hari='senin',
+            waktu_mulai=time(9, 0),
+            waktu_selesai=time(10, 0),
+            status=JadwalPraktikum.STATUS_DIAJUKAN,
+        )
+
+        response = self.client.get(reverse('dashboard:home'))
+
+        self.assertContains(response, 'Pengajuan Jadwal Praktikum')
+        self.assertContains(response, 'Praktikum Mobile')
+        self.assertContains(response, reverse('dashboard:jadwal_accept', args=[jadwal.pk]))
+        self.assertContains(response, reverse('dashboard:jadwal_reject', args=[jadwal.pk]))
+
+    def test_accept_pending_jadwal_changes_status_to_diterima(self):
+        ruangan = RuanganLab.objects.create(nama='Lab Terima', kode='LAB-ACC', kapasitas=24)
+        jadwal = JadwalPraktikum.objects.create(
+            mata_kuliah='Praktikum AI',
+            kelas='TI 6A',
+            ruangan=ruangan,
+            pengampu='Asleb Dua',
+            hari='selasa',
+            waktu_mulai=time(10, 0),
+            waktu_selesai=time(11, 0),
+            status=JadwalPraktikum.STATUS_DIAJUKAN,
+        )
+
+        response = self.client.post(reverse('dashboard:jadwal_accept', args=[jadwal.pk]))
+        jadwal.refresh_from_db()
+
+        self.assertRedirects(response, reverse('dashboard:home'))
+        self.assertEqual(jadwal.status, JadwalPraktikum.STATUS_DITERIMA)
+
+    def test_accept_pending_jadwal_rejects_when_conflicting_with_accepted_jadwal(self):
+        ruangan = RuanganLab.objects.create(nama='Lab Konflik', kode='LAB-CONF', kapasitas=24)
+        JadwalPraktikum.objects.create(
+            mata_kuliah='Praktikum Diterima',
+            kelas='TI 4A',
+            ruangan=ruangan,
+            pengampu='Dosen Satu',
+            hari='rabu',
+            waktu_mulai=time(8, 0),
+            waktu_selesai=time(10, 0),
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+        jadwal = JadwalPraktikum.objects.create(
+            mata_kuliah='Praktikum Bentrok',
+            kelas='TI 4B',
+            ruangan=ruangan,
+            pengampu='Asleb Dua',
+            hari='rabu',
+            waktu_mulai=time(9, 0),
+            waktu_selesai=time(11, 0),
+            status=JadwalPraktikum.STATUS_DIAJUKAN,
+        )
+
+        response = self.client.post(reverse('dashboard:jadwal_accept', args=[jadwal.pk]), follow=True)
+        jadwal.refresh_from_db()
+
+        self.assertRedirects(response, reverse('dashboard:home'))
+        self.assertEqual(jadwal.status, JadwalPraktikum.STATUS_DIAJUKAN)
+        self.assertContains(response, 'Jadwal tidak bisa diterima karena ruangan sudah dipakai')
+
+    def test_reject_pending_jadwal_changes_status_to_ditolak(self):
+        ruangan = RuanganLab.objects.create(nama='Lab Tolak', kode='LAB-REJ', kapasitas=24)
+        jadwal = JadwalPraktikum.objects.create(
+            mata_kuliah='Praktikum Ditolak',
+            kelas='TI 7A',
+            ruangan=ruangan,
+            pengampu='Asleb Tiga',
+            hari='jumat',
+            waktu_mulai=time(13, 0),
+            waktu_selesai=time(14, 0),
+            status=JadwalPraktikum.STATUS_DIAJUKAN,
+        )
+
+        response = self.client.post(reverse('dashboard:jadwal_reject', args=[jadwal.pk]))
+        jadwal.refresh_from_db()
+
+        self.assertRedirects(response, reverse('dashboard:home'))
+        self.assertEqual(jadwal.status, JadwalPraktikum.STATUS_DITOLAK)
 
     def test_dashboard_shows_replacement_action_for_lost_or_broken_peminjaman(self):
         PeminjamanAlat.objects.create(

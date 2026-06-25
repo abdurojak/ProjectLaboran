@@ -4,5 +4,5 @@
 
 {% block content %}
 {% url 'jadwal:jadwal_list' as cancel_url %}
-{% include "components/confirmation.html" with eyebrow="Jadwal" title="Hapus Jadwal Praktikum" description="Konfirmasi penghapusan jadwal praktikum." message_prefix="Yakin ingin menghapus jadwal" target_label=jadwal.mata_kuliah second_prefix="untuk" second_label=jadwal.kelas cancel_url=cancel_url %}
+{% include "components/confirmation.html" with eyebrow="Jadwal" title="Hapus Jadwal Praktikum" description="Konfirmasi penghapusan jadwal praktikum." message_prefix="Yakin ingin menghapus jadwal" target_label=jadwal.mata_kuliah cancel_url=cancel_url %}
 {% endblock %}

@@ -9,6 +9,9 @@ from apps.ruangan.models import RuanganLab
 class JadwalPraktikum(models.Model):
     JAM_KERJA_MULAI = time(7, 30)
     JAM_KERJA_SELESAI = time(18, 0)
+    STATUS_DIAJUKAN = 'diajukan'
+    STATUS_DITERIMA = 'diterima'
+    STATUS_DITOLAK = 'ditolak'
     HARI_CHOICES = [
         ('senin', 'Senin'),
         ('selasa', 'Selasa'),
@@ -16,6 +19,11 @@ class JadwalPraktikum(models.Model):
         ('kamis', 'Kamis'),
         ('jumat', 'Jumat'),
         ('sabtu', 'Sabtu'),
+    ]
+    STATUS_CHOICES = [
+        (STATUS_DIAJUKAN, 'Diajukan'),
+        (STATUS_DITERIMA, 'Diterima'),
+        (STATUS_DITOLAK, 'Ditolak'),
     ]
 
     mata_kuliah = models.CharField('Matkul', max_length=200)
@@ -25,6 +33,7 @@ class JadwalPraktikum(models.Model):
     hari = models.CharField(max_length=10, choices=HARI_CHOICES, default='senin')
     waktu_mulai = models.TimeField('Waktu Mulai')
     waktu_selesai = models.TimeField('Waktu Selesai', blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_DIAJUKAN)
     catatan = models.TextField(blank=True)
     dibuat_pada = models.DateTimeField(auto_now_add=True)
     diperbarui_pada = models.DateTimeField(auto_now=True)
@@ -54,12 +63,16 @@ class JadwalPraktikum(models.Model):
         if errors:
             raise ValidationError(errors)
 
+        if self.status != self.STATUS_DITERIMA:
+            return
+
         if not self.hari or not self.ruangan_id or not self.waktu_mulai:
             return
 
         jadwal_di_ruangan = JadwalPraktikum.objects.filter(
             hari=self.hari,
             ruangan=self.ruangan,
+            status=self.STATUS_DITERIMA,
         )
 
         if self.pk:

@@ -1,4 +1,5 @@
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Sum
 from django.shortcuts import get_object_or_404, redirect
@@ -100,7 +101,10 @@ class DashboardView(TemplateView):
             hari_ini = self.WEEKDAY_TO_HARI.get(context['today'].weekday())
             context['peminjaman_saya'] = peminjaman_saya[:6]
             context['riwayat_honor_saya'] = riwayat_honor_saya
-            context['jadwal_hari_ini'] = jadwal_qs.filter(hari=hari_ini)[:6] if hari_ini else jadwal_qs.none()
+            context['jadwal_hari_ini'] = jadwal_qs.filter(
+                hari=hari_ini,
+                status=JadwalPraktikum.STATUS_DITERIMA,
+            )[:6] if hari_ini else jadwal_qs.none()
             context['pendaftaran_asleb_dibuka'] = (is_mahasiswa or is_asisten_lab) and pengaturan_pendaftaran.dibuka
             context['kegiatan_kalender_mahasiswa'] = kegiatan_qs.filter(tanggal__gte=context['today'])[:6]
             context['public_registration_url'] = get_public_registration_url()
@@ -128,7 +132,7 @@ class DashboardView(TemplateView):
                 },
                 {
                     'label': 'Jadwal Hari Ini',
-                    'value': jadwal_qs.filter(hari=hari_ini).count() if hari_ini else 0,
+                    'value': jadwal_qs.filter(hari=hari_ini, status=JadwalPraktikum.STATUS_DITERIMA).count() if hari_ini else 0,
                     'note': 'Jadwal praktikum hari ini',
                     'icon': 'calendar-days',
                     'tone': 'green',
@@ -213,6 +217,9 @@ class DashboardView(TemplateView):
         context['peminjaman_diajukan'] = peminjaman_qs.filter(status='diajukan')[:6]
         context['peminjaman_dipinjam'] = peminjaman_qs.filter(status='dipinjam')[:6]
         context['peminjaman_perlu_diganti'] = peminjaman_qs.filter(status__in=['hilang', 'rusak'])[:6]
+        context['jadwal_diajukan'] = JadwalPraktikum.objects.select_related('ruangan').filter(
+            status=JadwalPraktikum.STATUS_DIAJUKAN,
+        ).order_by('hari', 'waktu_mulai')[:8]
         context['today'] = timezone.localdate()
         hari_ini = self.WEEKDAY_TO_HARI.get(context['today'].weekday())
         context['stats_cards'] = self._decorate_items([
@@ -232,7 +239,7 @@ class DashboardView(TemplateView):
             },
             {
                 'label': 'Jadwal Hari Ini',
-                'value': jadwal_qs.filter(hari=hari_ini).count() if hari_ini else 0,
+                'value': jadwal_qs.filter(hari=hari_ini, status=JadwalPraktikum.STATUS_DITERIMA).count() if hari_ini else 0,
                 'note': 'Jadwal praktikum yang terdaftar hari ini',
                 'icon': 'calendar-days',
                 'tone': 'blue',
@@ -441,6 +448,47 @@ def accept_peminjaman(request, pk):
 def reject_peminjaman(request, pk):
     peminjaman = get_object_or_404(PeminjamanAlat, pk=pk, status='diajukan')
     peminjaman.delete()
+    return redirect('dashboard:home')
+
+
+def _is_admin_or_laboran(request):
+    pengguna = getattr(request, 'current_pengguna', None)
+    return bool(pengguna and pengguna.role in ['admin', 'laboran'])
+
+
+@require_POST
+def accept_jadwal(request, pk):
+    if not _is_admin_or_laboran(request):
+        messages.warning(request, 'Anda tidak memiliki akses untuk memproses pengajuan jadwal.')
+        return redirect('dashboard:home')
+
+    jadwal = get_object_or_404(JadwalPraktikum.objects.select_related('ruangan'), pk=pk, status=JadwalPraktikum.STATUS_DIAJUKAN)
+    jadwal.status = JadwalPraktikum.STATUS_DITERIMA
+
+    try:
+        jadwal.full_clean()
+    except ValidationError:
+        messages.error(
+            request,
+            'Jadwal tidak bisa diterima karena ruangan sudah dipakai pada hari dan rentang waktu tersebut.',
+        )
+        return redirect('dashboard:home')
+
+    jadwal.save(update_fields=['status', 'diperbarui_pada'])
+    messages.success(request, 'Pengajuan jadwal praktikum diterima.')
+    return redirect('dashboard:home')
+
+
+@require_POST
+def reject_jadwal(request, pk):
+    if not _is_admin_or_laboran(request):
+        messages.warning(request, 'Anda tidak memiliki akses untuk memproses pengajuan jadwal.')
+        return redirect('dashboard:home')
+
+    jadwal = get_object_or_404(JadwalPraktikum, pk=pk, status=JadwalPraktikum.STATUS_DIAJUKAN)
+    jadwal.status = JadwalPraktikum.STATUS_DITOLAK
+    jadwal.save(update_fields=['status', 'diperbarui_pada'])
+    messages.success(request, 'Pengajuan jadwal praktikum ditolak.')
     return redirect('dashboard:home')
 
 

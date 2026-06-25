@@ -215,7 +215,6 @@
                     <thead class="bg-slate-50">
                         <tr>
                             <th>Mata Praktikum</th>
-                            <th>Kelas</th>
                             <th>Ruangan</th>
                             <th>Waktu</th>
                         </tr>
@@ -224,13 +223,12 @@
                         {% for jadwal in jadwal_hari_ini %}
                         <tr>
                             <td class="font-semibold text-slate-900">{{ jadwal.mata_kuliah }}</td>
-                            <td>{{ jadwal.kelas }}</td>
                             <td>{{ jadwal.ruangan.nama }}</td>
                             <td>{{ jadwal.waktu_mulai|time:"H:i" }}{% if jadwal.waktu_selesai %} - {{ jadwal.waktu_selesai|time:"H:i" }}{% endif %}</td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="4" class="py-10 text-center text-slate-500">Tidak ada jadwal praktikum hari ini.</td>
+                            <td colspan="3" class="py-10 text-center text-slate-500">Tidak ada jadwal praktikum hari ini.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -238,6 +236,56 @@
             </div>
         </section>
         {% else %}
+        <section class="surface-card min-w-0 overflow-hidden p-6">
+            <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h3 class="text-2xl font-bold tracking-tight text-slate-900">Pengajuan Jadwal Praktikum</h3>
+                    <p class="mt-1 text-sm text-slate-500">Jadwal dari aslab yang menunggu keputusan admin laboratorium.</p>
+                </div>
+                <a href="{% url 'jadwal:jadwal_list' %}" class="btn-secondary">Lihat jadwal</a>
+            </div>
+
+            {% if jadwal_diajukan %}
+            <div class="-mx-2 max-w-full overflow-x-auto px-2 pb-2">
+                <div class="flex w-max max-w-none flex-nowrap gap-4">
+                    {% for jadwal in jadwal_diajukan %}
+                    <article class="min-w-[300px] max-w-[300px] flex-none rounded-2xl border border-amber-100 bg-white p-4">
+                        <div class="flex items-start gap-3">
+                            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-700">
+                                <i data-lucide="calendar-plus" class="h-5 w-5"></i>
+                            </span>
+                            <div class="min-w-0">
+                                <a class="block truncate font-bold text-brand-700 hover:text-brand-800" href="{% url 'jadwal:jadwal_detail' jadwal.pk %}">{{ jadwal.mata_kuliah }}</a>
+                                <p class="mt-1 truncate text-sm font-semibold text-slate-700">{{ jadwal.ruangan.nama }}</p>
+                                <p class="mt-1 text-xs text-slate-500">{{ jadwal.get_hari_display }}, {{ jadwal.waktu_mulai|time:"H:i" }}{% if jadwal.waktu_selesai %} - {{ jadwal.waktu_selesai|time:"H:i" }}{% endif %}</p>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 grid grid-cols-2 gap-2">
+                            <form method="post" action="{% url 'dashboard:jadwal_accept' jadwal.pk %}" data-confirm-message="Terima pengajuan jadwal ini?">
+                                {% csrf_token %}
+                                <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700">
+                                    <i data-lucide="check" class="h-4 w-4"></i>
+                                    Terima
+                                </button>
+                            </form>
+                            <form method="post" action="{% url 'dashboard:jadwal_reject' jadwal.pk %}" data-confirm-message="Tolak pengajuan jadwal ini?">
+                                {% csrf_token %}
+                                <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50">
+                                    <i data-lucide="x" class="h-4 w-4"></i>
+                                    Tolak
+                                </button>
+                            </form>
+                        </div>
+                    </article>
+                    {% endfor %}
+                </div>
+            </div>
+            {% else %}
+            <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">Belum ada pengajuan jadwal praktikum.</div>
+            {% endif %}
+        </section>
+
         <section class="surface-card min-w-0 overflow-hidden p-6">
             <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
                 <div>
