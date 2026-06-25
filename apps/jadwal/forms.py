@@ -9,9 +9,9 @@ class JadwalPraktikumForm(forms.ModelForm):
         fields = [
             'mata_kuliah',
             'kelas',
-            'letak_ruangan',
+            'ruangan',
             'pengampu',
-            'tanggal',
+            'hari',
             'waktu_mulai',
             'waktu_selesai',
             'catatan',
@@ -19,11 +19,9 @@ class JadwalPraktikumForm(forms.ModelForm):
         widgets = {
             'mata_kuliah': forms.TextInput(attrs={'placeholder': 'Contoh: Pemrograman Web'}),
             'kelas': forms.TextInput(attrs={'placeholder': 'Contoh: TI 4A'}),
-            'letak_ruangan': forms.TextInput(attrs={'placeholder': 'Contoh: Lab Pemrograman'}),
             'pengampu': forms.TextInput(attrs={'placeholder': 'Nama dosen/asleb pengampu'}),
-            'tanggal': forms.DateInput(attrs={'type': 'date'}),
-            'waktu_mulai': forms.TimeInput(attrs={'type': 'time'}),
-            'waktu_selesai': forms.TimeInput(attrs={'type': 'time'}),
+            'waktu_mulai': forms.TimeInput(attrs={'type': 'time', 'step': 1800, 'min': '07:30', 'max': '18:00'}),
+            'waktu_selesai': forms.TimeInput(attrs={'type': 'time', 'step': 1800, 'min': '07:30', 'max': '18:00'}),
             'catatan': forms.Textarea(attrs={'rows': 4}),
         }
 
