@@ -48,6 +48,8 @@ class AslebViewTests(TestCase):
         self.assertContains(response, 'Data Asleb')
         self.assertContains(response, 'Siti Nurhaliza')
         self.assertContains(response, 'Pemrograman Web')
+        active_links = [link['title'] for link in response.context['sidebar_links'] if link['active']]
+        self.assertEqual(active_links, ['Data Asleb'])
 
     def test_asleb_search_filters_data(self):
         response = self.client.get(reverse('asleb:asleb_list'), {'q': '2301001'})
@@ -120,6 +122,8 @@ class AslebViewTests(TestCase):
         self.assertContains(response, 'Siti Nurhaliza')
         self.assertContains(response, 'Rp 147.000')
         self.assertContains(response, 'BCA 123456789')
+        active_links = [link['title'] for link in response.context['sidebar_links'] if link['active']]
+        self.assertEqual(active_links, ['Rekap Honorarium Asleb'])
 
     def test_konfirmasi_transfer_honor_menyimpan_bukti_dan_status_dibayar(self):
         honor = HonorAsleb.objects.create(

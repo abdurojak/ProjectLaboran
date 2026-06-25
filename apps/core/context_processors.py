@@ -36,10 +36,28 @@ SIDEBAR_LINKS = [
     {'title': 'Barang Tertinggal', 'icon': 'briefcase', 'url': 'barang_tertinggal:list', 'namespace': 'barang_tertinggal'},
     {'title': 'Peminjaman Alat', 'icon': 'arrow-left-right', 'url': 'peminjaman:peminjaman_list', 'namespace': 'peminjaman'},
     {'title': 'Jadwal Praktikum', 'icon': 'calendar-clock', 'url': 'jadwal:jadwal_list', 'namespace': 'jadwal'},
-    {'title': 'Absensi Asleb', 'icon': 'clipboard-check', 'url': 'asleb:absensi_list', 'namespace': 'asleb_absensi'},
-    {'title': 'Data Asleb', 'icon': 'users', 'url': 'asleb:asleb_list', 'namespace': 'asleb'},
+    {
+        'title': 'Absensi Asleb',
+        'icon': 'clipboard-check',
+        'url': 'asleb:absensi_list',
+        'namespace': 'asleb_absensi',
+        'url_names': {'absensi_list', 'absensi_create'},
+    },
+    {
+        'title': 'Data Asleb',
+        'icon': 'users',
+        'url': 'asleb:asleb_list',
+        'namespace': 'asleb',
+        'url_names': {'asleb_list', 'asleb_create', 'asleb_detail', 'asleb_update', 'asleb_delete'},
+    },
     {'title': 'Pendaftaran Asleb', 'icon': 'user-round-plus', 'url': 'pendaftaran_asleb:pendaftaran_list', 'namespace': 'pendaftaran_asleb'},
-    {'title': 'Rekap Honorarium Asleb', 'icon': 'file-chart-column', 'url': 'asleb:honor_list', 'namespace': 'asleb'},
+    {
+        'title': 'Rekap Honorarium Asleb',
+        'icon': 'file-chart-column',
+        'url': 'asleb:honor_list',
+        'namespace': 'asleb',
+        'url_names': {'honor_list', 'honor_create', 'honor_confirm_transfer', 'honor_update', 'honor_delete'},
+    },
     {'title': 'Pengguna', 'icon': 'user-round', 'url': 'pengguna:list', 'namespace': 'pengguna'},
     {'title': 'Ruangan', 'icon': 'door-open', 'url': 'ruangan:ruangan_list', 'namespace': 'ruangan'},
     {'title': 'Pengaturan', 'icon': 'settings', 'url': '', 'namespace': ''},
@@ -52,6 +70,7 @@ ASISTEN_LAB_HIDDEN_NAMESPACES = {'inventaris', 'barang_tertinggal', 'asleb', 'pe
 
 def dashboard_sidebar(request):
     current_namespace = getattr(request.resolver_match, 'namespace', '')
+    current_url_name = getattr(request.resolver_match, 'url_name', '')
     links = []
 
     for link in SIDEBAR_LINKS:
@@ -64,7 +83,11 @@ def dashboard_sidebar(request):
                 continue
 
         item = link.copy()
-        item['active'] = bool(item['namespace'] and item['namespace'] == current_namespace)
+        url_names = item.get('url_names')
+        if url_names:
+            item['active'] = current_namespace == item['namespace'] and current_url_name in url_names
+        else:
+            item['active'] = bool(item['namespace'] and item['namespace'] == current_namespace)
         item.update(TONES['teal'] if item['active'] else TONES['gray'])
         links.append(item)
 
