@@ -16,6 +16,19 @@
             linear-gradient(135deg, rgba(37, 99, 235, 0.08), transparent 34%),
             linear-gradient(225deg, rgba(15, 118, 110, 0.08), transparent 30%),
             var(--surface-bg);
+        min-width: 0;
+        overflow: hidden;
+    }
+    .calendar-scroll {
+        max-width: 100%;
+        min-width: 0;
+        overflow-x: auto;
+        overflow-y: hidden;
+        overscroll-behavior-x: contain;
+        padding-bottom: 0.25rem;
+    }
+    .calendar-scroll .fc {
+        min-width: 680px;
     }
     .fc .fc-toolbar.fc-header-toolbar {
         align-items: center;
@@ -111,7 +124,17 @@
         height: 0.65rem;
         border-radius: 999px;
     }
+    .calendar-side-card {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
     @media (max-width: 767px) {
+        .calendar-page {
+            overflow: hidden;
+        }
+        .calendar-scroll .fc {
+            min-width: 600px;
+        }
         .fc .fc-toolbar.fc-header-toolbar {
             display: grid;
             grid-template-columns: 1fr;
@@ -136,34 +159,50 @@
             font-size: 0.7rem;
             padding: 0.2rem 0.3rem;
         }
+        .calendar-legend-item {
+            width: 100%;
+            justify-content: flex-start;
+        }
+    }
+    @media (max-width: 480px) {
+        .calendar-scroll .fc {
+            min-width: 540px;
+        }
+        .fc .fc-toolbar-chunk {
+            flex-wrap: wrap;
+        }
+        .fc .fc-button {
+            border-radius: 0.75rem;
+            padding-inline: 0.55rem;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<section class="calendar-page space-y-6">
+<section class="calendar-page min-w-0 max-w-full space-y-6 overflow-hidden">
     <div class="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div class="min-w-0">
             <p class="text-sm font-bold uppercase tracking-[0.2em] text-blue-700">Kalender</p>
             <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Kalender Kegiatan</h2>
-            <p class="mt-2 text-sm text-slate-500">Gunakan tampilan kalender untuk menandai kegiatan mendatang. Hari perayaan nasional akan otomatis muncul di kalender.</p>
+            <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-500">Gunakan tampilan kalender untuk menandai kegiatan mendatang. Hari perayaan nasional akan otomatis muncul di kalender.</p>
         </div>
-        <div class="flex flex-wrap gap-3">
-            <a class="btn-secondary" href="{% url 'kalender:notifikasi_list' %}">
+        <div class="flex w-full flex-wrap gap-3 sm:w-auto sm:justify-end">
+            <a class="btn-secondary w-full justify-center sm:w-auto" href="{% url 'kalender:notifikasi_list' %}">
                 <i data-lucide="bell" class="h-4 w-4"></i>
                 <span>Lihat Notifikasi</span>
             </a>
-            <a class="btn-primary bg-blue-700 shadow-blue-900/15" href="{% url 'kalender:kegiatan_create' %}">
+            <a class="btn-primary w-full justify-center bg-blue-700 shadow-blue-900/15 sm:w-auto" href="{% url 'kalender:kegiatan_create' %}">
                 <i data-lucide="plus" class="h-4 w-4"></i>
                 <span>Tambah Kegiatan</span>
             </a>
         </div>
     </div>
 
-    <div class="grid gap-6 xl:grid-cols-[minmax(0,1.65fr)_360px]">
-        <div class="surface-card calendar-shell p-5 md:p-6">
+    <div class="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,360px)]">
+        <div class="surface-card calendar-shell p-4 md:p-6">
             <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
-                <div>
+                <div class="min-w-0">
                     <h3 class="text-xl font-bold text-slate-900">Tampilan Kalender</h3>
                     <p class="mt-1 text-sm text-slate-500">Klik kegiatan pada kalender untuk membuka detailnya. Semua penanda warna diringkas di bawah agar mudah dipindai.</p>
                     <div class="mt-4 flex flex-wrap gap-2">
@@ -174,12 +213,14 @@
                     </div>
                 </div>
             </div>
-            <div id="fullcalendar" class="min-h-[620px] md:min-h-[720px]"></div>
+            <div class="calendar-scroll">
+                <div id="fullcalendar" class="min-h-[560px] md:min-h-[720px]"></div>
+            </div>
         </div>
 
-        <aside class="space-y-6">
+        <aside class="min-w-0 space-y-6">
             {% if request.current_pengguna and request.current_pengguna.role == 'asisten_lab' %}
-            <div class="surface-card p-6">
+            <div class="calendar-side-card surface-card p-5 md:p-6">
                 <div class="flex items-start gap-4">
                     <span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
                         <i data-lucide="calendar-clock" class="h-6 w-6"></i>
@@ -206,7 +247,7 @@
             {% endif %}
 
             {% if not request.current_pengguna or request.current_pengguna.role == 'admin' or request.current_pengguna.role == 'laboran' %}
-            <div class="surface-card p-6">
+            <div class="calendar-side-card surface-card p-5 md:p-6">
                 <div class="flex items-start gap-4">
                     <span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-50 text-orange-600">
                         <i data-lucide="calendar-heart" class="h-6 w-6"></i>
@@ -218,7 +259,7 @@
                 </div>
             </div>
 
-            <div class="surface-card p-6">
+            <div class="calendar-side-card surface-card p-5 md:p-6">
                 <div class="flex items-start gap-4">
                     <span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
                         <i data-lucide="school" class="h-6 w-6"></i>
@@ -230,7 +271,7 @@
                 </div>
             </div>
 
-            <div class="surface-card p-6">
+            <div class="calendar-side-card surface-card p-5 md:p-6">
                 <div class="flex items-start gap-4">
                     <span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
                         <i data-lucide="bell-ring" class="h-6 w-6"></i>
@@ -244,7 +285,7 @@
             {% endif %}
 
             {% if request.current_pengguna and request.current_pengguna.role == 'mahasiswa' %}
-            <div class="surface-card p-6">
+            <div class="calendar-side-card surface-card p-5 md:p-6">
                 <div class="flex items-start gap-4">
                     <span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
                         <i data-lucide="lock-keyhole" class="h-6 w-6"></i>
@@ -257,7 +298,7 @@
             </div>
             {% endif %}
 
-            <div class="surface-card p-6">
+            <div class="calendar-side-card surface-card p-5 md:p-6">
                 <div class="mb-4 flex items-center justify-between gap-3">
                     <div>
                         <h3 class="text-xl font-bold text-slate-900">Agenda Terdekat</h3>
@@ -266,7 +307,7 @@
                 </div>
                 <div class="space-y-4">
                     {% for kegiatan in upcoming_kegiatan %}
-                    <a href="{% url 'kalender:kegiatan_detail' kegiatan.pk %}" class="block rounded-[24px] border border-slate-200 bg-slate-50/80 p-4">
+                    <a href="{% url 'kalender:kegiatan_detail' kegiatan.pk %}" class="block min-w-0 rounded-[24px] border border-slate-200 bg-slate-50/80 p-4">
                         <div class="flex items-start justify-between gap-3">
                             <div>
                                 <div class="font-bold text-slate-900">{{ kegiatan.judul }}</div>

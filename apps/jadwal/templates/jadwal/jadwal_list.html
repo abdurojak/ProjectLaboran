@@ -9,6 +9,7 @@
         grid-template-columns: 144px minmax(0, 1fr);
         max-width: 100%;
         overflow: hidden;
+        border-color: var(--border-color);
     }
 
     .jadwal-time-panel {
@@ -32,6 +33,80 @@
         overflow-x: auto;
         overflow-y: hidden;
         overscroll-behavior-x: contain;
+    }
+
+    .jadwal-time-panel {
+        background: rgba(240, 253, 250, 0.78);
+        border-color: var(--border-color);
+    }
+
+    .jadwal-table-head {
+        background: rgba(204, 251, 241, 0.62);
+        border-color: rgba(20, 184, 166, 0.22);
+        color: #0f766e;
+    }
+
+    .jadwal-table-head > *,
+    .jadwal-time-cell > * {
+        border-color: inherit;
+    }
+
+    .jadwal-time-cell,
+    .jadwal-grid-cell {
+        background: rgba(255, 255, 255, 0.78);
+        border-color: var(--border-color);
+    }
+
+    .jadwal-time-cell {
+        color: var(--text-soft);
+    }
+
+    .jadwal-grid-body {
+        background: rgba(255, 255, 255, 0.76);
+    }
+
+    .jadwal-practice-block {
+        background: rgba(204, 251, 241, 0.92);
+        border-color: rgba(13, 148, 136, 0.34);
+        color: #0f172a;
+    }
+
+    .jadwal-practice-block a {
+        color: inherit;
+    }
+
+    .jadwal-practice-block a:hover {
+        color: #0f766e;
+    }
+
+    html[data-theme="dark"] .jadwal-time-panel {
+        background: rgba(15, 23, 42, 0.74);
+    }
+
+    html[data-theme="dark"] .jadwal-table-head {
+        background: rgba(20, 184, 166, 0.14);
+        border-color: rgba(45, 212, 191, 0.24);
+        color: #99f6e4;
+    }
+
+    html[data-theme="dark"] .jadwal-time-cell,
+    html[data-theme="dark"] .jadwal-grid-cell {
+        background: rgba(15, 23, 42, 0.58);
+        border-color: rgba(148, 163, 184, 0.20);
+    }
+
+    html[data-theme="dark"] .jadwal-grid-body {
+        background: rgba(2, 6, 23, 0.30);
+    }
+
+    html[data-theme="dark"] .jadwal-practice-block {
+        background: rgba(20, 184, 166, 0.24);
+        border-color: rgba(94, 234, 212, 0.38);
+        color: #f8fafc;
+    }
+
+    html[data-theme="dark"] .jadwal-practice-block a:hover {
+        color: #5eead4;
     }
 
     @media (min-width: 768px) {
@@ -82,15 +157,15 @@
         </div>
 
         <div class="jadwal-board">
-            <div class="jadwal-time-panel shrink-0 border-r border-slate-200 bg-rose-50">
-                <div class="grid h-14 grid-cols-2 border-b border-rose-200 bg-rose-100 text-xs font-bold text-slate-600 md:text-sm">
-                    <div class="flex items-center justify-center border-r border-rose-200 px-2">Dari</div>
+            <div class="jadwal-time-panel shrink-0 border-r">
+                <div class="jadwal-table-head grid h-14 grid-cols-2 border-b text-xs font-bold md:text-sm">
+                    <div class="flex items-center justify-center border-r px-2">Dari</div>
                     <div class="flex items-center justify-center px-2">Sampai</div>
                 </div>
                 <div class="jadwal-slot-grid grid">
                     {% for slot in time_slots %}
-                    <div class="grid grid-cols-2 border-b border-slate-200 text-xs font-semibold text-slate-700 md:text-sm">
-                        <div class="flex items-center justify-center border-r border-slate-200 px-2">{{ slot.mulai }}</div>
+                    <div class="jadwal-time-cell grid grid-cols-2 border-b text-xs font-semibold md:text-sm">
+                        <div class="flex items-center justify-center border-r px-2">{{ slot.mulai }}</div>
                         <div class="flex items-center justify-center px-2">{{ slot.selesai }}</div>
                     </div>
                     {% endfor %}
@@ -100,29 +175,29 @@
             <div class="jadwal-lab-scroll">
                 <div class="jadwal-room-track grid">
                     {% for ruangan in ruangan_list %}
-                    <div class="flex h-14 items-center justify-center border-b border-r border-rose-200 bg-rose-100 px-3 text-center text-xs font-bold text-slate-700 md:text-sm">
+                    <div class="jadwal-table-head flex h-14 items-center justify-center border-b border-r px-3 text-center text-xs font-bold md:text-sm">
                         {{ ruangan.nama }}{% if ruangan.kapasitas %} ({{ ruangan.kapasitas }}){% endif %}
                     </div>
                     {% empty %}
-                    <div class="flex h-14 items-center justify-center border-b border-rose-200 bg-rose-100 px-3 text-center text-xs font-bold text-slate-500 md:text-sm">
+                    <div class="jadwal-table-head flex h-14 items-center justify-center border-b px-3 text-center text-xs font-bold md:text-sm">
                         Belum ada ruang lab aktif
                     </div>
                     {% endfor %}
                 </div>
 
-                <div class="jadwal-room-track jadwal-slot-grid relative grid bg-white">
+                <div class="jadwal-room-track jadwal-slot-grid jadwal-grid-body relative grid">
                     {% for slot in time_slots %}
                         {% for ruangan in ruangan_list %}
-                        <div class="border-b border-r border-slate-200 bg-white"></div>
+                        <div class="jadwal-grid-cell border-b border-r"></div>
                         {% empty %}
-                        <div class="border-b border-slate-200 bg-white"></div>
+                        <div class="jadwal-grid-cell border-b"></div>
                         {% endfor %}
                     {% endfor %}
 
                     {% for block in jadwal_blocks %}
                     <div class="z-10" style="grid-column: {{ block.grid_column }}; grid-row: {{ block.grid_row }} / span {{ block.span }};">
-                        <div class="flex h-full min-h-20 flex-col items-center justify-center border border-blue-200 bg-blue-100 px-3 py-4 text-center font-bold text-slate-950">
-                            <a href="{% url 'jadwal:jadwal_detail' block.jadwal.pk %}" class="transition hover:text-blue-800">
+                        <div class="jadwal-practice-block flex h-full min-h-20 flex-col items-center justify-center border px-3 py-4 text-center font-bold">
+                            <a href="{% url 'jadwal:jadwal_detail' block.jadwal.pk %}" class="transition">
                                 <span>{{ block.jadwal.mata_kuliah }}</span>
                             </a>
                             {% if block.can_manage %}
