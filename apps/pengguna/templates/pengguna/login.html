@@ -1,13 +1,19 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}Login{% endblock %}
 
 {% block content %}
 <section class="mx-auto max-w-xl space-y-6">
-    <div>
-        <p class="text-sm font-bold uppercase tracking-[0.2em] text-brand-700">Autentikasi</p>
-        <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Login</h2>
-        <p class="mt-2 text-sm text-slate-500">Masuk menggunakan NIM/NIK dan password pengguna.</p>
+    <div class="flex items-center gap-4 sm:gap-5">
+        <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-brand-100 bg-white/90 p-2 shadow-soft sm:h-16 sm:w-16">
+            <img src="{% static 'core/img/labhub-logo.png' %}" alt="LabHub" class="h-full w-full object-contain">
+        </div>
+        <div class="min-w-0">
+            <p class="text-xs font-bold uppercase tracking-[0.16em] text-brand-700 sm:text-sm sm:tracking-[0.2em]">Autentikasi</p>
+            <h2 class="mt-1 text-2xl font-black tracking-tight text-slate-900 sm:mt-2 sm:text-3xl">Login</h2>
+            <p class="mt-2 text-sm text-slate-500">Masuk menggunakan NIM/NIK dan password pengguna.</p>
+        </div>
     </div>
 
     <form method="post" class="surface-card space-y-5 p-6 md:p-8">

@@ -2,15 +2,69 @@
 
 {% block title %}Rekap Honorarium Asleb{% endblock %}
 
+{% block extra_head %}
+<style>
+    .honor-page {
+        --honor-main: #6d28d9;
+        --honor-soft: rgba(109, 40, 217, 0.10);
+    }
+    .honor-stat {
+        position: relative;
+        overflow: hidden;
+    }
+    .honor-stat::after {
+        content: "";
+        position: absolute;
+        right: -2rem;
+        bottom: -3rem;
+        width: 8rem;
+        height: 8rem;
+        border-radius: 999px;
+        background: var(--honor-soft);
+    }
+    .honor-stat-icon {
+        display: inline-flex;
+        width: 2.75rem;
+        height: 2.75rem;
+        align-items: center;
+        justify-content: center;
+        border-radius: 1rem;
+        background: var(--honor-soft);
+        color: var(--honor-main);
+    }
+    .honor-transfer-card {
+        width: 100%;
+    }
+    @media (max-width: 767px) {
+        .honor-page-actions,
+        .honor-page-actions > *,
+        .honor-page-actions form,
+        .honor-page-actions a,
+        .honor-page-actions button,
+        .honor-filter-actions,
+        .honor-filter-actions a,
+        .honor-filter-actions button {
+            width: 100%;
+        }
+        .honor-page-actions a,
+        .honor-page-actions button,
+        .honor-filter-actions a,
+        .honor-filter-actions button {
+            justify-content: center;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<section class="space-y-6">
+<section class="honor-page space-y-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div class="max-w-3xl">
             <p class="text-sm font-bold uppercase tracking-[0.2em] text-violet-700">Honorarium</p>
-            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Rekap Honorarium Asleb</h2>
+            <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">Rekap Honorarium Asleb</h2>
             <p class="mt-2 text-sm text-slate-500">{{ formula_note }}</p>
         </div>
-        <div class="flex flex-wrap gap-3">
+        <div class="honor-page-actions flex w-full flex-wrap gap-3 lg:w-auto lg:justify-end">
             <a class="btn-secondary" href="{% url 'asleb:surat_honor_list' %}">
                 <i data-lucide="archive" class="h-4 w-4"></i>
                 <span>Arsip Surat</span>
@@ -29,33 +83,55 @@
                 </button>
             </form>
             {% endif %}
+            {% if is_admin %}
             <a class="btn-primary bg-violet-700 hover:bg-violet-800 shadow-violet-900/20" href="{% url 'asleb:honor_create' %}">
                 <i data-lucide="plus" class="h-4 w-4"></i>
                 <span>Tambah Rekap</span>
             </a>
+            {% endif %}
         </div>
     </div>
 
-    <div class="grid gap-4 md:grid-cols-4">
-        <article class="surface-card p-5">
-            <div class="text-sm font-semibold text-slate-500">Total Honor Terfilter</div>
-            <div class="mt-2 text-3xl font-black tracking-tight text-violet-700">{{ total_honor }}</div>
+    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <article class="surface-card honor-stat p-5">
+            <div class="relative z-10 flex items-start justify-between gap-4">
+                <div>
+                    <div class="text-sm font-semibold text-slate-500">Total Honor Terfilter</div>
+                    <div class="mt-2 text-2xl font-black tracking-tight text-violet-700 sm:text-3xl">{{ total_honor }}</div>
+                </div>
+                <span class="honor-stat-icon"><i data-lucide="wallet-cards" class="h-5 w-5"></i></span>
+            </div>
         </article>
-        <article class="surface-card p-5">
-            <div class="text-sm font-semibold text-slate-500">Laboran TF Aktif</div>
-            <div class="mt-2 text-3xl font-black tracking-tight text-slate-900">{{ laboran_count }}</div>
+        <article class="surface-card honor-stat p-5">
+            <div class="relative z-10 flex items-start justify-between gap-4">
+                <div>
+                    <div class="text-sm font-semibold text-slate-500">Laboran TF Aktif</div>
+                    <div class="mt-2 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">{{ laboran_count }}</div>
+                </div>
+                <span class="honor-stat-icon"><i data-lucide="users-round" class="h-5 w-5"></i></span>
+            </div>
         </article>
-        <article class="surface-card p-5">
-            <div class="text-sm font-semibold text-slate-500">Honor Belum Dibagi</div>
-            <div class="mt-2 text-3xl font-black tracking-tight text-amber-600">{{ unassigned_honor_count }}</div>
+        <article class="surface-card honor-stat p-5">
+            <div class="relative z-10 flex items-start justify-between gap-4">
+                <div>
+                    <div class="text-sm font-semibold text-slate-500">Honor Belum Dibagi</div>
+                    <div class="mt-2 text-2xl font-black tracking-tight text-amber-600 sm:text-3xl">{{ unassigned_honor_count }}</div>
+                </div>
+                <span class="honor-stat-icon"><i data-lucide="shuffle" class="h-5 w-5"></i></span>
+            </div>
         </article>
-        <article class="surface-card p-5">
-            <div class="text-sm font-semibold text-slate-500">Tarif Junior</div>
-            <div class="mt-2 text-3xl font-black tracking-tight text-slate-900">Rp 7.000</div>
+        <article class="surface-card honor-stat p-5">
+            <div class="relative z-10 flex items-start justify-between gap-4">
+                <div>
+                    <div class="text-sm font-semibold text-slate-500">Tarif Junior</div>
+                    <div class="mt-2 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">Rp 7.000</div>
+                </div>
+                <span class="honor-stat-icon"><i data-lucide="badge-dollar-sign" class="h-5 w-5"></i></span>
+            </div>
         </article>
     </div>
 
-    <form id="honor-filter-form" method="get" class="surface-card grid gap-4 p-5 md:grid-cols-[minmax(0,1.4fr)_180px_180px_auto] md:items-end">
+    <form id="honor-filter-form" method="get" class="surface-card grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-[minmax(0,1.4fr)_180px_180px_auto] xl:items-end">
         <div>
             <label for="id_q">Cari asleb</label>
             <input id="id_q" name="q" type="text" value="{{ search_query }}" placeholder="Cari nama, NIM, matkul, atau PIC transfer" autocomplete="off">
@@ -73,7 +149,7 @@
                 {% endfor %}
             </select>
         </div>
-        <div class="flex flex-wrap gap-3">
+        <div class="honor-filter-actions flex flex-wrap gap-3 md:col-span-2 xl:col-span-1">
             <button type="submit" class="btn-primary bg-violet-700 hover:bg-violet-800 shadow-violet-900/20">
                 <i data-lucide="search" class="h-4 w-4"></i>
                 <span>Terapkan</span>
@@ -85,95 +161,117 @@
         </div>
     </form>
 
-    <div class="surface-card overflow-hidden">
-        <div class="overflow-x-auto">
-            <table class="min-w-max">
-                <thead class="bg-slate-50">
-                    <tr>
-                        <th>Nama Mahasiswa</th>
-                        <th>Status</th>
-                        <th>Jumlah Praktikum</th>
-                        <th>Total Pertemuan</th>
-                        <th>Total Jam Terealisasi</th>
-                        <th>Total Akhir (Max 60)</th>
-                        <th>Honor/Jam</th>
-                        <th>Total Honor</th>
-                        <th>Laboran TF</th>
-                        <th>Data TF Gaji</th>
-                        <th>PIC Transfer</th>
-                        <th>Aksi</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for honor in honor_list %}
-                    <tr class="hover:bg-slate-50/70">
-                        <td>
-                            <div class="font-semibold text-slate-900">{{ honor.asleb.nama }}</div>
-                            <div class="text-xs text-slate-500">{{ honor.asleb.nim }} · {{ honor.asleb.matkul|default:"Matkul belum diisi" }}</div>
-                        </td>
-                        <td>{{ honor.get_level_display }}</td>
-                        <td>{{ honor.jumlah_praktikum }}</td>
-                        <td>{{ honor.total_pertemuan }}</td>
-                        <td>{{ honor.total_jam_terealisasi }}</td>
-                        <td>{{ honor.total_akhir }}</td>
-                        <td>{{ honor.honor_per_jam_rupiah }}</td>
-                        <td class="font-black text-violet-700">{{ honor.jumlah_rupiah }}</td>
-                        <td>
-                            {% if honor.assigned_laboran %}
-                            <div class="font-semibold text-slate-900">{{ honor.assigned_laboran.nama_pengguna }}</div>
-                            <div class="text-xs text-slate-500">{{ honor.assigned_laboran.nim_nik }}</div>
+    <div class="surface-card honor-table overflow-hidden">
+        <div class="border-b border-slate-200 bg-slate-50/80 px-5 py-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h3 class="text-lg font-black text-slate-900">Data Honorarium</h3>
+                    <p class="mt-1 text-sm text-slate-500">Ringkasan honor ditampilkan per asleb agar mudah dibaca tanpa scroll kanan-kiri.</p>
+                </div>
+                <span class="inline-flex items-center gap-2 rounded-full bg-violet-50 px-3 py-1 text-xs font-black text-violet-700">
+                    <i data-lucide="layout-list" class="h-4 w-4"></i>
+                    Rekap bulanan
+                </span>
+            </div>
+        </div>
+        <div class="grid gap-4 p-4">
+            {% for honor in honor_list %}
+            <article class="rounded-[24px] border border-slate-200 bg-white/80 p-4 shadow-sm">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div class="min-w-0">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <h4 class="text-lg font-black text-slate-900">{{ honor.asleb.nama }}</h4>
+                            <span class="inline-flex rounded-full bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700">{{ honor.get_level_display }}</span>
+                        </div>
+                        <div class="mt-1 text-sm text-slate-500">{{ honor.asleb.nim }} &middot; {{ honor.asleb.matkul|default:"Matkul belum diisi" }}</div>
+                    </div>
+                    <div class="text-left sm:text-right">
+                        <div class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Total Honor</div>
+                        <div class="mt-1 text-2xl font-black text-violet-700">{{ honor.jumlah_rupiah }}</div>
+                    </div>
+                </div>
+
+                <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div class="rounded-2xl bg-slate-50 p-3">
+                        <div class="text-xs font-bold uppercase text-slate-500">Praktikum</div>
+                        <div class="mt-1 font-black text-slate-900">{{ honor.jumlah_praktikum }}</div>
+                    </div>
+                    <div class="rounded-2xl bg-slate-50 p-3">
+                        <div class="text-xs font-bold uppercase text-slate-500">Pertemuan</div>
+                        <div class="mt-1 font-black text-slate-900">{{ honor.total_pertemuan }}</div>
+                    </div>
+                    <div class="rounded-2xl bg-slate-50 p-3">
+                        <div class="text-xs font-bold uppercase text-slate-500">Jam Realisasi</div>
+                        <div class="mt-1 font-black text-slate-900">{{ honor.total_jam_terealisasi }}</div>
+                    </div>
+                    <div class="rounded-2xl bg-slate-50 p-3">
+                        <div class="text-xs font-bold uppercase text-slate-500">Akhir / Honor per Jam</div>
+                        <div class="mt-1 font-black text-slate-900">{{ honor.total_akhir }} &middot; {{ honor.honor_per_jam_rupiah }}</div>
+                    </div>
+                </div>
+
+                <div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(260px,0.8fr)]">
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                        <div class="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Laboran TF</div>
+                        {% if honor.assigned_laboran %}
+                        <div class="mt-2 font-bold text-slate-900">{{ honor.assigned_laboran.nama_pengguna }}</div>
+                        <div class="text-sm text-slate-500">{{ honor.assigned_laboran.nim_nik }}</div>
+                        {% else %}
+                        <span class="mt-2 inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">Belum dibagi</span>
+                        {% endif %}
+                    </div>
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                        <div class="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Data TF Gaji</div>
+                        <div class="mt-2 font-bold text-slate-900">{{ honor.tujuan_transfer }}</div>
+                        <div class="text-sm text-slate-500">
+                            {% if honor.tanggal_transfer %}
+                            TF: {{ honor.tanggal_transfer|date:"d M Y" }}
                             {% else %}
-                            <span class="inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">Belum dibagi</span>
+                            Tanggal TF belum diisi
                             {% endif %}
-                        </td>
-                        <td>
-                            <div class="font-semibold text-slate-900">{{ honor.tujuan_transfer }}</div>
-                            <div class="text-xs text-slate-500">
-                                {% if honor.tanggal_transfer %}
-                                TF: {{ honor.tanggal_transfer|date:"d M Y" }}
-                                {% else %}
-                                Tanggal TF belum diisi
-                                {% endif %}
-                            </div>
-                            {% if honor.bukti_transfer %}
-                            <a class="mt-1 inline-flex text-xs font-bold text-brand-700 hover:text-brand-800" href="{{ honor.bukti_transfer.url }}" target="_blank" rel="noreferrer">Lihat bukti TF</a>
+                        </div>
+                        {% if honor.bukti_transfer %}
+                        <a class="mt-2 inline-flex text-sm font-bold text-brand-700 hover:text-brand-800" href="{{ honor.bukti_transfer.url }}" target="_blank" rel="noreferrer">Lihat bukti TF</a>
+                        {% endif %}
+                    </div>
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                        <div class="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Aksi</div>
+                        <div class="mt-3 flex flex-wrap gap-3 text-sm font-semibold">
+                            <a class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700" href="{% url 'asleb:honor_update' honor.pk %}">
+                                <i data-lucide="pencil" class="h-4 w-4"></i><span>Edit</span>
+                            </a>
+                            {% if is_admin %}
+                            <form method="post" action="{% url 'asleb:honor_delete' honor.pk %}" data-confirm-message="Yakin ingin menghapus rekap honor ini?" class="inline">
+                                {% csrf_token %}
+                                <button type="submit" class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700">
+                                    <i data-lucide="trash-2" class="h-4 w-4"></i>
+                                    <span>Hapus</span>
+                                </button>
+                            </form>
                             {% endif %}
-                        </td>
-                        <td>{{ honor.pic_transfer|default:"-" }}</td>
-                        <td>
-                            <div class="flex flex-wrap gap-3 text-sm font-semibold">
-                                <a class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700" href="{% url 'asleb:honor_update' honor.pk %}">
-                                    <i data-lucide="pencil" class="h-4 w-4"></i><span>Edit</span>
-                                </a>
-                                {% if honor.status != 'dibayar' %}
-                                <form method="post" enctype="multipart/form-data" action="{% url 'asleb:honor_confirm_transfer' honor.pk %}" class="grid gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 p-3">
-                                    {% csrf_token %}
-                                    <input type="date" name="tanggal_transfer" value="{% now 'Y-m-d' %}" class="min-h-10 rounded-xl bg-white text-xs">
-                                    <input type="text" name="pic_transfer" value="{{ current_pengguna.nama_pengguna }}" class="min-h-10 rounded-xl bg-white text-xs" placeholder="PIC transfer">
-                                    <input type="file" name="bukti_transfer" accept="image/*,.pdf" class="text-xs">
-                                    <button type="submit" class="inline-flex items-center justify-center gap-1 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700">
-                                        <i data-lucide="badge-check" class="h-4 w-4"></i>
-                                        <span>Sudah di TF</span>
-                                    </button>
-                                </form>
-                                {% endif %}
-                                <form method="post" action="{% url 'asleb:honor_delete' honor.pk %}" data-confirm-message="Yakin ingin menghapus rekap honor ini?" class="inline">
-                                    {% csrf_token %}
-                                    <button type="submit" class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700">
-                                        <i data-lucide="trash-2" class="h-4 w-4"></i>
-                                        <span>Hapus</span>
-                                    </button>
-                                </form>
-                            </div>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="12" class="py-12 text-center text-slate-500">Belum ada rekap honor asleb.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                        </div>
+                        <div class="mt-3 text-sm text-slate-500">PIC: {{ honor.pic_transfer|default:"-" }}</div>
+                    </div>
+                </div>
+
+                {% if honor.status != 'dibayar' %}
+                <form method="post" enctype="multipart/form-data" action="{% url 'asleb:honor_confirm_transfer' honor.pk %}" class="honor-transfer-card mt-4 grid gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4 md:grid-cols-[160px_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-center">
+                    {% csrf_token %}
+                    <input type="date" name="tanggal_transfer" value="{% now 'Y-m-d' %}" class="min-h-10 rounded-xl bg-white text-xs">
+                    <input type="text" name="pic_transfer" value="{{ current_pengguna.nama_pengguna }}" class="min-h-10 rounded-xl bg-white text-xs" placeholder="PIC transfer">
+                    <input type="file" name="bukti_transfer" accept="image/*,.pdf" class="text-xs">
+                    <button type="submit" class="inline-flex items-center justify-center gap-1 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700">
+                        <i data-lucide="badge-check" class="h-4 w-4"></i>
+                        <span>Sudah di TF</span>
+                    </button>
+                </form>
+                {% endif %}
+            </article>
+            {% empty %}
+            <div class="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 p-10 text-center text-slate-500">
+                Belum ada rekap honor asleb.
+            </div>
+            {% endfor %}
         </div>
     </div>
 </section>

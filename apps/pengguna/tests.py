@@ -81,14 +81,139 @@ class PenggunaViewTests(TestCase):
         session.save()
 
     def test_list_page_loads(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Maya Mahasiswa',
+            nim_nik='2202001',
+            email='maya@example.com',
+            password='rahasia123',
+            no_hp='081111111111',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='mahasiswa',
+        )
+        laboran = Pengguna.objects.create(
+            nama_pengguna='Lala Laboran',
+            nim_nik='3302001',
+            email='lala@example.com',
+            password='rahasia123',
+            no_hp='082222222222',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='laboran',
+        )
+        asisten = Pengguna.objects.create(
+            nama_pengguna='Ali Asisten',
+            nim_nik='2202002',
+            email='ali@example.com',
+            password='rahasia123',
+            no_hp='083333333333',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='asisten_lab',
+        )
+
         response = self.client.get(reverse('pengguna:list'))
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Pengguna')
-        self.assertContains(response, self.pengguna.kode_pengguna)
-        self.assertContains(response, 'Andi Pratama')
-        self.assertContains(response, 'Admin')
+        self.assertNotContains(response, self.pengguna.kode_pengguna)
+        self.assertContains(response, 'Mahasiswa')
+        self.assertContains(response, 'Laboran')
+        self.assertContains(response, 'Asisten Lab')
+        self.assertContains(response, mahasiswa.nama_pengguna)
+        self.assertContains(response, laboran.nama_pengguna)
+        self.assertContains(response, asisten.nama_pengguna)
         self.assertContains(response, 'data-confirmation-modal')
+
+    def test_laboran_hanya_melihat_mahasiswa_dan_asisten_lab_di_menu_pengguna(self):
+        laboran = Pengguna.objects.create(
+            nama_pengguna='Lala Laboran',
+            nim_nik='3302001',
+            email='lala@example.com',
+            password='rahasia123',
+            no_hp='082222222222',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='laboran',
+        )
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Maya Mahasiswa',
+            nim_nik='2202001',
+            email='maya@example.com',
+            password='rahasia123',
+            no_hp='081111111111',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='mahasiswa',
+        )
+        asisten = Pengguna.objects.create(
+            nama_pengguna='Ali Asisten',
+            nim_nik='2202002',
+            email='ali@example.com',
+            password='rahasia123',
+            no_hp='083333333333',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='asisten_lab',
+        )
+        session = self.client.session
+        session['pengguna_id'] = laboran.pk
+        session.save()
+
+        response = self.client.get(reverse('pengguna:list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, mahasiswa.nama_pengguna)
+        self.assertContains(response, asisten.nama_pengguna)
+        self.assertNotContains(response, laboran.kode_pengguna)
+        self.assertNotContains(response, '<h3 class="text-xl font-black text-slate-900">Laboran</h3>', html=False)
+        self.assertNotContains(response, 'Tambah Pengguna')
+
+    def test_laboran_tidak_bisa_mengelola_pengguna_via_url_langsung(self):
+        laboran = Pengguna.objects.create(
+            nama_pengguna='Lala Laboran',
+            nim_nik='3302001',
+            email='lala@example.com',
+            password='rahasia123',
+            no_hp='082222222222',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='laboran',
+        )
+        target = Pengguna.objects.create(
+            nama_pengguna='Maya Mahasiswa',
+            nim_nik='2202001',
+            email='maya@example.com',
+            password='rahasia123',
+            no_hp='081111111111',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='mahasiswa',
+        )
+        session = self.client.session
+        session['pengguna_id'] = laboran.pk
+        session.save()
+
+        self.assertRedirects(self.client.get(reverse('pengguna:create')), reverse('pengguna:list'))
+        self.assertRedirects(self.client.get(reverse('pengguna:update', args=[target.pk])), reverse('pengguna:list'))
+        self.assertRedirects(self.client.post(reverse('pengguna:delete', args=[target.pk])), reverse('pengguna:list'))
+        self.assertTrue(Pengguna.objects.filter(pk=target.pk).exists())
 
     @patch('apps.pengguna.forms.validate_human_face_photo')
     def test_create_pengguna_menyimpan_password_hash_dan_foto(self, mock_validate_face):
