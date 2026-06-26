@@ -172,7 +172,7 @@ class DashboardView(TemplateView):
             if is_asisten_lab:
                 menu_modules.extend([
                     {
-                        'title': 'Absensi Asleb',
+                        'title': 'Absensi Aslab',
                         'description': 'Isi absensi praktikum, upload modul, dan bukti video kegiatan.',
                         'url': 'asleb:absensi_list',
                         'status': 'Aktif',
@@ -248,7 +248,7 @@ class DashboardView(TemplateView):
             {
                 'label': 'Honorarium Bulan Ini',
                 'value': 0,
-                'note': 'Menunggu modul rekap honorarium asleb',
+                'note': 'Menunggu modul rekap honorarium aslab',
                 'icon': 'file-chart-column',
                 'tone': 'purple',
             },
@@ -279,7 +279,7 @@ class DashboardView(TemplateView):
                 'tone': 'blue',
             },
             {
-                'title': 'Data Asleb',
+                'title': 'Data Aslab',
                 'description': 'Kelola data asisten laboratorium untuk membantu operasional praktikum.',
                 'url': 'asleb:asleb_list',
                 'status': 'Aktif',
@@ -287,16 +287,16 @@ class DashboardView(TemplateView):
                 'tone': 'green',
             },
             {
-                'title': 'Pendaftaran Asleb',
-                'description': 'Kelola calon asleb yang mendaftar berdasarkan matkul, kontak, dan status seleksi.',
+                'title': 'Pendaftaran Aslab',
+                'description': 'Kelola calon aslab yang mendaftar berdasarkan matkul, kontak, dan status seleksi.',
                 'url': 'pendaftaran_asleb:pendaftaran_list',
                 'status': 'Aktif',
                 'icon': 'user-round-plus',
                 'tone': 'teal',
             },
             {
-                'title': 'Rekap Honorarium Asleb',
-                'description': 'Hitung honor asleb per bulan berdasarkan total pertemuan, batas 60 jam, dan tarif Junior/Senior.',
+                'title': 'Rekap Honorarium Aslab',
+                'description': 'Hitung honor aslab per bulan berdasarkan total pertemuan, batas 60 jam, dan tarif Junior/Senior.',
                 'url': 'asleb:honor_list',
                 'status': 'Aktif',
                 'icon': 'file-chart-column',
@@ -348,8 +348,8 @@ class DashboardView(TemplateView):
             },
             {
                 'time': '08:55',
-                'title': 'Data asleb diperbarui',
-                'detail': f'{asleb_qs.filter(status="aktif").count()} asleb aktif dan {pendaftaran_asleb_qs.filter(status="diajukan").count()} pendaftar menunggu seleksi.',
+                'title': 'Data aslab diperbarui',
+                'detail': f'{asleb_qs.filter(status="aktif").count()} aslab aktif dan {pendaftaran_asleb_qs.filter(status="diajukan").count()} pendaftar menunggu seleksi.',
                 'tone': 'green',
             },
         ]
@@ -390,15 +390,15 @@ class DashboardView(TemplateView):
                 'tone': 'blue',
             },
             {
-                'title': 'Tambah Data Asleb',
+                'title': 'Tambah Data Aslab',
                 'description': 'Masukkan data asisten laboratorium baru.',
                 'url': 'asleb:asleb_create',
                 'icon': 'user-plus',
                 'tone': 'green',
             },
             {
-                'title': 'Tambah Pendaftaran Asleb',
-                'description': 'Catat calon asleb baru beserta matkul yang diminati.',
+                'title': 'Tambah Pendaftaran Aslab',
+                'description': 'Catat calon aslab baru beserta matkul yang diminati.',
                 'url': 'pendaftaran_asleb:pendaftaran_create',
                 'icon': 'user-round-plus',
                 'tone': 'teal',

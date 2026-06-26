@@ -23,7 +23,7 @@ class AslebForm(forms.ModelForm):
             'catatan',
         ]
         widgets = {
-            'nama': forms.TextInput(attrs={'placeholder': 'Nama lengkap asleb'}),
+            'nama': forms.TextInput(attrs={'placeholder': 'Nama lengkap aslab'}),
             'nim': forms.TextInput(attrs={'placeholder': 'NIM mahasiswa'}),
             'no_hp': forms.TextInput(attrs={'placeholder': 'Nomor HP aktif'}),
             'program_studi': forms.TextInput(attrs={'placeholder': 'Contoh: Rekayasa Perangkat Lunak'}),

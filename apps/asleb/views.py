@@ -142,7 +142,7 @@ class HonorAslebListView(ListView):
         context['unassigned_honor_count'] = base_honor_qs.filter(assigned_laboran__isnull=True).count()
         context['is_admin'] = bool(pengguna and pengguna.role == 'admin')
         context['is_laboran'] = bool(pengguna and pengguna.role == 'laboran')
-        context['formula_note'] = 'Total Honor = min(7 x Total Pertemuan, 60) x Honor/Jam. Level otomatis: periode asleb ke-1 dan ke-2 Junior Rp7.000, mulai ke-3 Senior Rp8.000.'
+        context['formula_note'] = 'Total Honor = min(7 x Total Pertemuan, 60) x Honor/Jam. Level otomatis: periode aslab ke-1 dan ke-2 Junior Rp7.000, mulai ke-3 Senior Rp8.000.'
         return context
 
 
@@ -247,7 +247,7 @@ class SuratHonorAslebGenerateView(SuratHonorAccessMixin, FormView):
         ).order_by('asleb__matkul', 'asleb__nama'))
 
         if not honors:
-            form.add_error('bulan', 'Belum ada rekap honor asleb untuk bulan ini.')
+            form.add_error('bulan', 'Belum ada rekap honor aslab untuk bulan ini.')
             return self.form_invalid(form)
 
         total_honor = sum(honor.jumlah for honor in honors)
@@ -258,7 +258,7 @@ class SuratHonorAslebGenerateView(SuratHonorAccessMixin, FormView):
             bulan=bulan,
             perihal=form.cleaned_data['perihal'],
         )
-        filename = f"surat-honor-asleb-{slugify(month_year_label(bulan))}-{timezone.now():%Y%m%d%H%M%S}.pdf"
+        filename = f"surat-honor-aslab-{slugify(month_year_label(bulan))}-{timezone.now():%Y%m%d%H%M%S}.pdf"
         surat = SuratHonorAsleb(
             bulan=bulan,
             nomor_surat=form.cleaned_data['nomor_surat'],
@@ -284,7 +284,7 @@ def download_surat_honor(request, pk):
     return FileResponse(
         surat.file_pdf.open('rb'),
         as_attachment=True,
-        filename=f'surat-honor-asleb-{slugify(surat.bulan_label)}.pdf',
+        filename=f'surat-honor-aslab-{slugify(surat.bulan_label)}.pdf',
         content_type='application/pdf',
     )
 
@@ -349,11 +349,11 @@ class AbsensiAslebCreateView(CreateView):
             return redirect('dashboard:home')
 
         if not self.asleb:
-            messages.error(request, 'Data Asleb untuk akun ini belum ditemukan.')
+            messages.error(request, 'Data Aslab untuk akun ini belum ditemukan.')
             return redirect('dashboard:home')
 
         if not PengaturanAbsensiAsleb.get_solo().dibuka:
-            messages.warning(request, 'Absensi asleb sedang ditutup oleh admin/laboran.')
+            messages.warning(request, 'Absensi aslab sedang ditutup oleh admin/laboran.')
             return redirect('asleb:absensi_list')
 
         return super().dispatch(request, *args, **kwargs)
@@ -384,7 +384,7 @@ def toggle_absensi_status(request):
     pengaturan.save(update_fields=['dibuka', 'diperbarui_pada'])
 
     status = 'dibuka' if pengaturan.dibuka else 'ditutup'
-    messages.success(request, f'Absensi asleb berhasil {status}.')
+    messages.success(request, f'Absensi aslab berhasil {status}.')
     return redirect('asleb:absensi_list')
 
 

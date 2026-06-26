@@ -24,8 +24,8 @@ class Asleb(models.Model):
 
     class Meta:
         ordering = ['nama']
-        verbose_name = 'Asleb'
-        verbose_name_plural = 'Data Asleb'
+        verbose_name = 'Aslab'
+        verbose_name_plural = 'Data Aslab'
 
     def __str__(self):
         return f'{self.nama} - {self.nim}'
@@ -97,8 +97,8 @@ class HonorAsleb(models.Model):
 
     class Meta:
         ordering = ['-bulan', 'asleb__nama']
-        verbose_name = 'Honor Asleb'
-        verbose_name_plural = 'Honor Asleb'
+        verbose_name = 'Honor Aslab'
+        verbose_name_plural = 'Honor Aslab'
 
     def __str__(self):
         return f'{self.asleb.nama} - {self.bulan:%B %Y} - {self.jumlah}'
@@ -213,8 +213,8 @@ class SuratHonorAsleb(models.Model):
 
     class Meta:
         ordering = ['-bulan', '-dibuat_pada']
-        verbose_name = 'Surat Honor Asleb'
-        verbose_name_plural = 'Arsip Surat Honor Asleb'
+        verbose_name = 'Surat Honor Aslab'
+        verbose_name_plural = 'Arsip Surat Honor Aslab'
 
     def __str__(self):
         return f'{self.nomor_surat} - {self.bulan:%B %Y}'
@@ -248,8 +248,8 @@ class PengaturanAbsensiAsleb(models.Model):
     diperbarui_pada = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = 'Pengaturan Absensi Asleb'
-        verbose_name_plural = 'Pengaturan Absensi Asleb'
+        verbose_name = 'Pengaturan Absensi Aslab'
+        verbose_name_plural = 'Pengaturan Absensi Aslab'
 
     @classmethod
     def get_solo(cls):
@@ -257,7 +257,7 @@ class PengaturanAbsensiAsleb(models.Model):
         return pengaturan
 
     def __str__(self):
-        return 'Absensi Asleb Dibuka' if self.dibuka else 'Absensi Asleb Ditutup'
+        return 'Absensi Aslab Dibuka' if self.dibuka else 'Absensi Aslab Ditutup'
 
 
 class AbsensiAsleb(models.Model):
@@ -279,8 +279,8 @@ class AbsensiAsleb(models.Model):
         constraints = [
             models.UniqueConstraint(fields=['asleb', 'modul'], name='unique_absensi_asleb_per_modul'),
         ]
-        verbose_name = 'Absensi Asleb'
-        verbose_name_plural = 'Absensi Asleb'
+        verbose_name = 'Absensi Aslab'
+        verbose_name_plural = 'Absensi Aslab'
 
     def __str__(self):
         return f'{self.asleb.nama} - Modul {self.modul}'

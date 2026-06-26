@@ -295,9 +295,9 @@ class PenggunaViewTests(TestCase):
 
         response = self.client.get(reverse('pengguna:detail', args=[self.pengguna.pk]))
 
-        self.assertContains(response, 'Status Asleb')
+        self.assertContains(response, 'Status Aslab')
         self.assertContains(response, 'Junior')
-        self.assertContains(response, '1 periode sebagai asleb.')
+        self.assertContains(response, '1 periode sebagai aslab.')
 
         matkul = MataKuliahAsleb.objects.first()
         for index in range(3):
@@ -315,7 +315,7 @@ class PenggunaViewTests(TestCase):
         response = self.client.get(reverse('pengguna:detail', args=[self.pengguna.pk]))
 
         self.assertContains(response, 'Senior')
-        self.assertContains(response, '3 periode sebagai asleb.')
+        self.assertContains(response, '3 periode sebagai aslab.')
 
     def test_update_profile_mengubah_data_pengguna(self):
         response = self.client.post(
@@ -860,9 +860,9 @@ class PenggunaAuthTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, 'Inventaris')
         self.assertNotContains(response, 'Barang Tertinggal')
-        self.assertNotContains(response, 'Data Asleb')
-        self.assertNotContains(response, 'Pendaftaran Asleb')
-        self.assertNotContains(response, 'Rekap Honorarium Asleb')
+        self.assertNotContains(response, 'Data Aslab')
+        self.assertNotContains(response, 'Pendaftaran Aslab')
+        self.assertNotContains(response, 'Rekap Honorarium Aslab')
         self.assertNotContains(response, 'Pengguna')
 
     def test_asisten_lab_tidak_bisa_membuka_menu_admin_asleb_langsung(self):

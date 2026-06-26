@@ -467,8 +467,8 @@ class DashboardViewTests(TestCase):
 
         response = self.client.get(reverse('dashboard:home'))
 
-        self.assertContains(response, 'Pendaftaran asleb sedang dibuka')
-        self.assertContains(response, 'QR pendaftaran asleb')
+        self.assertContains(response, 'Pendaftaran aslab sedang dibuka')
+        self.assertContains(response, 'QR pendaftaran aslab')
         self.assertContains(response, get_public_registration_url())
 
     def test_dashboard_mahasiswa_menyembunyikan_qr_pendaftaran_asleb_saat_ditutup(self):
@@ -490,8 +490,8 @@ class DashboardViewTests(TestCase):
 
         response = self.client.get(reverse('dashboard:home'))
 
-        self.assertNotContains(response, 'Pendaftaran asleb sedang dibuka')
-        self.assertNotContains(response, 'QR pendaftaran asleb')
+        self.assertNotContains(response, 'Pendaftaran aslab sedang dibuka')
+        self.assertNotContains(response, 'QR pendaftaran aslab')
 
     def test_dashboard_asisten_lab_menampilkan_total_honor_bulan_ini(self):
         asisten = Pengguna.objects.create(
@@ -547,8 +547,8 @@ class DashboardViewTests(TestCase):
         self.assertContains(response, 'Honor Bulan Ini')
         self.assertContains(response, 'Rp 448.000')
         self.assertNotContains(response, 'Inventaris')
-        self.assertNotContains(response, 'Data Asleb')
-        self.assertNotContains(response, 'Pendaftaran Asleb')
+        self.assertNotContains(response, 'Data Aslab')
+        self.assertNotContains(response, 'Pendaftaran Aslab')
 
     def test_dashboard_asisten_lab_honor_dibayar_reset_saldo_bulan_ini(self):
         asisten = Pengguna.objects.create(
@@ -613,6 +613,6 @@ class DashboardViewTests(TestCase):
 
         response = self.client.get(reverse('dashboard:home'))
 
-        self.assertContains(response, 'Pendaftaran asleb sedang dibuka')
+        self.assertContains(response, 'Pendaftaran aslab sedang dibuka')
         self.assertContains(response, 'Buka Form Pendaftaran')
         self.assertContains(response, get_public_registration_url())

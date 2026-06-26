@@ -3,6 +3,8 @@ import base64
 from django.test import TestCase
 from django.urls import reverse
 from django.core import mail
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from apps.asleb.models import Asleb
@@ -11,6 +13,7 @@ from apps.pengguna.models import Pengguna
 from .forms import PendaftaranAslebPublicForm
 from .models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb
 from .utils import get_public_registration_url
+from .views import WIZARD_SESSION_KEY
 
 
 class PendaftaranAslebViewTests(TestCase):
@@ -47,7 +50,7 @@ class PendaftaranAslebViewTests(TestCase):
         response = self.client.get(reverse('pendaftaran_asleb:pendaftaran_list'))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Pendaftaran Asleb')
+        self.assertContains(response, 'Pendaftaran Aslab')
         self.assertContains(response, 'Rizki Pratama')
         self.assertContains(response, 'Status: Ditutup')
         self.assertContains(response, 'Buka Pendaftaran')
@@ -124,9 +127,25 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertNotContains(response, 'name="email" type="email"')
         self.assertNotContains(response, 'name="program_studi" type="text"')
 
+        transkrip_path = default_storage.save(
+            'pendaftaran_asleb/transkrip_tmp/test-transkrip.pdf',
+            ContentFile(b'transkrip'),
+        )
+        session = self.client.session
+        session[WIZARD_SESSION_KEY] = {
+            'step': 'berkas',
+            'matkul_id': self.matkul.pk,
+            'transkrip_path': transkrip_path,
+            'transkrip_name': 'test-transkrip.pdf',
+            'nilai_transkrip': 'A',
+            'nilai_lolos': True,
+        }
+        session.save()
+
         post_response = self.client.post(reverse('pendaftaran_asleb:pendaftaran_public'), {
             'semester': 4,
             'matkul': self.matkul.pk,
+            'cv': SimpleUploadedFile('cv.pdf', b'cv', content_type='application/pdf'),
             'metode_rekening': 'rekening_bank',
             'rekening': 'BCA 123456789',
             'alasan': 'Ingin membantu praktikum.',
@@ -260,7 +279,7 @@ class PendaftaranAslebViewTests(TestCase):
         response = self.client.get(reverse('pendaftaran_asleb:matkul_list'))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Kelola Matkul Asleb')
+        self.assertContains(response, 'Kelola Matkul Aslab')
         self.assertContains(response, 'Struktur Data dan Algoritma')
 
     def test_matkul_bisa_ditambahkan(self):

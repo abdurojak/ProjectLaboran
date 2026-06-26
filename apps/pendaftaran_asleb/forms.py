@@ -38,7 +38,7 @@ class PendaftaranAslebForm(forms.ModelForm):
             'status',
         ]
         widgets = {
-            'nama': forms.TextInput(attrs={'placeholder': 'Nama lengkap calon asleb'}),
+            'nama': forms.TextInput(attrs={'placeholder': 'Nama lengkap calon aslab'}),
             'nim': forms.TextInput(attrs={'placeholder': 'NIM mahasiswa'}),
             'no_hp': forms.TextInput(attrs={'placeholder': 'Nomor HP aktif'}),
             'program_studi': forms.TextInput(attrs={'placeholder': 'Contoh: Rekayasa Perangkat Lunak'}),
@@ -174,7 +174,7 @@ class PublicBerkasPendaftaranForm(forms.Form):
     SEMESTER_CHOICES = [(semester, f'Semester {semester}') for semester in range(3, 9)]
     signature_data = forms.CharField(widget=forms.HiddenInput, required=False)
 
-    nama = forms.CharField(max_length=150, widget=forms.TextInput(attrs={'placeholder': 'Nama lengkap calon asleb'}))
+    nama = forms.CharField(max_length=150, widget=forms.TextInput(attrs={'placeholder': 'Nama lengkap calon aslab'}))
     nim = forms.CharField(max_length=30, widget=forms.TextInput(attrs={'placeholder': 'NIM mahasiswa'}))
     no_hp = forms.CharField(max_length=30, widget=forms.TextInput(attrs={'placeholder': 'Nomor HP aktif'}))
     email = forms.EmailField(required=False)

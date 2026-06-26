@@ -37,22 +37,22 @@ SIDEBAR_LINKS = [
     {'title': 'Peminjaman Alat', 'icon': 'arrow-left-right', 'url': 'peminjaman:peminjaman_list', 'namespace': 'peminjaman'},
     {'title': 'Jadwal Praktikum', 'icon': 'calendar-clock', 'url': 'jadwal:jadwal_list', 'namespace': 'jadwal'},
     {
-        'title': 'Absensi Asleb',
+        'title': 'Absensi Aslab',
         'icon': 'clipboard-check',
         'url': 'asleb:absensi_list',
         'namespace': 'asleb_absensi',
         'url_names': {'absensi_list', 'absensi_create'},
     },
     {
-        'title': 'Data Asleb',
+        'title': 'Data Aslab',
         'icon': 'users',
         'url': 'asleb:asleb_list',
         'namespace': 'asleb',
         'url_names': {'asleb_list', 'asleb_create', 'asleb_detail', 'asleb_update', 'asleb_delete'},
     },
-    {'title': 'Pendaftaran Asleb', 'icon': 'user-round-plus', 'url': 'pendaftaran_asleb:pendaftaran_list', 'namespace': 'pendaftaran_asleb'},
+    {'title': 'Pendaftaran Aslab', 'icon': 'user-round-plus', 'url': 'pendaftaran_asleb:pendaftaran_list', 'namespace': 'pendaftaran_asleb'},
     {
-        'title': 'Rekap Honorarium Asleb',
+        'title': 'Rekap Honorarium Aslab',
         'icon': 'file-chart-column',
         'url': 'asleb:honor_list',
         'namespace': 'asleb',
@@ -87,7 +87,7 @@ SIDEBAR_LINKS = [
 ]
 
 MAHASISWA_VISIBLE_NAMESPACES = {'core', 'dashboard', 'kalender', 'peminjaman', 'jadwal', 'ruangan'}
-ASISTEN_LAB_HIDDEN_TITLES = {'Rekap Honorarium Asleb'}
+ASISTEN_LAB_HIDDEN_TITLES = {'Rekap Honorarium Aslab'}
 ASISTEN_LAB_HIDDEN_NAMESPACES = {'inventaris', 'barang_tertinggal', 'asleb', 'pendaftaran_asleb', 'pengguna'}
 
 

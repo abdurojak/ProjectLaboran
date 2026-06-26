@@ -77,8 +77,8 @@ class SettingsView(TemplateView):
 
         if pengguna.role in {'admin', 'laboran'}:
             cards.append({
-                'title': 'Pendaftaran Asleb',
-                'description': 'Buka/tutup pendaftaran dan kelola data mata kuliah asleb.',
+                'title': 'Pendaftaran Aslab',
+                'description': 'Buka/tutup pendaftaran dan kelola data mata kuliah aslab.',
                 'url': 'pendaftaran_asleb:pendaftaran_list',
                 'args': [],
                 'icon': 'user-round-plus',

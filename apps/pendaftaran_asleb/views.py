@@ -251,7 +251,7 @@ class PendaftaranAslebPublicCreateView(View):
         default_storage.delete(wizard['transkrip_path'])
         request.session.pop(WIZARD_SESSION_KEY, None)
         request.session.modified = True
-        messages.success(request, 'Pendaftaran asleb berhasil dikirim.')
+        messages.success(request, 'Pendaftaran aslab berhasil dikirim.')
         return redirect('pendaftaran_asleb:pendaftaran_success')
 
     def render_current_step(self, request, **forms):
@@ -302,7 +302,7 @@ def accept_pendaftaran(request, pk):
     pendaftaran.status = 'diterima'
     pendaftaran.save(update_fields=['status', 'diperbarui_pada'])
     promote_pengguna_to_asisten_lab(pendaftaran)
-    messages.success(request, 'Pendaftaran asleb ditandai diterima.')
+    messages.success(request, 'Pendaftaran aslab ditandai diterima.')
     return redirect('pendaftaran_asleb:pendaftaran_list')
 
 
@@ -311,7 +311,7 @@ def reject_pendaftaran(request, pk):
     pendaftaran = get_object_or_404(PendaftaranAsleb, pk=pk)
     pendaftaran.status = 'ditolak'
     pendaftaran.save(update_fields=['status', 'diperbarui_pada'])
-    messages.warning(request, 'Pendaftaran asleb ditandai ditolak.')
+    messages.warning(request, 'Pendaftaran aslab ditandai ditolak.')
     return redirect('pendaftaran_asleb:pendaftaran_list')
 
 
@@ -320,13 +320,13 @@ def generate_asleb(request, pk):
     pendaftaran = get_object_or_404(PendaftaranAsleb, pk=pk)
 
     if pendaftaran.status != 'diterima':
-        messages.error(request, 'Hanya pendaftaran yang diterima yang bisa digenerate ke Data Asleb.')
+        messages.error(request, 'Hanya pendaftaran yang diterima yang bisa digenerate ke Data Aslab.')
         return redirect('pendaftaran_asleb:pendaftaran_list')
 
     create_or_update_asleb_from_pendaftaran(pendaftaran)
     pendaftaran.status = 'digenerate'
     pendaftaran.save(update_fields=['status', 'diperbarui_pada'])
-    messages.success(request, 'Pendaftaran berhasil digenerate ke Data Asleb.')
+    messages.success(request, 'Pendaftaran berhasil digenerate ke Data Aslab.')
     return redirect('asleb:asleb_list')
 
 
@@ -342,7 +342,7 @@ def generate_all_accepted_asleb(request):
         generated_count += 1
 
     if generated_count:
-        messages.success(request, f'{generated_count} pendaftar diterima berhasil digenerate ke Data Asleb.')
+        messages.success(request, f'{generated_count} pendaftar diterima berhasil digenerate ke Data Aslab.')
     else:
         messages.warning(request, 'Belum ada pendaftar berstatus diterima untuk digenerate.')
 
@@ -359,9 +359,9 @@ def toggle_pendaftaran_status(request):
     notified_count = notify_pendaftaran_dibuka() if pengaturan.dibuka else 0
 
     if notified_count:
-        messages.success(request, f'Pendaftaran asleb berhasil {status}. Notifikasi email dikirim ke {notified_count} akun.')
+        messages.success(request, f'Pendaftaran aslab berhasil {status}. Notifikasi email dikirim ke {notified_count} akun.')
     else:
-        messages.success(request, f'Pendaftaran asleb berhasil {status}.')
+        messages.success(request, f'Pendaftaran aslab berhasil {status}.')
     return redirect('pendaftaran_asleb:pendaftaran_list')
 
 
@@ -389,7 +389,7 @@ def notify_pendaftaran_dibuka():
 
     for email in recipients:
         sent = send_mail(
-            subject='Pendaftaran Asleb Project Laboran Dibuka',
+            subject='Pendaftaran Aslab Project Laboran Dibuka',
             message=(
                 'Pendaftaran asisten laboratorium sudah dibuka.\n\n'
                 f'Silakan daftar melalui link berikut:\n{registration_url}\n\n'
@@ -416,7 +416,7 @@ def create_or_update_asleb_from_pendaftaran(pendaftaran):
             'matkul': str(pendaftaran.matkul),
             'status': 'aktif',
             'tanggal_bergabung': timezone.localdate(),
-            'catatan': f'Digenerate dari pendaftaran asleb tanggal {pendaftaran.tanggal_daftar:%d-%m-%Y}.',
+            'catatan': f'Digenerate dari pendaftaran aslab tanggal {pendaftaran.tanggal_daftar:%d-%m-%Y}.',
         },
     )
     promote_pengguna_to_asisten_lab(pendaftaran)

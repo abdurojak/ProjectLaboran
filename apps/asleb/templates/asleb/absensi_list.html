@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}Absensi Asleb{% endblock %}
+{% block title %}Absensi Aslab{% endblock %}
 
 {% block content %}
 <section class="min-w-0 max-w-full space-y-6 overflow-hidden">
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="min-w-0">
             <p class="text-sm font-bold uppercase tracking-[0.2em] text-cyan-700">Absensi</p>
-            <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 md:text-3xl">Absensi Asleb</h2>
+            <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 md:text-3xl">Absensi Aslab</h2>
             <p class="mt-2 text-sm text-slate-500">Asisten lab mengisi absensi per modul, upload modul praktikum, dan bukti video kegiatan.</p>
         </div>
         <div class="flex w-full flex-wrap gap-3 sm:w-auto">
@@ -32,7 +32,7 @@
 
     <div class="{% if pengaturan_absensi.dibuka %}border-emerald-200 bg-emerald-50 text-emerald-800{% else %}border-amber-200 bg-amber-50 text-amber-800{% endif %} rounded-3xl border px-5 py-4 text-sm font-semibold">
         Status absensi: {% if pengaturan_absensi.dibuka %}Dibuka{% else %}Ditutup{% endif %}.
-        {% if is_asisten_lab and not asleb_profile %} Data Asleb untuk akun Anda belum ditemukan, hubungi admin/laboran.{% endif %}
+        {% if is_asisten_lab and not asleb_profile %} Data Aslab untuk akun Anda belum ditemukan, hubungi admin/laboran.{% endif %}
     </div>
 
     <form id="absensi-filter-form" method="get" class="surface-card min-w-0 max-w-full overflow-hidden grid gap-4 p-4 sm:p-5 md:grid-cols-[minmax(0,1.4fr)_180px_auto] md:items-end">
@@ -88,7 +88,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="7" class="py-12 text-center text-slate-500">Belum ada absensi asleb.</td>
+                        <td colspan="7" class="py-12 text-center text-slate-500">Belum ada absensi aslab.</td>
                     </tr>
                     {% endfor %}
                 </tbody>

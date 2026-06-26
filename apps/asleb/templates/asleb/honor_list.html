@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Rekap Honorarium Asleb{% endblock %}
+{% block title %}Rekap Honorarium Aslab{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -61,7 +61,7 @@
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="max-w-3xl">
             <p class="text-sm font-bold uppercase tracking-[0.2em] text-violet-700">Honorarium</p>
-            <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">Rekap Honorarium Asleb</h2>
+            <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">Rekap Honorarium Aslab</h2>
             <p class="mt-2 text-sm text-slate-500">{{ formula_note }}</p>
         </div>
         <div class="honor-page-actions flex w-full flex-wrap gap-3 lg:w-auto lg:justify-end">
@@ -133,7 +133,7 @@
 
     <form id="honor-filter-form" method="get" class="surface-card grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-[minmax(0,1.4fr)_180px_180px_auto] xl:items-end">
         <div>
-            <label for="id_q">Cari asleb</label>
+            <label for="id_q">Cari aslab</label>
             <input id="id_q" name="q" type="text" value="{{ search_query }}" placeholder="Cari nama, NIM, matkul, atau PIC transfer" autocomplete="off">
         </div>
         <div>
@@ -166,7 +166,7 @@
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h3 class="text-lg font-black text-slate-900">Data Honorarium</h3>
-                    <p class="mt-1 text-sm text-slate-500">Ringkasan honor ditampilkan per asleb agar mudah dibaca tanpa scroll kanan-kiri.</p>
+                    <p class="mt-1 text-sm text-slate-500">Ringkasan honor ditampilkan per aslab agar mudah dibaca tanpa scroll kanan-kiri.</p>
                 </div>
                 <span class="inline-flex items-center gap-2 rounded-full bg-violet-50 px-3 py-1 text-xs font-black text-violet-700">
                     <i data-lucide="layout-list" class="h-4 w-4"></i>
@@ -269,7 +269,7 @@
             </article>
             {% empty %}
             <div class="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 p-10 text-center text-slate-500">
-                Belum ada rekap honor asleb.
+                Belum ada rekap honor aslab.
             </div>
             {% endfor %}
         </div>

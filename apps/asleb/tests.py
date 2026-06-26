@@ -47,11 +47,11 @@ class AslebViewTests(TestCase):
         response = self.client.get(reverse('asleb:asleb_list'))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Data Asleb')
+        self.assertContains(response, 'Data Aslab')
         self.assertContains(response, 'Siti Nurhaliza')
         self.assertContains(response, 'Pemrograman Web')
         active_links = [link['title'] for link in response.context['sidebar_links'] if link['active']]
-        self.assertEqual(active_links, ['Data Asleb'])
+        self.assertEqual(active_links, ['Data Aslab'])
 
     def test_absensi_list_memakai_layout_responsif(self):
         response = self.client.get(reverse('asleb:absensi_list'))
@@ -153,12 +153,12 @@ class AslebViewTests(TestCase):
         response = self.client.get(reverse('asleb:honor_list'), {'bulan': '2026-04'})
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Rekap Honorarium Asleb')
+        self.assertContains(response, 'Rekap Honorarium Aslab')
         self.assertContains(response, 'Siti Nurhaliza')
         self.assertContains(response, 'Rp 147.000')
         self.assertContains(response, 'BCA 123456789')
         active_links = [link['title'] for link in response.context['sidebar_links'] if link['active']]
-        self.assertEqual(active_links, ['Rekap Honorarium Asleb'])
+        self.assertEqual(active_links, ['Rekap Honorarium Aslab'])
 
     def test_konfirmasi_transfer_honor_menyimpan_bukti_dan_status_dibayar(self):
         honor = HonorAsleb.objects.create(
