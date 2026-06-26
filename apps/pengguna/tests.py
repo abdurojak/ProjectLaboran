@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from django.contrib.auth.hashers import check_password
 from django import forms
+from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError
 from django.test import TestCase
@@ -502,7 +503,7 @@ class PenggunaAuthTests(TestCase):
         self.assertFalse(pengguna.is_verified)
         self.assertNotIn('pengguna_id', self.client.session)
         kode = self.client.session['pengguna_otp']['code']
-        self.assertContains(response, f'http://10.24.80.245:8000/pengguna/register/verifikasi/?kode={kode}')
+        self.assertContains(response, f'{settings.PUBLIC_ACCESS_BASE_URL}/pengguna/register/verifikasi/?kode={kode}')
 
         response = self.client.post(reverse('pengguna:verify_register'), {'kode': kode})
         pengguna.refresh_from_db()
