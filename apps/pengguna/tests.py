@@ -774,6 +774,39 @@ class PenggunaAuthTests(TestCase):
         self.assertContains(response, 'Email harus menggunakan domain @std.trisakti.ac.id atau @trisakti.ac.id.')
         self.assertFalse(Pengguna.objects.filter(nim_nik='2201002').exists())
 
+    def test_register_menolak_email_yang_sudah_terdaftar(self):
+        Pengguna.objects.create(
+            nama_pengguna='Pemilik Email',
+            nim_nik='2201999',
+            email='sama@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081111111111',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+        )
+
+        response = self.client.post(
+            reverse('pengguna:register'),
+            {
+                'nama_pengguna': 'Email Sama',
+                'nim_nik': '2201010',
+                'email': 'SAMA@std.trisakti.ac.id',
+                'password': 'passwordku123',
+                'password_confirmation': 'passwordku123',
+                'alamat': 'Jakarta',
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Informatika',
+                'gender': 'laki_laki',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Email sudah terdaftar')
+        self.assertFalse(Pengguna.objects.filter(nim_nik='2201010').exists())
+
     def test_register_menolak_nim_berhuruf(self):
         response = self.client.post(
             reverse('pengguna:register'),

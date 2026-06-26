@@ -337,6 +337,8 @@ class RegisterPenggunaForm(forms.ModelForm):
         valid_domains = ('@std.trisakti.ac.id', '@trisakti.ac.id')
         if not email.endswith(valid_domains):
             raise forms.ValidationError('Email harus menggunakan domain @std.trisakti.ac.id atau @trisakti.ac.id.')
+        if Pengguna.objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError('Email sudah terdaftar. Gunakan email Trisakti lain atau login.')
         return email
 
     def clean_foto(self):

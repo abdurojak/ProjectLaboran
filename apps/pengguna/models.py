@@ -62,7 +62,7 @@ class Pengguna(models.Model):
     kode_pengguna = models.CharField(max_length=10, unique=True, blank=True, editable=False)
     nama_pengguna = models.CharField(max_length=150)
     nim_nik = models.CharField('NIM/NIK', max_length=40, unique=True)
-    email = models.EmailField()
+    email = models.EmailField(unique=True)
     password = models.CharField(max_length=128)
     no_hp = models.CharField('No HP', max_length=30)
     alamat = models.TextField()
