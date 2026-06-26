@@ -3,7 +3,7 @@ from io import BytesIO
 
 from django.conf import settings
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
@@ -110,6 +110,11 @@ def build_styles():
         name='LetterLeft',
         parent=styles['Letter'],
         alignment=TA_LEFT,
+    ))
+    styles.add(ParagraphStyle(
+        name='LetterRight',
+        parent=styles['Letter'],
+        alignment=TA_RIGHT,
     ))
     styles.add(ParagraphStyle(
         name='TitleCenter',
@@ -265,6 +270,30 @@ def build_chair_signature(styles):
     return wrapper
 
 
+def build_lab_signature(styles, lab_name):
+    signature = Table([
+        [paragraph(f'{lab_name}<br/>Jurusan Teknik Informatika<br/>Kepala Laboratorium', styles['LetterRight'])],
+        [''],
+        [paragraph(LAB_SIGNATURES.get(lab_name, 'Kepala Laboratorium'), styles['LetterRight'])],
+    ], colWidths=[7.4 * cm], rowHeights=[1.0 * cm, 1.5 * cm, 0.5 * cm])
+    signature.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    wrapper = Table([['', signature]], colWidths=[10.2 * cm, 7.4 * cm])
+    wrapper.setStyle(TableStyle([
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    return wrapper
+
+
 def build_lampiran_page(styles, lab_name, honors, bulan_label):
     story = [
         paragraph('LAPORAN KEGIATAN ASISTEN', styles['TitleCenter']),
@@ -307,8 +336,6 @@ def build_lampiran_page(styles, lab_name, honors, bulan_label):
     story.extend([
         table,
         Spacer(1, 0.75 * cm),
-        paragraph(f'{lab_name}<br/>Jurusan Teknik Informatika<br/>Kepala Laboratorium', styles['LetterLeft']),
-        Spacer(1, 1.5 * cm),
-        paragraph(LAB_SIGNATURES.get(lab_name, 'Kepala Laboratorium'), styles['LetterLeft']),
+        build_lab_signature(styles, lab_name),
     ])
     return story

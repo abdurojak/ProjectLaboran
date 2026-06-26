@@ -3,18 +3,18 @@
 {% block title %}Absensi Asleb{% endblock %}
 
 {% block content %}
-<section class="space-y-6">
+<section class="min-w-0 max-w-full space-y-6 overflow-hidden">
     <div class="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div class="min-w-0">
             <p class="text-sm font-bold uppercase tracking-[0.2em] text-cyan-700">Absensi</p>
-            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Absensi Asleb</h2>
+            <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 md:text-3xl">Absensi Asleb</h2>
             <p class="mt-2 text-sm text-slate-500">Asisten lab mengisi absensi per modul, upload modul praktikum, dan bukti video kegiatan.</p>
         </div>
-        <div class="flex flex-wrap gap-3">
+        <div class="flex w-full flex-wrap gap-3 sm:w-auto">
             {% if current_pengguna.role == 'admin' or current_pengguna.role == 'laboran' %}
             <form method="post" action="{% url 'asleb:absensi_toggle_status' %}">
                 {% csrf_token %}
-                <button type="submit" class="{% if pengaturan_absensi.dibuka %}btn-secondary{% else %}btn-primary{% endif %} gap-2">
+                <button type="submit" class="{% if pengaturan_absensi.dibuka %}btn-secondary{% else %}btn-primary{% endif %} w-full justify-center gap-2 sm:w-auto">
                     <i data-lucide="{% if pengaturan_absensi.dibuka %}lock{% else %}unlock{% endif %}" class="h-4 w-4"></i>
                     <span>{% if pengaturan_absensi.dibuka %}Tutup Absensi{% else %}Buka Absensi{% endif %}</span>
                 </button>
@@ -22,7 +22,7 @@
             {% endif %}
 
             {% if is_asisten_lab and pengaturan_absensi.dibuka and asleb_profile %}
-            <a class="btn-primary gap-2" href="{% url 'asleb:absensi_create' %}">
+            <a class="btn-primary w-full justify-center gap-2 sm:w-auto" href="{% url 'asleb:absensi_create' %}">
                 <i data-lucide="clipboard-check" class="h-4 w-4"></i>
                 <span>Isi Absensi</span>
             </a>
@@ -35,12 +35,12 @@
         {% if is_asisten_lab and not asleb_profile %} Data Asleb untuk akun Anda belum ditemukan, hubungi admin/laboran.{% endif %}
     </div>
 
-    <form id="absensi-filter-form" method="get" class="surface-card grid gap-4 p-5 md:grid-cols-[minmax(0,1.4fr)_180px_auto] md:items-end">
-        <div>
+    <form id="absensi-filter-form" method="get" class="surface-card min-w-0 max-w-full overflow-hidden grid gap-4 p-4 sm:p-5 md:grid-cols-[minmax(0,1.4fr)_180px_auto] md:items-end">
+        <div class="min-w-0">
             <label for="id_q">Cari absensi</label>
             <input id="id_q" name="q" type="text" value="{{ search_query }}" placeholder="Cari nama, NIM, materi, atau pekerjaan" autocomplete="off">
         </div>
-        <div>
+        <div class="min-w-0">
             <label for="id_modul">Modul</label>
             <select id="id_modul" name="modul">
                 <option value="">Semua modul</option>
@@ -50,20 +50,20 @@
             </select>
         </div>
         <div class="flex flex-wrap gap-3">
-            <button type="submit" class="btn-primary">
+            <button type="submit" class="btn-primary w-full justify-center sm:w-auto">
                 <i data-lucide="search" class="h-4 w-4"></i>
                 <span>Terapkan</span>
             </button>
-            <a href="{% url 'asleb:absensi_list' %}" class="btn-secondary">
+            <a href="{% url 'asleb:absensi_list' %}" class="btn-secondary w-full justify-center sm:w-auto">
                 <i data-lucide="rotate-ccw" class="h-4 w-4"></i>
                 <span>Reset</span>
             </a>
         </div>
     </form>
 
-    <div class="surface-card overflow-hidden">
-        <div class="overflow-x-auto">
-            <table class="min-w-max">
+    <div class="surface-card min-w-0 max-w-full overflow-hidden">
+        <div class="-mx-2 max-w-full overflow-x-auto px-2 pb-2">
+            <table class="min-w-[860px]">
                 <thead class="bg-slate-50">
                     <tr>
                         <th>Nama</th>
@@ -83,8 +83,8 @@
                         <td>{{ absensi.tanggal_praktikum|date:"d M Y" }}</td>
                         <td>Modul {{ absensi.modul }}</td>
                         <td>{{ absensi.materi_praktikum|default:"-" }}</td>
-                        <td><a class="font-semibold text-brand-700 hover:text-brand-800" href="{{ absensi.file_modul.url }}" target="_blank" rel="noreferrer">Lihat modul</a></td>
-                        <td><a class="font-semibold text-brand-700 hover:text-brand-800" href="{{ absensi.bukti_video.url }}" target="_blank" rel="noreferrer">Lihat video</a></td>
+                        <td><a class="inline-flex whitespace-nowrap font-semibold text-brand-700 hover:text-brand-800" href="{{ absensi.file_modul.url }}" target="_blank" rel="noreferrer">Lihat modul</a></td>
+                        <td><a class="inline-flex whitespace-nowrap font-semibold text-brand-700 hover:text-brand-800" href="{{ absensi.bukti_video.url }}" target="_blank" rel="noreferrer">Lihat video</a></td>
                     </tr>
                     {% empty %}
                     <tr>

@@ -3,12 +3,14 @@ from datetime import date
 from django.test import TestCase
 from django.urls import reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
+from reportlab.lib.enums import TA_RIGHT
 
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb
 from apps.pengguna.models import Pengguna
 
 from .forms import AbsensiAslebForm
-from .models import Asleb, HonorAsleb
+from .models import Asleb, HonorAsleb, PengaturanAbsensiAsleb
+from .surat_honor import LAB_SIGNATURES, build_lab_signature, build_lampiran_page, build_styles
 
 
 class AslebViewTests(TestCase):
@@ -50,6 +52,39 @@ class AslebViewTests(TestCase):
         self.assertContains(response, 'Pemrograman Web')
         active_links = [link['title'] for link in response.context['sidebar_links'] if link['active']]
         self.assertEqual(active_links, ['Data Asleb'])
+
+    def test_absensi_list_memakai_layout_responsif(self):
+        response = self.client.get(reverse('asleb:absensi_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'min-w-0 max-w-full space-y-6 overflow-hidden')
+        self.assertContains(response, '-mx-2 max-w-full overflow-x-auto')
+        self.assertContains(response, 'min-w-[860px]')
+
+    def test_absensi_form_memakai_layout_responsif(self):
+        PengaturanAbsensiAsleb.get_solo().__class__.objects.update_or_create(pk=1, defaults={'dibuka': True})
+        aslab_user = Pengguna.objects.create(
+            nama_pengguna='Siti Nurhaliza',
+            nim_nik=self.asleb.nim,
+            email='siti-aslab-login@example.com',
+            password='rahasia123',
+            no_hp='081234567891',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='asisten_lab',
+        )
+        session = self.client.session
+        session['pengguna_id'] = aslab_user.pk
+        session.save()
+
+        response = self.client.get(reverse('asleb:absensi_create'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'mx-auto min-w-0 max-w-4xl')
+        self.assertContains(response, 'min-w-0 max-w-full overflow-hidden')
+        self.assertContains(response, 'w-full justify-center sm:w-auto')
 
     def test_asleb_search_filters_data(self):
         response = self.client.get(reverse('asleb:asleb_list'), {'q': '2301001'})
@@ -146,6 +181,25 @@ class AslebViewTests(TestCase):
         self.assertEqual(honor.status, 'dibayar')
         self.assertEqual(honor.pic_transfer, 'Lab Admin')
         self.assertTrue(honor.bukti_transfer)
+
+    def test_ttd_kepala_laboratorium_di_lampiran_rata_kanan(self):
+        lab_name = next(iter(LAB_SIGNATURES))
+        honor = HonorAsleb.objects.create(
+            asleb=self.asleb,
+            bulan=date(2026, 4, 1),
+            jumlah_praktikum=1,
+            total_pertemuan=3,
+            status='diproses',
+        )
+
+        story = build_lampiran_page(build_styles(), lab_name, [honor], 'April 2026')
+        signature_wrapper = story[-1]
+        signature = signature_wrapper._cellvalues[0][1]
+
+        self.assertEqual(signature_wrapper._colWidths[0] > signature_wrapper._colWidths[1], True)
+        self.assertEqual(signature._cellvalues[0][0].style.alignment, TA_RIGHT)
+        self.assertEqual(signature._cellvalues[2][0].style.alignment, TA_RIGHT)
+        self.assertEqual(build_lab_signature(build_styles(), lab_name)._cellvalues[0][1]._cellvalues[2][0].text, LAB_SIGNATURES[lab_name])
 
     def test_absensi_menolak_file_modul_yang_sama(self):
         first_form = AbsensiAslebForm(

@@ -3,28 +3,28 @@
 {% block title %}Form Absensi Asleb{% endblock %}
 
 {% block content %}
-<section class="mx-auto max-w-4xl space-y-6">
-    <div>
+<section class="mx-auto min-w-0 max-w-4xl space-y-6 overflow-hidden">
+    <div class="min-w-0">
         <p class="text-sm font-bold uppercase tracking-[0.2em] text-cyan-700">Absensi</p>
-        <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Form Absensi Asleb</h2>
+        <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 md:text-3xl">Form Absensi Asleb</h2>
         <p class="mt-2 text-sm text-slate-500">Isi absensi praktikum. Modul yang sudah pernah diabsen tidak akan bisa dipilih lagi.</p>
     </div>
 
-    <div class="surface-card grid gap-4 p-5 md:grid-cols-2">
-        <div>
+    <div class="surface-card min-w-0 max-w-full overflow-hidden grid gap-4 p-5 md:grid-cols-2">
+        <div class="min-w-0">
             <div class="text-sm font-semibold text-slate-500">Nama</div>
-            <div class="mt-1 text-lg font-black text-slate-900">{{ view.asleb.nama }}</div>
+            <div class="mt-1 break-words text-lg font-black text-slate-900">{{ view.asleb.nama }}</div>
         </div>
-        <div>
+        <div class="min-w-0">
             <div class="text-sm font-semibold text-slate-500">NIM</div>
-            <div class="mt-1 text-lg font-black text-slate-900">{{ view.asleb.nim }}</div>
+            <div class="mt-1 break-words text-lg font-black text-slate-900">{{ view.asleb.nim }}</div>
         </div>
     </div>
 
-    <form method="post" enctype="multipart/form-data" class="surface-card grid gap-5 p-6 md:grid-cols-2 md:p-8">
+    <form method="post" enctype="multipart/form-data" class="surface-card min-w-0 max-w-full overflow-hidden grid gap-5 p-5 md:grid-cols-2 md:p-8">
         {% csrf_token %}
         {% for field in form %}
-        <div class="{% if field.name == 'pekerjaan' %}md:col-span-2{% endif %}">
+        <div class="{% if field.name == 'pekerjaan' %}md:col-span-2{% endif %} min-w-0">
             {{ field.label_tag }}
             {{ field }}
             {% if field.errors %}
@@ -36,11 +36,11 @@
             Setiap absensi akan menambah total pertemuan pada rekap honorarium bulan terkait. Satu asleb hanya bisa mengisi satu kali untuk setiap modul.
         </div>
         <div class="flex flex-wrap gap-3 pt-2 md:col-span-2">
-            <button type="submit" class="btn-primary gap-2">
+            <button type="submit" class="btn-primary w-full justify-center gap-2 sm:w-auto">
                 <i data-lucide="save" class="h-4 w-4"></i>
                 <span>Simpan Absensi</span>
             </button>
-            <a class="btn-secondary" href="{% url 'asleb:absensi_list' %}">
+            <a class="btn-secondary w-full justify-center sm:w-auto" href="{% url 'asleb:absensi_list' %}">
                 <i data-lucide="arrow-left" class="h-4 w-4"></i>
                 <span>Batal</span>
             </a>
