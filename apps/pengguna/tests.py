@@ -499,6 +499,7 @@ class PenggunaAuthTests(TestCase):
         response = self.client.post(
             reverse('pengguna:login'),
             {
+                'jenis_login': 'mahasiswa',
                 'nim_nik': '2201001',
                 'password': 'rahasia123',
             },
@@ -511,6 +512,7 @@ class PenggunaAuthTests(TestCase):
         response = self.client.post(
             f"{reverse('pengguna:login')}?next=https://evil.example/phish",
             {
+                'jenis_login': 'mahasiswa',
                 'nim_nik': '2201001',
                 'password': 'rahasia123',
             },
@@ -522,6 +524,7 @@ class PenggunaAuthTests(TestCase):
         response = self.client.post(
             reverse('pengguna:login'),
             {
+                'jenis_login': 'mahasiswa',
                 'nim_nik': '2201001',
                 'password': 'salah',
             },
@@ -537,6 +540,7 @@ class PenggunaAuthTests(TestCase):
         response = self.client.post(
             reverse('pengguna:login'),
             {
+                'jenis_login': 'mahasiswa',
                 'nim_nik': '9999999',
                 'password': 'passwordasal',
             },
@@ -552,6 +556,7 @@ class PenggunaAuthTests(TestCase):
         response = self.client.post(
             reverse('pengguna:login'),
             {
+                'jenis_login': 'mahasiswa',
                 'nim_nik': 'ABC123',
                 'password': 'passwordasal',
             },
@@ -568,6 +573,7 @@ class PenggunaAuthTests(TestCase):
         response = self.client.post(
             reverse('pengguna:login'),
             {
+                'jenis_login': 'mahasiswa',
                 'nim_nik': '2201001',
                 'password': 'rahasia123',
             },
@@ -577,10 +583,52 @@ class PenggunaAuthTests(TestCase):
         self.assertContains(response, 'Akun belum diverifikasi')
         self.assertNotIn('pengguna_id', self.client.session)
 
+    def test_login_karyawan_hanya_untuk_admin_dan_laboran(self):
+        admin = Pengguna.objects.create(
+            nama_pengguna='Admin Lab',
+            nim_nik='3301001',
+            email='admin@example.com',
+            password='rahasia123',
+            no_hp='081111111111',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='admin',
+        )
+
+        response = self.client.post(
+            reverse('pengguna:login'),
+            {
+                'jenis_login': 'karyawan',
+                'nim_nik': admin.nim_nik,
+                'password': 'rahasia123',
+            },
+        )
+
+        self.assertRedirects(response, reverse('dashboard:home'))
+        self.assertEqual(self.client.session['pengguna_id'], admin.pk)
+
+    def test_login_mahasiswa_ditolak_di_mode_karyawan(self):
+        response = self.client.post(
+            reverse('pengguna:login'),
+            {
+                'jenis_login': 'karyawan',
+                'nim_nik': self.pengguna.nim_nik,
+                'password': 'rahasia123',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Akun ini bukan akun karyawan')
+        self.assertNotIn('pengguna_id', self.client.session)
+
     def test_register_fakultas_dan_prodi_berupa_dropdown(self):
         response = self.client.get(reverse('pengguna:register'))
 
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="nama_pengguna"', html=False)
+        self.assertContains(response, 'name="nim_nik"', html=False)
         self.assertContains(response, '<select name="fakultas"', html=False)
         self.assertContains(response, '<select name="prodi"', html=False)
         self.assertContains(response, 'Teknologi Industri')
@@ -613,8 +661,8 @@ class PenggunaAuthTests(TestCase):
                 'password': 'passwordku123',
                 'password_confirmation': 'passwordku123',
                 'alamat': 'Jakarta',
-                'fakultas': 'Ekonomi',
-                'prodi': 'Manajemen',
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Informatika',
                 'gender': 'perempuan',
             },
             follow=True,
@@ -622,6 +670,7 @@ class PenggunaAuthTests(TestCase):
 
         pengguna = Pengguna.objects.get(nim_nik='2201002')
         self.assertRedirects(response, reverse('pengguna:verify_register'))
+        self.assertEqual(pengguna.nama_pengguna, 'Siti Aminah')
         self.assertTrue(check_password('passwordku123', pengguna.password))
         self.assertEqual(pengguna.role, 'mahasiswa')
         self.assertEqual(pengguna.no_hp, '')
@@ -647,8 +696,8 @@ class PenggunaAuthTests(TestCase):
                 'password': 'passwordku123',
                 'password_confirmation': 'passwordku123',
                 'alamat': 'Jakarta',
-                'fakultas': 'Ekonomi',
-                'prodi': 'Manajemen',
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Informatika',
                 'gender': 'laki_laki',
             },
         )
@@ -677,8 +726,8 @@ class PenggunaAuthTests(TestCase):
                 'password': 'passwordku123',
                 'password_confirmation': 'passwordku123',
                 'alamat': 'Jakarta',
-                'fakultas': 'Ekonomi',
-                'prodi': 'Manajemen',
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Informatika',
                 'gender': 'perempuan',
             },
         )
@@ -715,8 +764,8 @@ class PenggunaAuthTests(TestCase):
                 'password': 'passwordku123',
                 'password_confirmation': 'passwordku123',
                 'alamat': 'Jakarta',
-                'fakultas': 'Ekonomi',
-                'prodi': 'Manajemen',
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Informatika',
                 'gender': 'perempuan',
             },
         )
@@ -735,8 +784,8 @@ class PenggunaAuthTests(TestCase):
                 'password': 'passwordku123',
                 'password_confirmation': 'passwordku123',
                 'alamat': 'Jakarta',
-                'fakultas': 'Ekonomi',
-                'prodi': 'Manajemen',
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Informatika',
                 'gender': 'perempuan',
             },
         )

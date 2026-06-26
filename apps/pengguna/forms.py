@@ -223,12 +223,29 @@ class ChangePasswordForm(forms.Form):
 
 
 class LoginPenggunaForm(forms.Form):
-    nim_nik = forms.CharField(
-        label='NIM/NIK',
-        max_length=40,
-        widget=forms.TextInput(attrs={'inputmode': 'numeric', 'pattern': '[0-9]*', 'placeholder': 'NIM/NIK terdaftar'}),
+    JENIS_LOGIN_CHOICES = [
+        ('mahasiswa', 'Mahasiswa'),
+        ('karyawan', 'Karyawan'),
+    ]
+
+    jenis_login = forms.ChoiceField(
+        label='Masuk sebagai',
+        choices=JENIS_LOGIN_CHOICES,
+        initial='mahasiswa',
+        required=False,
+        widget=forms.RadioSelect,
     )
-    password = forms.CharField(widget=forms.PasswordInput)
+    nim_nik = forms.CharField(
+        label='NIM atau NIK',
+        max_length=40,
+        widget=forms.TextInput(attrs={
+            'autocomplete': 'username',
+            'inputmode': 'numeric',
+            'pattern': '[0-9]*',
+            'placeholder': 'Masukkan NIM atau NIK',
+        }),
+    )
+    password = forms.CharField(widget=forms.PasswordInput(attrs={'autocomplete': 'current-password'}))
 
     error_messages = {
         'invalid_login': 'NIM/NIK atau password tidak sesuai.',
@@ -242,6 +259,7 @@ class LoginPenggunaForm(forms.Form):
 
     def clean(self):
         cleaned_data = super().clean()
+        jenis_login = cleaned_data.get('jenis_login') or 'mahasiswa'
         nim_nik = cleaned_data.get('nim_nik')
         password = cleaned_data.get('password')
 
@@ -259,6 +277,12 @@ class LoginPenggunaForm(forms.Form):
         if not check_password(password, pengguna.password):
             raise forms.ValidationError(self.error_messages['invalid_login'])
 
+        if jenis_login == 'mahasiswa' and pengguna.role not in ['mahasiswa', 'asisten_lab']:
+            raise forms.ValidationError('Akun ini bukan akun mahasiswa. Pilih login sebagai karyawan.')
+
+        if jenis_login == 'karyawan' and pengguna.role not in ['admin', 'laboran']:
+            raise forms.ValidationError('Akun ini bukan akun karyawan. Pilih login sebagai mahasiswa.')
+
         cleaned_data['pengguna'] = pengguna
         return cleaned_data
 
@@ -269,26 +293,32 @@ class RegisterPenggunaForm(forms.ModelForm):
     class Meta:
         model = Pengguna
         fields = [
-            'foto',
             'nama_pengguna',
             'nim_nik',
             'email',
             'password',
             'password_confirmation',
             'gender',
+            'foto',
             'alamat',
             'fakultas',
             'prodi',
         ]
         widgets = {
             'foto': forms.FileInput(attrs={'class': 'hidden', 'accept': 'image/*'}),
-            'password': forms.PasswordInput(render_value=False),
+            'password': forms.PasswordInput(attrs={'autocomplete': 'new-password'}, render_value=False),
             'email': forms.EmailInput(attrs={
+                'autocomplete': 'email',
                 'placeholder': 'nama@std.trisakti.ac.id atau nama@trisakti.ac.id',
                 'pattern': '.+@(std\\.trisakti\\.ac\\.id|trisakti\\.ac\\.id)',
                 'title': 'Gunakan email dengan akhiran @std.trisakti.ac.id atau @trisakti.ac.id',
             }),
-            'nim_nik': forms.TextInput(attrs={'inputmode': 'numeric', 'pattern': '[0-9]*', 'placeholder': 'Angka saja'}),
+            'nim_nik': forms.TextInput(attrs={
+                'autocomplete': 'username',
+                'inputmode': 'numeric',
+                'pattern': '[0-9]*',
+                'placeholder': 'Angka saja',
+            }),
             'alamat': forms.Textarea(attrs={'rows': 4}),
         }
 

@@ -4,48 +4,256 @@
 {% block title %}Login{% endblock %}
 
 {% block content %}
-<section class="mx-auto max-w-xl space-y-6">
-    <div class="flex items-center gap-4 sm:gap-5">
-        <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-brand-100 bg-white/90 p-2 shadow-soft sm:h-16 sm:w-16">
-            <img src="{% static 'core/img/labhub-logo.png' %}" alt="LabHub" class="h-full w-full object-contain">
+<section class="auth-page login-page mx-auto grid min-h-[calc(100vh-7rem)] w-full max-w-6xl items-center gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+    <aside class="auth-brand-panel login-brand-panel hidden min-h-[34rem] overflow-hidden rounded-[28px] border border-brand-100 bg-brand-900 p-8 text-white lg:flex lg:flex-col lg:justify-between">
+        <div class="relative z-10">
+            <div class="login-brand-logo flex h-16 w-16 items-center justify-center rounded-2xl border border-white/20 bg-white/95 p-2">
+                <img src="{% static 'core/img/labhub-logo.png' %}" alt="LabHub" class="h-full w-full object-contain">
+            </div>
+            <div class="mt-8">
+                <p class="text-xs font-black uppercase tracking-[0.24em] text-cyan-100">LabHub</p>
+                <h2 class="mt-3 text-4xl font-black leading-tight tracking-tight">Portal operasional lab JTIF Usakti</h2>
+            </div>
         </div>
-        <div class="min-w-0">
-            <p class="text-xs font-bold uppercase tracking-[0.16em] text-brand-700 sm:text-sm sm:tracking-[0.2em]">Autentikasi</p>
-            <h2 class="mt-1 text-2xl font-black tracking-tight text-slate-900 sm:mt-2 sm:text-3xl">Login</h2>
-            <p class="mt-2 text-sm text-slate-500">Masuk menggunakan NIM/NIK dan password pengguna.</p>
+        <div class="relative z-10 space-y-4">
+            <div class="login-mini-stats">
+                <span><i data-lucide="flask-conical" class="h-5 w-5"></i> Inventaris</span>
+                <span><i data-lucide="calendar-days" class="h-5 w-5"></i> Jadwal</span>
+                <span><i data-lucide="shield-check" class="h-5 w-5"></i> Akses aman</span>
+            </div>
         </div>
-    </div>
+    </aside>
 
-    <form method="post" class="surface-card space-y-5 p-6 md:p-8">
-        {% csrf_token %}
-        {% if form.non_field_errors %}
-        <div class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
-            {{ form.non_field_errors|striptags }}
+    <div class="login-form-shell flex min-w-0 flex-col justify-center space-y-6">
+        <div class="flex items-center gap-4 sm:gap-5 lg:justify-center lg:text-center">
+            <div class="auth-mobile-logo flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-brand-100 bg-white/90 p-2 shadow-soft sm:h-16 sm:w-16 lg:hidden">
+                <img src="{% static 'core/img/labhub-logo.png' %}" alt="LabHub" class="h-full w-full object-contain">
+            </div>
+            <div class="min-w-0">
+                <p class="text-xs font-bold uppercase tracking-[0.16em] text-brand-700 sm:text-sm sm:tracking-[0.2em]">Autentikasi</p>
+                <h2 class="mt-1 text-2xl font-black tracking-tight text-slate-900 sm:mt-2 sm:text-3xl">Login</h2>
+                <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Pilih jenis akun, lalu masuk ke dashboard LabHub.</p>
+            </div>
         </div>
-        {% endif %}
-        {% for field in form %}
-        <div>
-            {{ field.label_tag }}
-            {{ field }}
-            {% if field.errors %}
-            <div class="mt-2 text-sm font-semibold text-rose-600">{{ field.errors|striptags }}</div>
+
+        <form method="post" class="auth-form login-form-card surface-card space-y-5 p-6 md:p-8">
+            {% csrf_token %}
+            {% if form.non_field_errors %}
+            <div class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+                {{ form.non_field_errors|striptags }}
+            </div>
             {% endif %}
-        </div>
-        {% endfor %}
-        <div class="flex flex-wrap items-center gap-3 pt-2">
-            <button type="submit" class="btn-primary gap-2">
-                <i data-lucide="log-in" class="h-4 w-4"></i>
-                <span>Login</span>
-            </button>
-            <a class="btn-secondary gap-2" href="{% url 'pengguna:register' %}">
-                <i data-lucide="user-plus" class="h-4 w-4"></i>
-                <span>Register</span>
-            </a>
-            <a class="inline-flex items-center gap-2 text-sm font-bold text-brand-700 hover:text-brand-800" href="{% url 'pengguna:forgot_password' %}">
-                <i data-lucide="key-round" class="h-4 w-4"></i>
-                <span>Lupa password?</span>
-            </a>
-        </div>
-    </form>
+            {% for field in form %}
+            <div>
+                {{ field.label_tag }}
+                {% if field.name == 'jenis_login' %}
+                <div class="mt-2 grid gap-3 sm:grid-cols-2">
+                    {% for choice in field %}
+                    <label class="login-choice flex min-h-14 cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition">
+                        {{ choice.tag }}
+                        <i data-lucide="{% if choice.data.value == 'mahasiswa' %}graduation-cap{% else %}briefcase-business{% endif %}" class="h-4 w-4 text-brand-700"></i>
+                        <span>{{ choice.choice_label }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+                {% else %}
+                {{ field }}
+                {% endif %}
+                {% if field.errors %}
+                <div class="mt-2 text-sm font-semibold text-rose-600">{{ field.errors|striptags }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+            <div class="flex flex-wrap items-center gap-3 pt-2">
+                <button type="submit" class="btn-primary gap-2">
+                    <i data-lucide="log-in" class="h-4 w-4"></i>
+                    <span>Login</span>
+                </button>
+                <a class="btn-secondary gap-2" href="{% url 'pengguna:register' %}">
+                    <i data-lucide="user-plus" class="h-4 w-4"></i>
+                    <span>Register</span>
+                </a>
+                <a class="inline-flex items-center gap-2 text-sm font-bold text-brand-700 hover:text-brand-800" href="{% url 'pengguna:forgot_password' %}">
+                    <i data-lucide="key-round" class="h-4 w-4"></i>
+                    <span>Lupa password?</span>
+                </a>
+            </div>
+        </form>
+    </div>
 </section>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const identifierInput = document.getElementById('id_nim_nik');
+        const loginChoices = document.querySelectorAll('input[name="jenis_login"]');
+
+        function syncIdentifierLabel() {
+            if (!identifierInput) {
+                return;
+            }
+
+            const selected = document.querySelector('input[name="jenis_login"]:checked');
+            const mode = selected ? selected.value : 'mahasiswa';
+            identifierInput.placeholder = mode === 'karyawan' ? 'Masukkan NIK karyawan' : 'Masukkan NIM mahasiswa';
+        }
+
+        if (identifierInput) {
+            identifierInput.addEventListener('input', function () {
+                identifierInput.value = identifierInput.value.replace(/\D/g, '');
+            });
+        }
+
+        loginChoices.forEach(function (choice) {
+            choice.addEventListener('change', syncIdentifierLabel);
+        });
+        syncIdentifierLabel();
+    });
+</script>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    .auth-brand-panel {
+        position: relative;
+        isolation: isolate;
+    }
+
+    .auth-brand-panel::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+            linear-gradient(135deg, rgba(255, 255, 255, 0.13) 0 1px, transparent 1px 100%),
+            linear-gradient(90deg, rgba(45, 212, 191, 0.18), rgba(14, 165, 233, 0.08));
+        background-size: 26px 26px, auto;
+        opacity: 0.9;
+        z-index: 0;
+    }
+
+    .auth-brand-panel::after {
+        content: "";
+        position: absolute;
+        left: -8rem;
+        bottom: -10rem;
+        width: 26rem;
+        height: 26rem;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 9999px;
+        z-index: 0;
+    }
+
+    .auth-icon-tile {
+        display: flex;
+        min-height: 5rem;
+        align-items: center;
+        justify-content: center;
+        border-radius: 1.25rem;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: rgba(255, 255, 255, 0.10);
+        color: rgb(207, 250, 254);
+    }
+
+    .auth-form {
+        border-color: rgba(32, 164, 171, 0.24) !important;
+    }
+
+    .login-page {
+        align-items: center;
+    }
+
+    .login-brand-panel {
+        min-height: 34rem;
+        flex-direction: column;
+        justify-content: space-between;
+        box-sizing: border-box;
+        padding: 2rem;
+        border-radius: 1.75rem;
+    }
+
+    .login-brand-logo {
+        width: 4rem;
+        height: 4rem;
+        max-width: 4rem;
+        max-height: 4rem;
+        flex: 0 0 auto;
+        box-sizing: border-box;
+    }
+
+    .login-brand-logo img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+
+    .login-mini-stats {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+
+    .login-mini-stats span {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        border-radius: 1.1rem;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: rgba(255, 255, 255, 0.10);
+        padding: 0.8rem 0.95rem;
+        color: rgb(207, 250, 254);
+        font-size: 0.9rem;
+        font-weight: 800;
+    }
+
+    .login-form-card {
+        position: relative;
+        overflow: hidden;
+    }
+
+    .login-form-card::before {
+        content: "";
+        position: absolute;
+        inset: 0 0 auto 0;
+        height: 0.35rem;
+        background: linear-gradient(90deg, #13838c, #20a4ab, #42c0c4);
+    }
+
+    .login-choice {
+        box-sizing: border-box;
+    }
+
+    @media (min-width: 1024px) {
+        .login-form-card {
+            max-width: 48rem;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .login-form-shell {
+            align-items: stretch;
+        }
+    }
+
+    @media (hover: hover) and (pointer: fine) {
+        .login-choice:hover {
+            transform: translateY(-2px);
+            border-color: rgba(32, 164, 171, 0.45) !important;
+            background-color: rgba(32, 164, 171, 0.08) !important;
+        }
+
+        .login-choice:hover span {
+            color: #116971;
+        }
+
+        .login-choice:has(input:checked) {
+            border-color: rgba(32, 164, 171, 0.55) !important;
+            background-color: rgba(32, 164, 171, 0.10) !important;
+        }
+
+        form.surface-card a:hover {
+            transform: translateY(-1px);
+        }
+    }
+</style>
 {% endblock %}
