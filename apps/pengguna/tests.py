@@ -381,6 +381,17 @@ class PenggunaAuthTests(TestCase):
         self.assertRedirects(response, reverse('dashboard:home'))
         self.assertEqual(self.client.session['pengguna_id'], self.pengguna.pk)
 
+    def test_login_menolak_next_url_domain_luar(self):
+        response = self.client.post(
+            f"{reverse('pengguna:login')}?next=https://evil.example/phish",
+            {
+                'nim_nik': '2201001',
+                'password': 'rahasia123',
+            },
+        )
+
+        self.assertRedirects(response, reverse('dashboard:home'), fetch_redirect_response=False)
+
     def test_login_menolak_password_salah(self):
         response = self.client.post(
             reverse('pengguna:login'),
@@ -448,6 +459,13 @@ class PenggunaAuthTests(TestCase):
         self.assertContains(response, '<select name="prodi"', html=False)
         self.assertContains(response, 'Teknologi Industri')
         self.assertContains(response, 'Informatika')
+
+    def test_halaman_publik_login_register_tidak_menampilkan_sidebar_dashboard(self):
+        for url in [reverse('pengguna:login'), reverse('pengguna:register')]:
+            response = self.client.get(url)
+
+            self.assertEqual(response.status_code, 200)
+            self.assertNotContains(response, 'id="dashboard-sidebar"', html=False)
 
     def test_register_dropdown_fakultas_prodi_mengambil_data_database(self):
         Fakultas.objects.create(nama='Fakultas Baru')
@@ -541,6 +559,25 @@ class PenggunaAuthTests(TestCase):
 
         self.assertRedirects(response, reverse('pengguna:verify_register'))
         self.assertTrue(Pengguna.objects.filter(nim_nik='2201003', email='dina@trisakti.ac.id').exists())
+
+    def test_register_menolak_password_lemah(self):
+        response = self.client.post(
+            reverse('pengguna:register'),
+            {
+                'nama_pengguna': 'Password Lemah',
+                'nim_nik': '2201009',
+                'email': 'lemah@std.trisakti.ac.id',
+                'password': '123',
+                'password_confirmation': '123',
+                'alamat': 'Jakarta',
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Informatika',
+                'gender': 'laki_laki',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Pengguna.objects.filter(nim_nik='2201009').exists())
 
     def test_register_menolak_email_non_trisakti(self):
         response = self.client.post(

@@ -11,10 +11,12 @@ def get_public_registration_url():
 
 
 GRADE_PATTERN = re.compile(
-    r'(?:nilai|grade|huruf|mutu)\s*[:=\-]?\s*(A|B|C)\b|\b(A|B|C)\s*(?:nilai|grade|huruf|mutu)\b',
+    r'(?:nilai|grade|huruf|mutu)\s*[:=\-]?\s*(A|B|C|D|E)\b|\b(A|B|C|D|E)\s*(?:nilai|grade|huruf|mutu)\b',
     re.IGNORECASE,
 )
-TRANSCRIPT_GRADE_PATTERN = re.compile(r'\b(A|B|C)\b', re.IGNORECASE)
+TRANSCRIPT_GRADE_PATTERN = re.compile(r'\b(A|B|C|D|E)\b', re.IGNORECASE)
+
+PASSING_GRADES = {'A', 'B', 'C'}
 
 
 def extract_grade_from_transcript(file_obj, matkul=None):
@@ -144,6 +146,10 @@ def find_grade(text):
         return None
 
     return next(value.upper() for value in match.groups() if value)
+
+
+def is_passing_grade(grade):
+    return (grade or '').upper() in PASSING_GRADES
 
 
 def find_grade_for_course(text, matkul):

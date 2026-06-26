@@ -84,6 +84,8 @@ class PendaftaranAsleb(models.Model):
         ('A', 'A'),
         ('B', 'B'),
         ('C', 'C'),
+        ('D', 'D'),
+        ('E', 'E'),
         ('tidak_terbaca', 'Tidak terbaca'),
     ]
 

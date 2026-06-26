@@ -1,5 +1,7 @@
 from django import forms
 from django.contrib.auth.hashers import check_password
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from django.db import OperationalError, ProgrammingError
 
 from .models import Fakultas, Pengguna, Prodi
@@ -18,6 +20,16 @@ def active_name_choices(model, empty_label):
 def apply_fakultas_prodi_choices(form):
     form.fields['fakultas'].widget = forms.Select(choices=active_name_choices(Fakultas, 'Pilih fakultas'))
     form.fields['prodi'].widget = forms.Select(choices=active_name_choices(Prodi, 'Pilih prodi'))
+
+
+def add_password_validator_errors(form, password):
+    if not password:
+        return
+
+    try:
+        validate_password(password)
+    except ValidationError as exc:
+        form.add_error('password', exc)
 
 
 class PenggunaForm(forms.ModelForm):
@@ -55,6 +67,11 @@ class PenggunaForm(forms.ModelForm):
         validate_human_face_photo(foto)
         return foto
 
+    def clean(self):
+        cleaned_data = super().clean()
+        add_password_validator_errors(self, cleaned_data.get('password'))
+        return cleaned_data
+
     def save(self, commit=True):
         instance = super().save(commit=False)
         password = self.cleaned_data.get('password')
@@ -70,6 +87,66 @@ class PenggunaForm(forms.ModelForm):
             instance.save()
             self.save_m2m()
 
+        return instance
+
+
+class FakultasForm(forms.ModelForm):
+    class Meta:
+        model = Fakultas
+        fields = ['nama', 'aktif']
+        widgets = {
+            'nama': forms.TextInput(attrs={'placeholder': 'Contoh: Teknologi Industri'}),
+        }
+
+
+class ProdiForm(forms.ModelForm):
+    class Meta:
+        model = Prodi
+        fields = ['nama', 'aktif']
+        widgets = {
+            'nama': forms.TextInput(attrs={'placeholder': 'Contoh: Informatika'}),
+        }
+
+
+class PenggunaAppearanceForm(forms.ModelForm):
+    hapus_background = forms.BooleanField(required=False, widget=forms.HiddenInput)
+
+    class Meta:
+        model = Pengguna
+        fields = ['theme_mode', 'background_mode', 'background_image']
+        widgets = {
+            'theme_mode': forms.RadioSelect,
+            'background_mode': forms.RadioSelect,
+            'background_image': forms.FileInput(attrs={'accept': 'image/*'}),
+        }
+
+    def clean_background_image(self):
+        image = self.cleaned_data.get('background_image')
+        if image and image.size > 2 * 1024 * 1024:
+            raise forms.ValidationError('Ukuran gambar background maksimal 2 MB.')
+        return image
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        old_background = None
+        if instance.pk:
+            old_background = Pengguna.objects.filter(pk=instance.pk).values_list('background_image', flat=True).first()
+
+        if self.cleaned_data.get('hapus_background'):
+            instance.background_image = None
+            if instance.background_mode == 'custom':
+                instance.background_mode = 'default'
+        elif self.cleaned_data.get('background_image'):
+            instance.background_mode = 'custom'
+
+        if instance.background_mode == 'custom' and not instance.background_image:
+            instance.background_mode = 'default'
+
+        if commit:
+            instance.save(update_fields=['theme_mode', 'background_mode', 'background_image', 'diperbarui_pada'])
+            new_background = instance.background_image.name if instance.background_image else ''
+            if old_background and old_background != new_background:
+                instance._meta.get_field('background_image').storage.delete(old_background)
         return instance
 
 
@@ -141,6 +218,7 @@ class ChangePasswordForm(forms.Form):
         if password and password_confirmation and password != password_confirmation:
             self.add_error('password_confirmation', 'Konfirmasi password tidak sama.')
 
+        add_password_validator_errors(self, password)
         return cleaned_data
 
 
@@ -244,6 +322,7 @@ class RegisterPenggunaForm(forms.ModelForm):
         if password and password_confirmation and password != password_confirmation:
             self.add_error('password_confirmation', 'Konfirmasi password tidak sama.')
 
+        add_password_validator_errors(self, password)
         return cleaned_data
 
     def save(self, commit=True):
@@ -299,4 +378,5 @@ class ResetPasswordForm(VerificationCodeForm):
         if password and password_confirmation and password != password_confirmation:
             self.add_error('password_confirmation', 'Konfirmasi password tidak sama.')
 
+        add_password_validator_errors(self, password)
         return cleaned_data

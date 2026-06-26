@@ -56,15 +56,38 @@ SIDEBAR_LINKS = [
         'icon': 'file-chart-column',
         'url': 'asleb:honor_list',
         'namespace': 'asleb',
-        'url_names': {'honor_list', 'honor_create', 'honor_confirm_transfer', 'honor_update', 'honor_delete'},
+        'url_names': {
+            'honor_list',
+            'honor_create',
+            'honor_auto_assign_transfers',
+            'honor_confirm_transfer',
+            'honor_update',
+            'honor_delete',
+            'surat_honor_list',
+            'surat_honor_generate',
+            'surat_honor_download',
+        },
     },
-    {'title': 'Pengguna', 'icon': 'user-round', 'url': 'pengguna:list', 'namespace': 'pengguna'},
+    {
+        'title': 'Pengguna',
+        'icon': 'user-round',
+        'url': 'pengguna:list',
+        'namespace': 'pengguna',
+        'url_names': {'list', 'create', 'detail', 'update', 'update_profile', 'verify_profile_phone', 'change_password', 'delete'},
+    },
+    {
+        'title': 'Master Akademik',
+        'icon': 'graduation-cap',
+        'url': 'pengguna:master_akademik',
+        'namespace': 'pengguna',
+        'url_names': {'master_akademik', 'fakultas_create', 'fakultas_update', 'prodi_create', 'prodi_update'},
+    },
     {'title': 'Ruangan', 'icon': 'door-open', 'url': 'ruangan:ruangan_list', 'namespace': 'ruangan'},
-    {'title': 'Pengaturan', 'icon': 'settings', 'url': '', 'namespace': ''},
+    {'title': 'Pengaturan', 'icon': 'settings', 'url': 'core:settings', 'namespace': 'core'},
 ]
 
-MAHASISWA_VISIBLE_NAMESPACES = {'dashboard', 'kalender', 'peminjaman', 'jadwal', 'ruangan'}
-ASISTEN_LAB_HIDDEN_TITLES = {'Rekap Honorarium Asleb', 'Pengaturan'}
+MAHASISWA_VISIBLE_NAMESPACES = {'core', 'dashboard', 'kalender', 'peminjaman', 'jadwal', 'ruangan'}
+ASISTEN_LAB_HIDDEN_TITLES = {'Rekap Honorarium Asleb'}
 ASISTEN_LAB_HIDDEN_NAMESPACES = {'inventaris', 'barang_tertinggal', 'asleb', 'pendaftaran_asleb', 'pengguna'}
 
 

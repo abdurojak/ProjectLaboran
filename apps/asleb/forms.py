@@ -2,7 +2,9 @@ import hashlib
 
 from django import forms
 
-from .models import AbsensiAsleb, Asleb, HonorAsleb
+from apps.pengguna.models import Pengguna
+
+from .models import AbsensiAsleb, Asleb, HonorAsleb, SuratHonorAsleb
 
 
 class AslebForm(forms.ModelForm):
@@ -44,6 +46,7 @@ class HonorAslebForm(forms.ModelForm):
             'nama_pemilik_transfer',
             'tanggal_transfer',
             'bukti_transfer',
+            'assigned_laboran',
             'pic_transfer',
             'status',
             'keterangan',
@@ -56,6 +59,18 @@ class HonorAslebForm(forms.ModelForm):
             'nama_pemilik_transfer': forms.TextInput(attrs={'placeholder': 'Nama sesuai rekening/e-wallet'}),
             'keterangan': forms.Textarea(attrs={'rows': 3}),
         }
+
+    def __init__(self, *args, **kwargs):
+        self.current_pengguna = kwargs.pop('current_pengguna', None)
+        super().__init__(*args, **kwargs)
+        self.fields['assigned_laboran'].queryset = Pengguna.objects.filter(
+            role='laboran',
+            is_verified=True,
+        ).order_by('nama_pengguna')
+        self.fields['assigned_laboran'].required = False
+        self.fields['assigned_laboran'].empty_label = 'Bagi otomatis ke laboran'
+        if not self.current_pengguna or self.current_pengguna.role != 'admin':
+            self.fields.pop('assigned_laboran', None)
 
 
 class KonfirmasiTransferHonorForm(forms.ModelForm):
@@ -73,6 +88,28 @@ class KonfirmasiTransferHonorForm(forms.ModelForm):
         if not bukti_transfer and not self.instance.bukti_transfer:
             raise forms.ValidationError('Bukti screenshot transfer wajib diupload.')
         return bukti_transfer
+
+
+class SuratHonorAslebGenerateForm(forms.Form):
+    bulan = forms.DateField(
+        widget=forms.DateInput(attrs={'type': 'month'}),
+        input_formats=['%Y-%m', '%Y-%m-%d'],
+        help_text='Pilih bulan honor yang akan dibuatkan surat.',
+    )
+    nomor_surat = forms.CharField(
+        max_length=120,
+        widget=forms.TextInput(attrs={'placeholder': 'Contoh: 0363/AK.01.02/FTI-Kajur.TIF/VI/2026'}),
+    )
+    tanggal_surat = forms.DateField(widget=forms.DateInput(attrs={'type': 'date'}))
+    perihal = forms.CharField(
+        max_length=200,
+        initial=SuratHonorAsleb._meta.get_field('perihal').default,
+        widget=forms.TextInput(attrs={'placeholder': 'Perihal surat'}),
+    )
+
+    def clean_bulan(self):
+        bulan = self.cleaned_data['bulan']
+        return bulan.replace(day=1)
 
 
 class AbsensiAslebForm(forms.ModelForm):

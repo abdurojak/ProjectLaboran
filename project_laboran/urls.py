@@ -29,6 +29,7 @@ urlpatterns = [
     path('peminjaman/', include('apps.peminjaman.urls')),
     path('pendaftaran-asleb/', include('apps.pendaftaran_asleb.urls')),
     path('pengguna/', include('apps.pengguna.urls')),
+    path('pengaturan/', include('apps.core.urls')),
     path('ruangan/', include('apps.ruangan.urls')),
     path('admin/', admin.site.urls),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

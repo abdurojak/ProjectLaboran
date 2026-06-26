@@ -10,24 +10,48 @@
             <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Rekap Honorarium Asleb</h2>
             <p class="mt-2 text-sm text-slate-500">{{ formula_note }}</p>
         </div>
-        <a class="btn-primary bg-violet-700 hover:bg-violet-800 shadow-violet-900/20" href="{% url 'asleb:honor_create' %}">
-            <i data-lucide="plus" class="h-4 w-4"></i>
-            <span>Tambah Rekap</span>
-        </a>
+        <div class="flex flex-wrap gap-3">
+            <a class="btn-secondary" href="{% url 'asleb:surat_honor_list' %}">
+                <i data-lucide="archive" class="h-4 w-4"></i>
+                <span>Arsip Surat</span>
+            </a>
+            <a class="btn-secondary" href="{% url 'asleb:surat_honor_generate' %}">
+                <i data-lucide="file-plus-2" class="h-4 w-4"></i>
+                <span>Generate Surat</span>
+            </a>
+            {% if is_admin %}
+            <form method="post" action="{% url 'asleb:honor_auto_assign_transfers' %}">
+                {% csrf_token %}
+                <input type="hidden" name="bulan" value="{{ selected_bulan }}">
+                <button type="submit" class="btn-secondary">
+                    <i data-lucide="shuffle" class="h-4 w-4"></i>
+                    <span>Bagi Otomatis TF</span>
+                </button>
+            </form>
+            {% endif %}
+            <a class="btn-primary bg-violet-700 hover:bg-violet-800 shadow-violet-900/20" href="{% url 'asleb:honor_create' %}">
+                <i data-lucide="plus" class="h-4 w-4"></i>
+                <span>Tambah Rekap</span>
+            </a>
+        </div>
     </div>
 
-    <div class="grid gap-4 md:grid-cols-3">
+    <div class="grid gap-4 md:grid-cols-4">
         <article class="surface-card p-5">
             <div class="text-sm font-semibold text-slate-500">Total Honor Terfilter</div>
             <div class="mt-2 text-3xl font-black tracking-tight text-violet-700">{{ total_honor }}</div>
         </article>
         <article class="surface-card p-5">
-            <div class="text-sm font-semibold text-slate-500">Tarif Junior</div>
-            <div class="mt-2 text-3xl font-black tracking-tight text-slate-900">Rp 7.000</div>
+            <div class="text-sm font-semibold text-slate-500">Laboran TF Aktif</div>
+            <div class="mt-2 text-3xl font-black tracking-tight text-slate-900">{{ laboran_count }}</div>
         </article>
         <article class="surface-card p-5">
-            <div class="text-sm font-semibold text-slate-500">Tarif Senior</div>
-            <div class="mt-2 text-3xl font-black tracking-tight text-slate-900">Rp 8.000</div>
+            <div class="text-sm font-semibold text-slate-500">Honor Belum Dibagi</div>
+            <div class="mt-2 text-3xl font-black tracking-tight text-amber-600">{{ unassigned_honor_count }}</div>
+        </article>
+        <article class="surface-card p-5">
+            <div class="text-sm font-semibold text-slate-500">Tarif Junior</div>
+            <div class="mt-2 text-3xl font-black tracking-tight text-slate-900">Rp 7.000</div>
         </article>
     </div>
 
@@ -74,6 +98,7 @@
                         <th>Total Akhir (Max 60)</th>
                         <th>Honor/Jam</th>
                         <th>Total Honor</th>
+                        <th>Laboran TF</th>
                         <th>Data TF Gaji</th>
                         <th>PIC Transfer</th>
                         <th>Aksi</th>
@@ -93,6 +118,14 @@
                         <td>{{ honor.total_akhir }}</td>
                         <td>{{ honor.honor_per_jam_rupiah }}</td>
                         <td class="font-black text-violet-700">{{ honor.jumlah_rupiah }}</td>
+                        <td>
+                            {% if honor.assigned_laboran %}
+                            <div class="font-semibold text-slate-900">{{ honor.assigned_laboran.nama_pengguna }}</div>
+                            <div class="text-xs text-slate-500">{{ honor.assigned_laboran.nim_nik }}</div>
+                            {% else %}
+                            <span class="inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">Belum dibagi</span>
+                            {% endif %}
+                        </td>
                         <td>
                             <div class="font-semibold text-slate-900">{{ honor.tujuan_transfer }}</div>
                             <div class="text-xs text-slate-500">
@@ -136,7 +169,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="11" class="py-12 text-center text-slate-500">Belum ada rekap honor asleb.</td>
+                        <td colspan="12" class="py-12 text-center text-slate-500">Belum ada rekap honor asleb.</td>
                     </tr>
                     {% endfor %}
                 </tbody>

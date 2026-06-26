@@ -1,6 +1,6 @@
 <!doctype html>
 {% load static %}
-<html lang="id">
+<html lang="id" data-theme="{{ current_pengguna.theme_mode|default:'light' }}" data-bg="{{ current_pengguna.background_mode|default:'default' }}"{% if current_pengguna.background_image %} style="--custom-bg-image: url('{{ current_pengguna.background_image.url }}');"{% endif %}>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -74,12 +74,183 @@
             }
         }
     </style>
+    <style>
+        :root {
+            --page-bg:
+                radial-gradient(circle at top left, rgba(32, 164, 171, 0.10), transparent 34rem),
+                linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%);
+            --surface-bg: rgba(255, 255, 255, 0.96);
+            --surface-muted: rgba(248, 250, 252, 0.92);
+            --border-color: #e2e8f0;
+            --text-main: #0f172a;
+            --text-soft: #475569;
+            --text-muted: #64748b;
+            --field-bg: #ffffff;
+            --field-text: #334155;
+            --sidebar-bg: rgba(255, 255, 255, 0.98);
+            --shadow-soft-theme: 0 18px 45px rgba(17, 71, 77, 0.10);
+        }
+
+        html[data-theme="dark"] {
+            --page-bg:
+                radial-gradient(circle at top left, rgba(20, 184, 166, 0.18), transparent 28rem),
+                radial-gradient(circle at 80% 20%, rgba(59, 130, 246, 0.14), transparent 22rem),
+                linear-gradient(180deg, #06141f 0%, #0f172a 100%);
+            --surface-bg: rgba(15, 23, 42, 0.90);
+            --surface-muted: rgba(30, 41, 59, 0.76);
+            --border-color: rgba(148, 163, 184, 0.28);
+            --text-main: #f8fafc;
+            --text-soft: #cbd5e1;
+            --text-muted: #94a3b8;
+            --field-bg: rgba(15, 23, 42, 0.92);
+            --field-text: #e2e8f0;
+            --sidebar-bg: rgba(15, 23, 42, 0.96);
+            --shadow-soft-theme: 0 18px 45px rgba(0, 0, 0, 0.30);
+        }
+
+        html[data-bg="clean"] {
+            --page-bg: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+        }
+
+        html[data-bg="lab"] {
+            --page-bg:
+                radial-gradient(circle at 16% 14%, rgba(45, 212, 191, 0.22), transparent 24rem),
+                radial-gradient(circle at 85% 8%, rgba(14, 165, 233, 0.18), transparent 26rem),
+                linear-gradient(135deg, #eefcfb 0%, #f8fafc 48%, #e0f2fe 100%);
+        }
+
+        html[data-bg="aurora"] {
+            --page-bg:
+                radial-gradient(circle at 18% 18%, rgba(16, 185, 129, 0.22), transparent 24rem),
+                radial-gradient(circle at 82% 18%, rgba(99, 102, 241, 0.20), transparent 24rem),
+                radial-gradient(circle at 50% 92%, rgba(245, 158, 11, 0.14), transparent 24rem),
+                linear-gradient(180deg, #f8fafc 0%, #eff6ff 100%);
+        }
+
+        html[data-bg="grid"] {
+            --page-bg:
+                linear-gradient(rgba(15, 23, 42, 0.045) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(15, 23, 42, 0.045) 1px, transparent 1px),
+                linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+            background-size: 34px 34px, 34px 34px, auto;
+        }
+
+        html[data-bg="custom"] {
+            --page-bg:
+                linear-gradient(rgba(248, 250, 252, 0.82), rgba(226, 232, 240, 0.86)),
+                var(--custom-bg-image);
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }
+
+        html[data-theme="dark"][data-bg="clean"] {
+            --page-bg: linear-gradient(180deg, #020617 0%, #111827 100%);
+        }
+
+        html[data-theme="dark"][data-bg="lab"] {
+            --page-bg:
+                radial-gradient(circle at 16% 12%, rgba(20, 184, 166, 0.24), transparent 22rem),
+                radial-gradient(circle at 82% 10%, rgba(14, 165, 233, 0.18), transparent 24rem),
+                linear-gradient(135deg, #03131a 0%, #0f172a 100%);
+        }
+
+        html[data-theme="dark"][data-bg="aurora"] {
+            --page-bg:
+                radial-gradient(circle at 18% 18%, rgba(16, 185, 129, 0.22), transparent 22rem),
+                radial-gradient(circle at 82% 18%, rgba(99, 102, 241, 0.24), transparent 24rem),
+                radial-gradient(circle at 50% 92%, rgba(245, 158, 11, 0.12), transparent 24rem),
+                linear-gradient(180deg, #020617 0%, #111827 100%);
+        }
+
+        html[data-theme="dark"][data-bg="grid"] {
+            --page-bg:
+                linear-gradient(rgba(148, 163, 184, 0.07) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(148, 163, 184, 0.07) 1px, transparent 1px),
+                linear-gradient(180deg, #020617 0%, #111827 100%);
+        }
+
+        html[data-theme="dark"][data-bg="custom"] {
+            --page-bg:
+                linear-gradient(rgba(2, 6, 23, 0.72), rgba(15, 23, 42, 0.82)),
+                var(--custom-bg-image);
+        }
+
+        body {
+            background: var(--page-bg) !important;
+            color: var(--text-soft) !important;
+            min-height: 100vh;
+        }
+
+        .surface-card {
+            background: var(--surface-bg) !important;
+            border-color: var(--border-color) !important;
+            box-shadow: var(--shadow-soft-theme) !important;
+            backdrop-filter: blur(16px);
+        }
+
+        input, select, textarea {
+            background: var(--field-bg) !important;
+            color: var(--field-text) !important;
+            border-color: var(--border-color) !important;
+        }
+
+        input::placeholder, textarea::placeholder {
+            color: var(--text-muted) !important;
+        }
+
+        #dashboard-sidebar,
+        [data-sidebar-brand-shell],
+        header,
+        .btn-secondary,
+        .bg-white {
+            background-color: var(--sidebar-bg) !important;
+            border-color: var(--border-color) !important;
+        }
+
+        .bg-slate-50,
+        .bg-slate-50\/70,
+        .bg-slate-50\/80,
+        .bg-slate-100 {
+            background-color: var(--surface-muted) !important;
+        }
+
+        .text-slate-900,
+        .text-slate-800,
+        .text-slate-700 {
+            color: var(--text-main) !important;
+        }
+
+        .text-slate-600,
+        .text-slate-500 {
+            color: var(--text-muted) !important;
+        }
+
+        th, td, label {
+            color: var(--text-soft) !important;
+            border-color: var(--border-color) !important;
+        }
+
+        html[data-theme="dark"] .btn-secondary {
+            color: var(--text-main) !important;
+        }
+
+        html[data-theme="dark"] table,
+        html[data-theme="dark"] tbody,
+        html[data-theme="dark"] thead {
+            background: transparent !important;
+        }
+    </style>
 </head>
 <body>
+    {% if current_pengguna %}
     {% include "components/navbar.html" %}
+    {% endif %}
 
     <main class="mx-auto flex w-full max-w-[1500px] items-start gap-0 overflow-x-hidden px-4 py-6 md:gap-6 lg:px-7">
+        {% if current_pengguna %}
         {% include "components/dashboard_sidebar.html" %}
+        {% endif %}
         <section class="grid min-w-0 flex-1 gap-6 overflow-x-auto">
             {% if messages %}
             <div class="grid gap-3">
@@ -96,6 +267,19 @@
     {% block extra_script %}{% endblock %}
     <script>
         lucide.createIcons();
+        window.applyLabHubTheme = function (theme, bg, customBg) {
+            if (theme) {
+                document.documentElement.dataset.theme = theme;
+            }
+            if (bg) {
+                document.documentElement.dataset.bg = bg;
+            }
+            if (customBg) {
+                document.documentElement.style.setProperty('--custom-bg-image', "url('" + customBg + "')");
+                document.documentElement.dataset.bg = 'custom';
+            }
+            document.dispatchEvent(new CustomEvent('labhub-theme-change'));
+        };
     </script>
 </body>
 </html>

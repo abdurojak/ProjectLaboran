@@ -10,6 +10,7 @@ from django.conf import settings
 from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, UpdateView, View
 
 from apps.asleb.models import Asleb
@@ -17,19 +18,30 @@ from apps.core.views import PostOnlyDeleteMixin
 
 from .forms import (
     ChangePasswordForm,
+    FakultasForm,
     ForgotPasswordRequestForm,
     LoginPenggunaForm,
     PenggunaForm,
     PenggunaProfileForm,
+    ProdiForm,
     RegisterPenggunaForm,
     ResetPasswordForm,
     VerificationCodeForm,
 )
-from .models import Pengguna
+from .models import Fakultas, Pengguna, Prodi
 
 
 OTP_SESSION_KEY = 'pengguna_otp'
 OTP_EXPIRE_MINUTES = 10
+
+
+class AdminRequiredMixin:
+    def dispatch(self, request, *args, **kwargs):
+        pengguna = getattr(request, 'current_pengguna', None)
+        if not pengguna or pengguna.role != 'admin':
+            messages.error(request, 'Hanya admin yang bisa mengelola data master akademik.')
+            return redirect('dashboard:home')
+        return super().dispatch(request, *args, **kwargs)
 
 
 def generate_otp_code():
@@ -166,6 +178,68 @@ class PenggunaDeleteView(PostOnlyDeleteMixin, DeleteView):
     success_url = reverse_lazy('pengguna:list')
 
 
+class MasterAkademikView(AdminRequiredMixin, ListView):
+    model = Fakultas
+    template_name = 'pengguna/master_akademik.html'
+    context_object_name = 'fakultas_list'
+
+    def get_queryset(self):
+        return Fakultas.objects.all()
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['prodi_list'] = Prodi.objects.all()
+        return context
+
+
+class FakultasCreateView(AdminRequiredMixin, CreateView):
+    model = Fakultas
+    form_class = FakultasForm
+    template_name = 'pengguna/master_form.html'
+    success_url = reverse_lazy('pengguna:master_akademik')
+    extra_context = {
+        'title': 'Tambah Fakultas',
+        'eyebrow': 'Master Akademik',
+        'description': 'Tambahkan pilihan fakultas yang bisa dipilih saat registrasi.',
+    }
+
+
+class FakultasUpdateView(AdminRequiredMixin, UpdateView):
+    model = Fakultas
+    form_class = FakultasForm
+    template_name = 'pengguna/master_form.html'
+    success_url = reverse_lazy('pengguna:master_akademik')
+    extra_context = {
+        'title': 'Edit Fakultas',
+        'eyebrow': 'Master Akademik',
+        'description': 'Ubah nama atau status aktif fakultas.',
+    }
+
+
+class ProdiCreateView(AdminRequiredMixin, CreateView):
+    model = Prodi
+    form_class = ProdiForm
+    template_name = 'pengguna/master_form.html'
+    success_url = reverse_lazy('pengguna:master_akademik')
+    extra_context = {
+        'title': 'Tambah Prodi',
+        'eyebrow': 'Master Akademik',
+        'description': 'Tambahkan pilihan prodi yang bisa dipilih saat registrasi.',
+    }
+
+
+class ProdiUpdateView(AdminRequiredMixin, UpdateView):
+    model = Prodi
+    form_class = ProdiForm
+    template_name = 'pengguna/master_form.html'
+    success_url = reverse_lazy('pengguna:master_akademik')
+    extra_context = {
+        'title': 'Edit Prodi',
+        'eyebrow': 'Master Akademik',
+        'description': 'Ubah nama atau status aktif prodi.',
+    }
+
+
 class PenggunaChangePasswordView(View):
     def post(self, request, pk, *args, **kwargs):
         pengguna = Pengguna.objects.get(pk=pk)
@@ -262,7 +336,10 @@ class PenggunaLoginView(FormView):
         pengguna = form.cleaned_data['pengguna']
         self.request.session['pengguna_id'] = pengguna.pk
         messages.success(self.request, f'Selamat datang, {pengguna.nama_pengguna}.')
-        return redirect(self.request.GET.get('next') or self.success_url)
+        next_url = self.request.GET.get('next')
+        if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={self.request.get_host()}):
+            return redirect(next_url)
+        return redirect(self.success_url)
 
 
 class PenggunaRegisterView(CreateView):

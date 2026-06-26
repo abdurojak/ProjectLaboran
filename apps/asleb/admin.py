@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import AbsensiAsleb, Asleb, HonorAsleb, PengaturanAbsensiAsleb
+from .models import AbsensiAsleb, Asleb, HonorAsleb, PengaturanAbsensiAsleb, SuratHonorAsleb
 
 
 @admin.register(Asleb)
@@ -12,10 +12,18 @@ class AslebAdmin(admin.ModelAdmin):
 
 @admin.register(HonorAsleb)
 class HonorAslebAdmin(admin.ModelAdmin):
-    list_display = ('asleb', 'bulan', 'level', 'total_pertemuan', 'jumlah', 'status', 'pic_transfer')
-    list_filter = ('status', 'level', 'bulan')
-    search_fields = ('asleb__nama', 'asleb__nim', 'keterangan')
+    list_display = ('asleb', 'bulan', 'level', 'total_pertemuan', 'jumlah', 'status', 'assigned_laboran', 'pic_transfer')
+    list_filter = ('status', 'level', 'bulan', 'assigned_laboran')
+    search_fields = ('asleb__nama', 'asleb__nim', 'assigned_laboran__nama_pengguna', 'keterangan')
     readonly_fields = ('jumlah',)
+
+
+@admin.register(SuratHonorAsleb)
+class SuratHonorAslebAdmin(admin.ModelAdmin):
+    list_display = ('nomor_surat', 'bulan', 'jumlah_asleb', 'total_honor', 'dibuat_oleh', 'expires_at', 'dibuat_pada')
+    list_filter = ('bulan', 'expires_at', 'dibuat_oleh')
+    search_fields = ('nomor_surat', 'perihal', 'dibuat_oleh__nama_pengguna')
+    readonly_fields = ('file_pdf', 'total_honor', 'jumlah_asleb', 'expires_at', 'dibuat_pada', 'diperbarui_pada')
 
 
 @admin.register(AbsensiAsleb)

@@ -45,6 +45,18 @@ class Pengguna(models.Model):
         ('laki_laki', 'Laki-laki'),
         ('perempuan', 'Perempuan'),
     ]
+    THEME_MODE_CHOICES = [
+        ('light', 'Terang'),
+        ('dark', 'Gelap'),
+    ]
+    BACKGROUND_MODE_CHOICES = [
+        ('default', 'Default'),
+        ('clean', 'Clean'),
+        ('lab', 'Lab'),
+        ('aurora', 'Aurora'),
+        ('grid', 'Grid'),
+        ('custom', 'Custom'),
+    ]
 
     foto = models.ImageField(upload_to='pengguna/', blank=True, null=True)
     kode_pengguna = models.CharField(max_length=10, unique=True, blank=True, editable=False)
@@ -59,6 +71,9 @@ class Pengguna(models.Model):
     gender = models.CharField(max_length=20, choices=GENDER_CHOICES)
     role = models.CharField(max_length=30, choices=ROLE_CHOICES, default='mahasiswa')
     is_verified = models.BooleanField('Terverifikasi', default=True)
+    theme_mode = models.CharField(max_length=20, choices=THEME_MODE_CHOICES, default='light')
+    background_mode = models.CharField(max_length=20, choices=BACKGROUND_MODE_CHOICES, default='default')
+    background_image = models.ImageField(upload_to='pengguna/backgrounds/', blank=True, null=True)
     notifikasi_dibaca_pada = models.DateTimeField(blank=True, null=True)
     dibuat_pada = models.DateTimeField(auto_now_add=True)
     diperbarui_pada = models.DateTimeField(auto_now=True)

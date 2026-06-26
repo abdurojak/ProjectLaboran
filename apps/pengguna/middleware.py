@@ -5,7 +5,7 @@ from .models import Pengguna
 
 
 class PenggunaLoginRequiredMiddleware:
-    MAHASISWA_ALLOWED_NAMESPACES = {'dashboard', 'peminjaman', 'jadwal', 'pengguna', 'ruangan'}
+    MAHASISWA_ALLOWED_NAMESPACES = {'core', 'dashboard', 'peminjaman', 'jadwal', 'pengguna', 'ruangan'}
     MAHASISWA_ALLOWED_KALENDER_URLS = {
         'kegiatan_list',
         'kegiatan_create',

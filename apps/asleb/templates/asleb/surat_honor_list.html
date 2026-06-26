@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}Arsip Surat Honor Asleb{% endblock %}
+
+{% block content %}
+<section class="space-y-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <p class="text-sm font-bold uppercase tracking-[0.2em] text-violet-700">Honorarium</p>
+            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Arsip Surat Honor Asleb</h2>
+            <p class="mt-2 text-sm text-slate-500">Surat honor yang sudah digenerate tersimpan sebagai arsip dan otomatis dihapus setelah 5 tahun.</p>
+        </div>
+        <div class="flex flex-wrap gap-3">
+            <a class="btn-secondary" href="{% url 'asleb:honor_list' %}">
+                <i data-lucide="arrow-left" class="h-4 w-4"></i>
+                <span>Rekap Honor</span>
+            </a>
+            <a class="btn-primary bg-violet-700 hover:bg-violet-800 shadow-violet-900/20" href="{% url 'asleb:surat_honor_generate' %}">
+                <i data-lucide="file-plus-2" class="h-4 w-4"></i>
+                <span>Generate Surat</span>
+            </a>
+        </div>
+    </div>
+
+    <form method="get" class="surface-card grid gap-4 p-5 md:grid-cols-[minmax(0,1fr)_180px_auto] md:items-end">
+        <div>
+            <label for="id_q">Cari arsip</label>
+            <input id="id_q" name="q" type="text" value="{{ search_query }}" placeholder="Cari nomor surat, perihal, atau pembuat" autocomplete="off">
+        </div>
+        <div>
+            <label for="id_bulan">Bulan</label>
+            <input id="id_bulan" name="bulan" type="month" value="{{ selected_bulan }}">
+        </div>
+        <div class="flex flex-wrap gap-3">
+            <button type="submit" class="btn-primary bg-violet-700 hover:bg-violet-800 shadow-violet-900/20">
+                <i data-lucide="search" class="h-4 w-4"></i>
+                <span>Terapkan</span>
+            </button>
+            <a href="{% url 'asleb:surat_honor_list' %}" class="btn-secondary">
+                <i data-lucide="rotate-ccw" class="h-4 w-4"></i>
+                <span>Reset</span>
+            </a>
+        </div>
+    </form>
+
+    <div class="surface-card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-max">
+                <thead class="bg-slate-50">
+                    <tr>
+                        <th>Nomor Surat</th>
+                        <th>Bulan</th>
+                        <th>Jumlah Asleb</th>
+                        <th>Total Honor</th>
+                        <th>Dibuat Oleh</th>
+                        <th>Arsip Sampai</th>
+                        <th>Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for surat in surat_list %}
+                    <tr class="hover:bg-slate-50/70">
+                        <td>
+                            <div class="font-semibold text-slate-900">{{ surat.nomor_surat }}</div>
+                            <div class="text-xs text-slate-500">{{ surat.perihal }}</div>
+                        </td>
+                        <td>{{ surat.bulan_label }}</td>
+                        <td>{{ surat.jumlah_asleb }}</td>
+                        <td class="font-black text-violet-700">{{ surat.total_honor_rupiah }}</td>
+                        <td>{{ surat.dibuat_oleh.nama_pengguna|default:"-" }}</td>
+                        <td>{{ surat.expires_at|date:"d M Y" }}</td>
+                        <td>
+                            <a class="inline-flex items-center gap-1 text-violet-700 hover:text-violet-800" href="{% url 'asleb:surat_honor_download' surat.pk %}">
+                                <i data-lucide="download" class="h-4 w-4"></i>
+                                <span>Download PDF</span>
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="py-12 text-center text-slate-500">Belum ada arsip surat honor.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+{% endblock %}
