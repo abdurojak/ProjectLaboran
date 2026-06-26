@@ -18,6 +18,15 @@ from .models import AbsensiAsleb, Asleb, HonorAsleb, PengaturanAbsensiAsleb, Sur
 from .surat_honor import generate_surat_honor_pdf, month_year_label
 
 
+class HonorAdminRequiredMixin:
+    def dispatch(self, request, *args, **kwargs):
+        pengguna = getattr(request, 'current_pengguna', None)
+        if not pengguna or pengguna.role != 'admin':
+            messages.error(request, 'Hanya admin yang bisa mengelola rekap honorarium.')
+            return redirect('asleb:honor_list')
+        return super().dispatch(request, *args, **kwargs)
+
+
 class AslebListView(ListView):
     model = Asleb
     template_name = 'asleb/asleb_list.html'
@@ -102,7 +111,12 @@ class HonorAslebListView(ListView):
             )
 
         if bulan:
-            queryset = queryset.filter(bulan__month=bulan.split('-')[1], bulan__year=bulan.split('-')[0])
+            try:
+                year, month = bulan.split('-')
+                queryset = queryset.filter(bulan__month=month, bulan__year=year)
+            except ValueError:
+                messages.error(self.request, 'Format bulan tidak valid.')
+                queryset = queryset.none()
 
         if status:
             queryset = queryset.filter(status=status)
@@ -132,7 +146,7 @@ class HonorAslebListView(ListView):
         return context
 
 
-class HonorAslebCreateView(CreateView):
+class HonorAslebCreateView(HonorAdminRequiredMixin, CreateView):
     model = HonorAsleb
     form_class = HonorAslebForm
     template_name = 'asleb/honor_form.html'
@@ -163,7 +177,7 @@ class HonorAslebUpdateView(UpdateView):
         return kwargs
 
 
-class HonorAslebDeleteView(PostOnlyDeleteMixin, DeleteView):
+class HonorAslebDeleteView(HonorAdminRequiredMixin, PostOnlyDeleteMixin, DeleteView):
     model = HonorAsleb
     template_name = 'asleb/honor_confirm_delete.html'
     context_object_name = 'honor'

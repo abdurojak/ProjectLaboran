@@ -39,8 +39,17 @@ class AdminRequiredMixin:
     def dispatch(self, request, *args, **kwargs):
         pengguna = getattr(request, 'current_pengguna', None)
         if not pengguna or pengguna.role != 'admin':
-            messages.error(request, 'Hanya admin yang bisa mengelola data master akademik.')
+            messages.error(request, 'Hanya admin yang bisa mengelola data ini.')
             return redirect('dashboard:home')
+        return super().dispatch(request, *args, **kwargs)
+
+
+class AdminPenggunaRequiredMixin:
+    def dispatch(self, request, *args, **kwargs):
+        pengguna = getattr(request, 'current_pengguna', None)
+        if not pengguna or pengguna.role != 'admin':
+            messages.error(request, 'Hanya admin yang bisa menambah, mengubah, atau menghapus pengguna.')
+            return redirect('pengguna:list')
         return super().dispatch(request, *args, **kwargs)
 
 
@@ -138,6 +147,44 @@ class PenggunaListView(ListView):
     template_name = 'pengguna/list.html'
     context_object_name = 'pengguna_list'
 
+    ROLE_GROUPS = [
+        ('Mahasiswa', 'mahasiswa'),
+        ('Laboran', 'laboran'),
+        ('Asisten Lab', 'asisten_lab'),
+    ]
+
+    def get_queryset(self):
+        queryset = Pengguna.objects.exclude(role='admin').order_by('role', 'nama_pengguna')
+        pengguna = getattr(self.request, 'current_pengguna', None)
+
+        if pengguna and pengguna.role == 'laboran':
+            return queryset.filter(role__in=['mahasiswa', 'asisten_lab'])
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        pengguna = getattr(self.request, 'current_pengguna', None)
+        visible_roles = ['mahasiswa', 'laboran', 'asisten_lab']
+        if pengguna and pengguna.role == 'laboran':
+            visible_roles = ['mahasiswa', 'asisten_lab']
+
+        grouped_users = []
+        for title, role in self.ROLE_GROUPS:
+            if role not in visible_roles:
+                continue
+            users = [item for item in context['pengguna_list'] if item.role == role]
+            grouped_users.append({
+                'title': title,
+                'role': role,
+                'users': users,
+                'count': len(users),
+            })
+
+        context['grouped_users'] = grouped_users
+        context['can_manage_users'] = bool(pengguna and pengguna.role == 'admin')
+        return context
+
 
 class PenggunaDetailView(DetailView):
     model = Pengguna
@@ -156,14 +203,14 @@ class PenggunaDetailView(DetailView):
         return context
 
 
-class PenggunaCreateView(CreateView):
+class PenggunaCreateView(AdminPenggunaRequiredMixin, CreateView):
     model = Pengguna
     form_class = PenggunaForm
     template_name = 'pengguna/form.html'
     success_url = reverse_lazy('pengguna:list')
 
 
-class PenggunaUpdateView(UpdateView):
+class PenggunaUpdateView(AdminPenggunaRequiredMixin, UpdateView):
     model = Pengguna
     form_class = PenggunaForm
     template_name = 'pengguna/form.html'
@@ -171,7 +218,7 @@ class PenggunaUpdateView(UpdateView):
     success_url = reverse_lazy('pengguna:list')
 
 
-class PenggunaDeleteView(PostOnlyDeleteMixin, DeleteView):
+class PenggunaDeleteView(AdminPenggunaRequiredMixin, PostOnlyDeleteMixin, DeleteView):
     model = Pengguna
     template_name = 'pengguna/confirm_delete.html'
     context_object_name = 'pengguna'
