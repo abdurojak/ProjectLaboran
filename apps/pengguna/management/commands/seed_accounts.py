@@ -6,6 +6,7 @@ from apps.pengguna.models import Pengguna
 DEFAULT_PASSWORDS = {
     'admin': 'admin12345',
     'laboran': 'laboran12345',
+    'asisten_lab': 'asistenlab12345',
     'mahasiswa': 'mahasiswa12345',
 }
 
@@ -44,11 +45,22 @@ ACCOUNTS = [
         'prodi': 'Informatika',
         'gender': 'laki_laki',
     },
+    {
+        'role': 'asisten_lab',
+        'nama_pengguna': 'Asisten Lab LabHub',
+        'nim_nik': '1000000004',
+        'email': 'asistenlab@std.trisakti.ac.id',
+        'no_hp': '081200000004',
+        'alamat': 'Universitas Trisakti',
+        'fakultas': 'Teknologi Industri',
+        'prodi': 'Informatika',
+        'gender': 'laki_laki',
+    },
 ]
 
 
 class Command(BaseCommand):
-    help = 'Create or update default Admin, Laboran, and Mahasiswa application accounts.'
+    help = 'Create or update default accounts for every application role.'
 
     def add_arguments(self, parser):
         parser.add_argument(
