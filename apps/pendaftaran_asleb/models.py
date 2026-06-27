@@ -44,8 +44,13 @@ class MataKuliahAsleb(models.Model):
 
     class Meta:
         ordering = ['nama', 'kelas', 'dosen']
+<<<<<<< HEAD
         verbose_name = 'Mata Kuliah Asleb'
         verbose_name_plural = 'Mata Kuliah Asleb'
+=======
+        verbose_name = 'Mata Kuliah Aslab'
+        verbose_name_plural = 'Mata Kuliah Aslab'
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
     def __str__(self):
         return f'{self.nama} - {self.dosen} - {self.kelas}'
@@ -56,8 +61,13 @@ class PengaturanPendaftaranAsleb(models.Model):
     diperbarui_pada = models.DateTimeField(auto_now=True)
 
     class Meta:
+<<<<<<< HEAD
         verbose_name = 'Pengaturan Pendaftaran Asleb'
         verbose_name_plural = 'Pengaturan Pendaftaran Asleb'
+=======
+        verbose_name = 'Pengaturan Pendaftaran Aslab'
+        verbose_name_plural = 'Pengaturan Pendaftaran Aslab'
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
     @classmethod
     def get_solo(cls):
@@ -65,7 +75,11 @@ class PengaturanPendaftaranAsleb(models.Model):
         return pengaturan
 
     def __str__(self):
+<<<<<<< HEAD
         return 'Pendaftaran Asleb Dibuka' if self.dibuka else 'Pendaftaran Asleb Ditutup'
+=======
+        return 'Pendaftaran Aslab Dibuka' if self.dibuka else 'Pendaftaran Aslab Ditutup'
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
 
 class PendaftaranAsleb(models.Model):
@@ -73,7 +87,11 @@ class PendaftaranAsleb(models.Model):
         ('diajukan', 'Diajukan'),
         ('diterima', 'Diterima'),
         ('ditolak', 'Ditolak'),
+<<<<<<< HEAD
         ('digenerate', 'Masuk Data Asleb'),
+=======
+        ('digenerate', 'Masuk Data Aslab'),
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     ]
     METODE_REKENING_CHOICES = [
         ('rekening_bank', 'Rekening Bank'),
@@ -84,6 +102,11 @@ class PendaftaranAsleb(models.Model):
         ('A', 'A'),
         ('B', 'B'),
         ('C', 'C'),
+<<<<<<< HEAD
+=======
+        ('D', 'D'),
+        ('E', 'E'),
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
         ('tidak_terbaca', 'Tidak terbaca'),
     ]
 
@@ -117,8 +140,13 @@ class PendaftaranAsleb(models.Model):
 
     class Meta:
         ordering = ['matkul__nama', 'matkul__kelas', '-skor_nilai', 'dibuat_pada', 'nama']
+<<<<<<< HEAD
         verbose_name = 'Pendaftaran Asleb'
         verbose_name_plural = 'Pendaftaran Asleb'
+=======
+        verbose_name = 'Pendaftaran Aslab'
+        verbose_name_plural = 'Pendaftaran Aslab'
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
     def __str__(self):
         return f'{self.nama} - {self.matkul}'

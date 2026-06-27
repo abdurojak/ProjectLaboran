@@ -1,5 +1,10 @@
 from django import forms
 from django.contrib.auth.hashers import check_password
+<<<<<<< HEAD
+=======
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 from django.db import OperationalError, ProgrammingError
 
 from .models import Fakultas, Pengguna, Prodi
@@ -20,6 +25,19 @@ def apply_fakultas_prodi_choices(form):
     form.fields['prodi'].widget = forms.Select(choices=active_name_choices(Prodi, 'Pilih prodi'))
 
 
+<<<<<<< HEAD
+=======
+def add_password_validator_errors(form, password):
+    if not password:
+        return
+
+    try:
+        validate_password(password)
+    except ValidationError as exc:
+        form.add_error('password', exc)
+
+
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 class PenggunaForm(forms.ModelForm):
     class Meta:
         model = Pengguna
@@ -55,6 +73,14 @@ class PenggunaForm(forms.ModelForm):
         validate_human_face_photo(foto)
         return foto
 
+<<<<<<< HEAD
+=======
+    def clean(self):
+        cleaned_data = super().clean()
+        add_password_validator_errors(self, cleaned_data.get('password'))
+        return cleaned_data
+
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     def save(self, commit=True):
         instance = super().save(commit=False)
         password = self.cleaned_data.get('password')
@@ -73,6 +99,69 @@ class PenggunaForm(forms.ModelForm):
         return instance
 
 
+<<<<<<< HEAD
+=======
+class FakultasForm(forms.ModelForm):
+    class Meta:
+        model = Fakultas
+        fields = ['nama', 'aktif']
+        widgets = {
+            'nama': forms.TextInput(attrs={'placeholder': 'Contoh: Teknologi Industri'}),
+        }
+
+
+class ProdiForm(forms.ModelForm):
+    class Meta:
+        model = Prodi
+        fields = ['nama', 'aktif']
+        widgets = {
+            'nama': forms.TextInput(attrs={'placeholder': 'Contoh: Informatika'}),
+        }
+
+
+class PenggunaAppearanceForm(forms.ModelForm):
+    hapus_background = forms.BooleanField(required=False, widget=forms.HiddenInput)
+
+    class Meta:
+        model = Pengguna
+        fields = ['theme_mode', 'background_mode', 'background_image']
+        widgets = {
+            'theme_mode': forms.RadioSelect,
+            'background_mode': forms.RadioSelect,
+            'background_image': forms.FileInput(attrs={'accept': 'image/*'}),
+        }
+
+    def clean_background_image(self):
+        image = self.cleaned_data.get('background_image')
+        if image and image.size > 2 * 1024 * 1024:
+            raise forms.ValidationError('Ukuran gambar background maksimal 2 MB.')
+        return image
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        old_background = None
+        if instance.pk:
+            old_background = Pengguna.objects.filter(pk=instance.pk).values_list('background_image', flat=True).first()
+
+        if self.cleaned_data.get('hapus_background'):
+            instance.background_image = None
+            if instance.background_mode == 'custom':
+                instance.background_mode = 'default'
+        elif self.cleaned_data.get('background_image'):
+            instance.background_mode = 'custom'
+
+        if instance.background_mode == 'custom' and not instance.background_image:
+            instance.background_mode = 'default'
+
+        if commit:
+            instance.save(update_fields=['theme_mode', 'background_mode', 'background_image', 'diperbarui_pada'])
+            new_background = instance.background_image.name if instance.background_image else ''
+            if old_background and old_background != new_background:
+                instance._meta.get_field('background_image').storage.delete(old_background)
+        return instance
+
+
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 class PenggunaProfileForm(forms.ModelForm):
     class Meta:
         model = Pengguna
@@ -141,16 +230,46 @@ class ChangePasswordForm(forms.Form):
         if password and password_confirmation and password != password_confirmation:
             self.add_error('password_confirmation', 'Konfirmasi password tidak sama.')
 
+<<<<<<< HEAD
+=======
+        add_password_validator_errors(self, password)
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
         return cleaned_data
 
 
 class LoginPenggunaForm(forms.Form):
+<<<<<<< HEAD
     nim_nik = forms.CharField(
         label='NIM/NIK',
         max_length=40,
         widget=forms.TextInput(attrs={'inputmode': 'numeric', 'pattern': '[0-9]*', 'placeholder': 'NIM/NIK terdaftar'}),
     )
     password = forms.CharField(widget=forms.PasswordInput)
+=======
+    JENIS_LOGIN_CHOICES = [
+        ('mahasiswa', 'Mahasiswa'),
+        ('karyawan', 'Karyawan'),
+    ]
+
+    jenis_login = forms.ChoiceField(
+        label='Masuk sebagai',
+        choices=JENIS_LOGIN_CHOICES,
+        initial='mahasiswa',
+        required=False,
+        widget=forms.RadioSelect,
+    )
+    nim_nik = forms.CharField(
+        label='NIM atau NIK',
+        max_length=40,
+        widget=forms.TextInput(attrs={
+            'autocomplete': 'username',
+            'inputmode': 'numeric',
+            'pattern': '[0-9]*',
+            'placeholder': 'Masukkan NIM atau NIK',
+        }),
+    )
+    password = forms.CharField(widget=forms.PasswordInput(attrs={'autocomplete': 'current-password'}))
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
     error_messages = {
         'invalid_login': 'NIM/NIK atau password tidak sesuai.',
@@ -164,6 +283,10 @@ class LoginPenggunaForm(forms.Form):
 
     def clean(self):
         cleaned_data = super().clean()
+<<<<<<< HEAD
+=======
+        jenis_login = cleaned_data.get('jenis_login') or 'mahasiswa'
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
         nim_nik = cleaned_data.get('nim_nik')
         password = cleaned_data.get('password')
 
@@ -181,6 +304,15 @@ class LoginPenggunaForm(forms.Form):
         if not check_password(password, pengguna.password):
             raise forms.ValidationError(self.error_messages['invalid_login'])
 
+<<<<<<< HEAD
+=======
+        if jenis_login == 'mahasiswa' and pengguna.role not in ['mahasiswa', 'asisten_lab']:
+            raise forms.ValidationError('Akun ini bukan akun mahasiswa. Pilih login sebagai karyawan.')
+
+        if jenis_login == 'karyawan' and pengguna.role not in ['admin', 'laboran']:
+            raise forms.ValidationError('Akun ini bukan akun karyawan. Pilih login sebagai mahasiswa.')
+
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
         cleaned_data['pengguna'] = pengguna
         return cleaned_data
 
@@ -191,26 +323,48 @@ class RegisterPenggunaForm(forms.ModelForm):
     class Meta:
         model = Pengguna
         fields = [
+<<<<<<< HEAD
             'foto',
+=======
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
             'nama_pengguna',
             'nim_nik',
             'email',
             'password',
             'password_confirmation',
             'gender',
+<<<<<<< HEAD
+=======
+            'foto',
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
             'alamat',
             'fakultas',
             'prodi',
         ]
         widgets = {
             'foto': forms.FileInput(attrs={'class': 'hidden', 'accept': 'image/*'}),
+<<<<<<< HEAD
             'password': forms.PasswordInput(render_value=False),
             'email': forms.EmailInput(attrs={
+=======
+            'password': forms.PasswordInput(attrs={'autocomplete': 'new-password'}, render_value=False),
+            'email': forms.EmailInput(attrs={
+                'autocomplete': 'email',
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
                 'placeholder': 'nama@std.trisakti.ac.id atau nama@trisakti.ac.id',
                 'pattern': '.+@(std\\.trisakti\\.ac\\.id|trisakti\\.ac\\.id)',
                 'title': 'Gunakan email dengan akhiran @std.trisakti.ac.id atau @trisakti.ac.id',
             }),
+<<<<<<< HEAD
             'nim_nik': forms.TextInput(attrs={'inputmode': 'numeric', 'pattern': '[0-9]*', 'placeholder': 'Angka saja'}),
+=======
+            'nim_nik': forms.TextInput(attrs={
+                'autocomplete': 'username',
+                'inputmode': 'numeric',
+                'pattern': '[0-9]*',
+                'placeholder': 'Angka saja',
+            }),
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
             'alamat': forms.Textarea(attrs={'rows': 4}),
         }
 
@@ -229,6 +383,11 @@ class RegisterPenggunaForm(forms.ModelForm):
         valid_domains = ('@std.trisakti.ac.id', '@trisakti.ac.id')
         if not email.endswith(valid_domains):
             raise forms.ValidationError('Email harus menggunakan domain @std.trisakti.ac.id atau @trisakti.ac.id.')
+<<<<<<< HEAD
+=======
+        if Pengguna.objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError('Email sudah terdaftar. Gunakan email Trisakti lain atau login.')
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
         return email
 
     def clean_foto(self):
@@ -244,6 +403,10 @@ class RegisterPenggunaForm(forms.ModelForm):
         if password and password_confirmation and password != password_confirmation:
             self.add_error('password_confirmation', 'Konfirmasi password tidak sama.')
 
+<<<<<<< HEAD
+=======
+        add_password_validator_errors(self, password)
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
         return cleaned_data
 
     def save(self, commit=True):
@@ -299,4 +462,8 @@ class ResetPasswordForm(VerificationCodeForm):
         if password and password_confirmation and password != password_confirmation:
             self.add_error('password_confirmation', 'Konfirmasi password tidak sama.')
 
+<<<<<<< HEAD
+=======
+        add_password_validator_errors(self, password)
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
         return cleaned_data

@@ -45,3 +45,26 @@
 </section>
 {% endblock %}
 
+<<<<<<< HEAD
+=======
+{% block extra_script %}
+<script>
+    document.querySelectorAll('input[type="time"][min][max]').forEach((input) => {
+        const label = input.name === 'waktu_mulai' ? 'Waktu mulai' : 'Waktu selesai';
+        const min = input.getAttribute('min');
+        const max = input.getAttribute('max');
+        const message = `${label} harus berada dalam jam kerja ${min}-${max}.`;
+
+        const updateValidity = () => {
+            input.setCustomValidity('');
+            if (input.validity.rangeUnderflow || input.validity.rangeOverflow) {
+                input.setCustomValidity(message);
+            }
+        };
+
+        input.addEventListener('input', updateValidity);
+        input.addEventListener('invalid', updateValidity);
+    });
+</script>
+{% endblock %}
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271

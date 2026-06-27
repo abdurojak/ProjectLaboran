@@ -60,7 +60,11 @@ class JadwalViewTests(TestCase):
         )
 
     def test_jadwal_page_loads(self):
+<<<<<<< HEAD
         response = self.client.get(reverse('jadwal:jadwal_list'))
+=======
+        response = self.client.get(reverse('jadwal:jadwal_list'), {'hari': 'kamis'})
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Jadwal Praktikum')

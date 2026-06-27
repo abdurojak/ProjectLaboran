@@ -2,6 +2,7 @@
 
 {% block title %}Pengguna{% endblock %}
 
+<<<<<<< HEAD
 {% block content %}
 <section class="min-w-0 space-y-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
@@ -88,6 +89,157 @@
             </table>
         </div>
     </div>
+=======
+{% block extra_head %}
+<style>
+    .pengguna-card {
+        min-width: 0;
+    }
+    .pengguna-avatar {
+        width: 3.5rem;
+        height: 3.5rem;
+    }
+    @media (max-width: 767px) {
+        .pengguna-actions,
+        .pengguna-actions a,
+        .pengguna-actions button,
+        .pengguna-header-actions,
+        .pengguna-header-actions a {
+            width: 100%;
+        }
+        .pengguna-actions a,
+        .pengguna-actions button,
+        .pengguna-header-actions a {
+            justify-content: center;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="min-w-0 space-y-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div class="max-w-3xl">
+            <p class="text-sm font-bold uppercase tracking-[0.2em] text-brand-700">Pengguna</p>
+            <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">Pengguna</h2>
+            <p class="mt-2 text-sm text-slate-500">
+                Kelola data mahasiswa, laboran, dan asisten lab tanpa tabel lebar.
+            </p>
+        </div>
+        {% if can_manage_users %}
+        <div class="pengguna-header-actions flex w-full flex-wrap gap-3 sm:w-auto">
+            <a class="btn-primary gap-2" href="{% url 'pengguna:create' %}">
+                <i data-lucide="user-plus" class="h-4 w-4"></i>
+                <span>Tambah Pengguna</span>
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {% for group in grouped_users %}
+        <article class="surface-card p-5">
+            <div class="flex items-start justify-between gap-4">
+                <div>
+                    <div class="text-sm font-semibold text-slate-500">{{ group.title }}</div>
+                    <div class="mt-2 text-3xl font-black tracking-tight text-brand-700">{{ group.count }}</div>
+                </div>
+                <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-700">
+                    {% if group.role == 'mahasiswa' %}
+                    <i data-lucide="graduation-cap" class="h-5 w-5"></i>
+                    {% elif group.role == 'laboran' %}
+                    <i data-lucide="briefcase-business" class="h-5 w-5"></i>
+                    {% else %}
+                    <i data-lucide="flask-conical" class="h-5 w-5"></i>
+                    {% endif %}
+                </span>
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+
+    {% for group in grouped_users %}
+    <div class="surface-card overflow-hidden">
+        <div class="border-b border-slate-200 bg-slate-50/80 px-5 py-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h3 class="text-xl font-black text-slate-900">{{ group.title }}</h3>
+                    <p class="mt-1 text-sm text-slate-500">{{ group.count }} akun terdaftar.</p>
+                </div>
+                <span class="inline-flex rounded-full bg-brand-50 px-3 py-1 text-xs font-black text-brand-700">{{ group.title }}</span>
+            </div>
+        </div>
+
+        <div class="grid gap-4 p-4 lg:grid-cols-2 2xl:grid-cols-3">
+            {% for pengguna in group.users %}
+            <article class="pengguna-card rounded-[24px] border border-slate-200 bg-white/90 p-4">
+                <div class="flex min-w-0 items-start gap-4">
+                    {% if pengguna.foto %}
+                    <img src="{{ pengguna.foto.url }}" alt="{{ pengguna.nama_pengguna }}" class="pengguna-avatar shrink-0 rounded-2xl object-cover ring-1 ring-slate-200">
+                    {% else %}
+                    <div class="pengguna-avatar flex shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+                        <i data-lucide="user-round" class="h-5 w-5"></i>
+                    </div>
+                    {% endif %}
+
+                    <div class="min-w-0 flex-1">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <h4 class="min-w-0 truncate text-lg font-black text-slate-900">{{ pengguna.nama_pengguna }}</h4>
+                            <span class="inline-flex shrink-0 rounded-full bg-brand-100 px-3 py-1 text-xs font-bold text-brand-800">
+                                {{ pengguna.get_role_display }}
+                            </span>
+                        </div>
+                        <div class="mt-1 text-sm text-slate-500">{{ pengguna.kode_pengguna }} &middot; {{ pengguna.nim_nik }}</div>
+                        <div class="mt-3 grid gap-2 text-sm text-slate-600">
+                            <div class="flex min-w-0 items-center gap-2">
+                                <i data-lucide="mail" class="h-4 w-4 shrink-0 text-brand-700"></i>
+                                <span class="min-w-0 truncate">{{ pengguna.email }}</span>
+                            </div>
+                            <div class="flex min-w-0 items-center gap-2">
+                                <i data-lucide="phone" class="h-4 w-4 shrink-0 text-brand-700"></i>
+                                <span class="min-w-0 truncate">{{ pengguna.no_hp }}</span>
+                            </div>
+                            <div class="flex min-w-0 items-center gap-2">
+                                <i data-lucide="school" class="h-4 w-4 shrink-0 text-brand-700"></i>
+                                <span class="min-w-0 truncate">{{ pengguna.fakultas }} / {{ pengguna.prodi }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pengguna-actions mt-4 flex flex-wrap gap-3 text-sm font-semibold">
+                    <a class="inline-flex items-center gap-1 text-brand-700 hover:text-brand-800" href="{% url 'pengguna:detail' pengguna.pk %}">
+                        <i data-lucide="eye" class="h-4 w-4"></i>
+                        <span>Detail</span>
+                    </a>
+                    {% if can_manage_users %}
+                    <a class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700" href="{% url 'pengguna:update' pengguna.pk %}">
+                        <i data-lucide="pencil" class="h-4 w-4"></i>
+                        <span>Edit</span>
+                    </a>
+                    <form method="post" action="{% url 'pengguna:delete' pengguna.pk %}" data-confirm-message="Yakin ingin menghapus pengguna {{ pengguna.nama_pengguna }}?" class="inline">
+                        {% csrf_token %}
+                        <button type="submit" class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700">
+                            <i data-lucide="trash-2" class="h-4 w-4"></i>
+                            <span>Hapus</span>
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </article>
+            {% empty %}
+            <div class="rounded-[24px] border border-dashed border-slate-200 bg-white p-8 text-center text-sm text-slate-500 lg:col-span-2 2xl:col-span-3">
+                Belum ada akun {{ group.title|lower }}.
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% empty %}
+    <div class="surface-card p-10 text-center text-slate-500">
+        Belum ada data pengguna.
+    </div>
+    {% endfor %}
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 </section>
 {% endblock %}
 

@@ -10,6 +10,10 @@ from django.conf import settings
 from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+<<<<<<< HEAD
+=======
+from django.utils.http import url_has_allowed_host_and_scheme
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, UpdateView, View
 
 from apps.asleb.models import Asleb
@@ -17,21 +21,54 @@ from apps.core.views import PostOnlyDeleteMixin
 
 from .forms import (
     ChangePasswordForm,
+<<<<<<< HEAD
+=======
+    FakultasForm,
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     ForgotPasswordRequestForm,
     LoginPenggunaForm,
     PenggunaForm,
     PenggunaProfileForm,
+<<<<<<< HEAD
+=======
+    ProdiForm,
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     RegisterPenggunaForm,
     ResetPasswordForm,
     VerificationCodeForm,
 )
+<<<<<<< HEAD
 from .models import Pengguna
+=======
+from .models import Fakultas, Pengguna, Prodi
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
 
 OTP_SESSION_KEY = 'pengguna_otp'
 OTP_EXPIRE_MINUTES = 10
 
 
+<<<<<<< HEAD
+=======
+class AdminRequiredMixin:
+    def dispatch(self, request, *args, **kwargs):
+        pengguna = getattr(request, 'current_pengguna', None)
+        if not pengguna or pengguna.role != 'admin':
+            messages.error(request, 'Hanya admin yang bisa mengelola data ini.')
+            return redirect('dashboard:home')
+        return super().dispatch(request, *args, **kwargs)
+
+
+class AdminPenggunaRequiredMixin:
+    def dispatch(self, request, *args, **kwargs):
+        pengguna = getattr(request, 'current_pengguna', None)
+        if not pengguna or pengguna.role != 'admin':
+            messages.error(request, 'Hanya admin yang bisa menambah, mengubah, atau menghapus pengguna.')
+            return redirect('pengguna:list')
+        return super().dispatch(request, *args, **kwargs)
+
+
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 def generate_otp_code():
     return f'{random.randint(0, 999999):06d}'
 
@@ -126,6 +163,47 @@ class PenggunaListView(ListView):
     template_name = 'pengguna/list.html'
     context_object_name = 'pengguna_list'
 
+<<<<<<< HEAD
+=======
+    ROLE_GROUPS = [
+        ('Mahasiswa', 'mahasiswa'),
+        ('Laboran', 'laboran'),
+        ('Asisten Lab', 'asisten_lab'),
+    ]
+
+    def get_queryset(self):
+        queryset = Pengguna.objects.exclude(role='admin').order_by('role', 'nama_pengguna')
+        pengguna = getattr(self.request, 'current_pengguna', None)
+
+        if pengguna and pengguna.role == 'laboran':
+            return queryset.filter(role__in=['mahasiswa', 'asisten_lab'])
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        pengguna = getattr(self.request, 'current_pengguna', None)
+        visible_roles = ['mahasiswa', 'laboran', 'asisten_lab']
+        if pengguna and pengguna.role == 'laboran':
+            visible_roles = ['mahasiswa', 'asisten_lab']
+
+        grouped_users = []
+        for title, role in self.ROLE_GROUPS:
+            if role not in visible_roles:
+                continue
+            users = [item for item in context['pengguna_list'] if item.role == role]
+            grouped_users.append({
+                'title': title,
+                'role': role,
+                'users': users,
+                'count': len(users),
+            })
+
+        context['grouped_users'] = grouped_users
+        context['can_manage_users'] = bool(pengguna and pengguna.role == 'admin')
+        return context
+
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
 class PenggunaDetailView(DetailView):
     model = Pengguna
@@ -144,14 +222,22 @@ class PenggunaDetailView(DetailView):
         return context
 
 
+<<<<<<< HEAD
 class PenggunaCreateView(CreateView):
+=======
+class PenggunaCreateView(AdminPenggunaRequiredMixin, CreateView):
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     model = Pengguna
     form_class = PenggunaForm
     template_name = 'pengguna/form.html'
     success_url = reverse_lazy('pengguna:list')
 
 
+<<<<<<< HEAD
 class PenggunaUpdateView(UpdateView):
+=======
+class PenggunaUpdateView(AdminPenggunaRequiredMixin, UpdateView):
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     model = Pengguna
     form_class = PenggunaForm
     template_name = 'pengguna/form.html'
@@ -159,13 +245,82 @@ class PenggunaUpdateView(UpdateView):
     success_url = reverse_lazy('pengguna:list')
 
 
+<<<<<<< HEAD
 class PenggunaDeleteView(PostOnlyDeleteMixin, DeleteView):
+=======
+class PenggunaDeleteView(AdminPenggunaRequiredMixin, PostOnlyDeleteMixin, DeleteView):
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     model = Pengguna
     template_name = 'pengguna/confirm_delete.html'
     context_object_name = 'pengguna'
     success_url = reverse_lazy('pengguna:list')
 
 
+<<<<<<< HEAD
+=======
+class MasterAkademikView(AdminRequiredMixin, ListView):
+    model = Fakultas
+    template_name = 'pengguna/master_akademik.html'
+    context_object_name = 'fakultas_list'
+
+    def get_queryset(self):
+        return Fakultas.objects.all()
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['prodi_list'] = Prodi.objects.all()
+        return context
+
+
+class FakultasCreateView(AdminRequiredMixin, CreateView):
+    model = Fakultas
+    form_class = FakultasForm
+    template_name = 'pengguna/master_form.html'
+    success_url = reverse_lazy('pengguna:master_akademik')
+    extra_context = {
+        'title': 'Tambah Fakultas',
+        'eyebrow': 'Master Akademik',
+        'description': 'Tambahkan pilihan fakultas yang bisa dipilih saat registrasi.',
+    }
+
+
+class FakultasUpdateView(AdminRequiredMixin, UpdateView):
+    model = Fakultas
+    form_class = FakultasForm
+    template_name = 'pengguna/master_form.html'
+    success_url = reverse_lazy('pengguna:master_akademik')
+    extra_context = {
+        'title': 'Edit Fakultas',
+        'eyebrow': 'Master Akademik',
+        'description': 'Ubah nama atau status aktif fakultas.',
+    }
+
+
+class ProdiCreateView(AdminRequiredMixin, CreateView):
+    model = Prodi
+    form_class = ProdiForm
+    template_name = 'pengguna/master_form.html'
+    success_url = reverse_lazy('pengguna:master_akademik')
+    extra_context = {
+        'title': 'Tambah Prodi',
+        'eyebrow': 'Master Akademik',
+        'description': 'Tambahkan pilihan prodi yang bisa dipilih saat registrasi.',
+    }
+
+
+class ProdiUpdateView(AdminRequiredMixin, UpdateView):
+    model = Prodi
+    form_class = ProdiForm
+    template_name = 'pengguna/master_form.html'
+    success_url = reverse_lazy('pengguna:master_akademik')
+    extra_context = {
+        'title': 'Edit Prodi',
+        'eyebrow': 'Master Akademik',
+        'description': 'Ubah nama atau status aktif prodi.',
+    }
+
+
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 class PenggunaChangePasswordView(View):
     def post(self, request, pk, *args, **kwargs):
         pengguna = Pengguna.objects.get(pk=pk)
@@ -262,7 +417,14 @@ class PenggunaLoginView(FormView):
         pengguna = form.cleaned_data['pengguna']
         self.request.session['pengguna_id'] = pengguna.pk
         messages.success(self.request, f'Selamat datang, {pengguna.nama_pengguna}.')
+<<<<<<< HEAD
         return redirect(self.request.GET.get('next') or self.success_url)
+=======
+        next_url = self.request.GET.get('next')
+        if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={self.request.get_host()}):
+            return redirect(next_url)
+        return redirect(self.success_url)
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
 
 class PenggunaRegisterView(CreateView):

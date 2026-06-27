@@ -3,6 +3,10 @@ from unittest.mock import patch
 
 from django.contrib.auth.hashers import check_password
 from django import forms
+<<<<<<< HEAD
+=======
+from django.conf import settings
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError
 from django.test import TestCase
@@ -80,15 +84,151 @@ class PenggunaViewTests(TestCase):
         session.save()
 
     def test_list_page_loads(self):
+<<<<<<< HEAD
+=======
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Maya Mahasiswa',
+            nim_nik='2202001',
+            email='maya@example.com',
+            password='rahasia123',
+            no_hp='081111111111',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='mahasiswa',
+        )
+        laboran = Pengguna.objects.create(
+            nama_pengguna='Lala Laboran',
+            nim_nik='3302001',
+            email='lala@example.com',
+            password='rahasia123',
+            no_hp='082222222222',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='laboran',
+        )
+        asisten = Pengguna.objects.create(
+            nama_pengguna='Ali Asisten',
+            nim_nik='2202002',
+            email='ali@example.com',
+            password='rahasia123',
+            no_hp='083333333333',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='asisten_lab',
+        )
+
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
         response = self.client.get(reverse('pengguna:list'))
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Pengguna')
+<<<<<<< HEAD
         self.assertContains(response, self.pengguna.kode_pengguna)
         self.assertContains(response, 'Andi Pratama')
         self.assertContains(response, 'Admin')
         self.assertContains(response, 'data-confirmation-modal')
 
+=======
+        self.assertNotContains(response, self.pengguna.kode_pengguna)
+        self.assertContains(response, 'Mahasiswa')
+        self.assertContains(response, 'Laboran')
+        self.assertContains(response, 'Asisten Lab')
+        self.assertContains(response, mahasiswa.nama_pengguna)
+        self.assertContains(response, laboran.nama_pengguna)
+        self.assertContains(response, asisten.nama_pengguna)
+        self.assertContains(response, 'data-confirmation-modal')
+
+    def test_laboran_hanya_melihat_mahasiswa_dan_asisten_lab_di_menu_pengguna(self):
+        laboran = Pengguna.objects.create(
+            nama_pengguna='Lala Laboran',
+            nim_nik='3302001',
+            email='lala@example.com',
+            password='rahasia123',
+            no_hp='082222222222',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='laboran',
+        )
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Maya Mahasiswa',
+            nim_nik='2202001',
+            email='maya@example.com',
+            password='rahasia123',
+            no_hp='081111111111',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='mahasiswa',
+        )
+        asisten = Pengguna.objects.create(
+            nama_pengguna='Ali Asisten',
+            nim_nik='2202002',
+            email='ali@example.com',
+            password='rahasia123',
+            no_hp='083333333333',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='asisten_lab',
+        )
+        session = self.client.session
+        session['pengguna_id'] = laboran.pk
+        session.save()
+
+        response = self.client.get(reverse('pengguna:list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, mahasiswa.nama_pengguna)
+        self.assertContains(response, asisten.nama_pengguna)
+        self.assertNotContains(response, laboran.kode_pengguna)
+        self.assertNotContains(response, '<h3 class="text-xl font-black text-slate-900">Laboran</h3>', html=False)
+        self.assertNotContains(response, 'Tambah Pengguna')
+
+    def test_laboran_tidak_bisa_mengelola_pengguna_via_url_langsung(self):
+        laboran = Pengguna.objects.create(
+            nama_pengguna='Lala Laboran',
+            nim_nik='3302001',
+            email='lala@example.com',
+            password='rahasia123',
+            no_hp='082222222222',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='laboran',
+        )
+        target = Pengguna.objects.create(
+            nama_pengguna='Maya Mahasiswa',
+            nim_nik='2202001',
+            email='maya@example.com',
+            password='rahasia123',
+            no_hp='081111111111',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='mahasiswa',
+        )
+        session = self.client.session
+        session['pengguna_id'] = laboran.pk
+        session.save()
+
+        self.assertRedirects(self.client.get(reverse('pengguna:create')), reverse('pengguna:list'))
+        self.assertRedirects(self.client.get(reverse('pengguna:update', args=[target.pk])), reverse('pengguna:list'))
+        self.assertRedirects(self.client.post(reverse('pengguna:delete', args=[target.pk])), reverse('pengguna:list'))
+        self.assertTrue(Pengguna.objects.filter(pk=target.pk).exists())
+
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     @patch('apps.pengguna.forms.validate_human_face_photo')
     def test_create_pengguna_menyimpan_password_hash_dan_foto(self, mock_validate_face):
         foto = SimpleUploadedFile(
@@ -169,9 +309,15 @@ class PenggunaViewTests(TestCase):
 
         response = self.client.get(reverse('pengguna:detail', args=[self.pengguna.pk]))
 
+<<<<<<< HEAD
         self.assertContains(response, 'Status Asleb')
         self.assertContains(response, 'Junior')
         self.assertContains(response, '1 periode sebagai asleb.')
+=======
+        self.assertContains(response, 'Status Aslab')
+        self.assertContains(response, 'Junior')
+        self.assertContains(response, '1 periode sebagai aslab.')
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
         matkul = MataKuliahAsleb.objects.first()
         for index in range(3):
@@ -189,7 +335,11 @@ class PenggunaViewTests(TestCase):
         response = self.client.get(reverse('pengguna:detail', args=[self.pengguna.pk]))
 
         self.assertContains(response, 'Senior')
+<<<<<<< HEAD
         self.assertContains(response, '3 periode sebagai asleb.')
+=======
+        self.assertContains(response, '3 periode sebagai aslab.')
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
     def test_update_profile_mengubah_data_pengguna(self):
         response = self.client.post(
@@ -373,6 +523,10 @@ class PenggunaAuthTests(TestCase):
         response = self.client.post(
             reverse('pengguna:login'),
             {
+<<<<<<< HEAD
+=======
+                'jenis_login': 'mahasiswa',
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
                 'nim_nik': '2201001',
                 'password': 'rahasia123',
             },
@@ -381,10 +535,29 @@ class PenggunaAuthTests(TestCase):
         self.assertRedirects(response, reverse('dashboard:home'))
         self.assertEqual(self.client.session['pengguna_id'], self.pengguna.pk)
 
+<<<<<<< HEAD
+=======
+    def test_login_menolak_next_url_domain_luar(self):
+        response = self.client.post(
+            f"{reverse('pengguna:login')}?next=https://evil.example/phish",
+            {
+                'jenis_login': 'mahasiswa',
+                'nim_nik': '2201001',
+                'password': 'rahasia123',
+            },
+        )
+
+        self.assertRedirects(response, reverse('dashboard:home'), fetch_redirect_response=False)
+
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     def test_login_menolak_password_salah(self):
         response = self.client.post(
             reverse('pengguna:login'),
             {
+<<<<<<< HEAD
+=======
+                'jenis_login': 'mahasiswa',
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
                 'nim_nik': '2201001',
                 'password': 'salah',
             },
@@ -400,6 +573,10 @@ class PenggunaAuthTests(TestCase):
         response = self.client.post(
             reverse('pengguna:login'),
             {
+<<<<<<< HEAD
+=======
+                'jenis_login': 'mahasiswa',
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
                 'nim_nik': '9999999',
                 'password': 'passwordasal',
             },
@@ -415,6 +592,10 @@ class PenggunaAuthTests(TestCase):
         response = self.client.post(
             reverse('pengguna:login'),
             {
+<<<<<<< HEAD
+=======
+                'jenis_login': 'mahasiswa',
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
                 'nim_nik': 'ABC123',
                 'password': 'passwordasal',
             },
@@ -431,6 +612,10 @@ class PenggunaAuthTests(TestCase):
         response = self.client.post(
             reverse('pengguna:login'),
             {
+<<<<<<< HEAD
+=======
+                'jenis_login': 'mahasiswa',
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
                 'nim_nik': '2201001',
                 'password': 'rahasia123',
             },
@@ -440,15 +625,73 @@ class PenggunaAuthTests(TestCase):
         self.assertContains(response, 'Akun belum diverifikasi')
         self.assertNotIn('pengguna_id', self.client.session)
 
+<<<<<<< HEAD
+=======
+    def test_login_karyawan_hanya_untuk_admin_dan_laboran(self):
+        admin = Pengguna.objects.create(
+            nama_pengguna='Admin Lab',
+            nim_nik='3301001',
+            email='admin@example.com',
+            password='rahasia123',
+            no_hp='081111111111',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='admin',
+        )
+
+        response = self.client.post(
+            reverse('pengguna:login'),
+            {
+                'jenis_login': 'karyawan',
+                'nim_nik': admin.nim_nik,
+                'password': 'rahasia123',
+            },
+        )
+
+        self.assertRedirects(response, reverse('dashboard:home'))
+        self.assertEqual(self.client.session['pengguna_id'], admin.pk)
+
+    def test_login_mahasiswa_ditolak_di_mode_karyawan(self):
+        response = self.client.post(
+            reverse('pengguna:login'),
+            {
+                'jenis_login': 'karyawan',
+                'nim_nik': self.pengguna.nim_nik,
+                'password': 'rahasia123',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Akun ini bukan akun karyawan')
+        self.assertNotIn('pengguna_id', self.client.session)
+
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     def test_register_fakultas_dan_prodi_berupa_dropdown(self):
         response = self.client.get(reverse('pengguna:register'))
 
         self.assertEqual(response.status_code, 200)
+<<<<<<< HEAD
+=======
+        self.assertContains(response, 'name="nama_pengguna"', html=False)
+        self.assertContains(response, 'name="nim_nik"', html=False)
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
         self.assertContains(response, '<select name="fakultas"', html=False)
         self.assertContains(response, '<select name="prodi"', html=False)
         self.assertContains(response, 'Teknologi Industri')
         self.assertContains(response, 'Informatika')
 
+<<<<<<< HEAD
+=======
+    def test_halaman_publik_login_register_tidak_menampilkan_sidebar_dashboard(self):
+        for url in [reverse('pengguna:login'), reverse('pengguna:register')]:
+            response = self.client.get(url)
+
+            self.assertEqual(response.status_code, 200)
+            self.assertNotContains(response, 'id="dashboard-sidebar"', html=False)
+
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     def test_register_dropdown_fakultas_prodi_mengambil_data_database(self):
         Fakultas.objects.create(nama='Fakultas Baru')
         Prodi.objects.create(nama='Prodi Baru')
@@ -469,8 +712,13 @@ class PenggunaAuthTests(TestCase):
                 'password': 'passwordku123',
                 'password_confirmation': 'passwordku123',
                 'alamat': 'Jakarta',
+<<<<<<< HEAD
                 'fakultas': 'Ekonomi',
                 'prodi': 'Manajemen',
+=======
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Informatika',
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
                 'gender': 'perempuan',
             },
             follow=True,
@@ -478,13 +726,21 @@ class PenggunaAuthTests(TestCase):
 
         pengguna = Pengguna.objects.get(nim_nik='2201002')
         self.assertRedirects(response, reverse('pengguna:verify_register'))
+<<<<<<< HEAD
+=======
+        self.assertEqual(pengguna.nama_pengguna, 'Siti Aminah')
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
         self.assertTrue(check_password('passwordku123', pengguna.password))
         self.assertEqual(pengguna.role, 'mahasiswa')
         self.assertEqual(pengguna.no_hp, '')
         self.assertFalse(pengguna.is_verified)
         self.assertNotIn('pengguna_id', self.client.session)
         kode = self.client.session['pengguna_otp']['code']
+<<<<<<< HEAD
         self.assertContains(response, f'http://10.24.80.245:8000/pengguna/register/verifikasi/?kode={kode}')
+=======
+        self.assertContains(response, f'{settings.PUBLIC_ACCESS_BASE_URL}/pengguna/register/verifikasi/?kode={kode}')
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
         response = self.client.post(reverse('pengguna:verify_register'), {'kode': kode})
         pengguna.refresh_from_db()
@@ -503,8 +759,13 @@ class PenggunaAuthTests(TestCase):
                 'password': 'passwordku123',
                 'password_confirmation': 'passwordku123',
                 'alamat': 'Jakarta',
+<<<<<<< HEAD
                 'fakultas': 'Ekonomi',
                 'prodi': 'Manajemen',
+=======
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Informatika',
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
                 'gender': 'laki_laki',
             },
         )
@@ -533,8 +794,13 @@ class PenggunaAuthTests(TestCase):
                 'password': 'passwordku123',
                 'password_confirmation': 'passwordku123',
                 'alamat': 'Jakarta',
+<<<<<<< HEAD
                 'fakultas': 'Ekonomi',
                 'prodi': 'Manajemen',
+=======
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Informatika',
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
                 'gender': 'perempuan',
             },
         )
@@ -542,6 +808,28 @@ class PenggunaAuthTests(TestCase):
         self.assertRedirects(response, reverse('pengguna:verify_register'))
         self.assertTrue(Pengguna.objects.filter(nim_nik='2201003', email='dina@trisakti.ac.id').exists())
 
+<<<<<<< HEAD
+=======
+    def test_register_menolak_password_lemah(self):
+        response = self.client.post(
+            reverse('pengguna:register'),
+            {
+                'nama_pengguna': 'Password Lemah',
+                'nim_nik': '2201009',
+                'email': 'lemah@std.trisakti.ac.id',
+                'password': '123',
+                'password_confirmation': '123',
+                'alamat': 'Jakarta',
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Informatika',
+                'gender': 'laki_laki',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Pengguna.objects.filter(nim_nik='2201009').exists())
+
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     def test_register_menolak_email_non_trisakti(self):
         response = self.client.post(
             reverse('pengguna:register'),
@@ -552,8 +840,13 @@ class PenggunaAuthTests(TestCase):
                 'password': 'passwordku123',
                 'password_confirmation': 'passwordku123',
                 'alamat': 'Jakarta',
+<<<<<<< HEAD
                 'fakultas': 'Ekonomi',
                 'prodi': 'Manajemen',
+=======
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Informatika',
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
                 'gender': 'perempuan',
             },
         )
@@ -562,6 +855,42 @@ class PenggunaAuthTests(TestCase):
         self.assertContains(response, 'Email harus menggunakan domain @std.trisakti.ac.id atau @trisakti.ac.id.')
         self.assertFalse(Pengguna.objects.filter(nim_nik='2201002').exists())
 
+<<<<<<< HEAD
+=======
+    def test_register_menolak_email_yang_sudah_terdaftar(self):
+        Pengguna.objects.create(
+            nama_pengguna='Pemilik Email',
+            nim_nik='2201999',
+            email='sama@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081111111111',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+        )
+
+        response = self.client.post(
+            reverse('pengguna:register'),
+            {
+                'nama_pengguna': 'Email Sama',
+                'nim_nik': '2201010',
+                'email': 'SAMA@std.trisakti.ac.id',
+                'password': 'passwordku123',
+                'password_confirmation': 'passwordku123',
+                'alamat': 'Jakarta',
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Informatika',
+                'gender': 'laki_laki',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Email sudah terdaftar')
+        self.assertFalse(Pengguna.objects.filter(nim_nik='2201010').exists())
+
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     def test_register_menolak_nim_berhuruf(self):
         response = self.client.post(
             reverse('pengguna:register'),
@@ -572,8 +901,13 @@ class PenggunaAuthTests(TestCase):
                 'password': 'passwordku123',
                 'password_confirmation': 'passwordku123',
                 'alamat': 'Jakarta',
+<<<<<<< HEAD
                 'fakultas': 'Ekonomi',
                 'prodi': 'Manajemen',
+=======
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Informatika',
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
                 'gender': 'perempuan',
             },
         )
@@ -697,9 +1031,15 @@ class PenggunaAuthTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, 'Inventaris')
         self.assertNotContains(response, 'Barang Tertinggal')
+<<<<<<< HEAD
         self.assertNotContains(response, 'Data Asleb')
         self.assertNotContains(response, 'Pendaftaran Asleb')
         self.assertNotContains(response, 'Rekap Honorarium Asleb')
+=======
+        self.assertNotContains(response, 'Data Aslab')
+        self.assertNotContains(response, 'Pendaftaran Aslab')
+        self.assertNotContains(response, 'Rekap Honorarium Aslab')
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
         self.assertNotContains(response, 'Pengguna')
 
     def test_asisten_lab_tidak_bisa_membuka_menu_admin_asleb_langsung(self):

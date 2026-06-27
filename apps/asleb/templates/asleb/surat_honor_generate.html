@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Generate Surat Honor Aslab{% endblock %}
+
+{% block content %}
+<section class="mx-auto max-w-4xl space-y-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <p class="text-sm font-bold uppercase tracking-[0.2em] text-violet-700">Honorarium</p>
+            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Generate Surat Honor Aslab</h2>
+            <p class="mt-2 text-sm text-slate-500">Buat surat pengantar dan lampiran laporan kegiatan aslab dari rekap honor bulanan.</p>
+        </div>
+        <a class="btn-secondary" href="{% url 'asleb:surat_honor_list' %}">
+            <i data-lucide="arrow-left" class="h-4 w-4"></i>
+            <span>Arsip Surat</span>
+        </a>
+    </div>
+
+    <form method="post" class="surface-card grid gap-5 p-6 md:grid-cols-2 md:p-8">
+        {% csrf_token %}
+        {% for field in form %}
+        <div class="{% if field.name == 'perihal' %}md:col-span-2{% endif %}">
+            {{ field.label_tag }}
+            {{ field }}
+            {% if field.help_text %}
+            <p class="mt-2 text-xs font-semibold text-slate-500">{{ field.help_text }}</p>
+            {% endif %}
+            {% if field.errors %}
+            <div class="mt-2 text-sm font-semibold text-rose-600">{{ field.errors|striptags }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+        <div class="rounded-3xl bg-violet-50 p-5 text-sm leading-7 text-violet-900 md:col-span-2">
+            <div class="font-black">Template surat:</div>
+            <div>PDF memakai kop surat Universitas Trisakti - Fakultas Teknologi Industri seperti contoh.</div>
+            <div>Halaman pertama berisi surat pengantar, halaman berikutnya berisi lampiran tabel per laboratorium.</div>
+            <div>Setelah digenerate, file otomatis tersimpan di arsip dan bisa didownload ulang oleh admin/laboran.</div>
+        </div>
+        <div class="flex flex-wrap gap-3 md:col-span-2">
+            <button type="submit" class="btn-primary bg-violet-700 hover:bg-violet-800 shadow-violet-900/20">
+                <i data-lucide="file-check-2" class="h-4 w-4"></i>
+                <span>Generate PDF</span>
+            </button>
+            <a class="btn-secondary" href="{% url 'asleb:surat_honor_list' %}">
+                <i data-lucide="x" class="h-4 w-4"></i>
+                <span>Batal</span>
+            </a>
+        </div>
+    </form>
+</section>
+{% endblock %}

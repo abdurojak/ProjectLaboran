@@ -24,8 +24,13 @@ class Asleb(models.Model):
 
     class Meta:
         ordering = ['nama']
+<<<<<<< HEAD
         verbose_name = 'Asleb'
         verbose_name_plural = 'Data Asleb'
+=======
+        verbose_name = 'Aslab'
+        verbose_name_plural = 'Data Aslab'
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
     def __str__(self):
         return f'{self.nama} - {self.nim}'
@@ -80,6 +85,18 @@ class HonorAsleb(models.Model):
     nama_pemilik_transfer = models.CharField('Nama Pemilik Rekening/E-Wallet', max_length=150, blank=True)
     tanggal_transfer = models.DateField(blank=True, null=True)
     bukti_transfer = models.FileField('Bukti Screenshot Transfer', upload_to='honor_asleb/bukti_transfer/', blank=True)
+<<<<<<< HEAD
+=======
+    assigned_laboran = models.ForeignKey(
+        'pengguna.Pengguna',
+        on_delete=models.SET_NULL,
+        related_name='tugas_transfer_honor',
+        blank=True,
+        null=True,
+        limit_choices_to={'role': 'laboran'},
+        verbose_name='Laboran Penanggung Jawab TF',
+    )
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     pic_transfer = models.CharField(max_length=120, blank=True)
     keterangan = models.CharField(max_length=200, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
@@ -88,8 +105,13 @@ class HonorAsleb(models.Model):
 
     class Meta:
         ordering = ['-bulan', 'asleb__nama']
+<<<<<<< HEAD
         verbose_name = 'Honor Asleb'
         verbose_name_plural = 'Honor Asleb'
+=======
+        verbose_name = 'Honor Aslab'
+        verbose_name_plural = 'Honor Aslab'
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
     def __str__(self):
         return f'{self.asleb.nama} - {self.bulan:%B %Y} - {self.jumlah}'
@@ -129,9 +151,37 @@ class HonorAsleb(models.Model):
     def save(self, *args, **kwargs):
         self.level = self.asleb.level_otomatis
         self.fill_transfer_from_registration()
+<<<<<<< HEAD
         self.jumlah = self.total_honor
         super().save(*args, **kwargs)
 
+=======
+        if not self.assigned_laboran_id:
+            self.assigned_laboran = self.get_next_laboran_for_transfer()
+        self.jumlah = self.total_honor
+        super().save(*args, **kwargs)
+
+    def get_next_laboran_for_transfer(self):
+        Pengguna = apps.get_model('pengguna', 'Pengguna')
+        laboran_list = list(Pengguna.objects.filter(role='laboran', is_verified=True).order_by('nama_pengguna', 'pk'))
+        if not laboran_list:
+            return None
+
+        bulan_awal = self.bulan.replace(day=1)
+        load_by_laboran = {
+            item['assigned_laboran_id']: item['total']
+            for item in HonorAsleb.objects.filter(
+                bulan__year=bulan_awal.year,
+                bulan__month=bulan_awal.month,
+                assigned_laboran__isnull=False,
+            )
+            .exclude(pk=self.pk)
+            .values('assigned_laboran_id')
+            .annotate(total=models.Count('id'))
+        }
+        return min(laboran_list, key=lambda laboran: (load_by_laboran.get(laboran.pk, 0), laboran.nama_pengguna, laboran.pk))
+
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     def fill_transfer_from_registration(self):
         if self.nomor_transfer and self.nama_pemilik_transfer:
             return
@@ -153,13 +203,80 @@ class HonorAsleb(models.Model):
             self.nama_pemilik_transfer = registration.nama
 
 
+<<<<<<< HEAD
+=======
+def default_surat_honor_expires_at():
+    today = timezone.localdate()
+    try:
+        return today.replace(year=today.year + 5)
+    except ValueError:
+        return today.replace(month=2, day=28, year=today.year + 5)
+
+
+class SuratHonorAsleb(models.Model):
+    bulan = models.DateField()
+    nomor_surat = models.CharField(max_length=120)
+    tanggal_surat = models.DateField(default=timezone.localdate)
+    perihal = models.CharField(max_length=200, default='Laporan Kegiatan Asisten Laboratorium Jurusan Teknik Informatika')
+    file_pdf = models.FileField(upload_to='surat_honor_asleb/')
+    dibuat_oleh = models.ForeignKey(
+        'pengguna.Pengguna',
+        on_delete=models.SET_NULL,
+        related_name='surat_honor_dibuat',
+        blank=True,
+        null=True,
+    )
+    total_honor = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    jumlah_asleb = models.PositiveIntegerField(default=0)
+    expires_at = models.DateField(default=default_surat_honor_expires_at)
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+    diperbarui_pada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-bulan', '-dibuat_pada']
+        verbose_name = 'Surat Honor Aslab'
+        verbose_name_plural = 'Arsip Surat Honor Aslab'
+
+    def __str__(self):
+        return f'{self.nomor_surat} - {self.bulan:%B %Y}'
+
+    @property
+    def bulan_label(self):
+        bulan_names = [
+            '',
+            'Januari',
+            'Februari',
+            'Maret',
+            'April',
+            'Mei',
+            'Juni',
+            'Juli',
+            'Agustus',
+            'September',
+            'Oktober',
+            'November',
+            'Desember',
+        ]
+        return f'{bulan_names[self.bulan.month]} {self.bulan.year}'
+
+    @property
+    def total_honor_rupiah(self):
+        return f'Rp {self.total_honor:,.0f}'.replace(',', '.')
+
+
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 class PengaturanAbsensiAsleb(models.Model):
     dibuka = models.BooleanField(default=False)
     diperbarui_pada = models.DateTimeField(auto_now=True)
 
     class Meta:
+<<<<<<< HEAD
         verbose_name = 'Pengaturan Absensi Asleb'
         verbose_name_plural = 'Pengaturan Absensi Asleb'
+=======
+        verbose_name = 'Pengaturan Absensi Aslab'
+        verbose_name_plural = 'Pengaturan Absensi Aslab'
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
     @classmethod
     def get_solo(cls):
@@ -167,7 +284,11 @@ class PengaturanAbsensiAsleb(models.Model):
         return pengaturan
 
     def __str__(self):
+<<<<<<< HEAD
         return 'Absensi Asleb Dibuka' if self.dibuka else 'Absensi Asleb Ditutup'
+=======
+        return 'Absensi Aslab Dibuka' if self.dibuka else 'Absensi Aslab Ditutup'
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
 
 class AbsensiAsleb(models.Model):
@@ -189,8 +310,13 @@ class AbsensiAsleb(models.Model):
         constraints = [
             models.UniqueConstraint(fields=['asleb', 'modul'], name='unique_absensi_asleb_per_modul'),
         ]
+<<<<<<< HEAD
         verbose_name = 'Absensi Asleb'
         verbose_name_plural = 'Absensi Asleb'
+=======
+        verbose_name = 'Absensi Aslab'
+        verbose_name_plural = 'Absensi Aslab'
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
     def __str__(self):
         return f'{self.asleb.nama} - Modul {self.modul}'

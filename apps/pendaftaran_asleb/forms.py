@@ -38,7 +38,11 @@ class PendaftaranAslebForm(forms.ModelForm):
             'status',
         ]
         widgets = {
+<<<<<<< HEAD
             'nama': forms.TextInput(attrs={'placeholder': 'Nama lengkap calon asleb'}),
+=======
+            'nama': forms.TextInput(attrs={'placeholder': 'Nama lengkap calon aslab'}),
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
             'nim': forms.TextInput(attrs={'placeholder': 'NIM mahasiswa'}),
             'no_hp': forms.TextInput(attrs={'placeholder': 'Nomor HP aktif'}),
             'program_studi': forms.TextInput(attrs={'placeholder': 'Contoh: Rekayasa Perangkat Lunak'}),
@@ -150,6 +154,80 @@ class PendaftaranAslebPublicForm(PendaftaranAslebForm):
         return instance
 
 
+<<<<<<< HEAD
+=======
+class PublicPilihMatkulForm(forms.Form):
+    matkul = forms.ModelChoiceField(
+        queryset=MataKuliahAsleb.objects.none(),
+        empty_label='Pilih mata kuliah',
+        widget=forms.Select(attrs={'class': 'min-h-12'}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['matkul'].queryset = MataKuliahAsleb.objects.filter(aktif=True)
+
+
+class PublicTranskripForm(forms.Form):
+    transkrip = forms.FileField(
+        label='Upload Transkrip Nilai',
+        widget=forms.FileInput(attrs={'accept': '.pdf,.png,.jpg,.jpeg,.webp,.txt,.csv'}),
+        help_text='Upload transkrip PDF/gambar. Sistem akan membaca nilai mata kuliah yang dipilih.',
+    )
+
+
+class PublicBerkasPendaftaranForm(forms.Form):
+    SEMESTER_CHOICES = [(semester, f'Semester {semester}') for semester in range(3, 9)]
+    signature_data = forms.CharField(widget=forms.HiddenInput, required=False)
+
+    nama = forms.CharField(max_length=150, widget=forms.TextInput(attrs={'placeholder': 'Nama lengkap calon aslab'}))
+    nim = forms.CharField(max_length=30, widget=forms.TextInput(attrs={'placeholder': 'NIM mahasiswa'}))
+    no_hp = forms.CharField(max_length=30, widget=forms.TextInput(attrs={'placeholder': 'Nomor HP aktif'}))
+    email = forms.EmailField(required=False)
+    program_studi = forms.CharField(max_length=120, widget=forms.TextInput(attrs={'placeholder': 'Program studi'}))
+    semester = forms.ChoiceField(choices=SEMESTER_CHOICES)
+    cv = forms.FileField(label='CV', widget=forms.FileInput(attrs={'accept': '.pdf,.doc,.docx'}))
+    metode_rekening = forms.ChoiceField(choices=PendaftaranAsleb.METODE_REKENING_CHOICES)
+    rekening = forms.CharField(max_length=150, widget=forms.TextInput(attrs={'placeholder': 'Contoh: BCA 123456789 / DANA 0812xxxx / OVO 0812xxxx'}))
+    alasan = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 4, 'placeholder': 'Alasan atau catatan pendaftaran'}))
+
+    def __init__(self, *args, **kwargs):
+        self.current_pengguna = kwargs.pop('current_pengguna', None)
+        super().__init__(*args, **kwargs)
+        if self.current_pengguna and self.current_pengguna.role in ['mahasiswa', 'asisten_lab']:
+            self.fields['nama'].initial = self.current_pengguna.nama_pengguna
+            self.fields['nim'].initial = self.current_pengguna.nim_nik
+            self.fields['no_hp'].initial = self.current_pengguna.no_hp
+            self.fields['email'].initial = self.current_pengguna.email
+            self.fields['program_studi'].initial = self.current_pengguna.prodi
+
+            for field_name in ['nama', 'nim', 'no_hp', 'email', 'program_studi']:
+                self.fields[field_name].required = False
+                self.fields[field_name].widget = forms.HiddenInput()
+
+    def clean_semester(self):
+        semester = int(self.cleaned_data['semester'])
+        if semester < 3 or semester > 8:
+            raise forms.ValidationError('Semester hanya boleh 3 sampai 8.')
+        return semester
+
+    def clean_signature_data(self):
+        signature_data = self.cleaned_data.get('signature_data')
+        decode_signature_data(signature_data)
+        return signature_data
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if self.current_pengguna and self.current_pengguna.role in ['mahasiswa', 'asisten_lab']:
+            cleaned_data['nama'] = self.current_pengguna.nama_pengguna
+            cleaned_data['nim'] = self.current_pengguna.nim_nik
+            cleaned_data['no_hp'] = self.current_pengguna.no_hp
+            cleaned_data['email'] = self.current_pengguna.email
+            cleaned_data['program_studi'] = self.current_pengguna.prodi
+        return cleaned_data
+
+
+>>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 class MataKuliahAslebForm(forms.ModelForm):
     class Meta:
         model = MataKuliahAsleb
