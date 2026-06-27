@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}Barang Mahasiswa Tertinggal{% endblock %}
+
+{% block content %}
+<section class="min-w-0 space-y-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <p class="text-sm font-bold uppercase tracking-[0.2em] text-amber-600">Barang Tertinggal</p>
+            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Barang Mahasiswa Tertinggal</h2>
+            <p class="mt-2 text-sm text-slate-500">Kelola barang mahasiswa yang ditemukan, diajukan, rusak, hilang, atau sudah diambil.</p>
+        </div>
+        <a class="btn-primary bg-amber-500 shadow-amber-500/20 hover:bg-amber-600" href="{% url 'barang_tertinggal:create' %}">
+            <i data-lucide="plus" class="h-4 w-4"></i>
+            <span>Tambah Barang</span>
+        </a>
+    </div>
+
+    <div class="hidden">
+        {% for value, label in status_choices %}
+        <span>{{ label }}</span>
+        {% endfor %}
+    </div>
+
+    <div class="surface-card min-w-0 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-max">
+                <thead class="bg-slate-50">
+                    <tr>
+                        <th>Foto</th>
+                        <th>Kode</th>
+                        <th>Nama Barang</th>
+                        <th>Jenis</th>
+                        <th>Jumlah</th>
+                        <th>Tanggal Ditemukan</th>
+                        <th>Tanggal Diambil</th>
+                        <th>Pemilik</th>
+                        <th>Status</th>
+                        <th>Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for barang in barang_tertinggal_list %}
+                    <tr class="hover:bg-slate-50/70">
+                        <td>
+                            {% if barang.foto %}
+                            <img src="{{ barang.foto.url }}" alt="{{ barang.nama_barang }}" class="h-14 w-14 rounded-2xl object-cover ring-1 ring-slate-200">
+                            {% else %}
+                            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+                                <i data-lucide="image" class="h-5 w-5"></i>
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td class="font-semibold text-slate-600">{{ barang.kode_barang_tertinggal }}</td>
+                        <td class="font-semibold text-slate-900">{{ barang.nama_barang }}</td>
+                        <td>{{ barang.jenis_barang }}</td>
+                        <td>{{ barang.jumlah_barang }}</td>
+                        <td>{{ barang.tanggal_ditemukan|date:"d M Y" }}</td>
+                        <td>{{ barang.tanggal_diambil|date:"d M Y"|default:"-" }}</td>
+                        <td>{{ barang.nama_pemilik|default:"-" }}</td>
+                        <td>
+                            <span class="
+                                {% if barang.status == 'tertinggal' %}bg-amber-100 text-amber-700
+                                {% elif barang.status == 'diajukan' %}bg-blue-100 text-blue-700
+                                {% elif barang.status == 'diambil' %}bg-emerald-100 text-emerald-700
+                                {% elif barang.status == 'rusak' %}bg-orange-100 text-orange-700
+                                {% elif barang.status == 'hilang' %}bg-rose-100 text-rose-700
+                                {% else %}bg-slate-100 text-slate-700{% endif %}
+                                inline-flex rounded-full px-3 py-1 text-xs font-bold">
+                                {{ barang.get_status_display }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="flex flex-wrap gap-3 text-sm font-semibold">
+                                <a class="inline-flex items-center gap-1 text-brand-700 hover:text-brand-800" href="{% url 'barang_tertinggal:detail' barang.pk %}">
+                                    <i data-lucide="eye" class="h-4 w-4"></i>
+                                    <span>Detail</span>
+                                </a>
+                                <a class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700" href="{% url 'barang_tertinggal:update' barang.pk %}">
+                                    <i data-lucide="pencil" class="h-4 w-4"></i>
+                                    <span>Edit</span>
+                                </a>
+                                <form method="post" action="{% url 'barang_tertinggal:delete' barang.pk %}" data-confirm-message="Yakin ingin menghapus barang tertinggal {{ barang.nama_barang }}?" class="inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700">
+                                        <i data-lucide="trash-2" class="h-4 w-4"></i>
+                                        <span>Hapus</span>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="10" class="py-12 text-center text-slate-500">Belum ada data barang tertinggal.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+{% include "components/confirmation_modal.html" with title="Konfirmasi Hapus Barang Tertinggal" confirm_label="Lanjutkan" confirm_icon="arrow-right" %}
+{% endblock %}

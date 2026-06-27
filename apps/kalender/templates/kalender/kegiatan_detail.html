@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Detail Kegiatan{% endblock %}
+
+{% block content %}
+<section class="mx-auto max-w-4xl space-y-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <p class="text-sm font-bold uppercase tracking-[0.2em] text-blue-700">Kalender</p>
+            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">{{ kegiatan.judul }}</h2>
+            <p class="mt-2 text-sm text-slate-500">Detail kegiatan dan status notifikasinya.</p>
+        </div>
+        <div class="flex flex-wrap gap-3">
+            {% if not request.current_pengguna or request.current_pengguna.role == 'admin' or request.current_pengguna.role == 'laboran' or kegiatan.dibuat_oleh_id == request.current_pengguna.pk %}
+            <a class="btn-primary bg-blue-700 hover:bg-blue-800 shadow-blue-900/15" href="{% url 'kalender:kegiatan_update' kegiatan.pk %}">
+                <i data-lucide="pencil" class="h-4 w-4"></i>
+                <span>Edit</span>
+            </a>
+            {% endif %}
+            <a class="btn-secondary" href="{% url 'kalender:kegiatan_list' %}">
+                <i data-lucide="arrow-left" class="h-4 w-4"></i>
+                <span>Kembali</span>
+            </a>
+        </div>
+    </div>
+
+    <div class="surface-card grid gap-5 p-6 md:grid-cols-2 md:p-8">
+        <div class="rounded-3xl bg-slate-50 p-5">
+            <div class="text-sm font-semibold text-slate-500">Tanggal</div>
+            <div class="mt-2 text-xl font-bold text-slate-900">{{ kegiatan.tanggal|date:"d M Y" }}</div>
+        </div>
+        <div class="rounded-3xl bg-slate-50 p-5">
+            <div class="text-sm font-semibold text-slate-500">Waktu</div>
+            <div class="mt-2 text-xl font-bold text-slate-900">
+                {{ kegiatan.waktu_mulai|time:"H:i" }}{% if kegiatan.waktu_selesai %} - {{ kegiatan.waktu_selesai|time:"H:i" }}{% endif %}
+            </div>
+        </div>
+        <div class="rounded-3xl bg-slate-50 p-5">
+            <div class="text-sm font-semibold text-slate-500">Lokasi</div>
+            <div class="mt-2 text-xl font-bold text-slate-900">{{ kegiatan.lokasi|default:"-" }}</div>
+        </div>
+        <div class="rounded-3xl bg-slate-50 p-5">
+            <div class="text-sm font-semibold text-slate-500">Notifikasi</div>
+            <div class="mt-2 text-xl font-bold text-slate-900">{% if kegiatan.tampilkan_notifikasi %}Aktif{% else %}Nonaktif{% endif %}</div>
+        </div>
+        <div class="rounded-3xl bg-slate-50 p-5">
+            <div class="text-sm font-semibold text-slate-500">Dibuat Oleh</div>
+            <div class="mt-2 text-xl font-bold text-slate-900">{{ kegiatan.dibuat_oleh.nama_pengguna|default:"-" }}</div>
+        </div>
+        <div class="rounded-3xl bg-slate-50 p-5">
+            <div class="text-sm font-semibold text-slate-500">Dibagikan Ke</div>
+            <div class="mt-2 text-xl font-bold text-slate-900">{{ kegiatan.target_role_display }}</div>
+        </div>
+        <div class="rounded-3xl bg-slate-50 p-5 md:col-span-2">
+            <div class="text-sm font-semibold text-slate-500">Deskripsi</div>
+            <div class="mt-2 text-base leading-7 text-slate-700">{{ kegiatan.deskripsi|default:"-" }}</div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+

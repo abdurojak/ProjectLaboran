@@ -1,0 +1,42 @@
+<div
+    class="js-file-upload"
+    data-file-upload
+    data-empty-label="{{ empty_label|default:'Belum ada file dipilih' }}"
+    data-delete-label="{{ delete_label|default:'File akan dihapus saat disimpan' }}"
+>
+    {{ field }}
+    <div class="mt-3 rounded-[24px] border border-dashed border-brand-200 bg-brand-50/40 p-5">
+        <div class="flex flex-wrap items-center gap-4">
+            <label for="{{ field.id_for_label }}" class="btn-secondary cursor-pointer gap-2 border-brand-200 bg-white text-brand-800 hover:bg-brand-50">
+                <i data-lucide="{{ icon|default:'upload-cloud' }}" class="h-5 w-5"></i>
+                <span>{{ button_label|default:'Pilih File' }}</span>
+            </label>
+            <div class="min-w-0">
+                <div class="text-sm font-bold text-slate-800">{{ title|default:'Upload file' }}</div>
+                <p data-file-name class="mt-1 break-all text-sm font-semibold text-slate-500">
+                    {% if current_file %}{{ current_file.name }}{% else %}{{ empty_label|default:'Belum ada file dipilih' }}{% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+
+    {% if show_preview|default:True %}
+    <div data-preview-wrapper class="{% if not current_file %}hidden{% endif %} mt-4">
+        <div class="mb-2 text-sm font-semibold text-slate-700">{{ preview_label|default:'Preview file' }}</div>
+        <div class="flex flex-wrap items-start gap-4">
+            <img
+                data-preview-image
+                src="{% if current_file %}{{ current_file.url }}{% endif %}"
+                alt="{{ preview_alt|default:'Preview file' }}"
+                class="h-44 w-44 rounded-3xl object-cover ring-1 ring-slate-200"
+            >
+            {% if delete_input_id %}
+            <button data-delete-button type="button" class="btn-secondary gap-2 text-rose-700 hover:bg-rose-50">
+                <i data-lucide="trash-2" class="h-4 w-4"></i>
+                <span>{{ delete_button_label|default:'Hapus File' }}</span>
+            </button>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>

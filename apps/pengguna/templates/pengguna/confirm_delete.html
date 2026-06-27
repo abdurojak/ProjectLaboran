@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+
+{% block title %}Hapus Pengguna{% endblock %}
+
+{% block content %}
+{% url 'pengguna:list' as cancel_url %}
+{% include "components/confirmation.html" with eyebrow="Pengguna" title="Hapus Pengguna" description="Konfirmasi penghapusan data pengguna." message_prefix="Yakin ingin menghapus pengguna" target_label=pengguna.kode_pengguna second_prefix="-" second_label=pengguna.nama_pengguna cancel_url=cancel_url %}
+{% endblock %}

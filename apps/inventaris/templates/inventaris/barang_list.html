@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}Daftar Barang{% endblock %}
+
+{% block content %}
+<section class="space-y-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <p class="text-sm font-bold uppercase tracking-[0.2em] text-brand-700">Inventaris</p>
+            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Daftar Barang</h2>
+            <p class="mt-2 text-sm text-slate-500">Kelola data inventaris laboratorium dari satu tabel yang rapi dan mudah dibaca.</p>
+        </div>
+        <div class="flex flex-wrap gap-3">
+            <a class="btn-secondary gap-2" href="{% url 'inventaris:lokasi_list' %}">
+                <i data-lucide="map-pin" class="h-4 w-4"></i>
+                <span>Kelola Lokasi</span>
+            </a>
+            <a class="btn-primary gap-2" href="{% url 'inventaris:barang_create' %}">
+                <i data-lucide="plus" class="h-4 w-4"></i>
+                <span>Tambah Barang</span>
+            </a>
+        </div>
+    </div>
+
+    <form id="inventaris-search-form" method="get" class="surface-card p-5">
+        <div>
+            <label for="id_q">Cari barang</label>
+            <input id="id_q" name="q" type="text" value="{{ search_query }}" placeholder="Cari nama, kode, atau keterangan" autocomplete="off">
+        </div>
+    </form>
+
+    <div class="surface-card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table>
+                <thead class="bg-slate-50">
+                    <tr>
+                        <th>Foto</th>
+                        <th>Kode Inventaris</th>
+                        <th>Nama</th>
+                        <th>Stok Total</th>
+                        <th>Dipinjam</th>
+                        <th>Tersedia</th>
+                        <th>Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for barang in barang_list %}
+                    <tr class="hover:bg-slate-50/70">
+                        <td>
+                            {% if barang.foto %}
+                            <img src="{{ barang.foto.url }}" alt="{{ barang.nama }}" class="h-14 w-14 rounded-2xl object-cover ring-1 ring-slate-200">
+                            {% else %}
+                            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+                                <i data-lucide="image" class="h-5 w-5"></i>
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td class="font-semibold text-slate-600">{{ barang.kode_inventaris }}</td>
+                        <td class="font-semibold text-slate-900">{{ barang.nama }}</td>
+                        <td>{{ barang.jumlah }}</td>
+                        <td>{{ barang.jumlah_dipinjam }}</td>
+                        <td>
+                            <span class="{% if barang.stok_tersedia %}bg-emerald-100 text-emerald-700{% else %}bg-rose-100 text-rose-700{% endif %} inline-flex rounded-full px-3 py-1 text-xs font-bold">
+                                {{ barang.stok_tersedia }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="flex flex-wrap gap-3 text-sm font-semibold">
+                                <a class="inline-flex items-center gap-1 text-brand-700 hover:text-brand-800" href="{% url 'inventaris:inventaris_detail' barang.pk %}">
+                                    <i data-lucide="eye" class="h-4 w-4"></i>
+                                    <span>Detail</span>
+                                </a>
+                                <a class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700" href="{% url 'inventaris:barang_update' barang.pk %}">
+                                    <i data-lucide="pencil" class="h-4 w-4"></i>
+                                    <span>Edit</span>
+                                </a>
+                                <form method="post" action="{% url 'inventaris:barang_delete' barang.pk %}" data-confirm-message="Yakin ingin menghapus barang {{ barang.nama }}?" class="inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700">
+                                        <i data-lucide="trash-2" class="h-4 w-4"></i>
+                                        <span>Hapus</span>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="py-12 text-center text-slate-500">Tidak ada barang yang cocok dengan pencarian saat ini.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+{% include "components/confirmation_modal.html" with title="Konfirmasi Hapus Inventaris" confirm_label="Lanjutkan" confirm_icon="arrow-right" %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('inventaris-search-form');
+        const searchInput = document.getElementById('id_q');
+        let searchTimer = null;
+
+        if (searchInput) {
+            searchInput.addEventListener('input', function () {
+                clearTimeout(searchTimer);
+                searchTimer = setTimeout(function () {
+                    form.submit();
+                }, 350);
+            });
+        }
+    });
+</script>
+{% endblock %}

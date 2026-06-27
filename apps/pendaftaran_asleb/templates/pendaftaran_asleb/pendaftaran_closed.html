@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Pendaftaran Asleb Ditutup{% endblock %}
+
+{% block content %}
+<section class="mx-auto max-w-2xl">
+    <div class="surface-card overflow-hidden">
+        <div class="bg-gradient-to-br from-slate-900 via-teal-900 to-cyan-800 p-8 text-white">
+            <div class="flex items-center gap-4">
+                <span class="grid h-16 w-16 place-items-center rounded-3xl bg-white/15 ring-1 ring-white/20">
+                    <i data-lucide="lock" class="h-8 w-8"></i>
+                </span>
+                <div>
+                    <p class="text-xs font-black uppercase tracking-[0.25em] text-cyan-100">Pendaftaran Asleb</p>
+                    <h2 class="mt-2 text-3xl font-black tracking-tight">Pendaftaran sedang ditutup</h2>
+                </div>
+            </div>
+            <p class="mt-5 max-w-xl text-sm leading-7 text-cyan-50">
+                Form pendaftaran asleb belum dibuka oleh admin. Silakan cek kembali ketika periode pendaftaran sudah tersedia.
+            </p>
+        </div>
+        <div class="p-6">
+            <a href="{% url 'pengguna:login' %}" class="btn-secondary gap-2">
+                <i data-lucide="arrow-left" class="h-4 w-4"></i>
+                <span>Kembali ke login</span>
+            </a>
+        </div>
+    </div>
+</section>
+{% endblock %}

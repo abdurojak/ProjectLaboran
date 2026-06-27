@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+
+{% block title %}Hapus Barang{% endblock %}
+
+{% block content %}
+{% url 'inventaris:barang_list' as cancel_url %}
+{% include "components/confirmation.html" with eyebrow="Inventaris" title="Hapus Barang" description="Konfirmasi penghapusan data barang dari sistem inventaris." message_prefix="Yakin ingin menghapus barang" target_label=barang.nama cancel_url=cancel_url %}
+{% endblock %}

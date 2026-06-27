@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}Form Lokasi{% endblock %}
+
+{% block content %}
+<div class="surface-card p-6">
+    <h2 class="text-2xl font-bold text-slate-900">Form Lokasi</h2>
+    <p class="mt-1 text-sm text-slate-500">Kode lokasi akan dibuat otomatis setelah data disimpan.</p>
+    <form class="mt-6" method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <div class="mt-5 flex flex-wrap gap-3">
+            <button class="btn-primary" type="submit">Simpan</button>
+            <a class="btn-secondary" href="{% url 'inventaris:lokasi_list' %}">Batal</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

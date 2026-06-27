@@ -1,0 +1,626 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="grid gap-6">
+        {% comment %}
+        <div class="grid gap-4">
+            <article class="surface-card overflow-hidden bg-gradient-to-br from-white via-brand-50/60 to-slate-100/70 p-7 md:p-9">
+                <div class="grid items-end gap-8 lg:grid-cols-[minmax(0,1.3fr)_320px]">
+                    <div>
+                        <p class="text-xs font-extrabold uppercase tracking-[0.22em] text-brand-700">Dashboard</p>
+                        <h2 class="mt-3 max-w-xl text-4xl font-black tracking-tight text-slate-900 md:text-5xl">Pusat kendali operasional laboratorium</h2>
+                        <p class="mt-5 max-w-2xl text-base leading-8 text-slate-600">Kelola inventaris, peminjaman, jadwal, data asleb, rekap honorarium asleb, dan seluruh aktivitas laboratorium dalam satu sistem terintegrasi. Untuk tahap sekarang, menu inventaris menjadi modul yang aktif terlebih dahulu.</p>
+                    </div>
+
+                    <div class="relative min-h-[220px]">
+                        <div class="absolute bottom-5 left-0 flex h-28 w-24 items-center justify-center rounded-t-[48px] rounded-br-[28px] bg-slate-800 text-white/90">
+                            <i data-lucide="microscope" class="h-12 w-12"></i>
+                        </div>
+                        <div class="absolute bottom-4 right-0 flex h-24 w-20 items-center justify-center rounded-[28px] bg-brand-100 text-brand-800">
+                            <i data-lucide="flask-conical" class="h-10 w-10"></i>
+                        </div>
+                        <div class="absolute bottom-10 right-16 h-28 w-10 rounded-full bg-emerald-200/40 blur-[2px]"></div>
+                        <div class="absolute right-10 top-6 h-[120px] w-[190px] rounded-[18px] bg-slate-800 shadow-2xl shadow-slate-900/20">
+                            <div class="absolute inset-[10px] rounded-[12px] bg-gradient-to-b from-white to-cyan-50"></div>
+                            <div class="absolute left-8 top-9 h-1 w-16 rounded-full bg-emerald-300"></div>
+                            <div class="absolute right-8 top-8 h-12 w-12 rounded-full bg-[conic-gradient(#68d7d2_0_72%,#dbeef0_72%_100%)]"></div>
+                            <div class="absolute bottom-8 left-8 w-4 rounded-t-lg bg-cyan-300" style="height: 42px;"></div>
+                            <div class="absolute bottom-8 left-14 w-4 rounded-t-lg bg-sky-400" style="height: 64px;"></div>
+                            <div class="absolute bottom-8 left-20 w-4 rounded-t-lg bg-emerald-300" style="height: 84px;"></div>
+                            <div class="absolute -bottom-4 left-[70px] h-4 w-12 rounded-b-xl bg-slate-700"></div>
+                        </div>
+                    </div>
+                </div>
+            </article>
+        </div>
+        {% endcomment %}
+
+        {% if not is_mahasiswa_dashboard or is_asisten_lab_dashboard %}
+        <div class="grid gap-4 md:grid-cols-4">
+            {% for stat in stats_cards %}
+            <article class="surface-card flex items-center gap-4 p-4">
+                <div class="{{ stat.icon_bg }} {{ stat.icon_text }} flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
+                    <i data-lucide="{{ stat.icon }}" class="h-5 w-5"></i>
+                </div>
+                <div class="min-w-0">
+                    <div class="truncate text-sm font-semibold text-slate-500">{{ stat.label }}</div>
+                    <div class="{{ stat.value_text }} mt-1 text-3xl font-black tracking-tight">{{ stat.value }}</div>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if is_mahasiswa_dashboard %}
+        {% if pendaftaran_asleb_dibuka %}
+        <section class="surface-card overflow-hidden">
+            <div class="grid gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-center">
+                <div>
+                    <p class="text-xs font-black uppercase tracking-[0.24em] text-teal-700">Pendaftaran Asleb</p>
+                    <h3 class="mt-3 text-3xl font-black tracking-tight text-slate-900">Pendaftaran asleb sedang dibuka</h3>
+                    <p class="mt-3 max-w-2xl text-sm leading-7 text-slate-500">
+                        Scan QR atau buka link pendaftaran untuk mengirim data diri, berkas, rekening, dan pilihan mata kuliah. Jika sudah login, nama dan NIM akan otomatis terisi.
+                    </p>
+                    <div class="mt-5 flex flex-wrap gap-3">
+                        <a href="{{ public_registration_url }}" class="btn-primary gap-2">
+                            <i data-lucide="external-link" class="h-4 w-4"></i>
+                            <span>Buka Form Pendaftaran</span>
+                        </a>
+                    </div>
+                </div>
+                <div class="rounded-[28px] border border-teal-100 bg-white p-4 shadow-sm">
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data={{ public_registration_url|urlencode }}" alt="QR pendaftaran asleb" class="mx-auto h-52 w-52 rounded-2xl object-contain">
+                </div>
+            </div>
+        </section>
+        {% endif %}
+
+        {% if is_asisten_lab_dashboard %}
+        <section class="surface-card min-w-0 overflow-hidden p-6">
+            <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h3 class="text-2xl font-bold tracking-tight text-slate-900">Riwayat Honor Saya</h3>
+                    <p class="mt-1 text-sm text-slate-500">Honor tetap tersimpan per bulan. Jika sudah ditransfer, saldo bulan berjalan otomatis menjadi Rp 0.</p>
+                </div>
+                <a href="{% url 'asleb:absensi_list' %}" class="btn-secondary">Buka Absensi</a>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-max">
+                    <thead class="bg-slate-50">
+                        <tr>
+                            <th>Bulan</th>
+                            <th>Total Honor</th>
+                            <th>Status</th>
+                            <th>Tanggal TF</th>
+                            <th>Bukti TF</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for honor in riwayat_honor_saya %}
+                        <tr>
+                            <td class="font-semibold text-slate-900">{{ honor.bulan|date:"F Y" }}</td>
+                            <td class="font-black text-violet-700">{{ honor.jumlah_rupiah }}</td>
+                            <td>{{ honor.get_status_display }}</td>
+                            <td>{{ honor.tanggal_transfer|date:"d M Y"|default:"-" }}</td>
+                            <td>
+                                {% if honor.bukti_transfer %}
+                                <a class="font-semibold text-brand-700 hover:text-brand-800" href="{{ honor.bukti_transfer.url }}" target="_blank" rel="noreferrer">Lihat bukti</a>
+                                {% else %}
+                                <span class="text-slate-400">Belum ada</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="py-10 text-center text-slate-500">Belum ada riwayat honor.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        {% endif %}
+
+        <section class="surface-card min-w-0 overflow-hidden p-6">
+            <div class="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-center">
+                <div class="rounded-[28px] border border-blue-100 bg-blue-50/70 p-5 text-center">
+                    <p class="text-sm font-bold uppercase tracking-[0.18em] text-blue-700">{{ today|date:"F" }}</p>
+                    <div class="mt-2 text-6xl font-black tracking-tight text-slate-900">{{ today|date:"d" }}</div>
+                    <p class="mt-2 text-sm font-semibold text-slate-600">{{ today|date:"l, Y" }}</p>
+                </div>
+                <div class="min-w-0">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <p class="text-xs font-black uppercase tracking-[0.22em] text-blue-700">Kalender</p>
+                            <h3 class="mt-2 text-2xl font-bold tracking-tight text-slate-900">Kegiatan Terdekat</h3>
+                        </div>
+                        <a href="{% url 'kalender:kegiatan_list' %}" class="btn-secondary">Buka Kalender</a>
+                    </div>
+                    <div class="mt-4 grid gap-3">
+                        {% for kegiatan in kegiatan_kalender_mahasiswa %}
+                        <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <div class="min-w-0">
+                                    <p class="truncate text-sm font-bold text-slate-900">{{ kegiatan.judul }}</p>
+                                    <p class="mt-1 text-xs text-slate-500">{{ kegiatan.tanggal|date:"d M Y" }} · {{ kegiatan.lokasi|default:"Lokasi belum diisi" }}</p>
+                                </div>
+                                <span class="shrink-0 rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
+                                    {{ kegiatan.waktu_mulai|time:"H:i" }}{% if kegiatan.waktu_selesai %} - {{ kegiatan.waktu_selesai|time:"H:i" }}{% endif %}
+                                </span>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div class="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500">
+                            Belum ada kegiatan kalender terdekat.
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="surface-card min-w-0 overflow-hidden p-6">
+            <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h3 class="text-2xl font-bold tracking-tight text-slate-900">Peminjaman Saya</h3>
+                    <p class="mt-1 text-sm text-slate-500">Pantau pengajuan dan peminjaman alat yang tercatat atas nama Anda.</p>
+                </div>
+                <a href="{% url 'peminjaman:peminjaman_list' %}?milik_saya=1" class="btn-secondary">Lihat semua</a>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-max">
+                    <thead class="bg-slate-50">
+                        <tr>
+                            <th>Kode Pinjam</th>
+                            <th>Barang</th>
+                            <th>Tanggal Pinjam</th>
+                            <th>Tanggal Kembali</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for peminjaman in peminjaman_saya %}
+                        <tr>
+                            <td class="font-semibold text-slate-600">{{ peminjaman.kode_pinjam }}</td>
+                            <td><a class="font-semibold text-brand-700 hover:text-brand-800" href="{% url 'peminjaman:peminjaman_detail' peminjaman.pk %}">{{ peminjaman.barang.nama }}</a></td>
+                            <td>{{ peminjaman.tanggal_pinjam|date:"d M Y" }}</td>
+                            <td>{{ peminjaman.tanggal_kembali|date:"d M Y" }}</td>
+                            <td>{{ peminjaman.get_status_display }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="py-10 text-center text-slate-500">Belum ada peminjaman alat atas nama Anda.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="surface-card min-w-0 overflow-hidden p-6">
+            <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h3 class="text-2xl font-bold tracking-tight text-slate-900">Jadwal Praktikum Hari Ini</h3>
+                    <p class="mt-1 text-sm text-slate-500">Jadwal praktikum yang tercatat untuk hari ini.</p>
+                </div>
+                <a href="{% url 'jadwal:jadwal_list' %}" class="btn-secondary">Lihat jadwal</a>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-max">
+                    <thead class="bg-slate-50">
+                        <tr>
+                            <th>Mata Praktikum</th>
+                            <th>Ruangan</th>
+                            <th>Waktu</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for jadwal in jadwal_hari_ini %}
+                        <tr>
+                            <td class="font-semibold text-slate-900">{{ jadwal.mata_kuliah }}</td>
+                            <td>{{ jadwal.ruangan.nama }}</td>
+                            <td>{{ jadwal.waktu_mulai|time:"H:i" }}{% if jadwal.waktu_selesai %} - {{ jadwal.waktu_selesai|time:"H:i" }}{% endif %}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="3" class="py-10 text-center text-slate-500">Tidak ada jadwal praktikum hari ini.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        {% else %}
+        <section class="surface-card min-w-0 overflow-hidden p-6">
+            <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h3 class="text-2xl font-bold tracking-tight text-slate-900">Pengajuan Jadwal Praktikum</h3>
+                    <p class="mt-1 text-sm text-slate-500">Jadwal dari aslab yang menunggu keputusan admin laboratorium.</p>
+                </div>
+                <a href="{% url 'jadwal:jadwal_list' %}" class="btn-secondary">Lihat jadwal</a>
+            </div>
+
+            {% if jadwal_diajukan %}
+            <div class="-mx-2 max-w-full overflow-x-auto px-2 pb-2">
+                <div class="flex w-max max-w-none flex-nowrap gap-4">
+                    {% for jadwal in jadwal_diajukan %}
+                    <article class="min-w-[300px] max-w-[300px] flex-none rounded-2xl border border-amber-100 bg-white p-4">
+                        <div class="flex items-start gap-3">
+                            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-700">
+                                <i data-lucide="calendar-plus" class="h-5 w-5"></i>
+                            </span>
+                            <div class="min-w-0">
+                                <a class="block truncate font-bold text-brand-700 hover:text-brand-800" href="{% url 'jadwal:jadwal_detail' jadwal.pk %}">{{ jadwal.mata_kuliah }}</a>
+                                <p class="mt-1 truncate text-sm font-semibold text-slate-700">{{ jadwal.ruangan.nama }}</p>
+                                <p class="mt-1 text-xs text-slate-500">{{ jadwal.get_hari_display }}, {{ jadwal.waktu_mulai|time:"H:i" }}{% if jadwal.waktu_selesai %} - {{ jadwal.waktu_selesai|time:"H:i" }}{% endif %}</p>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 grid grid-cols-2 gap-2">
+                            <form method="post" action="{% url 'dashboard:jadwal_accept' jadwal.pk %}" data-confirm-message="Terima pengajuan jadwal ini?">
+                                {% csrf_token %}
+                                <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700">
+                                    <i data-lucide="check" class="h-4 w-4"></i>
+                                    Terima
+                                </button>
+                            </form>
+                            <form method="post" action="{% url 'dashboard:jadwal_reject' jadwal.pk %}" data-confirm-message="Tolak pengajuan jadwal ini?">
+                                {% csrf_token %}
+                                <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50">
+                                    <i data-lucide="x" class="h-4 w-4"></i>
+                                    Tolak
+                                </button>
+                            </form>
+                        </div>
+                    </article>
+                    {% endfor %}
+                </div>
+            </div>
+            {% else %}
+            <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">Belum ada pengajuan jadwal praktikum.</div>
+            {% endif %}
+        </section>
+
+        <section class="surface-card min-w-0 overflow-hidden p-6">
+            <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h3 class="text-2xl font-bold tracking-tight text-slate-900">Peminjaman Alat Diajukan</h3>
+                    <p class="mt-1 text-sm text-slate-500">Pengajuan baru yang menunggu keputusan admin laboratorium.</p>
+                </div>
+                <a href="{% url 'peminjaman:peminjaman_list' %}" class="btn-secondary">Lihat semua</a>
+            </div>
+
+            {% if peminjaman_diajukan %}
+            <div class="-mx-2 max-w-full overflow-x-auto px-2 pb-2">
+                <div class="flex w-max max-w-none flex-nowrap gap-4">
+                    {% for peminjaman in peminjaman_diajukan %}
+                    <article class="min-w-[280px] max-w-[280px] flex-none rounded-2xl border border-slate-200 bg-white p-4">
+                        <div class="flex items-start gap-3">
+                            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+                                <i data-lucide="clipboard-list" class="h-5 w-5"></i>
+                            </span>
+                            <div class="min-w-0">
+                                <a class="block truncate font-bold text-brand-700 hover:text-brand-800" href="{% url 'peminjaman:peminjaman_detail' peminjaman.pk %}">{{ peminjaman.barang.nama }}</a>
+                                <p class="mt-1 truncate text-sm font-semibold text-slate-700">{{ peminjaman.nama_peminjam }}</p>
+                                <p class="mt-1 text-xs text-slate-500">{{ peminjaman.tanggal_pinjam|date:"d M" }} - {{ peminjaman.tanggal_kembali|date:"d M Y" }}</p>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 grid grid-cols-2 gap-2">
+                            <form method="post" action="{% url 'dashboard:peminjaman_accept' peminjaman.pk %}">
+                                {% csrf_token %}
+                                <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700">
+                                    <i data-lucide="check" class="h-4 w-4"></i>
+                                    Terima
+                                </button>
+                            </form>
+                            <form method="post" action="{% url 'dashboard:peminjaman_reject' peminjaman.pk %}">
+                                {% csrf_token %}
+                                <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50">
+                                    <i data-lucide="x" class="h-4 w-4"></i>
+                                    Tolak
+                                </button>
+                            </form>
+                        </div>
+                    </article>
+                    {% endfor %}
+                </div>
+            </div>
+            {% else %}
+            <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">Belum ada pengajuan peminjaman alat.</div>
+            {% endif %}
+        </section>
+
+        <section class="surface-card min-w-0 overflow-hidden p-6">
+            <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h3 class="text-2xl font-bold tracking-tight text-slate-900">Barang Yang Dipinjam</h3>
+                    <p class="mt-1 text-sm text-slate-500">Alat yang sedang dipinjam dan perlu diperbarui status akhirnya.</p>
+                </div>
+                <a href="{% url 'peminjaman:peminjaman_list' %}" class="btn-secondary">Lihat semua</a>
+            </div>
+
+            {% if peminjaman_dipinjam %}
+            <div class="-mx-2 max-w-full overflow-x-auto px-2 pb-2">
+                <div class="flex w-max max-w-none flex-nowrap gap-4">
+                    {% for peminjaman in peminjaman_dipinjam %}
+                    <article class="min-w-[280px] max-w-[280px] flex-none rounded-2xl border border-slate-200 bg-white p-4">
+                        <div class="flex items-start gap-3">
+                            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+                                <i data-lucide="arrow-left-right" class="h-5 w-5"></i>
+                            </span>
+                            <div class="min-w-0">
+                                <a class="block truncate font-bold text-brand-700 hover:text-brand-800" href="{% url 'peminjaman:peminjaman_detail' peminjaman.pk %}">{{ peminjaman.barang.nama }}</a>
+                                <p class="mt-1 truncate text-sm font-semibold text-slate-700">{{ peminjaman.nama_peminjam }}</p>
+                                <p class="mt-1 text-xs text-slate-500">{{ peminjaman.tanggal_pinjam|date:"d M" }} - {{ peminjaman.tanggal_kembali|date:"d M Y" }}</p>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 grid gap-2">
+                            <form method="post" action="{% url 'dashboard:peminjaman_returned' peminjaman.pk %}" data-confirm-message="Yakin tandai peminjaman ini sudah dikembalikan?">
+                                {% csrf_token %}
+                                <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700">
+                                    <i data-lucide="undo-2" class="h-4 w-4"></i>
+                                    Dikembalikan
+                                </button>
+                            </form>
+                            <div class="grid grid-cols-2 gap-2">
+                                <form method="post" action="{% url 'dashboard:peminjaman_lost' peminjaman.pk %}" data-confirm-message="Yakin tandai barang ini hilang?">
+                                    {% csrf_token %}
+                                    <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50">
+                                        <i data-lucide="circle-alert" class="h-4 w-4"></i>
+                                        Hilang
+                                    </button>
+                                </form>
+                                <form method="post" action="{% url 'dashboard:peminjaman_broken' peminjaman.pk %}" data-confirm-message="Yakin tandai barang ini rusak?">
+                                    {% csrf_token %}
+                                    <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-orange-200 bg-white px-3 py-2 text-sm font-semibold text-orange-700 transition hover:bg-orange-50">
+                                        <i data-lucide="wrench" class="h-4 w-4"></i>
+                                        Rusak
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </article>
+                    {% endfor %}
+                </div>
+            </div>
+            {% else %}
+            <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">Belum ada alat yang sedang dipinjam.</div>
+            {% endif %}
+        </section>
+
+        <section class="surface-card min-w-0 overflow-hidden p-6">
+            <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h3 class="text-2xl font-bold tracking-tight text-slate-900">Peminjaman Perlu Diganti</h3>
+                    <p class="mt-1 text-sm text-slate-500">Alat berstatus hilang atau rusak yang menunggu penggantian.</p>
+                </div>
+                <a href="{% url 'peminjaman:peminjaman_list' %}" class="btn-secondary">Lihat semua</a>
+            </div>
+
+            {% if peminjaman_perlu_diganti %}
+            <div class="-mx-2 max-w-full overflow-x-auto px-2 pb-2">
+                <div class="flex w-max max-w-none flex-nowrap gap-4">
+                    {% for peminjaman in peminjaman_perlu_diganti %}
+                    <article class="min-w-[280px] max-w-[280px] flex-none rounded-2xl border border-slate-200 bg-white p-4">
+                        <div class="flex items-start gap-3">
+                            <span class="{% if peminjaman.status == 'hilang' %}bg-rose-50 text-rose-700{% else %}bg-orange-50 text-orange-700{% endif %} flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl">
+                                <i data-lucide="{% if peminjaman.status == 'hilang' %}circle-alert{% else %}wrench{% endif %}" class="h-5 w-5"></i>
+                            </span>
+                            <div class="min-w-0">
+                                <a class="block truncate font-bold text-brand-700 hover:text-brand-800" href="{% url 'peminjaman:peminjaman_detail' peminjaman.pk %}">{{ peminjaman.barang.nama }}</a>
+                                <p class="mt-1 truncate text-sm font-semibold text-slate-700">{{ peminjaman.nama_peminjam }}</p>
+                                <span class="{% if peminjaman.status == 'hilang' %}bg-rose-100 text-rose-700{% else %}bg-orange-100 text-orange-700{% endif %} mt-2 inline-flex rounded-full px-3 py-1 text-xs font-bold">
+                                    {{ peminjaman.get_status_display }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <form method="post" action="{% url 'dashboard:peminjaman_replaced' peminjaman.pk %}" class="mt-4" data-confirm-message="Yakin tandai barang ini sudah digantikan?">
+                            {% csrf_token %}
+                            <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-brand-800">
+                                <i data-lucide="refresh-cw" class="h-4 w-4"></i>
+                                Digantikan
+                            </button>
+                        </form>
+                    </article>
+                    {% endfor %}
+                </div>
+            </div>
+            {% else %}
+            <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">Belum ada alat hilang atau rusak yang perlu diganti.</div>
+            {% endif %}
+        </section>
+
+        <section>
+            <div class="mb-4">
+                <h3 class="text-2xl font-bold tracking-tight text-slate-900">Menu Utama</h3>
+                <p class="mt-1 text-sm text-slate-500">Inventaris aktif sekarang, sementara modul lain disiapkan untuk tahap pengembangan berikutnya.</p>
+            </div>
+
+            <div class="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
+                {% for module in menu_modules %}
+                    {% if module.url %}
+                    <a href="{% url module.url %}" class="surface-card flex items-start gap-4 p-5 transition hover:-translate-y-0.5 hover:border-brand-200">
+                        <span class="{{ module.icon_bg }} {{ module.icon_text }} flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl">
+                            <i data-lucide="{{ module.icon }}" class="h-6 w-6"></i>
+                        </span>
+                        <div class="min-w-0 flex-1">
+                            <div class="text-lg font-bold text-slate-900">{{ module.title }}</div>
+                            <p class="mt-2 text-sm leading-7 text-slate-500">{{ module.description }}</p>
+                        </div>
+                        <span class="text-slate-400">
+                            <i data-lucide="chevron-right" class="h-6 w-6"></i>
+                        </span>
+                    </a>
+                    {% else %}
+                    <article class="surface-card flex items-start gap-4 border-slate-100 bg-slate-50/80 p-5 text-slate-500">
+                        <span class="{{ module.icon_bg }} {{ module.icon_text }} flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl">
+                            <i data-lucide="{{ module.icon }}" class="h-6 w-6"></i>
+                        </span>
+                        <div class="min-w-0 flex-1">
+                            <div class="text-lg font-bold text-slate-800">{{ module.title }}</div>
+                            <p class="mt-2 text-sm leading-7 text-slate-500">{{ module.description }}</p>
+                        </div>
+                        <span class="text-slate-300">
+                            <i data-lucide="chevron-right" class="h-6 w-6"></i>
+                        </span>
+                    </article>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </section>
+
+        <div class="grid gap-6 2xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)]">
+            <section class="surface-card p-6">
+                <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                        <h3 class="text-2xl font-bold tracking-tight text-slate-900">Aktivitas Terbaru</h3>
+                        <p class="mt-1 text-sm text-slate-500">Struktur ini siap dihubungkan ke aktivitas riil modul-modul berikutnya.</p>
+                    </div>
+                    <a href="{% url 'inventaris:barang_list' %}" class="btn-secondary">Lihat semua</a>
+                </div>
+
+                <div class="space-y-6">
+                    {% for activity in activities %}
+                    <div class="grid grid-cols-[56px_18px_minmax(0,1fr)] gap-4">
+                        <div class="pt-1 text-sm font-semibold text-slate-500">{{ activity.time }}</div>
+                        <div class="relative mx-auto min-h-[62px] w-px bg-slate-200
+                            {% if activity.tone == 'orange' %}text-amber-500{% elif activity.tone == 'blue' %}text-blue-600{% elif activity.tone == 'green' %}text-emerald-600{% else %}text-cyan-700{% endif %}">
+                            <span class="absolute -left-[5px] top-0 h-3 w-3 rounded-full bg-current"></span>
+                        </div>
+                        <div>
+                            <div class="font-bold text-slate-900">{{ activity.title }}</div>
+                            <p class="mt-1 text-sm leading-7 text-slate-500">{{ activity.detail }}</p>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+
+            <aside class="surface-card p-6">
+                <div class="mb-6">
+                    <h3 class="text-2xl font-bold tracking-tight text-slate-900">Akses Cepat</h3>
+                    <p class="mt-1 text-sm text-slate-500">Aksi utama yang paling sering dipakai dari dashboard.</p>
+                </div>
+
+                <div class="space-y-4">
+                    {% for action in quick_actions %}
+                        {% if action.url %}
+                        <a href="{% url action.url %}" class="flex items-start gap-4 rounded-[24px] border border-slate-200 bg-white p-5 transition hover:border-brand-200 hover:bg-brand-50/40">
+                            <span class="{{ action.icon_bg }} {{ action.icon_text }} flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl">
+                                <i data-lucide="{{ action.icon }}" class="h-6 w-6"></i>
+                            </span>
+                            <div class="min-w-0 flex-1">
+                                <div class="font-bold text-slate-900">{{ action.title }}</div>
+                                <p class="mt-1 text-sm leading-7 text-slate-500">{{ action.description }}</p>
+                            </div>
+                            <span class="text-slate-400">
+                                <i data-lucide="chevron-right" class="h-6 w-6"></i>
+                            </span>
+                        </a>
+                        {% else %}
+                        <article class="flex items-start gap-4 rounded-[24px] border border-slate-100 bg-slate-50/80 p-5">
+                            <span class="{{ action.icon_bg }} {{ action.icon_text }} flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl">
+                                <i data-lucide="{{ action.icon }}" class="h-6 w-6"></i>
+                            </span>
+                            <div class="min-w-0 flex-1">
+                                <div class="font-bold text-slate-800">{{ action.title }}</div>
+                                <p class="mt-1 text-sm leading-7 text-slate-500">{{ action.description }}</p>
+                            </div>
+                            <span class="text-slate-300">
+                                <i data-lucide="chevron-right" class="h-6 w-6"></i>
+                            </span>
+                        </article>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </aside>
+        </div>
+
+        <section class="surface-card p-6">
+            <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h3 class="text-2xl font-bold tracking-tight text-slate-900">Inventaris Terbaru</h3>
+                    <p class="mt-1 text-sm text-slate-500">Ringkasan singkat barang yang terakhir masuk atau diperbarui.</p>
+                </div>
+                <a href="{% url 'inventaris:barang_list' %}" class="btn-secondary">Buka modul inventaris</a>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Kode</th>
+                            <th>Nama</th>
+                            <th>Jumlah</th>
+                            <th>Kondisi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for barang in barang_terbaru %}
+                        <tr>
+                            <td class="font-semibold text-slate-600">{{ barang.kode_inventaris }}</td>
+                            <td><a class="font-semibold text-brand-700 hover:text-brand-800" href="{% url 'inventaris:inventaris_detail' barang.pk %}">{{ barang.nama }}</a></td>
+                            <td>{{ barang.jumlah }}</td>
+                            <td>{{ barang.get_kondisi_display }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="py-10 text-center text-slate-500">Belum ada data inventaris.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="surface-card p-6">
+            <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h3 class="text-2xl font-bold tracking-tight text-slate-900">Peminjaman Terbaru</h3>
+                    <p class="mt-1 text-sm text-slate-500">Transaksi peminjaman alat terbaru yang tercatat di sistem.</p>
+                </div>
+                <a href="{% url 'peminjaman:peminjaman_list' %}" class="btn-secondary">Buka modul peminjaman</a>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Barang</th>
+                            <th>Peminjam</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for peminjaman in peminjaman_terbaru %}
+                        <tr>
+                            <td>
+                                <a class="font-semibold text-brand-700 hover:text-brand-800" href="{% url 'peminjaman:peminjaman_detail' peminjaman.pk %}">{{ peminjaman.barang.nama }}</a>
+                            </td>
+                            <td>{{ peminjaman.nama_peminjam }}</td>
+                            <td>{{ peminjaman.get_status_display }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="py-10 text-center text-slate-500">Belum ada data peminjaman alat.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_script %}
+{% include "components/confirmation_modal.html" with title="Konfirmasi Status Peminjaman" confirm_label="Ya, Lanjutkan" %}
+{% endblock %}

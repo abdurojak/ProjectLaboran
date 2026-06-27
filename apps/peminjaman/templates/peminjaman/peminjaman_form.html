@@ -1,0 +1,304 @@
+{% extends "base.html" %}
+
+{% block title %}Form Peminjaman{% endblock %}
+
+{% block content %}
+<section class="mx-auto max-w-4xl space-y-6">
+    <div>
+        <p class="text-sm font-bold uppercase tracking-[0.2em] text-amber-600">Peminjaman</p>
+        <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Form Peminjaman Alat</h2>
+        <p class="mt-2 text-sm text-slate-500">Isi data peminjaman alat untuk mencatat barang yang keluar dari inventaris.</p>
+    </div>
+
+    <form method="post" class="surface-card space-y-5 p-6 md:p-8">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+        {{ form.barang }}
+        {{ form.selected_barang_ids }}
+        {% if current_pengguna and current_pengguna.role == 'mahasiswa' %}
+        {{ form.status }}
+        <div class="rounded-3xl border border-amber-100 bg-amber-50 p-4 text-sm font-semibold leading-7 text-amber-800">
+            Pengajuan mahasiswa otomatis masuk dengan status Diajukan dan menunggu persetujuan admin laboratorium.
+        </div>
+        {% endif %}
+        <div>
+            <label>Detail Barang</label>
+            <div class="flex flex-col gap-3">
+                <div class="min-h-[48px] rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                    <div class="flex flex-wrap gap-2" data-selected-barang-list>
+                        {% if form.instance.barang_id %}
+                        <span class="inline-flex items-center gap-2 rounded-full bg-brand-50 px-3 py-1.5 text-xs font-bold text-brand-800 ring-1 ring-brand-100" data-selected-barang-badge data-selected-barang-id="{{ form.instance.barang.pk }}" data-selected-barang-label="{{ form.instance.barang.kode_barang }} - {{ form.instance.barang.nama }}">
+                            <span>{{ form.instance.barang.kode_barang }} - {{ form.instance.barang.nama }}</span>
+                            <button type="button" class="text-brand-700 hover:text-brand-900" data-selected-barang-remove aria-label="Hapus {{ form.instance.barang.kode_barang }} - {{ form.instance.barang.nama }}">
+                                <i data-lucide="x" class="h-3.5 w-3.5"></i>
+                            </button>
+                        </span>
+                        {% endif %}
+                    </div>
+                    <p class="{% if form.instance.barang_id %}hidden {% endif %}px-1 py-1 text-sm text-slate-400" data-selected-barang-empty>Belum ada detail barang dipilih.</p>
+                </div>
+                <button type="button" class="btn-secondary shrink-0 gap-2" data-barang-picker-open>
+                    <i data-lucide="search" class="h-4 w-4"></i>
+                    <span>Pilih Barang</span>
+                </button>
+            </div>
+            {% for error in form.barang.errors %}
+            <p class="mt-2 text-sm font-semibold text-rose-600">{{ error }}</p>
+            {% endfor %}
+            {% for error in form.selected_barang_ids.errors %}
+            <p class="mt-2 text-sm font-semibold text-rose-600">{{ error }}</p>
+            {% endfor %}
+        </div>
+
+        {% for field in form %}
+            {% if field.name != 'barang' and field.name != 'selected_barang_ids' and not field.is_hidden %}
+            <div>
+                {{ field.label_tag }}
+                {{ field }}
+                {% if field.help_text %}
+                <p class="mt-2 text-xs text-slate-500">{{ field.help_text }}</p>
+                {% endif %}
+                {% for error in field.errors %}
+                <p class="mt-2 text-sm font-semibold text-rose-600">{{ error }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+        {% endfor %}
+
+        <div class="flex flex-wrap gap-3 pt-2">
+            <button type="submit" class="btn-primary bg-amber-500 hover:bg-amber-600 shadow-amber-500/20">
+                <i data-lucide="save" class="h-4 w-4"></i>
+                <span>Simpan</span>
+            </button>
+            <a class="btn-secondary" href="{% url 'peminjaman:peminjaman_list' %}">
+                <i data-lucide="arrow-left" class="h-4 w-4"></i>
+                <span>Batal</span>
+            </a>
+        </div>
+    </form>
+</section>
+
+<div class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/40 px-4 py-8" data-barang-picker-modal>
+    <div class="surface-card flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden">
+        <div class="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
+            <div>
+                <h3 class="text-xl font-bold text-slate-900">Pilih Detail Barang</h3>
+                <p class="mt-1 text-sm text-slate-500">Cari lalu pilih unit barang yang akan dipinjam.</p>
+            </div>
+            <button type="button" class="btn-secondary h-11 w-11 p-0" data-barang-picker-close aria-label="Tutup dialog">
+                <i data-lucide="x" class="h-4 w-4"></i>
+            </button>
+        </div>
+        <div class="border-b border-slate-200 p-5">
+            <label for="id_barang_picker_search">Cari barang</label>
+            <input id="id_barang_picker_search" type="text" placeholder="Cari kode, nama, lokasi, atau kondisi" autocomplete="off" data-barang-picker-search>
+        </div>
+        <div class="overflow-x-auto">
+            <table>
+                <thead class="bg-slate-50">
+                    <tr>
+                        <th>Pilih</th>
+                        <th>Kode Barang</th>
+                        <th>Nama Barang</th>
+                        <th>Lokasi</th>
+                        <th>Kondisi</th>
+                        <th>Status</th>
+                        <th>Foto</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for barang in detail_barang_list %}
+                    <tr data-barang-picker-row data-search="{{ barang.kode_barang }} {{ barang.nama }} {{ barang.inventaris.nama }} {{ barang.lokasi.nama_lokasi }} {{ barang.get_kondisi_display }} {{ barang.status_pinjam }}">
+                        <td>
+                            <input type="checkbox" class="h-4 w-4 rounded border-slate-300 text-brand-700 focus:ring-brand-100" data-barang-picker-choice data-barang-id="{{ barang.pk }}" data-barang-label="{{ barang.kode_barang }} - {{ barang.nama }}"{% if barang.kondisi == 'rusak_berat' or barang.sedang_dipinjam %} disabled data-barang-disabled="true"{% endif %}>
+                        </td>
+                        <td class="font-semibold text-slate-900">{{ barang.kode_barang }}</td>
+                        <td>{{ barang.nama }}</td>
+                        <td>{{ barang.lokasi.nama_lokasi|default:"-" }}</td>
+                        <td class="{% if barang.kondisi == 'baik' %}font-semibold text-emerald-700{% elif barang.kondisi == 'rusak_ringan' %}font-semibold text-amber-700{% else %}font-semibold text-rose-700{% endif %}">{{ barang.get_kondisi_display }}</td>
+                        <td>
+                            <span class="{% if barang.sedang_dipinjam %}bg-amber-100 text-amber-700{% else %}bg-emerald-100 text-emerald-700{% endif %} inline-flex rounded-full px-3 py-1 text-xs font-bold">
+                                {{ barang.status_pinjam }}
+                            </span>
+                        </td>
+                        <td>
+                            <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-brand-700 transition hover:border-brand-200 hover:bg-brand-50" data-barang-photo-preview data-barang-photo-title="{{ barang.kode_barang }} - {{ barang.nama }}" data-barang-photo-url="{% if barang.foto %}{{ barang.foto.url }}{% elif barang.inventaris and barang.inventaris.foto %}{{ barang.inventaris.foto.url }}{% endif %}" aria-label="Lihat foto {{ barang.kode_barang }} - {{ barang.nama }}">
+                                <i data-lucide="eye" class="h-4 w-4"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="py-12 text-center text-slate-500">Belum ada detail barang.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="flex flex-wrap justify-end gap-3 border-t border-slate-200 p-5">
+            <button type="button" class="btn-secondary" data-barang-picker-close>
+                <span>Batal</span>
+            </button>
+            <button type="button" class="btn-primary" data-barang-picker-done>
+                <i data-lucide="check" class="h-4 w-4"></i>
+                <span>Selesai</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="fixed inset-0 z-[60] hidden items-center justify-center bg-slate-950/50 px-4 py-8" data-barang-photo-modal>
+    <div class="surface-card w-full max-w-2xl overflow-hidden">
+        <div class="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
+            <div>
+                <h3 class="text-xl font-bold text-slate-900" data-barang-photo-heading>Foto Barang</h3>
+                <p class="mt-1 text-sm text-slate-500">Preview foto detail barang yang dipilih.</p>
+            </div>
+            <button type="button" class="btn-secondary h-11 w-11 p-0" data-barang-photo-close aria-label="Tutup preview foto">
+                <i data-lucide="x" class="h-4 w-4"></i>
+            </button>
+        </div>
+        <div class="bg-slate-50 p-5">
+            <img src="" alt="" class="hidden max-h-[60vh] w-full rounded-2xl object-contain" data-barang-photo-image>
+            <div class="rounded-2xl border border-dashed border-slate-200 bg-white px-5 py-12 text-center text-sm font-semibold text-slate-500" data-barang-photo-empty>
+                Foto barang belum tersedia.
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const modal = document.querySelector('[data-barang-picker-modal]');
+        const openButton = document.querySelector('[data-barang-picker-open]');
+        const closeButtons = document.querySelectorAll('[data-barang-picker-close]');
+        const searchInput = document.querySelector('[data-barang-picker-search]');
+        const hiddenInput = document.getElementById('id_barang');
+        const selectedInput = document.getElementById('id_selected_barang_ids');
+        const selectedList = document.querySelector('[data-selected-barang-list]');
+        const emptyState = document.querySelector('[data-selected-barang-empty]');
+        const rows = Array.from(document.querySelectorAll('[data-barang-picker-row]'));
+        const choices = Array.from(document.querySelectorAll('[data-barang-picker-choice]'));
+        const doneButton = document.querySelector('[data-barang-picker-done]');
+        const photoModal = document.querySelector('[data-barang-photo-modal]');
+        const photoTitle = document.querySelector('[data-barang-photo-heading]');
+        const photoImage = document.querySelector('[data-barang-photo-image]');
+        const photoEmpty = document.querySelector('[data-barang-photo-empty]');
+        const photoCloseButton = document.querySelector('[data-barang-photo-close]');
+
+        function openModal() {
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            searchInput.focus();
+        }
+
+        function closeModal() {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        openButton.addEventListener('click', openModal);
+        closeButtons.forEach(function (button) {
+            button.addEventListener('click', closeModal);
+        });
+        modal.addEventListener('click', function (event) {
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
+
+        function openPhotoModal(title, photoUrl) {
+            photoTitle.textContent = title || 'Foto Barang';
+            if (photoUrl) {
+                photoImage.src = photoUrl;
+                photoImage.alt = title || 'Foto barang';
+                photoImage.classList.remove('hidden');
+                photoEmpty.classList.add('hidden');
+            } else {
+                photoImage.removeAttribute('src');
+                photoImage.alt = '';
+                photoImage.classList.add('hidden');
+                photoEmpty.classList.remove('hidden');
+            }
+            photoModal.classList.remove('hidden');
+            photoModal.classList.add('flex');
+        }
+
+        function closePhotoModal() {
+            photoModal.classList.add('hidden');
+            photoModal.classList.remove('flex');
+        }
+
+        document.querySelectorAll('[data-barang-photo-preview]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                openPhotoModal(button.dataset.barangPhotoTitle, button.dataset.barangPhotoUrl);
+            });
+        });
+
+        photoCloseButton.addEventListener('click', closePhotoModal);
+        photoModal.addEventListener('click', function (event) {
+            if (event.target === photoModal) {
+                closePhotoModal();
+            }
+        });
+
+        searchInput.addEventListener('input', function () {
+            const keyword = searchInput.value.trim().toLowerCase();
+            rows.forEach(function (row) {
+                row.classList.toggle('hidden', !row.dataset.search.toLowerCase().includes(keyword));
+            });
+        });
+
+        function syncSelectedInputs() {
+            const badges = Array.from(selectedList.querySelectorAll('[data-selected-barang-badge]'));
+            const selectedIds = badges.map(function (badge) {
+                return badge.dataset.selectedBarangId;
+            });
+
+            selectedInput.value = selectedIds.join(',');
+            hiddenInput.value = selectedIds[0] || '';
+            emptyState.classList.toggle('hidden', selectedIds.length > 0);
+            choices.forEach(function (choice) {
+                choice.checked = selectedIds.includes(choice.dataset.barangId);
+            });
+        }
+
+        function createBadge(id, label) {
+            const badge = document.createElement('span');
+            badge.className = 'inline-flex items-center gap-2 rounded-full bg-brand-50 px-3 py-1.5 text-xs font-bold text-brand-800 ring-1 ring-brand-100';
+            badge.dataset.selectedBarangBadge = '';
+            badge.dataset.selectedBarangId = id;
+            badge.dataset.selectedBarangLabel = label;
+            badge.innerHTML = '<span></span><button type="button" class="text-brand-700 hover:text-brand-900" data-selected-barang-remove aria-label="Hapus ' + label + '"><i data-lucide="x" class="h-3.5 w-3.5"></i></button>';
+            badge.querySelector('span').textContent = label;
+            return badge;
+        }
+
+        doneButton.addEventListener('click', function () {
+            selectedList.innerHTML = '';
+            choices.filter(function (choice) {
+                return choice.checked && !choice.disabled;
+            }).forEach(function (choice) {
+                selectedList.appendChild(createBadge(choice.dataset.barangId, choice.dataset.barangLabel));
+            });
+            syncSelectedInputs();
+            lucide.createIcons();
+            closeModal();
+        });
+
+        selectedList.addEventListener('click', function (event) {
+            const removeButton = event.target.closest('[data-selected-barang-remove]');
+            if (!removeButton) {
+                return;
+            }
+
+            removeButton.closest('[data-selected-barang-badge]').remove();
+            syncSelectedInputs();
+        });
+
+        syncSelectedInputs();
+    });
+</script>
+{% endblock %}

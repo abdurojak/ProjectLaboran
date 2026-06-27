@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block title %}Form Kegiatan{% endblock %}
+
+{% block extra_head %}
+<style>
+    .kalender-form input[type="text"],
+    .kalender-form input[type="date"],
+    .kalender-form input[type="time"],
+    .kalender-form textarea {
+        width: 100%;
+        border-radius: 1.25rem;
+        border: 1px solid #dbe7ef;
+        background: #f8fafc;
+        padding: 0.85rem 1rem;
+        color: #0f172a;
+        outline: none;
+        transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+    }
+
+    .kalender-form input[type="text"]:focus,
+    .kalender-form input[type="date"]:focus,
+    .kalender-form input[type="time"]:focus,
+    .kalender-form textarea:focus {
+        border-color: #0f766e;
+        background: #ffffff;
+        box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.12);
+    }
+
+    .notification-toggle input[type="checkbox"] {
+        height: 1.35rem;
+        width: 1.35rem;
+        accent-color: #0f766e;
+    }
+
+    .role-choice input[type="checkbox"] {
+        height: 1.1rem;
+        width: 1.1rem;
+        accent-color: #0f766e;
+    }
+
+    .role-choice:has(input[type="checkbox"]:checked) {
+        border-color: #0f766e;
+        background: linear-gradient(135deg, rgba(240, 253, 250, 0.95), rgba(236, 254, 255, 0.95));
+        box-shadow: 0 18px 35px rgba(15, 118, 110, 0.12);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="mx-auto max-w-4xl space-y-6">
+    <div>
+        <p class="text-sm font-bold uppercase tracking-[0.2em] text-blue-700">Kalender</p>
+        <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Form Kegiatan</h2>
+        <p class="mt-2 text-sm text-slate-500">Isi kegiatan mendatang dan aktifkan notifikasi jika perlu muncul di header.</p>
+    </div>
+
+    <form method="post" class="kalender-form surface-card overflow-hidden p-0">
+        {% csrf_token %}
+
+        <div class="border-b border-slate-100 bg-gradient-to-r from-teal-50 via-cyan-50 to-white p-6 md:p-8">
+            <div class="flex items-start gap-4">
+                <span class="flex h-14 w-14 shrink-0 items-center justify-center rounded-3xl bg-white text-teal-700 shadow-sm ring-1 ring-teal-100">
+                    <i data-lucide="calendar-plus" class="h-7 w-7"></i>
+                </span>
+                <div>
+                    <h3 class="text-2xl font-black text-slate-900">Detail kegiatan</h3>
+                    <p class="mt-2 max-w-2xl text-sm leading-7 text-slate-600">Lengkapi agenda, waktu, lokasi, lalu tentukan apakah kegiatan ini perlu muncul sebagai notifikasi.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-6 p-6 md:p-8">
+            {% if form.non_field_errors %}
+            <div class="rounded-3xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-700">
+                {{ form.non_field_errors }}
+            </div>
+            {% endif %}
+
+            <div class="grid gap-5 md:grid-cols-2">
+                <div class="md:col-span-2">
+                    <label for="{{ form.judul.id_for_label }}" class="mb-2 block text-sm font-bold text-slate-800">Judul kegiatan</label>
+                    {{ form.judul }}
+                    {% if form.judul.errors %}<p class="mt-2 text-sm font-semibold text-rose-600">{{ form.judul.errors|striptags }}</p>{% endif %}
+                </div>
+
+                <div>
+                    <label for="{{ form.tanggal.id_for_label }}" class="mb-2 block text-sm font-bold text-slate-800">Tanggal</label>
+                    {{ form.tanggal }}
+                    {% if form.tanggal.errors %}<p class="mt-2 text-sm font-semibold text-rose-600">{{ form.tanggal.errors|striptags }}</p>{% endif %}
+                </div>
+
+                <div>
+                    <label for="{{ form.lokasi.id_for_label }}" class="mb-2 block text-sm font-bold text-slate-800">Lokasi</label>
+                    {{ form.lokasi }}
+                    {% if form.lokasi.errors %}<p class="mt-2 text-sm font-semibold text-rose-600">{{ form.lokasi.errors|striptags }}</p>{% endif %}
+                </div>
+
+                <div>
+                    <label for="{{ form.waktu_mulai.id_for_label }}" class="mb-2 block text-sm font-bold text-slate-800">Waktu mulai</label>
+                    {{ form.waktu_mulai }}
+                    {% if form.waktu_mulai.errors %}<p class="mt-2 text-sm font-semibold text-rose-600">{{ form.waktu_mulai.errors|striptags }}</p>{% endif %}
+                </div>
+
+                <div>
+                    <label for="{{ form.waktu_selesai.id_for_label }}" class="mb-2 block text-sm font-bold text-slate-800">Waktu selesai</label>
+                    {{ form.waktu_selesai }}
+                    {% if form.waktu_selesai.errors %}<p class="mt-2 text-sm font-semibold text-rose-600">{{ form.waktu_selesai.errors|striptags }}</p>{% endif %}
+                </div>
+
+                <div class="md:col-span-2">
+                    <label for="{{ form.deskripsi.id_for_label }}" class="mb-2 block text-sm font-bold text-slate-800">Deskripsi</label>
+                    {{ form.deskripsi }}
+                    {% if form.deskripsi.errors %}<p class="mt-2 text-sm font-semibold text-rose-600">{{ form.deskripsi.errors|striptags }}</p>{% endif %}
+                </div>
+            </div>
+
+            <div class="notification-toggle rounded-[28px] border border-teal-100 bg-teal-50/60 p-5">
+                <label class="flex cursor-pointer items-start gap-4">
+                    <span class="mt-1">{{ form.tampilkan_notifikasi }}</span>
+                    <span>
+                        <span class="block text-base font-black text-slate-900">Tampilkan notifikasi</span>
+                        <span class="mt-1 block text-sm leading-7 text-slate-600">Jika aktif, kegiatan ini muncul di menu notifikasi selama masih termasuk agenda mendatang.</span>
+                    </span>
+                </label>
+                {% if form.tampilkan_notifikasi.errors %}<p class="mt-2 text-sm font-semibold text-rose-600">{{ form.tampilkan_notifikasi.errors|striptags }}</p>{% endif %}
+            </div>
+
+            {% if form.target_role %}
+            <div class="rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm">
+                <div class="mb-4 flex items-start gap-3">
+                    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-cyan-50 text-cyan-700">
+                        <i data-lucide="share-2" class="h-5 w-5"></i>
+                    </span>
+                    <div>
+                        <h4 class="text-lg font-black text-slate-900">Bagikan ke role</h4>
+                        <p class="mt-1 text-sm leading-6 text-slate-500">Pilih role yang boleh melihat kegiatan ini. Kosongkan jika hanya untuk catatan internal atau pribadi.</p>
+                    </div>
+                </div>
+
+                <div class="grid gap-3 sm:grid-cols-2">
+                    {% for checkbox in form.target_role %}
+                    <label class="role-choice flex cursor-pointer items-center justify-between gap-4 rounded-3xl border border-slate-200 bg-slate-50/80 p-4 transition">
+                        <span class="flex items-center gap-3">
+                            <span class="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-teal-700 shadow-sm">
+                                <i data-lucide="{% if checkbox.choice_label == 'Admin' %}shield-check{% elif checkbox.choice_label == 'Laboran' %}flask-conical{% elif checkbox.choice_label == 'Asisten Lab' %}clipboard-check{% else %}graduation-cap{% endif %}" class="h-5 w-5"></i>
+                            </span>
+                            <span class="font-bold text-slate-800">{{ checkbox.choice_label }}</span>
+                        </span>
+                        {{ checkbox.tag }}
+                    </label>
+                    {% endfor %}
+                </div>
+                {% if form.target_role.errors %}<p class="mt-3 text-sm font-semibold text-rose-600">{{ form.target_role.errors|striptags }}</p>{% endif %}
+            </div>
+            {% endif %}
+
+            <div class="flex flex-wrap gap-3 pt-2">
+                <button type="submit" class="btn-primary bg-teal-700 hover:bg-teal-800 shadow-teal-900/15">
+                    <i data-lucide="save" class="h-4 w-4"></i>
+                    <span>Simpan</span>
+                </button>
+                <a class="btn-secondary" href="{% url 'kalender:kegiatan_list' %}">
+                    <i data-lucide="arrow-left" class="h-4 w-4"></i>
+                    <span>Batal</span>
+                </a>
+            </div>
+        </div>
+    </form>
+</section>
+{% endblock %}
+

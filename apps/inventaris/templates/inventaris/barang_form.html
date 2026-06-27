@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}Form Barang{% endblock %}
+
+{% block content %}
+<section class="mx-auto max-w-4xl space-y-6">
+    <div>
+        <p class="text-sm font-bold uppercase tracking-[0.2em] text-brand-700">Inventaris</p>
+        <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Form Barang</h2>
+        <p class="mt-2 text-sm text-slate-500">Tambahkan atau perbarui data barang laboratorium melalui formulir berikut.</p>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" class="surface-card space-y-5 p-6 md:p-8">
+        {% csrf_token %}
+        <input type="hidden" id="id_hapus_foto" name="hapus_foto" value="0">
+        <div class="rounded-3xl border border-brand-100 bg-brand-50 p-4 text-sm leading-7 text-brand-900">
+            Kode barang akan dibuat otomatis saat data disimpan, jadi Anda tidak perlu mengetiknya manual.
+        </div>
+        {% for field in form %}
+        <div>
+            {{ field.label_tag }}
+            {% if field.name == 'foto' %}
+            {% include "components/file_upload.html" with field=field current_file=object.foto button_label="Pilih Foto" title="Upload foto barang" empty_label="Belum ada foto dipilih" delete_label="Foto akan dihapus saat disimpan" preview_label="Preview foto" preview_alt="Preview foto barang" delete_input_id="id_hapus_foto" delete_button_label="Hapus Foto" %}
+            {% else %}
+            {{ field }}
+            {% endif %}
+            {% if field.help_text %}
+            <p class="mt-2 text-sm text-slate-500">{{ field.help_text }}</p>
+            {% endif %}
+            {% for error in field.errors %}
+            <p class="mt-2 text-sm font-semibold text-rose-600">{{ error }}</p>
+            {% endfor %}
+        </div>
+        {% endfor %}
+        <div class="flex flex-wrap gap-3 pt-2">
+            <button type="submit" class="btn-primary">
+                <i data-lucide="save" class="h-4 w-4"></i>
+                <span>Simpan</span>
+            </button>
+            <a class="btn-secondary" href="{% url 'inventaris:barang_list' %}">
+                <i data-lucide="arrow-left" class="h-4 w-4"></i>
+                <span>Batal</span>
+            </a>
+        </div>
+    </form>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const hapusFotoInput = document.getElementById('id_hapus_foto');
+
+        document.querySelectorAll('[data-file-upload]').forEach(function (component) {
+            const fileInput = component.querySelector('input[type="file"]');
+            const previewWrapper = component.querySelector('[data-preview-wrapper]');
+            const previewImage = component.querySelector('[data-preview-image]');
+            const deleteButton = component.querySelector('[data-delete-button]');
+            const fileName = component.querySelector('[data-file-name]');
+            const emptyLabel = component.dataset.emptyLabel || 'Belum ada file dipilih';
+            const deleteLabel = component.dataset.deleteLabel || 'File akan dihapus saat disimpan';
+            let previewUrl = null;
+
+            if (!fileInput || !fileName) {
+                return;
+            }
+
+            fileInput.addEventListener('change', function () {
+                const file = fileInput.files && fileInput.files[0];
+
+                if (previewUrl) {
+                    URL.revokeObjectURL(previewUrl);
+                    previewUrl = null;
+                }
+
+                if (!file) {
+                    if (previewImage) {
+                        previewImage.removeAttribute('src');
+                    }
+                    if (previewWrapper) {
+                        previewWrapper.classList.add('hidden');
+                    }
+                    fileName.textContent = emptyLabel;
+                    return;
+                }
+
+                if (hapusFotoInput) {
+                    hapusFotoInput.value = '0';
+                }
+                fileName.textContent = file.name;
+
+                if (previewImage && previewWrapper) {
+                    previewUrl = URL.createObjectURL(file);
+                    previewImage.src = previewUrl;
+                    previewWrapper.classList.remove('hidden');
+                }
+            });
+
+            if (deleteButton && hapusFotoInput) {
+                deleteButton.addEventListener('click', function () {
+                    if (previewUrl) {
+                        URL.revokeObjectURL(previewUrl);
+                        previewUrl = null;
+                    }
+
+                    fileInput.value = '';
+                    hapusFotoInput.value = '1';
+                    fileName.textContent = deleteLabel;
+                    if (previewImage) {
+                        previewImage.removeAttribute('src');
+                    }
+                    if (previewWrapper) {
+                        previewWrapper.classList.add('hidden');
+                    }
+                });
+            }
+        });
+    });
+</script>
+{% endblock %}

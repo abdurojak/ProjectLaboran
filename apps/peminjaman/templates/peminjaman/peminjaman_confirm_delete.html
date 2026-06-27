@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+
+{% block title %}Hapus Peminjaman{% endblock %}
+
+{% block content %}
+{% url 'peminjaman:peminjaman_list' as cancel_url %}
+{% include "components/confirmation.html" with eyebrow="Peminjaman" title="Hapus Peminjaman" description="Konfirmasi penghapusan data transaksi peminjaman alat." message_prefix="Yakin ingin menghapus data peminjaman" target_label=peminjaman.kode_pinjam second_prefix="milik" second_label=peminjaman.nama_peminjam cancel_url=cancel_url %}
+{% endblock %}

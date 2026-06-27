@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}Absensi Asleb{% endblock %}
+
+{% block content %}
+<section class="space-y-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <p class="text-sm font-bold uppercase tracking-[0.2em] text-cyan-700">Absensi</p>
+            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Absensi Asleb</h2>
+            <p class="mt-2 text-sm text-slate-500">Asisten lab mengisi absensi per modul, upload modul praktikum, dan bukti video kegiatan.</p>
+        </div>
+        <div class="flex flex-wrap gap-3">
+            {% if current_pengguna.role == 'admin' or current_pengguna.role == 'laboran' %}
+            <form method="post" action="{% url 'asleb:absensi_toggle_status' %}">
+                {% csrf_token %}
+                <button type="submit" class="{% if pengaturan_absensi.dibuka %}btn-secondary{% else %}btn-primary{% endif %} gap-2">
+                    <i data-lucide="{% if pengaturan_absensi.dibuka %}lock{% else %}unlock{% endif %}" class="h-4 w-4"></i>
+                    <span>{% if pengaturan_absensi.dibuka %}Tutup Absensi{% else %}Buka Absensi{% endif %}</span>
+                </button>
+            </form>
+            {% endif %}
+
+            {% if is_asisten_lab and pengaturan_absensi.dibuka and asleb_profile %}
+            <a class="btn-primary gap-2" href="{% url 'asleb:absensi_create' %}">
+                <i data-lucide="clipboard-check" class="h-4 w-4"></i>
+                <span>Isi Absensi</span>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="{% if pengaturan_absensi.dibuka %}border-emerald-200 bg-emerald-50 text-emerald-800{% else %}border-amber-200 bg-amber-50 text-amber-800{% endif %} rounded-3xl border px-5 py-4 text-sm font-semibold">
+        Status absensi: {% if pengaturan_absensi.dibuka %}Dibuka{% else %}Ditutup{% endif %}.
+        {% if is_asisten_lab and not asleb_profile %} Data Asleb untuk akun Anda belum ditemukan, hubungi admin/laboran.{% endif %}
+    </div>
+
+    <form id="absensi-filter-form" method="get" class="surface-card grid gap-4 p-5 md:grid-cols-[minmax(0,1.4fr)_180px_auto] md:items-end">
+        <div>
+            <label for="id_q">Cari absensi</label>
+            <input id="id_q" name="q" type="text" value="{{ search_query }}" placeholder="Cari nama, NIM, materi, atau pekerjaan" autocomplete="off">
+        </div>
+        <div>
+            <label for="id_modul">Modul</label>
+            <select id="id_modul" name="modul">
+                <option value="">Semua modul</option>
+                {% for value, label in modul_choices %}
+                <option value="{{ value }}"{% if selected_modul == value|stringformat:"s" %} selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="flex flex-wrap gap-3">
+            <button type="submit" class="btn-primary">
+                <i data-lucide="search" class="h-4 w-4"></i>
+                <span>Terapkan</span>
+            </button>
+            <a href="{% url 'asleb:absensi_list' %}" class="btn-secondary">
+                <i data-lucide="rotate-ccw" class="h-4 w-4"></i>
+                <span>Reset</span>
+            </a>
+        </div>
+    </form>
+
+    <div class="surface-card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-max">
+                <thead class="bg-slate-50">
+                    <tr>
+                        <th>Nama</th>
+                        <th>NIM</th>
+                        <th>Tanggal Praktikum</th>
+                        <th>Modul</th>
+                        <th>Materi</th>
+                        <th>Upload Modul</th>
+                        <th>Bukti Video</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for absensi in absensi_list %}
+                    <tr class="hover:bg-slate-50/70">
+                        <td class="font-semibold text-slate-900">{{ absensi.asleb.nama }}</td>
+                        <td>{{ absensi.asleb.nim }}</td>
+                        <td>{{ absensi.tanggal_praktikum|date:"d M Y" }}</td>
+                        <td>Modul {{ absensi.modul }}</td>
+                        <td>{{ absensi.materi_praktikum|default:"-" }}</td>
+                        <td><a class="font-semibold text-brand-700 hover:text-brand-800" href="{{ absensi.file_modul.url }}" target="_blank" rel="noreferrer">Lihat modul</a></td>
+                        <td><a class="font-semibold text-brand-700 hover:text-brand-800" href="{{ absensi.bukti_video.url }}" target="_blank" rel="noreferrer">Lihat video</a></td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="py-12 text-center text-slate-500">Belum ada absensi asleb.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('absensi-filter-form');
+        const searchInput = document.getElementById('id_q');
+        const modulSelect = document.getElementById('id_modul');
+        let searchTimer = null;
+
+        if (searchInput) {
+            searchInput.addEventListener('input', function () {
+                clearTimeout(searchTimer);
+                searchTimer = setTimeout(function () {
+                    form.submit();
+                }, 350);
+            });
+        }
+
+        if (modulSelect) {
+            modulSelect.addEventListener('change', function () {
+                form.submit();
+            });
+        }
+    });
+</script>
+{% endblock %}

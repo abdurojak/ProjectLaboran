@@ -1,0 +1,145 @@
+<div class="h-fit w-0 shrink-0 transition-all duration-300 md:w-[96px] xl:w-[280px]" data-dashboard-sidebar-shell>
+<aside id="dashboard-sidebar" class="fixed inset-y-0 left-0 z-40 flex h-screen w-[300px] -translate-x-full flex-col overflow-x-hidden border-r border-slate-200 bg-white shadow-soft transition-all duration-300 md:w-[96px] md:translate-x-0 xl:w-[280px]" data-dashboard-sidebar>
+    <div class="relative flex min-h-[98px] items-center justify-end border-b border-slate-200 bg-white px-4" data-sidebar-brand-shell>
+        <button id="dashboard-sidebar-toggle" type="button" class="absolute right-3 top-1/2 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-2xl border border-slate-200 bg-white p-0 text-brand-800 shadow-sm transition hover:border-brand-200 hover:bg-brand-50" aria-label="Tutup menu dashboard" title="Tutup menu" aria-expanded="true">
+            <i data-lucide="panel-left-close" class="h-4 w-4"></i>
+        </button>
+    </div>
+
+    <div class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-4">
+        <nav class="grid gap-2">
+            {% for link in sidebar_links %}
+                {% if link.url %}
+                <a href="{% url link.url %}" class="{% if link.active %}bg-brand-50 text-brand-800 ring-1 ring-brand-100{% else %}text-slate-700 hover:bg-slate-50{% endif %} flex h-14 items-center gap-4 rounded-2xl px-3 font-semibold transition" title="{{ link.title }}">
+                    <span class="{{ link.icon_bg }} {{ link.icon_text }} flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl">
+                        <i data-lucide="{{ link.icon }}" class="h-5 w-5"></i>
+                    </span>
+                    <span data-sidebar-label class="hidden min-w-0 truncate">{{ link.title }}</span>
+                </a>
+                {% else %}
+                <div class="flex h-14 items-center gap-4 rounded-2xl px-3 text-slate-500" title="{{ link.title }}">
+                    <span class="{{ link.icon_bg }} {{ link.icon_text }} flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl">
+                        <i data-lucide="{{ link.icon }}" class="h-5 w-5"></i>
+                    </span>
+                    <span data-sidebar-label class="hidden min-w-0 truncate">{{ link.title }}</span>
+                </div>
+                {% endif %}
+            {% endfor %}
+        </nav>
+
+        <div data-sidebar-profile class="mt-6 hidden rounded-[24px] border border-slate-200 bg-gradient-to-b from-white to-brand-50/40 p-5">
+            <div class="text-sm font-medium text-slate-500">{{ today|date:"l, d F Y" }}</div>
+            <p class="mt-8 text-sm text-slate-500">Selamat datang,</p>
+            <p class="text-xl font-bold text-brand-800">Lab Admin</p>
+            <div class="mt-6 flex h-20 w-20 items-center justify-center rounded-[28px] bg-brand-100 text-brand-800">
+                <i data-lucide="flask-conical" class="h-10 w-10"></i>
+            </div>
+        </div>
+    </div>
+</aside>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const sidebar = document.querySelector('[data-dashboard-sidebar]');
+        const desktopToggle = document.getElementById('dashboard-sidebar-toggle');
+        const mobileToggle = document.getElementById('dashboard-sidebar-mobile-toggle');
+
+        if (!sidebar || !desktopToggle || !mobileToggle) {
+            return;
+        }
+
+        const labels = sidebar.querySelectorAll('[data-sidebar-label]');
+        const profile = sidebar.querySelector('[data-sidebar-profile]');
+        const shell = sidebar.closest('[data-dashboard-sidebar-shell]');
+        const header = document.querySelector('body > header');
+        const mediumQuery = window.matchMedia('(min-width: 768px)');
+        const desktopQuery = window.matchMedia('(min-width: 1280px)');
+        const brandShell = sidebar.querySelector('[data-sidebar-brand-shell]');
+        const toggles = [desktopToggle, mobileToggle];
+
+        function setToggleIcon(iconName) {
+            toggles.forEach(function (toggle) {
+                toggle.innerHTML = '<i data-lucide="' + iconName + '" class="h-4 w-4"></i>';
+            });
+            if (window.lucide) {
+                window.lucide.createIcons();
+            }
+        }
+
+        function setCollapsed(collapsed) {
+            const isMedium = mediumQuery.matches;
+
+            sidebar.classList.toggle('-translate-x-full', collapsed && !isMedium);
+            sidebar.classList.toggle('translate-x-0', !collapsed || isMedium);
+            sidebar.classList.toggle('w-[300px]', !collapsed && !isMedium);
+            sidebar.classList.toggle('md:w-[300px]', isMedium && !collapsed && !desktopQuery.matches);
+            sidebar.classList.toggle('w-[96px]', collapsed || (isMedium && !desktopQuery.matches));
+            sidebar.classList.toggle('md:w-[96px]', collapsed || desktopQuery.matches);
+            sidebar.classList.toggle('xl:w-[280px]', !collapsed && desktopQuery.matches);
+            sidebar.classList.toggle('xl:w-[96px]', collapsed && desktopQuery.matches);
+            if (shell) {
+                shell.classList.toggle('w-0', !isMedium);
+                shell.classList.toggle('w-[300px]', isMedium && !collapsed && !desktopQuery.matches);
+                shell.classList.toggle('md:w-[300px]', isMedium && !collapsed && !desktopQuery.matches);
+                shell.classList.toggle('w-[96px]', isMedium && (collapsed || !desktopQuery.matches));
+                shell.classList.toggle('md:w-[96px]', isMedium && (collapsed || desktopQuery.matches));
+                shell.classList.toggle('xl:w-[280px]', isMedium && !collapsed && desktopQuery.matches);
+                shell.classList.toggle('xl:w-[96px]', isMedium && collapsed && desktopQuery.matches);
+            }
+
+            if (header) {
+                if (!isMedium) {
+                    header.style.marginLeft = '0px';
+                    header.style.width = '100%';
+                } else {
+                    const sidebarWidth = collapsed ? '96px' : (desktopQuery.matches ? '280px' : '300px');
+                    header.style.marginLeft = sidebarWidth;
+                    header.style.width = 'calc(100% - ' + sidebarWidth + ')';
+                }
+            }
+
+            toggles.forEach(function (toggle) {
+                toggle.setAttribute('aria-expanded', String(!collapsed));
+                toggle.setAttribute('aria-label', collapsed ? 'Buka menu dashboard' : 'Tutup menu dashboard');
+                toggle.setAttribute('title', collapsed ? 'Buka menu' : 'Tutup menu');
+            });
+
+            labels.forEach(function (label) {
+                label.classList.toggle('hidden', collapsed);
+                label.classList.toggle('block', !collapsed);
+            });
+
+            if (brandShell) {
+                brandShell.classList.toggle('justify-center', collapsed);
+                brandShell.classList.toggle('justify-end', !collapsed);
+                brandShell.classList.toggle('px-3', collapsed);
+                brandShell.classList.toggle('px-4', !collapsed);
+            }
+
+            if (profile) {
+                profile.classList.toggle('hidden', collapsed);
+                profile.classList.toggle('block', !collapsed);
+            }
+
+            setToggleIcon(collapsed ? 'menu' : 'x');
+        }
+
+        setCollapsed(!desktopQuery.matches);
+
+        function handleToggleClick() {
+            const isExpanded = mobileToggle.getAttribute('aria-expanded') === 'true';
+            setCollapsed(isExpanded);
+        }
+
+        desktopToggle.addEventListener('click', handleToggleClick);
+        mobileToggle.addEventListener('click', handleToggleClick);
+
+        desktopQuery.addEventListener('change', function (event) {
+            setCollapsed(!event.matches);
+        });
+        mediumQuery.addEventListener('change', function () {
+            setCollapsed(!desktopQuery.matches);
+        });
+    });
+</script>

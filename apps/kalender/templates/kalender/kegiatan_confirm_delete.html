@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+
+{% block title %}Hapus Kegiatan{% endblock %}
+
+{% block content %}
+{% url 'kalender:kegiatan_list' as cancel_url %}
+{% include "components/confirmation.html" with eyebrow="Kalender" title="Hapus Kegiatan" description="Konfirmasi penghapusan kegiatan dari kalender." message_prefix="Yakin ingin menghapus kegiatan" target_label=kegiatan.judul cancel_url=cancel_url %}
+{% endblock %}

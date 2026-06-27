@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Login{% endblock %}
+
+{% block content %}
+<section class="mx-auto max-w-xl space-y-6">
+    <div>
+        <p class="text-sm font-bold uppercase tracking-[0.2em] text-brand-700">Autentikasi</p>
+        <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Login</h2>
+        <p class="mt-2 text-sm text-slate-500">Masuk menggunakan NIM/NIK dan password pengguna.</p>
+    </div>
+
+    <form method="post" class="surface-card space-y-5 p-6 md:p-8">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+        <div class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+            {{ form.non_field_errors|striptags }}
+        </div>
+        {% endif %}
+        {% for field in form %}
+        <div>
+            {{ field.label_tag }}
+            {{ field }}
+            {% if field.errors %}
+            <div class="mt-2 text-sm font-semibold text-rose-600">{{ field.errors|striptags }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+        <div class="flex flex-wrap items-center gap-3 pt-2">
+            <button type="submit" class="btn-primary gap-2">
+                <i data-lucide="log-in" class="h-4 w-4"></i>
+                <span>Login</span>
+            </button>
+            <a class="btn-secondary gap-2" href="{% url 'pengguna:register' %}">
+                <i data-lucide="user-plus" class="h-4 w-4"></i>
+                <span>Register</span>
+            </a>
+            <a class="inline-flex items-center gap-2 text-sm font-bold text-brand-700 hover:text-brand-800" href="{% url 'pengguna:forgot_password' %}">
+                <i data-lucide="key-round" class="h-4 w-4"></i>
+                <span>Lupa password?</span>
+            </a>
+        </div>
+    </form>
+</section>
+{% endblock %}
