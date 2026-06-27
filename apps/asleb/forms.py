@@ -2,13 +2,9 @@ import hashlib
 
 from django import forms
 
-<<<<<<< HEAD
-from .models import AbsensiAsleb, Asleb, HonorAsleb
-=======
 from apps.pengguna.models import Pengguna
 
 from .models import AbsensiAsleb, Asleb, HonorAsleb, SuratHonorAsleb
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
 
 class AslebForm(forms.ModelForm):
@@ -27,11 +23,7 @@ class AslebForm(forms.ModelForm):
             'catatan',
         ]
         widgets = {
-<<<<<<< HEAD
-            'nama': forms.TextInput(attrs={'placeholder': 'Nama lengkap asleb'}),
-=======
             'nama': forms.TextInput(attrs={'placeholder': 'Nama lengkap aslab'}),
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
             'nim': forms.TextInput(attrs={'placeholder': 'NIM mahasiswa'}),
             'no_hp': forms.TextInput(attrs={'placeholder': 'Nomor HP aktif'}),
             'program_studi': forms.TextInput(attrs={'placeholder': 'Contoh: Rekayasa Perangkat Lunak'}),
@@ -54,10 +46,7 @@ class HonorAslebForm(forms.ModelForm):
             'nama_pemilik_transfer',
             'tanggal_transfer',
             'bukti_transfer',
-<<<<<<< HEAD
-=======
             'assigned_laboran',
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
             'pic_transfer',
             'status',
             'keterangan',
@@ -71,8 +60,6 @@ class HonorAslebForm(forms.ModelForm):
             'keterangan': forms.Textarea(attrs={'rows': 3}),
         }
 
-<<<<<<< HEAD
-=======
     def __init__(self, *args, **kwargs):
         self.current_pengguna = kwargs.pop('current_pengguna', None)
         super().__init__(*args, **kwargs)
@@ -85,7 +72,6 @@ class HonorAslebForm(forms.ModelForm):
         if not self.current_pengguna or self.current_pengguna.role != 'admin':
             self.fields.pop('assigned_laboran', None)
 
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
 class KonfirmasiTransferHonorForm(forms.ModelForm):
     class Meta:
@@ -104,8 +90,6 @@ class KonfirmasiTransferHonorForm(forms.ModelForm):
         return bukti_transfer
 
 
-<<<<<<< HEAD
-=======
 class SuratHonorAslebGenerateForm(forms.Form):
     bulan = forms.DateField(
         widget=forms.DateInput(attrs={'type': 'month'}),
@@ -128,7 +112,6 @@ class SuratHonorAslebGenerateForm(forms.Form):
         return bulan.replace(day=1)
 
 
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 class AbsensiAslebForm(forms.ModelForm):
     class Meta:
         model = AbsensiAsleb

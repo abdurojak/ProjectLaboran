@@ -1,10 +1,7 @@
 from django import forms
 from django.contrib.auth.hashers import check_password
-<<<<<<< HEAD
-=======
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 from django.db import OperationalError, ProgrammingError
 
 from .models import Fakultas, Pengguna, Prodi
@@ -25,8 +22,6 @@ def apply_fakultas_prodi_choices(form):
     form.fields['prodi'].widget = forms.Select(choices=active_name_choices(Prodi, 'Pilih prodi'))
 
 
-<<<<<<< HEAD
-=======
 def add_password_validator_errors(form, password):
     if not password:
         return
@@ -37,7 +32,6 @@ def add_password_validator_errors(form, password):
         form.add_error('password', exc)
 
 
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 class PenggunaForm(forms.ModelForm):
     class Meta:
         model = Pengguna
@@ -73,14 +67,11 @@ class PenggunaForm(forms.ModelForm):
         validate_human_face_photo(foto)
         return foto
 
-<<<<<<< HEAD
-=======
     def clean(self):
         cleaned_data = super().clean()
         add_password_validator_errors(self, cleaned_data.get('password'))
         return cleaned_data
 
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     def save(self, commit=True):
         instance = super().save(commit=False)
         password = self.cleaned_data.get('password')
@@ -99,8 +90,6 @@ class PenggunaForm(forms.ModelForm):
         return instance
 
 
-<<<<<<< HEAD
-=======
 class FakultasForm(forms.ModelForm):
     class Meta:
         model = Fakultas
@@ -161,7 +150,6 @@ class PenggunaAppearanceForm(forms.ModelForm):
         return instance
 
 
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 class PenggunaProfileForm(forms.ModelForm):
     class Meta:
         model = Pengguna
@@ -230,22 +218,11 @@ class ChangePasswordForm(forms.Form):
         if password and password_confirmation and password != password_confirmation:
             self.add_error('password_confirmation', 'Konfirmasi password tidak sama.')
 
-<<<<<<< HEAD
-=======
         add_password_validator_errors(self, password)
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
         return cleaned_data
 
 
 class LoginPenggunaForm(forms.Form):
-<<<<<<< HEAD
-    nim_nik = forms.CharField(
-        label='NIM/NIK',
-        max_length=40,
-        widget=forms.TextInput(attrs={'inputmode': 'numeric', 'pattern': '[0-9]*', 'placeholder': 'NIM/NIK terdaftar'}),
-    )
-    password = forms.CharField(widget=forms.PasswordInput)
-=======
     JENIS_LOGIN_CHOICES = [
         ('mahasiswa', 'Mahasiswa'),
         ('karyawan', 'Karyawan'),
@@ -269,7 +246,6 @@ class LoginPenggunaForm(forms.Form):
         }),
     )
     password = forms.CharField(widget=forms.PasswordInput(attrs={'autocomplete': 'current-password'}))
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
     error_messages = {
         'invalid_login': 'NIM/NIK atau password tidak sesuai.',
@@ -283,10 +259,7 @@ class LoginPenggunaForm(forms.Form):
 
     def clean(self):
         cleaned_data = super().clean()
-<<<<<<< HEAD
-=======
         jenis_login = cleaned_data.get('jenis_login') or 'mahasiswa'
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
         nim_nik = cleaned_data.get('nim_nik')
         password = cleaned_data.get('password')
 
@@ -304,15 +277,12 @@ class LoginPenggunaForm(forms.Form):
         if not check_password(password, pengguna.password):
             raise forms.ValidationError(self.error_messages['invalid_login'])
 
-<<<<<<< HEAD
-=======
         if jenis_login == 'mahasiswa' and pengguna.role not in ['mahasiswa', 'asisten_lab']:
             raise forms.ValidationError('Akun ini bukan akun mahasiswa. Pilih login sebagai karyawan.')
 
         if jenis_login == 'karyawan' and pengguna.role not in ['admin', 'laboran']:
             raise forms.ValidationError('Akun ini bukan akun karyawan. Pilih login sebagai mahasiswa.')
 
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
         cleaned_data['pengguna'] = pengguna
         return cleaned_data
 
@@ -323,48 +293,37 @@ class RegisterPenggunaForm(forms.ModelForm):
     class Meta:
         model = Pengguna
         fields = [
-<<<<<<< HEAD
-            'foto',
-=======
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
             'nama_pengguna',
             'nim_nik',
             'email',
             'password',
             'password_confirmation',
             'gender',
-<<<<<<< HEAD
-=======
             'foto',
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
             'alamat',
             'fakultas',
             'prodi',
         ]
+        labels = {
+            'nim_nik': 'NIM',
+        }
         widgets = {
             'foto': forms.FileInput(attrs={'class': 'hidden', 'accept': 'image/*'}),
-<<<<<<< HEAD
-            'password': forms.PasswordInput(render_value=False),
-            'email': forms.EmailInput(attrs={
-=======
             'password': forms.PasswordInput(attrs={'autocomplete': 'new-password'}, render_value=False),
             'email': forms.EmailInput(attrs={
                 'autocomplete': 'email',
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
-                'placeholder': 'nama@std.trisakti.ac.id atau nama@trisakti.ac.id',
-                'pattern': '.+@(std\\.trisakti\\.ac\\.id|trisakti\\.ac\\.id)',
-                'title': 'Gunakan email dengan akhiran @std.trisakti.ac.id atau @trisakti.ac.id',
+                'placeholder': 'nama@std.trisakti.ac.id',
+                'pattern': '.+@std\\.trisakti\\.ac\\.id',
+                'title': 'Gunakan email mahasiswa dengan akhiran @std.trisakti.ac.id',
             }),
-<<<<<<< HEAD
-            'nim_nik': forms.TextInput(attrs={'inputmode': 'numeric', 'pattern': '[0-9]*', 'placeholder': 'Angka saja'}),
-=======
             'nim_nik': forms.TextInput(attrs={
                 'autocomplete': 'username',
                 'inputmode': 'numeric',
-                'pattern': '[0-9]*',
-                'placeholder': 'Angka saja',
+                'minlength': '10',
+                'pattern': '[0-9]{10,}',
+                'placeholder': 'Minimal 10 digit',
+                'title': 'NIM harus berisi minimal 10 digit angka',
             }),
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
             'alamat': forms.Textarea(attrs={'rows': 4}),
         }
 
@@ -375,19 +334,17 @@ class RegisterPenggunaForm(forms.ModelForm):
     def clean_nim_nik(self):
         nim_nik = self.cleaned_data['nim_nik'].strip()
         if not nim_nik.isdigit():
-            raise forms.ValidationError('NIM/NIK hanya boleh berisi angka.')
+            raise forms.ValidationError('NIM hanya boleh berisi angka.')
+        if len(nim_nik) < 10:
+            raise forms.ValidationError('NIM harus terdiri dari minimal 10 digit.')
         return nim_nik
 
     def clean_email(self):
         email = self.cleaned_data['email'].strip().lower()
-        valid_domains = ('@std.trisakti.ac.id', '@trisakti.ac.id')
-        if not email.endswith(valid_domains):
-            raise forms.ValidationError('Email harus menggunakan domain @std.trisakti.ac.id atau @trisakti.ac.id.')
-<<<<<<< HEAD
-=======
+        if not email.endswith('@std.trisakti.ac.id'):
+            raise forms.ValidationError('Email harus menggunakan domain @std.trisakti.ac.id.')
         if Pengguna.objects.filter(email__iexact=email).exists():
             raise forms.ValidationError('Email sudah terdaftar. Gunakan email Trisakti lain atau login.')
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
         return email
 
     def clean_foto(self):
@@ -403,10 +360,7 @@ class RegisterPenggunaForm(forms.ModelForm):
         if password and password_confirmation and password != password_confirmation:
             self.add_error('password_confirmation', 'Konfirmasi password tidak sama.')
 
-<<<<<<< HEAD
-=======
         add_password_validator_errors(self, password)
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
         return cleaned_data
 
     def save(self, commit=True):
@@ -462,8 +416,5 @@ class ResetPasswordForm(VerificationCodeForm):
         if password and password_confirmation and password != password_confirmation:
             self.add_error('password_confirmation', 'Konfirmasi password tidak sama.')
 
-<<<<<<< HEAD
-=======
         add_password_validator_errors(self, password)
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
         return cleaned_data

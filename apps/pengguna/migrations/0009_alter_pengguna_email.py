@@ -3,6 +3,37 @@
 from django.db import migrations, models
 
 
+def deduplicate_emails(apps, schema_editor):
+    Pengguna = apps.get_model('pengguna', 'Pengguna')
+    database = schema_editor.connection.alias
+    users = list(
+        Pengguna.objects.using(database)
+        .all()
+        .order_by('-is_verified', 'dibuat_pada', 'pk')
+    )
+    used_emails = {
+        (user.email or '').strip().lower()
+        for user in users
+        if (user.email or '').strip()
+    }
+    seen = set()
+
+    for user in users:
+        normalized_email = (user.email or '').strip().lower()
+        if normalized_email not in seen:
+            seen.add(normalized_email)
+            continue
+
+        replacement = f'duplicate-{user.pk}@invalid.local'
+        suffix = 1
+        while replacement.lower() in used_emails:
+            replacement = f'duplicate-{user.pk}-{suffix}@invalid.local'
+            suffix += 1
+
+        Pengguna.objects.using(database).filter(pk=user.pk).update(email=replacement)
+        used_emails.add(replacement.lower())
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -10,6 +41,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunPython(deduplicate_emails, migrations.RunPython.noop),
         migrations.AlterField(
             model_name='pengguna',
             name='email',

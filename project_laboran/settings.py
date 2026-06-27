@@ -31,19 +31,11 @@ DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = [
     host.strip()
-<<<<<<< HEAD
-    for host in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,10.24.80.245').split(',')
-    if host.strip()
-]
-
-PUBLIC_ACCESS_BASE_URL = os.getenv('PUBLIC_ACCESS_BASE_URL', 'http://10.24.80.245:8000')
-=======
     for host in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
     if host.strip()
 ]
 
 PUBLIC_ACCESS_BASE_URL = os.getenv('PUBLIC_ACCESS_BASE_URL', 'http://127.0.0.1:8000')
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
 
 # Application definition

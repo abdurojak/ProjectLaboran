@@ -38,11 +38,7 @@ class PendaftaranAslebForm(forms.ModelForm):
             'status',
         ]
         widgets = {
-<<<<<<< HEAD
-            'nama': forms.TextInput(attrs={'placeholder': 'Nama lengkap calon asleb'}),
-=======
             'nama': forms.TextInput(attrs={'placeholder': 'Nama lengkap calon aslab'}),
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
             'nim': forms.TextInput(attrs={'placeholder': 'NIM mahasiswa'}),
             'no_hp': forms.TextInput(attrs={'placeholder': 'Nomor HP aktif'}),
             'program_studi': forms.TextInput(attrs={'placeholder': 'Contoh: Rekayasa Perangkat Lunak'}),
@@ -154,8 +150,6 @@ class PendaftaranAslebPublicForm(PendaftaranAslebForm):
         return instance
 
 
-<<<<<<< HEAD
-=======
 class PublicPilihMatkulForm(forms.Form):
     matkul = forms.ModelChoiceField(
         queryset=MataKuliahAsleb.objects.none(),
@@ -227,7 +221,6 @@ class PublicBerkasPendaftaranForm(forms.Form):
         return cleaned_data
 
 
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 class MataKuliahAslebForm(forms.ModelForm):
     class Meta:
         model = MataKuliahAsleb

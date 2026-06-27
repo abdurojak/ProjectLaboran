@@ -1,28 +1,16 @@
 {% extends "base.html" %}
 
-<<<<<<< HEAD
-{% block title %}Form Rekap Honor Asleb{% endblock %}
-=======
 {% block title %}Form Rekap Honor Aslab{% endblock %}
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
 {% block content %}
 <section class="mx-auto max-w-4xl space-y-6">
     <div>
         <p class="text-sm font-bold uppercase tracking-[0.2em] text-violet-700">Honorarium</p>
-<<<<<<< HEAD
-        <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Form Rekap Honor Asleb</h2>
-        <p class="mt-2 text-sm text-slate-500">Isi komponen honor seperti contoh Excel. Total honor dan level Junior/Senior dihitung otomatis saat disimpan.</p>
-    </div>
-
-    <form method="post" class="surface-card grid gap-5 p-6 md:grid-cols-2 md:p-8">
-=======
         <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Form Rekap Honor Aslab</h2>
         <p class="mt-2 text-sm text-slate-500">Isi komponen honor seperti contoh Excel. Total honor dan level Junior/Senior dihitung otomatis saat disimpan.</p>
     </div>
 
     <form method="post" enctype="multipart/form-data" class="surface-card grid gap-5 p-6 md:grid-cols-2 md:p-8">
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
         {% csrf_token %}
         {% for field in form %}
         <div class="{% if field.name == 'keterangan' %}md:col-span-2{% endif %}">
@@ -42,12 +30,8 @@
             <div>Total Jam Terealisasi = 7 x Total Pertemuan</div>
             <div>Total Akhir = maksimal 60 jam</div>
             <div>Total Honor = Total Akhir x Honor/Jam.</div>
-<<<<<<< HEAD
-            <div>Level otomatis: periode asleb ke-1 dan ke-2 Junior Rp7.000, mulai periode ke-3 Senior Rp8.000.</div>
-=======
             <div>Level otomatis: periode aslab ke-1 dan ke-2 Junior Rp7.000, mulai periode ke-3 Senior Rp8.000.</div>
             <div>Jika laboran TF dikosongkan, sistem otomatis memilih laboran dengan tugas TF paling sedikit pada bulan tersebut.</div>
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
         </div>
 
         <div class="flex flex-wrap gap-3 pt-2 md:col-span-2">

@@ -1,17 +1,4 @@
 from django.contrib import messages
-<<<<<<< HEAD
-from django.db.models import Q, Sum
-from django.shortcuts import get_object_or_404, redirect
-from django.urls import reverse_lazy
-from django.utils import timezone
-from django.views.decorators.http import require_POST
-from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
-
-from apps.core.views import PostOnlyDeleteMixin
-
-from .forms import AbsensiAslebForm, AslebForm, HonorAslebForm, KonfirmasiTransferHonorForm
-from .models import AbsensiAsleb, Asleb, HonorAsleb, PengaturanAbsensiAsleb
-=======
 from django.core.files.base import ContentFile
 from django.db import transaction
 from django.db.models import Q, Sum
@@ -38,7 +25,6 @@ class HonorAdminRequiredMixin:
             messages.error(request, 'Hanya admin yang bisa mengelola rekap honorarium.')
             return redirect('asleb:honor_list')
         return super().dispatch(request, *args, **kwargs)
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
 
 class AslebListView(ListView):
@@ -106,34 +92,20 @@ class HonorAslebListView(ListView):
     context_object_name = 'honor_list'
 
     def get_queryset(self):
-<<<<<<< HEAD
-        queryset = HonorAsleb.objects.select_related('asleb')
-=======
         queryset = HonorAsleb.objects.select_related('asleb', 'assigned_laboran')
         pengguna = getattr(self.request, 'current_pengguna', None)
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
         search = self.request.GET.get('q', '').strip()
         bulan = self.request.GET.get('bulan', '').strip()
         status = self.request.GET.get('status', '').strip()
 
-<<<<<<< HEAD
-=======
         if pengguna and pengguna.role == 'laboran':
             queryset = queryset.filter(assigned_laboran=pengguna)
 
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
         if search:
             queryset = queryset.filter(
                 Q(asleb__nama__icontains=search) |
                 Q(asleb__nim__icontains=search) |
                 Q(asleb__matkul__icontains=search) |
-<<<<<<< HEAD
-                Q(pic_transfer__icontains=search)
-            )
-
-        if bulan:
-            queryset = queryset.filter(bulan__month=bulan.split('-')[1], bulan__year=bulan.split('-')[0])
-=======
                 Q(pic_transfer__icontains=search) |
                 Q(assigned_laboran__nama_pengguna__icontains=search)
             )
@@ -145,7 +117,6 @@ class HonorAslebListView(ListView):
             except ValueError:
                 messages.error(self.request, 'Format bulan tidak valid.')
                 queryset = queryset.none()
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
         if status:
             queryset = queryset.filter(status=status)
@@ -157,26 +128,16 @@ class HonorAslebListView(ListView):
         bulan_ini = timezone.localdate().replace(day=1)
         selected_bulan = self.request.GET.get('bulan', bulan_ini.strftime('%Y-%m'))
         total_honor = self.get_queryset().aggregate(total=Sum('jumlah'))['total'] or 0
-<<<<<<< HEAD
-=======
         pengguna = getattr(self.request, 'current_pengguna', None)
         base_honor_qs = HonorAsleb.objects.all()
         if pengguna and pengguna.role == 'laboran':
             base_honor_qs = base_honor_qs.filter(assigned_laboran=pengguna)
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
         context['search_query'] = self.request.GET.get('q', '').strip()
         context['selected_bulan'] = selected_bulan
         context['selected_status'] = self.request.GET.get('status', '').strip()
         context['status_choices'] = HonorAsleb.STATUS_CHOICES
         context['total_honor'] = f'Rp {total_honor:,.0f}'.replace(',', '.')
-<<<<<<< HEAD
-        context['formula_note'] = 'Total Honor = min(7 x Total Pertemuan, 60) x Honor/Jam. Level otomatis: periode asleb ke-1 dan ke-2 Junior Rp7.000, mulai ke-3 Senior Rp8.000.'
-        return context
-
-
-class HonorAslebCreateView(CreateView):
-=======
         context['laboran_count'] = Pengguna.objects.filter(role='laboran', is_verified=True).count()
         context['unassigned_honor_count'] = base_honor_qs.filter(assigned_laboran__isnull=True).count()
         context['is_admin'] = bool(pengguna and pengguna.role == 'admin')
@@ -186,20 +147,16 @@ class HonorAslebCreateView(CreateView):
 
 
 class HonorAslebCreateView(HonorAdminRequiredMixin, CreateView):
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     model = HonorAsleb
     form_class = HonorAslebForm
     template_name = 'asleb/honor_form.html'
     success_url = reverse_lazy('asleb:honor_list')
 
-<<<<<<< HEAD
-=======
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs['current_pengguna'] = getattr(self.request, 'current_pengguna', None)
         return kwargs
 
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
 class HonorAslebUpdateView(UpdateView):
     model = HonorAsleb
@@ -207,10 +164,6 @@ class HonorAslebUpdateView(UpdateView):
     template_name = 'asleb/honor_form.html'
     success_url = reverse_lazy('asleb:honor_list')
 
-<<<<<<< HEAD
-
-class HonorAslebDeleteView(PostOnlyDeleteMixin, DeleteView):
-=======
     def get_queryset(self):
         queryset = super().get_queryset()
         pengguna = getattr(self.request, 'current_pengguna', None)
@@ -225,15 +178,12 @@ class HonorAslebDeleteView(PostOnlyDeleteMixin, DeleteView):
 
 
 class HonorAslebDeleteView(HonorAdminRequiredMixin, PostOnlyDeleteMixin, DeleteView):
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     model = HonorAsleb
     template_name = 'asleb/honor_confirm_delete.html'
     context_object_name = 'honor'
     success_url = reverse_lazy('asleb:honor_list')
 
 
-<<<<<<< HEAD
-=======
 class SuratHonorAccessMixin:
     def dispatch(self, request, *args, **kwargs):
         cleanup_expired_surat_honor()
@@ -339,7 +289,6 @@ def download_surat_honor(request, pk):
     )
 
 
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 class AbsensiAslebListView(ListView):
     model = AbsensiAsleb
     template_name = 'asleb/absensi_list.html'
@@ -400,19 +349,11 @@ class AbsensiAslebCreateView(CreateView):
             return redirect('dashboard:home')
 
         if not self.asleb:
-<<<<<<< HEAD
-            messages.error(request, 'Data Asleb untuk akun ini belum ditemukan.')
-            return redirect('dashboard:home')
-
-        if not PengaturanAbsensiAsleb.get_solo().dibuka:
-            messages.warning(request, 'Absensi asleb sedang ditutup oleh admin/laboran.')
-=======
             messages.error(request, 'Data Aslab untuk akun ini belum ditemukan.')
             return redirect('dashboard:home')
 
         if not PengaturanAbsensiAsleb.get_solo().dibuka:
             messages.warning(request, 'Absensi aslab sedang ditutup oleh admin/laboran.')
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
             return redirect('asleb:absensi_list')
 
         return super().dispatch(request, *args, **kwargs)
@@ -443,11 +384,7 @@ def toggle_absensi_status(request):
     pengaturan.save(update_fields=['dibuka', 'diperbarui_pada'])
 
     status = 'dibuka' if pengaturan.dibuka else 'ditutup'
-<<<<<<< HEAD
-    messages.success(request, f'Absensi asleb berhasil {status}.')
-=======
     messages.success(request, f'Absensi aslab berhasil {status}.')
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     return redirect('asleb:absensi_list')
 
 
@@ -459,13 +396,10 @@ def confirm_honor_transfer(request, pk):
         return redirect('asleb:honor_list')
 
     honor = get_object_or_404(HonorAsleb, pk=pk)
-<<<<<<< HEAD
-=======
     if pengguna.role == 'laboran' and honor.assigned_laboran_id != pengguna.pk:
         messages.error(request, 'Tugas TF honor ini bukan milik akun laboran Anda.')
         return redirect('asleb:honor_list')
 
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     form = KonfirmasiTransferHonorForm(request.POST, request.FILES, instance=honor)
 
     if not form.is_valid():
@@ -483,8 +417,6 @@ def confirm_honor_transfer(request, pk):
     return redirect('asleb:honor_list')
 
 
-<<<<<<< HEAD
-=======
 @require_POST
 def auto_assign_honor_transfers(request):
     pengguna = getattr(request, 'current_pengguna', None)
@@ -550,7 +482,6 @@ def roman_month(month):
     return numerals[month]
 
 
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 def sync_honor_from_absensi(absensi):
     bulan = absensi.tanggal_praktikum.replace(day=1)
     total_pertemuan = AbsensiAsleb.objects.filter(

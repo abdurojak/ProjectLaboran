@@ -1,52 +1,9 @@
 {% extends "base.html" %}
-<<<<<<< HEAD
-=======
 {% load static %}
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
 {% block title %}Register{% endblock %}
 
 {% block content %}
-<<<<<<< HEAD
-<section class="mx-auto max-w-4xl space-y-6">
-    <div class="flex flex-wrap items-start justify-between gap-4">
-        <div>
-            <p class="text-sm font-bold uppercase tracking-[0.2em] text-brand-700">Autentikasi</p>
-            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Register</h2>
-            <p class="mt-2 text-sm text-slate-500">Buat akun pengguna baru. Role awal otomatis menjadi Mahasiswa.</p>
-        </div>
-        <a class="btn-secondary gap-2" href="{% url 'pengguna:login' %}">
-            <i data-lucide="log-in" class="h-4 w-4"></i>
-            <span>Login</span>
-        </a>
-    </div>
-
-    <form method="post" enctype="multipart/form-data" class="surface-card grid gap-5 p-6 md:grid-cols-2 md:p-8">
-        {% csrf_token %}
-        {% for field in form %}
-        <div class="{% if field.name == 'foto' or field.name == 'nama_pengguna' or field.name == 'alamat' %}md:col-span-2{% endif %}">
-            {{ field.label_tag }}
-            {% if field.name == 'foto' %}
-            {% include "components/file_upload.html" with field=field current_file=None button_label="Pilih Foto" title="Upload foto pengguna" empty_label="Belum ada foto dipilih" preview_label="Preview foto" preview_alt="Preview foto pengguna" show_preview=True %}
-            {% elif field.name == 'email' %}
-            <div class="relative">
-                {{ field }}
-                <div class="pointer-events-none absolute inset-y-0 right-4 hidden items-center text-xs font-black text-brand-700 xl:flex">
-                    Trisakti
-                </div>
-            </div>
-            <p class="mt-2 text-xs font-semibold text-slate-500">Wajib memakai email Trisakti dengan akhiran <span class="font-black text-brand-700">@std.trisakti.ac.id</span> atau <span class="font-black text-brand-700">@trisakti.ac.id</span>.</p>
-            <div id="email-domain-error" class="mt-2 hidden text-sm font-semibold text-rose-600">Email harus berakhiran @std.trisakti.ac.id atau @trisakti.ac.id.</div>
-            {% else %}
-            {{ field }}
-            {% endif %}
-            {% if field.errors %}
-            <div class="mt-2 text-sm font-semibold text-rose-600">{{ field.errors|striptags }}</div>
-            {% endif %}
-        </div>
-        {% endfor %}
-        <div class="flex flex-wrap gap-3 md:col-span-2">
-=======
 <section class="register-page mx-auto w-full max-w-6xl space-y-5">
     <div class="register-hero overflow-hidden rounded-[28px] border border-brand-100 bg-brand-900 px-6 py-5 text-white md:px-8">
         <div class="flex flex-wrap items-center justify-between gap-4">
@@ -80,8 +37,8 @@
                     <div class="relative">
                         {{ field }}
                     </div>
-                    <p class="mt-2 text-xs font-semibold text-slate-500">Gunakan email Trisakti.</p>
-                    <div id="email-domain-error" class="mt-2 hidden text-sm font-semibold text-rose-600">Email harus berakhiran @std.trisakti.ac.id atau @trisakti.ac.id.</div>
+                    <p class="mt-2 text-xs font-semibold text-slate-500">Gunakan email mahasiswa Trisakti.</p>
+                    <div id="email-domain-error" class="mt-2 hidden text-sm font-semibold text-rose-600">Email harus berakhiran @std.trisakti.ac.id.</div>
                 {% else %}
                     {{ field.label_tag }}
                     {{ field }}
@@ -93,7 +50,6 @@
             {% endfor %}
         </div>
         <div class="mt-5 flex flex-wrap gap-3 border-t border-slate-100 pt-5">
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
             <button type="submit" class="btn-primary gap-2">
                 <i data-lucide="user-plus" class="h-4 w-4"></i>
                 <span>Register</span>
@@ -107,8 +63,6 @@
 </section>
 {% endblock %}
 
-<<<<<<< HEAD
-=======
 {% block extra_head %}
 <style>
     .register-hero {
@@ -208,7 +162,6 @@
 </style>
 {% endblock %}
 
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 {% block extra_script %}
 <script>
     document.addEventListener('DOMContentLoaded', function () {
@@ -223,7 +176,7 @@
         if (emailInput && emailError) {
             emailInput.addEventListener('input', function () {
                 const value = emailInput.value.trim().toLowerCase();
-                const isValid = !value || value.endsWith('@std.trisakti.ac.id') || value.endsWith('@trisakti.ac.id');
+                const isValid = !value || value.endsWith('@std.trisakti.ac.id');
                 emailError.classList.toggle('hidden', isValid);
                 emailInput.classList.toggle('border-rose-300', !isValid);
                 emailInput.classList.toggle('ring-2', !isValid);

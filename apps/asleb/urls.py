@@ -12,15 +12,11 @@ from .views import (
     HonorAslebDeleteView,
     HonorAslebListView,
     HonorAslebUpdateView,
-<<<<<<< HEAD
-    confirm_honor_transfer,
-=======
     SuratHonorAslebGenerateView,
     SuratHonorAslebListView,
     auto_assign_honor_transfers,
     confirm_honor_transfer,
     download_surat_honor,
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     toggle_absensi_status,
 )
 
@@ -36,15 +32,11 @@ urlpatterns = [
     path('<int:pk>/edit/', AslebUpdateView.as_view(), name='asleb_update'),
     path('<int:pk>/hapus/', AslebDeleteView.as_view(), name='asleb_delete'),
     path('honorarium/', HonorAslebListView.as_view(), name='honor_list'),
-<<<<<<< HEAD
-    path('honorarium/tambah/', HonorAslebCreateView.as_view(), name='honor_create'),
-=======
     path('honorarium/surat/', SuratHonorAslebListView.as_view(), name='surat_honor_list'),
     path('honorarium/surat/generate/', SuratHonorAslebGenerateView.as_view(), name='surat_honor_generate'),
     path('honorarium/surat/<int:pk>/download/', download_surat_honor, name='surat_honor_download'),
     path('honorarium/tambah/', HonorAslebCreateView.as_view(), name='honor_create'),
     path('honorarium/bagi-tugas-tf/', auto_assign_honor_transfers, name='honor_auto_assign_transfers'),
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     path('honorarium/<int:pk>/konfirmasi-tf/', confirm_honor_transfer, name='honor_confirm_transfer'),
     path('honorarium/<int:pk>/edit/', HonorAslebUpdateView.as_view(), name='honor_update'),
     path('honorarium/<int:pk>/hapus/', HonorAslebDeleteView.as_view(), name='honor_delete'),

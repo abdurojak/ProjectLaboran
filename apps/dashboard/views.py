@@ -172,11 +172,7 @@ class DashboardView(TemplateView):
             if is_asisten_lab:
                 menu_modules.extend([
                     {
-<<<<<<< HEAD
-                        'title': 'Absensi Asleb',
-=======
                         'title': 'Absensi Aslab',
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
                         'description': 'Isi absensi praktikum, upload modul, dan bukti video kegiatan.',
                         'url': 'asleb:absensi_list',
                         'status': 'Aktif',
@@ -252,11 +248,7 @@ class DashboardView(TemplateView):
             {
                 'label': 'Honorarium Bulan Ini',
                 'value': 0,
-<<<<<<< HEAD
-                'note': 'Menunggu modul rekap honorarium asleb',
-=======
                 'note': 'Menunggu modul rekap honorarium aslab',
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
                 'icon': 'file-chart-column',
                 'tone': 'purple',
             },
@@ -287,11 +279,7 @@ class DashboardView(TemplateView):
                 'tone': 'blue',
             },
             {
-<<<<<<< HEAD
-                'title': 'Data Asleb',
-=======
                 'title': 'Data Aslab',
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
                 'description': 'Kelola data asisten laboratorium untuk membantu operasional praktikum.',
                 'url': 'asleb:asleb_list',
                 'status': 'Aktif',
@@ -299,26 +287,16 @@ class DashboardView(TemplateView):
                 'tone': 'green',
             },
             {
-<<<<<<< HEAD
-                'title': 'Pendaftaran Asleb',
-                'description': 'Kelola calon asleb yang mendaftar berdasarkan matkul, kontak, dan status seleksi.',
-=======
                 'title': 'Pendaftaran Aslab',
                 'description': 'Kelola calon aslab yang mendaftar berdasarkan matkul, kontak, dan status seleksi.',
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
                 'url': 'pendaftaran_asleb:pendaftaran_list',
                 'status': 'Aktif',
                 'icon': 'user-round-plus',
                 'tone': 'teal',
             },
             {
-<<<<<<< HEAD
-                'title': 'Rekap Honorarium Asleb',
-                'description': 'Hitung honor asleb per bulan berdasarkan total pertemuan, batas 60 jam, dan tarif Junior/Senior.',
-=======
                 'title': 'Rekap Honorarium Aslab',
                 'description': 'Hitung honor aslab per bulan berdasarkan total pertemuan, batas 60 jam, dan tarif Junior/Senior.',
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
                 'url': 'asleb:honor_list',
                 'status': 'Aktif',
                 'icon': 'file-chart-column',
@@ -370,13 +348,8 @@ class DashboardView(TemplateView):
             },
             {
                 'time': '08:55',
-<<<<<<< HEAD
-                'title': 'Data asleb diperbarui',
-                'detail': f'{asleb_qs.filter(status="aktif").count()} asleb aktif dan {pendaftaran_asleb_qs.filter(status="diajukan").count()} pendaftar menunggu seleksi.',
-=======
                 'title': 'Data aslab diperbarui',
                 'detail': f'{asleb_qs.filter(status="aktif").count()} aslab aktif dan {pendaftaran_asleb_qs.filter(status="diajukan").count()} pendaftar menunggu seleksi.',
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
                 'tone': 'green',
             },
         ]
@@ -417,24 +390,15 @@ class DashboardView(TemplateView):
                 'tone': 'blue',
             },
             {
-<<<<<<< HEAD
-                'title': 'Tambah Data Asleb',
-=======
                 'title': 'Tambah Data Aslab',
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
                 'description': 'Masukkan data asisten laboratorium baru.',
                 'url': 'asleb:asleb_create',
                 'icon': 'user-plus',
                 'tone': 'green',
             },
             {
-<<<<<<< HEAD
-                'title': 'Tambah Pendaftaran Asleb',
-                'description': 'Catat calon asleb baru beserta matkul yang diminati.',
-=======
                 'title': 'Tambah Pendaftaran Aslab',
                 'description': 'Catat calon aslab baru beserta matkul yang diminati.',
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
                 'url': 'pendaftaran_asleb:pendaftaran_create',
                 'icon': 'user-round-plus',
                 'tone': 'teal',

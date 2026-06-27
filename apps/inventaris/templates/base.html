@@ -1,10 +1,6 @@
 <!doctype html>
 {% load static %}
-<<<<<<< HEAD
-<html lang="id">
-=======
 <html lang="id" data-theme="{{ current_pengguna.theme_mode|default:'light' }}" data-bg="{{ current_pengguna.background_mode|default:'default' }}"{% if current_pengguna.background_image %} style="--custom-bg-image: url('{{ current_pengguna.background_image.url }}');"{% endif %}>
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -41,11 +37,7 @@
     <style type="text/tailwindcss">
         @layer base {
             body {
-<<<<<<< HEAD
-                @apply overflow-x-hidden bg-slate-100 text-slate-800 antialiased;
-=======
                 @apply overflow-x-hidden bg-white text-slate-800 antialiased;
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
             }
             label {
                 @apply mb-2 block text-sm font-semibold text-slate-700;
@@ -82,14 +74,6 @@
             }
         }
     </style>
-<<<<<<< HEAD
-</head>
-<body>
-    {% include "components/navbar.html" %}
-
-    <main class="mx-auto flex w-full max-w-[1500px] items-start gap-0 overflow-x-hidden px-4 py-6 md:gap-6 lg:px-7">
-        {% include "components/dashboard_sidebar.html" %}
-=======
     <style>
         :root {
             --page-bg: #ffffff;
@@ -637,7 +621,6 @@
         {% if current_pengguna %}
         {% include "components/dashboard_sidebar.html" %}
         {% endif %}
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
         <section class="grid min-w-0 flex-1 gap-6 overflow-x-auto">
             {% if messages %}
             <div class="grid gap-3">
@@ -654,8 +637,6 @@
     {% block extra_script %}{% endblock %}
     <script>
         lucide.createIcons();
-<<<<<<< HEAD
-=======
         window.applyLabHubTheme = function (theme, bg, customBg) {
             if (theme) {
                 document.documentElement.dataset.theme = theme;
@@ -669,7 +650,6 @@
             }
             document.dispatchEvent(new CustomEvent('labhub-theme-change'));
         };
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     </script>
 </body>
 </html>

@@ -1,14 +1,10 @@
 from django.urls import path
 
 from .views import (
-<<<<<<< HEAD
-    ForgotPasswordRequestView,
-=======
     FakultasCreateView,
     FakultasUpdateView,
     ForgotPasswordRequestView,
     MasterAkademikView,
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     PenggunaChangePasswordView,
     PenggunaCreateView,
     PenggunaDeleteView,
@@ -21,11 +17,8 @@ from .views import (
     PenggunaUpdateProfileView,
     PenggunaUpdateView,
     PenggunaVerifyRegisterView,
-<<<<<<< HEAD
-=======
     ProdiCreateView,
     ProdiUpdateView,
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     ResetPasswordView,
 )
 
@@ -39,14 +32,11 @@ urlpatterns = [
     path('reset-password/', ResetPasswordView.as_view(), name='reset_password'),
     path('logout/', PenggunaLogoutView.as_view(), name='logout'),
     path('', PenggunaListView.as_view(), name='list'),
-<<<<<<< HEAD
-=======
     path('master-akademik/', MasterAkademikView.as_view(), name='master_akademik'),
     path('master-akademik/fakultas/tambah/', FakultasCreateView.as_view(), name='fakultas_create'),
     path('master-akademik/fakultas/<int:pk>/edit/', FakultasUpdateView.as_view(), name='fakultas_update'),
     path('master-akademik/prodi/tambah/', ProdiCreateView.as_view(), name='prodi_create'),
     path('master-akademik/prodi/<int:pk>/edit/', ProdiUpdateView.as_view(), name='prodi_update'),
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     path('tambah/', PenggunaCreateView.as_view(), name='create'),
     path('<int:pk>/', PenggunaDetailView.as_view(), name='detail'),
     path('<int:pk>/edit/', PenggunaUpdateView.as_view(), name='update'),

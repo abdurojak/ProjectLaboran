@@ -37,44 +37,19 @@ SIDEBAR_LINKS = [
     {'title': 'Peminjaman Alat', 'icon': 'arrow-left-right', 'url': 'peminjaman:peminjaman_list', 'namespace': 'peminjaman'},
     {'title': 'Jadwal Praktikum', 'icon': 'calendar-clock', 'url': 'jadwal:jadwal_list', 'namespace': 'jadwal'},
     {
-<<<<<<< HEAD
-        'title': 'Absensi Asleb',
-=======
         'title': 'Absensi Aslab',
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
         'icon': 'clipboard-check',
         'url': 'asleb:absensi_list',
         'namespace': 'asleb_absensi',
         'url_names': {'absensi_list', 'absensi_create'},
     },
     {
-<<<<<<< HEAD
-        'title': 'Data Asleb',
-=======
         'title': 'Data Aslab',
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
         'icon': 'users',
         'url': 'asleb:asleb_list',
         'namespace': 'asleb',
         'url_names': {'asleb_list', 'asleb_create', 'asleb_detail', 'asleb_update', 'asleb_delete'},
     },
-<<<<<<< HEAD
-    {'title': 'Pendaftaran Asleb', 'icon': 'user-round-plus', 'url': 'pendaftaran_asleb:pendaftaran_list', 'namespace': 'pendaftaran_asleb'},
-    {
-        'title': 'Rekap Honorarium Asleb',
-        'icon': 'file-chart-column',
-        'url': 'asleb:honor_list',
-        'namespace': 'asleb',
-        'url_names': {'honor_list', 'honor_create', 'honor_confirm_transfer', 'honor_update', 'honor_delete'},
-    },
-    {'title': 'Pengguna', 'icon': 'user-round', 'url': 'pengguna:list', 'namespace': 'pengguna'},
-    {'title': 'Ruangan', 'icon': 'door-open', 'url': 'ruangan:ruangan_list', 'namespace': 'ruangan'},
-    {'title': 'Pengaturan', 'icon': 'settings', 'url': '', 'namespace': ''},
-]
-
-MAHASISWA_VISIBLE_NAMESPACES = {'dashboard', 'kalender', 'peminjaman', 'jadwal', 'ruangan'}
-ASISTEN_LAB_HIDDEN_TITLES = {'Rekap Honorarium Asleb', 'Pengaturan'}
-=======
     {'title': 'Pendaftaran Aslab', 'icon': 'user-round-plus', 'url': 'pendaftaran_asleb:pendaftaran_list', 'namespace': 'pendaftaran_asleb'},
     {
         'title': 'Rekap Honorarium Aslab',
@@ -113,7 +88,6 @@ ASISTEN_LAB_HIDDEN_TITLES = {'Rekap Honorarium Asleb', 'Pengaturan'}
 
 MAHASISWA_VISIBLE_NAMESPACES = {'core', 'dashboard', 'kalender', 'peminjaman', 'jadwal', 'ruangan'}
 ASISTEN_LAB_HIDDEN_TITLES = {'Rekap Honorarium Aslab'}
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 ASISTEN_LAB_HIDDEN_NAMESPACES = {'inventaris', 'barang_tertinggal', 'asleb', 'pendaftaran_asleb', 'pengguna'}
 
 

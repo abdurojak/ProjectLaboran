@@ -1,41 +1,24 @@
 {% extends "base.html" %}
 
-<<<<<<< HEAD
-{% block title %}Data Asleb{% endblock %}
-=======
 {% block title %}Data Aslab{% endblock %}
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
 {% block content %}
 <section class="space-y-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
-<<<<<<< HEAD
-            <p class="text-sm font-bold uppercase tracking-[0.2em] text-emerald-700">Asleb</p>
-            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Data Asleb</h2>
-=======
             <p class="text-sm font-bold uppercase tracking-[0.2em] text-emerald-700">Aslab</p>
             <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Data Aslab</h2>
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
             <p class="mt-2 text-sm text-slate-500">Kelola data asisten laboratorium, kontak, status aktif, dan program studi.</p>
         </div>
         <a class="btn-primary bg-emerald-600 hover:bg-emerald-700 shadow-emerald-700/20" href="{% url 'asleb:asleb_create' %}">
             <i data-lucide="plus" class="h-4 w-4"></i>
-<<<<<<< HEAD
-            <span>Tambah Asleb</span>
-=======
             <span>Tambah Aslab</span>
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
         </a>
     </div>
 
     <form id="asleb-filter-form" method="get" class="surface-card grid gap-4 p-5 md:grid-cols-[minmax(0,1.4fr)_220px_auto] md:items-end">
         <div>
-<<<<<<< HEAD
-            <label for="id_q">Cari asleb</label>
-=======
             <label for="id_q">Cari aslab</label>
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
             <input id="id_q" name="q" type="text" value="{{ search_query }}" placeholder="Cari nama, NIM, no HP, program studi, atau matkul" autocomplete="off">
         </div>
         <div>
@@ -111,11 +94,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-<<<<<<< HEAD
-                        <td colspan="8" class="py-12 text-center text-slate-500">Belum ada data asleb.</td>
-=======
                         <td colspan="8" class="py-12 text-center text-slate-500">Belum ada data aslab.</td>
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -126,11 +105,7 @@
 {% endblock %}
 
 {% block extra_script %}
-<<<<<<< HEAD
-{% include "components/confirmation_modal.html" with title="Konfirmasi Hapus Asleb" confirm_label="Hapus" confirm_icon="trash-2" %}
-=======
 {% include "components/confirmation_modal.html" with title="Konfirmasi Hapus Aslab" confirm_label="Hapus" confirm_icon="trash-2" %}
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const form = document.getElementById('asleb-filter-form');

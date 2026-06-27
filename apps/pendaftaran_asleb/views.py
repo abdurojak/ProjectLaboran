@@ -1,35 +1,21 @@
 from django.contrib import messages
 from django.conf import settings
-<<<<<<< HEAD
-=======
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 from django.core.mail import send_mail
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
-<<<<<<< HEAD
-from django.utils import timezone
-from django.views.decorators.http import require_POST
-from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
-=======
 from django.utils.text import get_valid_filename
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView, View
 import uuid
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
 from apps.asleb.models import Asleb
 from apps.core.views import PostOnlyDeleteMixin
 from apps.pengguna.models import Pengguna
 
-<<<<<<< HEAD
-from .forms import MataKuliahAslebForm, PendaftaranAslebForm, PendaftaranAslebPublicForm
-from .models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb
-from .utils import get_public_registration_url
-=======
 from .forms import (
     MataKuliahAslebForm,
     PendaftaranAslebForm,
@@ -44,7 +30,6 @@ from .utils import extract_grade_from_transcript, get_public_registration_url, i
 
 
 WIZARD_SESSION_KEY = 'pendaftaran_asleb_wizard'
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
 
 class PendaftaranAslebListView(ListView):
@@ -121,16 +106,8 @@ class PendaftaranAslebDeleteView(PostOnlyDeleteMixin, DeleteView):
     success_url = reverse_lazy('pendaftaran_asleb:pendaftaran_list')
 
 
-<<<<<<< HEAD
-class PendaftaranAslebPublicCreateView(CreateView):
-    model = PendaftaranAsleb
-    form_class = PendaftaranAslebPublicForm
-    template_name = 'pendaftaran_asleb/pendaftaran_public_form.html'
-    success_url = reverse_lazy('pendaftaran_asleb:pendaftaran_success')
-=======
 class PendaftaranAslebPublicCreateView(View):
     template_name = 'pendaftaran_asleb/pendaftaran_public_form.html'
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
     def dispatch(self, request, *args, **kwargs):
         if not PengaturanPendaftaranAsleb.get_solo().dibuka:
@@ -138,13 +115,6 @@ class PendaftaranAslebPublicCreateView(View):
 
         return super().dispatch(request, *args, **kwargs)
 
-<<<<<<< HEAD
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs['files'] = self.request.FILES or None
-        kwargs['current_pengguna'] = getattr(self.request, 'current_pengguna', None) or get_session_pengguna(self.request)
-        return kwargs
-=======
     def get(self, request, *args, **kwargs):
         if request.GET.get('reset') == '1':
             self.clear_wizard(request)
@@ -315,7 +285,6 @@ class PendaftaranAslebPublicCreateView(View):
         if not matkul_id:
             return None
         return MataKuliahAsleb.objects.filter(pk=matkul_id, aktif=True).first()
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
 
 class PendaftaranAslebSuccessView(ListView):
@@ -333,11 +302,7 @@ def accept_pendaftaran(request, pk):
     pendaftaran.status = 'diterima'
     pendaftaran.save(update_fields=['status', 'diperbarui_pada'])
     promote_pengguna_to_asisten_lab(pendaftaran)
-<<<<<<< HEAD
-    messages.success(request, 'Pendaftaran asleb ditandai diterima.')
-=======
     messages.success(request, 'Pendaftaran aslab ditandai diterima.')
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     return redirect('pendaftaran_asleb:pendaftaran_list')
 
 
@@ -346,11 +311,7 @@ def reject_pendaftaran(request, pk):
     pendaftaran = get_object_or_404(PendaftaranAsleb, pk=pk)
     pendaftaran.status = 'ditolak'
     pendaftaran.save(update_fields=['status', 'diperbarui_pada'])
-<<<<<<< HEAD
-    messages.warning(request, 'Pendaftaran asleb ditandai ditolak.')
-=======
     messages.warning(request, 'Pendaftaran aslab ditandai ditolak.')
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     return redirect('pendaftaran_asleb:pendaftaran_list')
 
 
@@ -359,21 +320,13 @@ def generate_asleb(request, pk):
     pendaftaran = get_object_or_404(PendaftaranAsleb, pk=pk)
 
     if pendaftaran.status != 'diterima':
-<<<<<<< HEAD
-        messages.error(request, 'Hanya pendaftaran yang diterima yang bisa digenerate ke Data Asleb.')
-=======
         messages.error(request, 'Hanya pendaftaran yang diterima yang bisa digenerate ke Data Aslab.')
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
         return redirect('pendaftaran_asleb:pendaftaran_list')
 
     create_or_update_asleb_from_pendaftaran(pendaftaran)
     pendaftaran.status = 'digenerate'
     pendaftaran.save(update_fields=['status', 'diperbarui_pada'])
-<<<<<<< HEAD
-    messages.success(request, 'Pendaftaran berhasil digenerate ke Data Asleb.')
-=======
     messages.success(request, 'Pendaftaran berhasil digenerate ke Data Aslab.')
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     return redirect('asleb:asleb_list')
 
 
@@ -389,11 +342,7 @@ def generate_all_accepted_asleb(request):
         generated_count += 1
 
     if generated_count:
-<<<<<<< HEAD
-        messages.success(request, f'{generated_count} pendaftar diterima berhasil digenerate ke Data Asleb.')
-=======
         messages.success(request, f'{generated_count} pendaftar diterima berhasil digenerate ke Data Aslab.')
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     else:
         messages.warning(request, 'Belum ada pendaftar berstatus diterima untuk digenerate.')
 
@@ -410,15 +359,9 @@ def toggle_pendaftaran_status(request):
     notified_count = notify_pendaftaran_dibuka() if pengaturan.dibuka else 0
 
     if notified_count:
-<<<<<<< HEAD
-        messages.success(request, f'Pendaftaran asleb berhasil {status}. Notifikasi email dikirim ke {notified_count} akun.')
-    else:
-        messages.success(request, f'Pendaftaran asleb berhasil {status}.')
-=======
         messages.success(request, f'Pendaftaran aslab berhasil {status}. Notifikasi email dikirim ke {notified_count} akun.')
     else:
         messages.success(request, f'Pendaftaran aslab berhasil {status}.')
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     return redirect('pendaftaran_asleb:pendaftaran_list')
 
 
@@ -446,11 +389,7 @@ def notify_pendaftaran_dibuka():
 
     for email in recipients:
         sent = send_mail(
-<<<<<<< HEAD
-            subject='Pendaftaran Asleb Project Laboran Dibuka',
-=======
             subject='Pendaftaran Aslab Project Laboran Dibuka',
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
             message=(
                 'Pendaftaran asisten laboratorium sudah dibuka.\n\n'
                 f'Silakan daftar melalui link berikut:\n{registration_url}\n\n'
@@ -477,11 +416,7 @@ def create_or_update_asleb_from_pendaftaran(pendaftaran):
             'matkul': str(pendaftaran.matkul),
             'status': 'aktif',
             'tanggal_bergabung': timezone.localdate(),
-<<<<<<< HEAD
-            'catatan': f'Digenerate dari pendaftaran asleb tanggal {pendaftaran.tanggal_daftar:%d-%m-%Y}.',
-=======
             'catatan': f'Digenerate dari pendaftaran aslab tanggal {pendaftaran.tanggal_daftar:%d-%m-%Y}.',
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
         },
     )
     promote_pengguna_to_asisten_lab(pendaftaran)

@@ -45,8 +45,6 @@ class Pengguna(models.Model):
         ('laki_laki', 'Laki-laki'),
         ('perempuan', 'Perempuan'),
     ]
-<<<<<<< HEAD
-=======
     THEME_MODE_CHOICES = [
         ('light', 'Terang'),
         ('dark', 'Gelap'),
@@ -59,17 +57,12 @@ class Pengguna(models.Model):
         ('grid', 'Grid'),
         ('custom', 'Custom'),
     ]
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
     foto = models.ImageField(upload_to='pengguna/', blank=True, null=True)
     kode_pengguna = models.CharField(max_length=10, unique=True, blank=True, editable=False)
     nama_pengguna = models.CharField(max_length=150)
     nim_nik = models.CharField('NIM/NIK', max_length=40, unique=True)
-<<<<<<< HEAD
-    email = models.EmailField()
-=======
     email = models.EmailField(unique=True)
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     password = models.CharField(max_length=128)
     no_hp = models.CharField('No HP', max_length=30)
     alamat = models.TextField()
@@ -78,12 +71,9 @@ class Pengguna(models.Model):
     gender = models.CharField(max_length=20, choices=GENDER_CHOICES)
     role = models.CharField(max_length=30, choices=ROLE_CHOICES, default='mahasiswa')
     is_verified = models.BooleanField('Terverifikasi', default=True)
-<<<<<<< HEAD
-=======
     theme_mode = models.CharField(max_length=20, choices=THEME_MODE_CHOICES, default='light')
     background_mode = models.CharField(max_length=20, choices=BACKGROUND_MODE_CHOICES, default='default')
     background_image = models.ImageField(upload_to='pengguna/backgrounds/', blank=True, null=True)
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     notifikasi_dibaca_pada = models.DateTimeField(blank=True, null=True)
     dibuat_pada = models.DateTimeField(auto_now_add=True)
     diperbarui_pada = models.DateTimeField(auto_now=True)

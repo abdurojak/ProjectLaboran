@@ -1,11 +1,8 @@
 from django.shortcuts import redirect
-<<<<<<< HEAD
-=======
 from django.urls import reverse
 from django.views.generic import TemplateView
 
 from apps.pengguna.forms import PenggunaAppearanceForm
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
 
 class PostOnlyDeleteMixin:
@@ -13,8 +10,6 @@ class PostOnlyDeleteMixin:
         if getattr(self, 'success_url', None):
             return redirect(self.success_url)
         return redirect(self.get_success_url())
-<<<<<<< HEAD
-=======
 
 
 class SettingsView(TemplateView):
@@ -92,4 +87,3 @@ class SettingsView(TemplateView):
         for card in cards:
             card['href'] = reverse(card['url'], args=card.get('args', []))
         return cards
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271

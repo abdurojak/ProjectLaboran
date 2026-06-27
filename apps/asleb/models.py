@@ -24,13 +24,8 @@ class Asleb(models.Model):
 
     class Meta:
         ordering = ['nama']
-<<<<<<< HEAD
-        verbose_name = 'Asleb'
-        verbose_name_plural = 'Data Asleb'
-=======
         verbose_name = 'Aslab'
         verbose_name_plural = 'Data Aslab'
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
     def __str__(self):
         return f'{self.nama} - {self.nim}'
@@ -85,8 +80,6 @@ class HonorAsleb(models.Model):
     nama_pemilik_transfer = models.CharField('Nama Pemilik Rekening/E-Wallet', max_length=150, blank=True)
     tanggal_transfer = models.DateField(blank=True, null=True)
     bukti_transfer = models.FileField('Bukti Screenshot Transfer', upload_to='honor_asleb/bukti_transfer/', blank=True)
-<<<<<<< HEAD
-=======
     assigned_laboran = models.ForeignKey(
         'pengguna.Pengguna',
         on_delete=models.SET_NULL,
@@ -96,7 +89,6 @@ class HonorAsleb(models.Model):
         limit_choices_to={'role': 'laboran'},
         verbose_name='Laboran Penanggung Jawab TF',
     )
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     pic_transfer = models.CharField(max_length=120, blank=True)
     keterangan = models.CharField(max_length=200, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
@@ -105,13 +97,8 @@ class HonorAsleb(models.Model):
 
     class Meta:
         ordering = ['-bulan', 'asleb__nama']
-<<<<<<< HEAD
-        verbose_name = 'Honor Asleb'
-        verbose_name_plural = 'Honor Asleb'
-=======
         verbose_name = 'Honor Aslab'
         verbose_name_plural = 'Honor Aslab'
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
     def __str__(self):
         return f'{self.asleb.nama} - {self.bulan:%B %Y} - {self.jumlah}'
@@ -151,11 +138,6 @@ class HonorAsleb(models.Model):
     def save(self, *args, **kwargs):
         self.level = self.asleb.level_otomatis
         self.fill_transfer_from_registration()
-<<<<<<< HEAD
-        self.jumlah = self.total_honor
-        super().save(*args, **kwargs)
-
-=======
         if not self.assigned_laboran_id:
             self.assigned_laboran = self.get_next_laboran_for_transfer()
         self.jumlah = self.total_honor
@@ -181,7 +163,6 @@ class HonorAsleb(models.Model):
         }
         return min(laboran_list, key=lambda laboran: (load_by_laboran.get(laboran.pk, 0), laboran.nama_pengguna, laboran.pk))
 
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     def fill_transfer_from_registration(self):
         if self.nomor_transfer and self.nama_pemilik_transfer:
             return
@@ -203,8 +184,6 @@ class HonorAsleb(models.Model):
             self.nama_pemilik_transfer = registration.nama
 
 
-<<<<<<< HEAD
-=======
 def default_surat_honor_expires_at():
     today = timezone.localdate()
     try:
@@ -264,19 +243,13 @@ class SuratHonorAsleb(models.Model):
         return f'Rp {self.total_honor:,.0f}'.replace(',', '.')
 
 
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 class PengaturanAbsensiAsleb(models.Model):
     dibuka = models.BooleanField(default=False)
     diperbarui_pada = models.DateTimeField(auto_now=True)
 
     class Meta:
-<<<<<<< HEAD
-        verbose_name = 'Pengaturan Absensi Asleb'
-        verbose_name_plural = 'Pengaturan Absensi Asleb'
-=======
         verbose_name = 'Pengaturan Absensi Aslab'
         verbose_name_plural = 'Pengaturan Absensi Aslab'
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
     @classmethod
     def get_solo(cls):
@@ -284,11 +257,7 @@ class PengaturanAbsensiAsleb(models.Model):
         return pengaturan
 
     def __str__(self):
-<<<<<<< HEAD
-        return 'Absensi Asleb Dibuka' if self.dibuka else 'Absensi Asleb Ditutup'
-=======
         return 'Absensi Aslab Dibuka' if self.dibuka else 'Absensi Aslab Ditutup'
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
 
 class AbsensiAsleb(models.Model):
@@ -310,13 +279,8 @@ class AbsensiAsleb(models.Model):
         constraints = [
             models.UniqueConstraint(fields=['asleb', 'modul'], name='unique_absensi_asleb_per_modul'),
         ]
-<<<<<<< HEAD
-        verbose_name = 'Absensi Asleb'
-        verbose_name_plural = 'Absensi Asleb'
-=======
         verbose_name = 'Absensi Aslab'
         verbose_name_plural = 'Absensi Aslab'
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
     def __str__(self):
         return f'{self.asleb.nama} - Modul {self.modul}'

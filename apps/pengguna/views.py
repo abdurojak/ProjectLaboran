@@ -10,10 +10,7 @@ from django.conf import settings
 from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
-<<<<<<< HEAD
-=======
 from django.utils.http import url_has_allowed_host_and_scheme
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, UpdateView, View
 
 from apps.asleb.models import Asleb
@@ -21,35 +18,23 @@ from apps.core.views import PostOnlyDeleteMixin
 
 from .forms import (
     ChangePasswordForm,
-<<<<<<< HEAD
-=======
     FakultasForm,
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     ForgotPasswordRequestForm,
     LoginPenggunaForm,
     PenggunaForm,
     PenggunaProfileForm,
-<<<<<<< HEAD
-=======
     ProdiForm,
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     RegisterPenggunaForm,
     ResetPasswordForm,
     VerificationCodeForm,
 )
-<<<<<<< HEAD
-from .models import Pengguna
-=======
 from .models import Fakultas, Pengguna, Prodi
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
 
 OTP_SESSION_KEY = 'pengguna_otp'
 OTP_EXPIRE_MINUTES = 10
 
 
-<<<<<<< HEAD
-=======
 class AdminRequiredMixin:
     def dispatch(self, request, *args, **kwargs):
         pengguna = getattr(request, 'current_pengguna', None)
@@ -68,7 +53,6 @@ class AdminPenggunaRequiredMixin:
         return super().dispatch(request, *args, **kwargs)
 
 
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 def generate_otp_code():
     return f'{random.randint(0, 999999):06d}'
 
@@ -163,8 +147,6 @@ class PenggunaListView(ListView):
     template_name = 'pengguna/list.html'
     context_object_name = 'pengguna_list'
 
-<<<<<<< HEAD
-=======
     ROLE_GROUPS = [
         ('Mahasiswa', 'mahasiswa'),
         ('Laboran', 'laboran'),
@@ -203,7 +185,6 @@ class PenggunaListView(ListView):
         context['can_manage_users'] = bool(pengguna and pengguna.role == 'admin')
         return context
 
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
 class PenggunaDetailView(DetailView):
     model = Pengguna
@@ -222,22 +203,14 @@ class PenggunaDetailView(DetailView):
         return context
 
 
-<<<<<<< HEAD
-class PenggunaCreateView(CreateView):
-=======
 class PenggunaCreateView(AdminPenggunaRequiredMixin, CreateView):
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     model = Pengguna
     form_class = PenggunaForm
     template_name = 'pengguna/form.html'
     success_url = reverse_lazy('pengguna:list')
 
 
-<<<<<<< HEAD
-class PenggunaUpdateView(UpdateView):
-=======
 class PenggunaUpdateView(AdminPenggunaRequiredMixin, UpdateView):
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     model = Pengguna
     form_class = PenggunaForm
     template_name = 'pengguna/form.html'
@@ -245,19 +218,13 @@ class PenggunaUpdateView(AdminPenggunaRequiredMixin, UpdateView):
     success_url = reverse_lazy('pengguna:list')
 
 
-<<<<<<< HEAD
-class PenggunaDeleteView(PostOnlyDeleteMixin, DeleteView):
-=======
 class PenggunaDeleteView(AdminPenggunaRequiredMixin, PostOnlyDeleteMixin, DeleteView):
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
     model = Pengguna
     template_name = 'pengguna/confirm_delete.html'
     context_object_name = 'pengguna'
     success_url = reverse_lazy('pengguna:list')
 
 
-<<<<<<< HEAD
-=======
 class MasterAkademikView(AdminRequiredMixin, ListView):
     model = Fakultas
     template_name = 'pengguna/master_akademik.html'
@@ -320,7 +287,6 @@ class ProdiUpdateView(AdminRequiredMixin, UpdateView):
     }
 
 
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 class PenggunaChangePasswordView(View):
     def post(self, request, pk, *args, **kwargs):
         pengguna = Pengguna.objects.get(pk=pk)
@@ -417,14 +383,10 @@ class PenggunaLoginView(FormView):
         pengguna = form.cleaned_data['pengguna']
         self.request.session['pengguna_id'] = pengguna.pk
         messages.success(self.request, f'Selamat datang, {pengguna.nama_pengguna}.')
-<<<<<<< HEAD
-        return redirect(self.request.GET.get('next') or self.success_url)
-=======
         next_url = self.request.GET.get('next')
         if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={self.request.get_host()}):
             return redirect(next_url)
         return redirect(self.success_url)
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
 
 class PenggunaRegisterView(CreateView):

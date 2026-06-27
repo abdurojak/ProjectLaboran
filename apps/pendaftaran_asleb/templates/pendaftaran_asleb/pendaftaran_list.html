@@ -1,10 +1,6 @@
 {% extends "base.html" %}
 
-<<<<<<< HEAD
-{% block title %}Pendaftaran Asleb{% endblock %}
-=======
 {% block title %}Pendaftaran Aslab{% endblock %}
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
 
 {% block content %}
 <section class="space-y-6">
@@ -15,11 +11,7 @@
                 <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
                     <i data-lucide="user-round-plus" class="h-6 w-6"></i>
                 </span>
-<<<<<<< HEAD
-                <span>Pendaftaran Asleb</span>
-=======
                 <span>Pendaftaran Aslab</span>
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
             </h2>
             <p class="mt-2 text-sm text-slate-500">Kelola calon asisten laboratorium yang mendaftar berdasarkan matkul, kontak, dan status seleksi.</p>
         </div>
@@ -68,11 +60,7 @@
             </div>
             {% if pengaturan_pendaftaran.dibuka %}
             <div class="mt-5 rounded-[24px] border border-slate-200 bg-white p-4">
-<<<<<<< HEAD
-                <img src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data={{ public_registration_url|urlencode }}" alt="QR pendaftaran asleb" class="mx-auto h-52 w-52 rounded-2xl object-contain">
-=======
                 <img src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data={{ public_registration_url|urlencode }}" alt="QR pendaftaran aslab" class="mx-auto h-52 w-52 rounded-2xl object-contain">
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
             </div>
             {% else %}
             <div class="mt-5 rounded-[24px] border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-semibold text-slate-500">
@@ -92,11 +80,7 @@
             </form>
             <div class="mt-4 grid gap-3 text-sm text-slate-600 md:grid-cols-3">
                 <div class="rounded-2xl bg-amber-50 p-4 text-amber-800"><strong>Diajukan:</strong> perlu dicek admin.</div>
-<<<<<<< HEAD
-                <div class="rounded-2xl bg-emerald-50 p-4 text-emerald-800"><strong>Diterima:</strong> siap digenerate sekaligus ke Data Asleb.</div>
-=======
                 <div class="rounded-2xl bg-emerald-50 p-4 text-emerald-800"><strong>Diterima:</strong> siap digenerate sekaligus ke Data Aslab.</div>
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
                 <div class="rounded-2xl bg-rose-50 p-4 text-rose-800"><strong>Ditolak:</strong> tidak diproses lanjut.</div>
             </div>
         </div>
@@ -208,11 +192,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-<<<<<<< HEAD
-                        <td colspan="9" class="py-12 text-center text-slate-500">Belum ada pendaftaran asleb.</td>
-=======
                         <td colspan="9" class="py-12 text-center text-slate-500">Belum ada pendaftaran aslab.</td>
->>>>>>> c12dcba654e9562f68a0caec0c103cefae955271
                     </tr>
                     {% endfor %}
                 </tbody>
