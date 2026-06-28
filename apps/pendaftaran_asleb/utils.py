@@ -29,6 +29,28 @@ def extract_grade_from_transcript(file_obj, matkul=None):
     return find_grade_for_course(transcript_text, matkul) or find_grade(transcript_text)
 
 
+def analyze_transcript(file_obj, matkul=None, expected_nim=''):
+    """Extract the selected course grade and verify the account NIM."""
+    if not file_obj:
+        return None, False
+
+    filename = getattr(file_obj, 'name', '') or ''
+    text = extract_transcript_text(file_obj)
+    transcript_text = f'{filename}\n{text}'
+    grade = find_grade_for_course(transcript_text, matkul) or find_grade(transcript_text)
+    return grade, transcript_contains_nim(text, expected_nim)
+
+
+def transcript_contains_nim(text, expected_nim):
+    expected_nim = re.sub(r'\D', '', str(expected_nim or ''))
+    if not text or not expected_nim:
+        return False
+
+    # OCR sometimes inserts spaces or hyphens between otherwise adjacent digits.
+    separated_digits = r'[\s\-]*'.join(re.escape(digit) for digit in expected_nim)
+    return bool(re.search(rf'(?<!\d){separated_digits}(?!\d)', text))
+
+
 def extract_transcript_text(file_obj):
     filename = (getattr(file_obj, 'name', '') or '').lower()
 

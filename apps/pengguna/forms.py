@@ -3,6 +3,7 @@ from django.contrib.auth.hashers import check_password
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.db import OperationalError, ProgrammingError
+from pathlib import Path
 
 from .models import Fakultas, Pengguna, Prodi
 from .utils import validate_human_face_photo
@@ -155,6 +156,7 @@ class PenggunaProfileForm(forms.ModelForm):
         model = Pengguna
         fields = [
             'foto',
+            'cv',
             'nama_pengguna',
             'nim_nik',
             'email',
@@ -167,6 +169,7 @@ class PenggunaProfileForm(forms.ModelForm):
         ]
         widgets = {
             'foto': forms.FileInput(attrs={'class': 'hidden', 'accept': 'image/*'}),
+            'cv': forms.FileInput(attrs={'accept': '.pdf,.doc,.docx'}),
             'no_hp': forms.TextInput(attrs={'inputmode': 'numeric', 'pattern': '[0-9]*', 'placeholder': 'Angka saja'}),
             'alamat': forms.Textarea(attrs={'rows': 4}),
         }
@@ -183,6 +186,16 @@ class PenggunaProfileForm(forms.ModelForm):
         validate_human_face_photo(foto)
         return foto
 
+    def clean_cv(self):
+        cv = self.cleaned_data.get('cv')
+        if not cv:
+            return cv
+        if Path(cv.name).suffix.lower() not in {'.pdf', '.doc', '.docx'}:
+            raise forms.ValidationError('CV harus berupa file PDF, DOC, atau DOCX.')
+        if cv.size > 5 * 1024 * 1024:
+            raise forms.ValidationError('Ukuran CV maksimal 5 MB.')
+        return cv
+
     def clean_no_hp(self):
         no_hp = self.cleaned_data.get('no_hp', '').strip()
         if no_hp and not no_hp.isdigit():
@@ -192,6 +205,9 @@ class PenggunaProfileForm(forms.ModelForm):
     def save(self, commit=True):
         instance = super().save(commit=False)
         hapus_foto = self.data.get('hapus_foto') == '1'
+        old_cv = None
+        if instance.pk:
+            old_cv = Pengguna.objects.filter(pk=instance.pk).values_list('cv', flat=True).first()
 
         if self.current_pengguna and self.current_pengguna.role == 'mahasiswa':
             instance.role = self.instance.role
@@ -202,6 +218,9 @@ class PenggunaProfileForm(forms.ModelForm):
         if commit:
             instance.save()
             self.save_m2m()
+            new_cv = instance.cv.name if instance.cv else ''
+            if old_cv and old_cv != new_cv:
+                instance._meta.get_field('cv').storage.delete(old_cv)
 
         return instance
 

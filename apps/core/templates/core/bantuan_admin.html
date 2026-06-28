@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Chat Bantuan Masuk{% endblock %}
+
+{% block content %}
+<section class="min-w-0 space-y-6">
+    <div>
+        <p class="text-sm font-bold uppercase tracking-[0.2em] text-cyan-700">Admin</p>
+        <h2 class="mt-2 text-3xl font-black text-slate-900">Chat Bantuan Masuk</h2>
+        <p class="mt-2 text-sm text-slate-500">Percakapan yang tidak terselesaikan oleh bot akan muncul di sini.</p>
+    </div>
+
+    <div class="grid min-h-[580px] overflow-hidden rounded-lg border border-slate-200 bg-white lg:grid-cols-[300px_minmax(0,1fr)]">
+        <aside class="border-b border-slate-200 bg-slate-50 p-4 lg:border-b-0 lg:border-r">
+            <div class="mb-3 text-xs font-black uppercase text-slate-500">Antrean ({{ percakapan_list|length }})</div>
+            <div class="space-y-2">
+                {% for item in percakapan_list %}
+                <a href="{% url 'core:bantuan_admin' %}?percakapan={{ item.pk }}" class="block rounded-lg border {% if percakapan.pk == item.pk %}border-cyan-300 bg-cyan-50{% else %}border-slate-200 bg-white{% endif %} p-3 hover:border-cyan-300">
+                    <div class="font-bold text-slate-900">{{ item.pengguna.nama_pengguna }}</div>
+                    <div class="mt-1 text-xs text-slate-500">{{ item.pengguna.get_role_display }} · {{ item.diperbarui_pada|date:"d M H:i" }}</div>
+                </a>
+                {% empty %}
+                <p class="rounded-lg border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500">Tidak ada antrean.</p>
+                {% endfor %}
+            </div>
+        </aside>
+
+        <div class="flex min-w-0 flex-col">
+            {% if percakapan %}
+            <div class="border-b border-slate-200 px-5 py-4">
+                <div class="font-black text-slate-900">{{ percakapan.pengguna.nama_pengguna }}</div>
+                <div class="text-sm text-slate-500">{{ percakapan.pengguna.nim_nik }} · {{ percakapan.pengguna.email }}</div>
+            </div>
+            <div class="max-h-[430px] flex-1 space-y-3 overflow-y-auto p-5" data-chat-messages>
+                {% for pesan in percakapan.pesan.all %}
+                <div class="flex {% if pesan.pengirim == 'admin' %}justify-end{% else %}justify-start{% endif %}">
+                    <div class="max-w-[85%] rounded-2xl {% if pesan.pengirim == 'admin' %}bg-brand-700 text-white{% elif pesan.pengirim == 'pengguna' %}bg-slate-100 text-slate-800{% else %}border border-cyan-200 bg-cyan-50 text-cyan-900{% endif %} px-4 py-3 text-sm">
+                        <div class="text-xs font-black uppercase opacity-70">{{ pesan.get_pengirim_display }}</div>
+                        <div class="mt-1 whitespace-pre-wrap break-words">{{ pesan.isi }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="border-t border-slate-200 bg-slate-50 p-4">
+                <form method="post" class="flex flex-col gap-3 sm:flex-row">
+                    {% csrf_token %}<input type="hidden" name="percakapan" value="{{ percakapan.pk }}">
+                    <textarea name="pesan" rows="2" maxlength="1000" class="flex-1 resize-none" placeholder="Tulis balasan admin..."></textarea>
+                    <button type="submit" class="btn-primary justify-center gap-2"><i data-lucide="send" class="h-4 w-4"></i><span>Balas</span></button>
+                    <button type="submit" name="action" value="selesai" class="btn-secondary justify-center gap-2"><i data-lucide="check" class="h-4 w-4"></i><span>Selesai</span></button>
+                </form>
+            </div>
+            {% else %}
+            <div class="flex flex-1 items-center justify-center p-8 text-center text-slate-500">Pilih percakapan bantuan untuk mulai membalas.</div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_script %}<script>document.addEventListener('DOMContentLoaded',function(){const e=document.querySelector('[data-chat-messages]');if(e)e.scrollTop=e.scrollHeight;});</script>{% endblock %}

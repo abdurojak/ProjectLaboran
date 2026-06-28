@@ -166,7 +166,7 @@ class PublicTranskripForm(forms.Form):
     transkrip = forms.FileField(
         label='Upload Transkrip Nilai',
         widget=forms.FileInput(attrs={'accept': '.pdf,.png,.jpg,.jpeg,.webp,.txt,.csv'}),
-        help_text='Upload transkrip PDF/gambar. Sistem akan membaca nilai mata kuliah yang dipilih.',
+        help_text='Upload transkrip PDF/gambar. Sistem akan mencocokkan NIM akun dan membaca nilai mata kuliah yang dipilih.',
     )
 
 
@@ -180,7 +180,6 @@ class PublicBerkasPendaftaranForm(forms.Form):
     email = forms.EmailField(required=False)
     program_studi = forms.CharField(max_length=120, widget=forms.TextInput(attrs={'placeholder': 'Program studi'}))
     semester = forms.ChoiceField(choices=SEMESTER_CHOICES)
-    cv = forms.FileField(label='CV', widget=forms.FileInput(attrs={'accept': '.pdf,.doc,.docx'}))
     metode_rekening = forms.ChoiceField(choices=PendaftaranAsleb.METODE_REKENING_CHOICES)
     rekening = forms.CharField(max_length=150, widget=forms.TextInput(attrs={'placeholder': 'Contoh: BCA 123456789 / DANA 0812xxxx / OVO 0812xxxx'}))
     alasan = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 4, 'placeholder': 'Alasan atau catatan pendaftaran'}))

@@ -26,7 +26,7 @@ from .forms import (
     decode_signature_data,
 )
 from .models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb
-from .utils import extract_grade_from_transcript, get_public_registration_url, is_passing_grade
+from .utils import analyze_transcript, get_public_registration_url, is_passing_grade
 
 
 WIZARD_SESSION_KEY = 'pendaftaran_asleb_wizard'
@@ -159,6 +159,13 @@ class PendaftaranAslebPublicCreateView(View):
         return redirect('pendaftaran_asleb:pendaftaran_public')
 
     def handle_matkul_step(self, request):
+        current_pengguna = getattr(request, 'current_pengguna', None) or get_session_pengguna(request)
+        if not current_pengguna or not current_pengguna.cv:
+            messages.warning(request, 'Lengkapi CV pada profil terlebih dahulu sebelum mendaftar sebagai aslab.')
+            if current_pengguna:
+                return redirect('pengguna:detail', pk=current_pengguna.pk)
+            return redirect('pengguna:login')
+
         form = PublicPilihMatkulForm(request.POST)
         if not form.is_valid():
             return self.render_current_step(request, matkul_form=form)
@@ -183,16 +190,44 @@ class PendaftaranAslebPublicCreateView(View):
             request.session.modified = True
             return redirect('pendaftaran_asleb:pendaftaran_public')
 
+        current_pengguna = getattr(request, 'current_pengguna', None) or get_session_pengguna(request)
+        if not current_pengguna or not current_pengguna.cv:
+            messages.warning(request, 'CV profil belum tersedia. Lengkapi CV sebelum melanjutkan pendaftaran aslab.')
+            if current_pengguna:
+                return redirect('pengguna:detail', pk=current_pengguna.pk)
+            return redirect('pengguna:login')
+
         form = PublicTranskripForm(request.POST, request.FILES)
         if not form.is_valid():
             return self.render_current_step(request, transkrip_form=form)
 
         transkrip = form.cleaned_data['transkrip']
-        detected_grade = extract_grade_from_transcript(transkrip, matkul) or 'tidak_terbaca'
+        detected_grade, nim_matches = analyze_transcript(
+            transkrip,
+            matkul,
+            getattr(current_pengguna, 'nim_nik', ''),
+        )
+        detected_grade = detected_grade or 'tidak_terbaca'
         transkrip.seek(0)
         old_transkrip_path = wizard.get('transkrip_path')
         if old_transkrip_path:
             default_storage.delete(old_transkrip_path)
+        if not nim_matches:
+            wizard.update({
+                'step': 'transkrip',
+                'transkrip_path': None,
+                'transkrip_name': None,
+                'nilai_transkrip': None,
+                'nilai_lolos': False,
+                'nim_terverifikasi': False,
+            })
+            request.session.modified = True
+            messages.error(
+                request,
+                'NIM pada transkrip tidak cocok dengan NIM akun atau tidak dapat dibaca. Upload transkrip milik Anda.',
+            )
+            return redirect('pendaftaran_asleb:pendaftaran_public')
+
         safe_name = get_valid_filename(transkrip.name)
         temp_path = default_storage.save(
             f'pendaftaran_asleb/transkrip_tmp/{uuid.uuid4().hex}-{safe_name}',
@@ -204,6 +239,7 @@ class PendaftaranAslebPublicCreateView(View):
             'transkrip_name': safe_name,
             'nilai_transkrip': detected_grade,
             'nilai_lolos': is_passing_grade(detected_grade),
+            'nim_terverifikasi': True,
         })
         request.session.modified = True
         if is_passing_grade(detected_grade):
@@ -215,12 +251,22 @@ class PendaftaranAslebPublicCreateView(View):
     def handle_berkas_step(self, request):
         wizard = self.get_wizard(request)
         matkul = self.get_selected_matkul(wizard)
-        if not matkul or not wizard.get('nilai_lolos') or not wizard.get('transkrip_path'):
+        if (
+            not matkul
+            or not wizard.get('nim_terverifikasi')
+            or not wizard.get('nilai_lolos')
+            or not wizard.get('transkrip_path')
+        ):
             wizard['step'] = 'matkul'
             request.session.modified = True
             return redirect('pendaftaran_asleb:pendaftaran_public')
 
         current_pengguna = getattr(request, 'current_pengguna', None) or get_session_pengguna(request)
+        if not current_pengguna or not current_pengguna.cv:
+            messages.warning(request, 'CV profil belum tersedia. Lengkapi CV sebelum melanjutkan pendaftaran aslab.')
+            if current_pengguna:
+                return redirect('pengguna:detail', pk=current_pengguna.pk)
+            return redirect('pengguna:login')
         form = PublicBerkasPendaftaranForm(request.POST, request.FILES, current_pengguna=current_pengguna)
         if not form.is_valid():
             return self.render_current_step(request, berkas_form=form)
@@ -228,6 +274,8 @@ class PendaftaranAslebPublicCreateView(View):
         signature_file = decode_signature_data(form.cleaned_data.get('signature_data'))
         with default_storage.open(wizard['transkrip_path'], 'rb') as transkrip_file:
             transkrip_content = ContentFile(transkrip_file.read(), name=wizard.get('transkrip_name') or 'transkrip.pdf')
+        with current_pengguna.cv.open('rb') as profile_cv:
+            cv_content = ContentFile(profile_cv.read(), name=current_pengguna.cv.name.rsplit('/', 1)[-1])
 
         pendaftaran = PendaftaranAsleb(
             nama=form.cleaned_data['nama'],
@@ -237,7 +285,7 @@ class PendaftaranAslebPublicCreateView(View):
             program_studi=form.cleaned_data['program_studi'],
             semester=form.cleaned_data['semester'],
             matkul=matkul,
-            cv=form.cleaned_data['cv'],
+            cv=cv_content,
             transkrip=transkrip_content,
             tanda_tangan=signature_file,
             metode_rekening=form.cleaned_data['metode_rekening'],
@@ -274,7 +322,11 @@ class PendaftaranAslebPublicCreateView(View):
             wizard['step'] = 'matkul'
             request.session.modified = True
             context['step'] = 'matkul'
-        if step == 'berkas' and (not matkul or not wizard.get('nilai_lolos')):
+        if step == 'berkas' and (
+            not matkul
+            or not wizard.get('nim_terverifikasi')
+            or not wizard.get('nilai_lolos')
+        ):
             wizard['step'] = 'transkrip'
             request.session.modified = True
             context['step'] = 'transkrip'

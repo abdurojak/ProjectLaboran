@@ -1,10 +1,8 @@
-import hashlib
-
 from django import forms
 
 from apps.pengguna.models import Pengguna
 
-from .models import AbsensiAsleb, Asleb, HonorAsleb, SuratHonorAsleb
+from .models import AbsensiAsleb, Asleb, HonorAsleb, ModulPraktikum, SuratHonorAsleb
 
 
 class AslebForm(forms.ModelForm):
@@ -113,63 +111,51 @@ class SuratHonorAslebGenerateForm(forms.Form):
 
 
 class AbsensiAslebForm(forms.ModelForm):
+    modul_praktikum = forms.ModelChoiceField(
+        label='Modul Praktikum',
+        queryset=ModulPraktikum.objects.none(),
+        empty_label='Pilih modul yang belum diabsen',
+    )
+
     class Meta:
         model = AbsensiAsleb
         fields = [
             'tanggal_praktikum',
-            'modul',
-            'materi_praktikum',
+            'modul_praktikum',
             'pekerjaan',
-            'file_modul',
             'bukti_video',
         ]
         widgets = {
             'tanggal_praktikum': forms.DateInput(attrs={'type': 'date'}),
             'pekerjaan': forms.Textarea(attrs={'rows': 4}),
-            'file_modul': forms.FileInput(attrs={'accept': '.pdf,.doc,.docx,.ppt,.pptx,.zip'}),
             'bukti_video': forms.FileInput(attrs={'accept': 'video/*'}),
         }
 
     def __init__(self, *args, **kwargs):
         self.asleb = kwargs.pop('asleb')
         super().__init__(*args, **kwargs)
-        used_modules = set(AbsensiAsleb.objects.filter(asleb=self.asleb).values_list('modul', flat=True))
-        current_module = self.instance.modul if self.instance and self.instance.pk else None
-        choices = [
-            (value, label)
-            for value, label in AbsensiAsleb.MODUL_CHOICES
-            if value not in used_modules or value == current_module
-        ]
-        self.fields['modul'].choices = [('', 'Pilih modul'), *choices]
+        matkul = get_asleb_matkul(self.asleb)
+        used_modules = AbsensiAsleb.objects.filter(
+            asleb=self.asleb,
+            modul_praktikum__isnull=False,
+        ).values_list('modul_praktikum_id', flat=True)
+        queryset = ModulPraktikum.objects.none()
+        if matkul:
+            queryset = ModulPraktikum.objects.filter(matkul=matkul).exclude(pk__in=used_modules)
+        self.fields['modul_praktikum'].queryset = queryset
 
-    def clean_modul(self):
-        modul = self.cleaned_data['modul']
-        duplicate = AbsensiAsleb.objects.filter(asleb=self.asleb, modul=modul)
-        if self.instance and self.instance.pk:
-            duplicate = duplicate.exclude(pk=self.instance.pk)
-
-        if duplicate.exists():
-            raise forms.ValidationError('Modul ini sudah pernah diabsen. Pilih modul lain.')
-
+    def clean_modul_praktikum(self):
+        modul = self.cleaned_data['modul_praktikum']
+        if AbsensiAsleb.objects.filter(asleb=self.asleb, modul_praktikum=modul).exists():
+            raise forms.ValidationError('Modul ini sudah pernah diabsen dan tidak dapat dipilih lagi.')
         return modul
-
-    def clean_file_modul(self):
-        file_modul = self.cleaned_data['file_modul']
-        file_hash = hash_uploaded_file(file_modul)
-        duplicate = AbsensiAsleb.objects.filter(file_modul_hash=file_hash)
-
-        if self.instance and self.instance.pk:
-            duplicate = duplicate.exclude(pk=self.instance.pk)
-
-        if duplicate.exists():
-            raise forms.ValidationError('Berkas modul ini sudah pernah diupload. Gunakan file modul yang berbeda.')
-
-        self.cleaned_data['file_modul_hash'] = file_hash
-        return file_modul
 
     def save(self, commit=True):
         instance = super().save(commit=False)
-        instance.file_modul_hash = self.cleaned_data.get('file_modul_hash', instance.file_modul_hash)
+        modul = self.cleaned_data['modul_praktikum']
+        instance.modul = modul.nomor
+        instance.materi_praktikum = modul.judul
+        instance.file_modul.name = modul.file.name
 
         if commit:
             instance.save()
@@ -177,9 +163,24 @@ class AbsensiAslebForm(forms.ModelForm):
         return instance
 
 
-def hash_uploaded_file(uploaded_file):
-    digest = hashlib.sha256()
-    for chunk in uploaded_file.chunks():
-        digest.update(chunk)
-    uploaded_file.seek(0)
-    return digest.hexdigest()
+class ModulPraktikumForm(forms.ModelForm):
+    class Meta:
+        model = ModulPraktikum
+        fields = ['matkul', 'nomor', 'judul', 'file']
+        widgets = {
+            'nomor': forms.NumberInput(attrs={'min': 1}),
+            'judul': forms.TextInput(attrs={'placeholder': 'Judul atau materi modul'}),
+            'file': forms.FileInput(attrs={'accept': '.pdf,.doc,.docx,.ppt,.pptx,.zip'}),
+        }
+
+
+def get_asleb_matkul(asleb):
+    from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb
+
+    registration = PendaftaranAsleb.objects.filter(
+        nim=asleb.nim,
+        status__in=['diterima', 'digenerate'],
+    ).select_related('matkul').order_by('-pk').first()
+    if registration:
+        return registration.matkul
+    return next((matkul for matkul in MataKuliahAsleb.objects.filter(aktif=True) if str(matkul) == asleb.matkul), None)

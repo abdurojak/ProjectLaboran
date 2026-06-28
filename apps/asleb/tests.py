@@ -9,7 +9,7 @@ from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb
 from apps.pengguna.models import Pengguna
 
 from .forms import AbsensiAslebForm
-from .models import Asleb, HonorAsleb, PengaturanAbsensiAsleb
+from .models import AbsensiAsleb, Asleb, HonorAsleb, ModulPraktikum, PengaturanAbsensiAsleb
 from .surat_honor import LAB_SIGNATURES, build_lab_signature, build_lampiran_page, build_styles
 
 
@@ -85,6 +85,54 @@ class AslebViewTests(TestCase):
         self.assertContains(response, 'mx-auto min-w-0 max-w-4xl')
         self.assertContains(response, 'min-w-0 max-w-full overflow-hidden')
         self.assertContains(response, 'w-full justify-center sm:w-auto')
+
+    def test_asisten_lab_tidak_dapat_menambah_modul(self):
+        aslab_user = Pengguna.objects.create(
+            nama_pengguna='Siti Nurhaliza',
+            nim_nik=self.asleb.nim,
+            email='siti-modul@example.com',
+            password='rahasia123',
+            no_hp='081234567891',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='asisten_lab',
+        )
+        session = self.client.session
+        session['pengguna_id'] = aslab_user.pk
+        session.save()
+
+        response = self.client.get(reverse('asleb:modul_create'))
+
+        self.assertRedirects(response, reverse('dashboard:home'))
+
+    def test_laboran_dapat_menambah_modul_matkul(self):
+        laboran = Pengguna.objects.create(
+            nama_pengguna='Laboran Modul',
+            nim_nik='1000000099',
+            email='laboran-modul@example.com',
+            password='rahasia123',
+            no_hp='081234567899',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='laboran',
+        )
+        session = self.client.session
+        session['pengguna_id'] = laboran.pk
+        session.save()
+
+        response = self.client.post(reverse('asleb:modul_create'), {
+            'matkul': self.matkul.pk,
+            'nomor': 1,
+            'judul': 'Pengenalan Struktur Data',
+            'file': SimpleUploadedFile('modul-sda.pdf', b'isi modul', content_type='application/pdf'),
+        })
+
+        self.assertRedirects(response, reverse('asleb:absensi_list'))
+        self.assertTrue(ModulPraktikum.objects.filter(matkul=self.matkul, nomor=1, diunggah_oleh=laboran).exists())
 
     def test_asleb_search_filters_data(self):
         response = self.client.get(reverse('asleb:asleb_list'), {'q': '2301001'})
@@ -201,16 +249,30 @@ class AslebViewTests(TestCase):
         self.assertEqual(signature._cellvalues[2][0].style.alignment, TA_RIGHT)
         self.assertEqual(build_lab_signature(build_styles(), lab_name)._cellvalues[0][1]._cellvalues[2][0].text, LAB_SIGNATURES[lab_name])
 
-    def test_absensi_menolak_file_modul_yang_sama(self):
+    def test_absensi_menolak_modul_yang_sudah_dipakai(self):
+        PendaftaranAsleb.objects.create(
+            nama=self.asleb.nama,
+            nim=self.asleb.nim,
+            no_hp=self.asleb.no_hp,
+            email=self.asleb.email,
+            program_studi=self.asleb.program_studi,
+            semester=self.asleb.semester,
+            matkul=self.matkul,
+            status='digenerate',
+        )
+        modul = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=1,
+            judul='Pengenalan Struktur Data',
+            file=SimpleUploadedFile('modul-1.pdf', b'isi modul', content_type='application/pdf'),
+        )
         first_form = AbsensiAslebForm(
             data={
                 'tanggal_praktikum': '2026-04-01',
-                'modul': 1,
-                'materi_praktikum': 'Materi 1',
+                'modul_praktikum': modul.pk,
                 'pekerjaan': 'Membantu praktikum',
             },
             files={
-                'file_modul': SimpleUploadedFile('modul-1.pdf', b'isi modul sama', content_type='application/pdf'),
                 'bukti_video': SimpleUploadedFile('video-1.mp4', b'video 1', content_type='video/mp4'),
             },
             asleb=self.asleb,
@@ -223,19 +285,17 @@ class AslebViewTests(TestCase):
         second_form = AbsensiAslebForm(
             data={
                 'tanggal_praktikum': '2026-04-02',
-                'modul': 2,
-                'materi_praktikum': 'Materi 2',
+                'modul_praktikum': modul.pk,
                 'pekerjaan': 'Membantu praktikum',
             },
             files={
-                'file_modul': SimpleUploadedFile('modul-duplikat.pdf', b'isi modul sama', content_type='application/pdf'),
                 'bukti_video': SimpleUploadedFile('video-2.mp4', b'video 2', content_type='video/mp4'),
             },
             asleb=self.asleb,
         )
 
         self.assertFalse(second_form.is_valid())
-        self.assertIn('file_modul', second_form.errors)
+        self.assertIn('modul_praktikum', second_form.errors)
 
     def create_pendaftaran_history(self, nim, count):
         for index in range(count):

@@ -260,10 +260,48 @@ class PengaturanAbsensiAsleb(models.Model):
         return 'Absensi Aslab Dibuka' if self.dibuka else 'Absensi Aslab Ditutup'
 
 
+class ModulPraktikum(models.Model):
+    matkul = models.ForeignKey(
+        'pendaftaran_asleb.MataKuliahAsleb',
+        on_delete=models.PROTECT,
+        related_name='modul_praktikum',
+    )
+    nomor = models.PositiveSmallIntegerField()
+    judul = models.CharField(max_length=200)
+    file = models.FileField(upload_to='modul_praktikum/')
+    diunggah_oleh = models.ForeignKey(
+        'pengguna.Pengguna',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='modul_praktikum_diunggah',
+    )
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+    diperbarui_pada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['matkul__nama', 'matkul__kelas', 'nomor']
+        constraints = [
+            models.UniqueConstraint(fields=['matkul', 'nomor'], name='unique_nomor_modul_per_matkul'),
+        ]
+        verbose_name = 'Modul Praktikum'
+        verbose_name_plural = 'Modul Praktikum'
+
+    def __str__(self):
+        return f'Modul {self.nomor} - {self.judul}'
+
+
 class AbsensiAsleb(models.Model):
     MODUL_CHOICES = [(number, f'Modul {number}') for number in range(1, 17)]
 
     asleb = models.ForeignKey(Asleb, on_delete=models.CASCADE, related_name='absensi')
+    modul_praktikum = models.ForeignKey(
+        ModulPraktikum,
+        on_delete=models.PROTECT,
+        related_name='absensi',
+        blank=True,
+        null=True,
+    )
     tanggal_praktikum = models.DateField(default=timezone.localdate)
     modul = models.PositiveSmallIntegerField(choices=MODUL_CHOICES)
     materi_praktikum = models.CharField(max_length=200, blank=True)
@@ -278,6 +316,10 @@ class AbsensiAsleb(models.Model):
         ordering = ['-tanggal_praktikum', 'asleb__nama', 'modul']
         constraints = [
             models.UniqueConstraint(fields=['asleb', 'modul'], name='unique_absensi_asleb_per_modul'),
+            models.UniqueConstraint(
+                fields=['asleb', 'modul_praktikum'],
+                name='unique_absensi_asleb_per_modul_praktikum',
+            ),
         ]
         verbose_name = 'Absensi Aslab'
         verbose_name_plural = 'Absensi Aslab'

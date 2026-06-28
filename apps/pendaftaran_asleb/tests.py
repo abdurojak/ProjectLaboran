@@ -104,6 +104,7 @@ class PendaftaranAslebViewTests(TestCase):
             gender='perempuan',
             role='mahasiswa',
             is_verified=True,
+            cv=SimpleUploadedFile('cv-siti.pdf', b'cv siti', content_type='application/pdf'),
         )
         pengaturan = PengaturanPendaftaranAsleb.get_solo()
         pengaturan.dibuka = True
@@ -139,6 +140,7 @@ class PendaftaranAslebViewTests(TestCase):
             'transkrip_name': 'test-transkrip.pdf',
             'nilai_transkrip': 'A',
             'nilai_lolos': True,
+            'nim_terverifikasi': True,
         }
         session.save()
 
@@ -159,6 +161,106 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertEqual(pendaftaran.email, mahasiswa.email)
         self.assertEqual(pendaftaran.program_studi, mahasiswa.prodi)
         self.assertTrue(pendaftaran.tanda_tangan)
+
+    def test_pilih_matkul_ditolak_jika_cv_profil_belum_ada(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Tanpa CV',
+            nim_nik='0642201099',
+            email='tanpacv@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081111111199',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+            is_verified=True,
+        )
+        pengaturan = PengaturanPendaftaranAsleb.get_solo()
+        pengaturan.dibuka = True
+        pengaturan.save(update_fields=['dibuka'])
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+
+        response = self.client.post(
+            reverse('pendaftaran_asleb:pendaftaran_public'),
+            {'matkul': self.matkul.pk},
+        )
+
+        self.assertRedirects(response, reverse('pengguna:detail', args=[mahasiswa.pk]))
+
+    def test_transkrip_dengan_nim_akun_dapat_lanjut(self):
+        mahasiswa = self.create_mahasiswa_dengan_cv('0642201040')
+        self.start_transcript_step(mahasiswa)
+        transcript = SimpleUploadedFile(
+            'transkrip.txt',
+            b'NIM: 0642201040\nStruktur Data dan Algoritma 3 A',
+            content_type='text/plain',
+        )
+
+        response = self.client.post(
+            reverse('pendaftaran_asleb:pendaftaran_public'),
+            {'transkrip': transcript},
+        )
+
+        self.assertRedirects(response, reverse('pendaftaran_asleb:pendaftaran_public'))
+        wizard = self.client.session[WIZARD_SESSION_KEY]
+        self.assertEqual(wizard['step'], 'berkas')
+        self.assertTrue(wizard['nim_terverifikasi'])
+        self.assertEqual(wizard['nilai_transkrip'], 'A')
+
+    def test_transkrip_dengan_nim_berbeda_tidak_dapat_lanjut(self):
+        mahasiswa = self.create_mahasiswa_dengan_cv('0642201041')
+        self.start_transcript_step(mahasiswa)
+        transcript = SimpleUploadedFile(
+            'transkrip.txt',
+            b'NIM: 0642209999\nStruktur Data dan Algoritma 3 A',
+            content_type='text/plain',
+        )
+
+        response = self.client.post(
+            reverse('pendaftaran_asleb:pendaftaran_public'),
+            {'transkrip': transcript},
+        )
+
+        self.assertRedirects(response, reverse('pendaftaran_asleb:pendaftaran_public'))
+        wizard = self.client.session[WIZARD_SESSION_KEY]
+        self.assertEqual(wizard['step'], 'transkrip')
+        self.assertFalse(wizard['nim_terverifikasi'])
+        self.assertFalse(wizard.get('transkrip_path'))
+
+    def create_mahasiswa_dengan_cv(self, nim):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna=f'Mahasiswa {nim}',
+            nim_nik=nim,
+            email=f'{nim}@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081111111188',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+            is_verified=True,
+            cv=SimpleUploadedFile(f'cv-{nim}.pdf', b'cv', content_type='application/pdf'),
+        )
+        pengaturan = PengaturanPendaftaranAsleb.get_solo()
+        pengaturan.dibuka = True
+        pengaturan.save(update_fields=['dibuka'])
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+        return mahasiswa
+
+    def start_transcript_step(self, mahasiswa):
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session[WIZARD_SESSION_KEY] = {
+            'step': 'transkrip',
+            'matkul_id': self.matkul.pk,
+        }
+        session.save()
 
     def test_public_form_semester_hanya_tiga_sampai_delapan(self):
         form = PendaftaranAslebPublicForm(data={

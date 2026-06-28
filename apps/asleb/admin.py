@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import AbsensiAsleb, Asleb, HonorAsleb, PengaturanAbsensiAsleb, SuratHonorAsleb
+from .models import AbsensiAsleb, Asleb, HonorAsleb, ModulPraktikum, PengaturanAbsensiAsleb, SuratHonorAsleb
 
 
 @admin.register(Asleb)
@@ -31,6 +31,13 @@ class AbsensiAslebAdmin(admin.ModelAdmin):
     list_display = ('asleb', 'tanggal_praktikum', 'modul', 'materi_praktikum', 'dibuat_pada')
     list_filter = ('tanggal_praktikum', 'modul')
     search_fields = ('asleb__nama', 'asleb__nim', 'materi_praktikum')
+
+
+@admin.register(ModulPraktikum)
+class ModulPraktikumAdmin(admin.ModelAdmin):
+    list_display = ('nomor', 'judul', 'matkul', 'diunggah_oleh', 'diperbarui_pada')
+    list_filter = ('matkul',)
+    search_fields = ('judul', 'matkul__nama', 'matkul__kode')
 
 
 @admin.register(PengaturanAbsensiAsleb)
