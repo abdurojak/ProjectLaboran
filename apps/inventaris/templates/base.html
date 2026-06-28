@@ -698,9 +698,103 @@
             {% block content %}{% endblock %}
         </section>
     </main>
+    {% if current_pengguna %}
+    <div class="fixed bottom-24 right-4 z-40 md:bottom-8 md:right-8" data-help-floating>
+        <button type="button" class="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-700 text-white shadow-xl shadow-brand-900/20 transition hover:-translate-y-0.5 hover:bg-brand-800" data-help-dialog-open aria-label="Buka chat bantuan" title="Chat Bantuan">
+            <i data-lucide="message-circle-question" class="h-6 w-6"></i>
+        </button>
+    </div>
+
+    <div class="fixed inset-0 z-[70] hidden items-end justify-center bg-slate-950/45 p-4 sm:items-center" data-help-dialog>
+        <div class="surface-card flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden">
+            <div class="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
+                <div>
+                    <p class="text-xs font-black uppercase tracking-[0.2em] text-brand-700">Bantuan</p>
+                    <h3 class="mt-1 text-xl font-black text-slate-900">Chat Bantuan</h3>
+                    <p class="mt-1 text-sm leading-6 text-slate-500">Tanyakan kendala singkat atau buka halaman bantuan lengkap.</p>
+                </div>
+                <button type="button" class="btn-secondary h-11 w-11 p-0" data-help-dialog-close aria-label="Tutup chat bantuan">
+                    <i data-lucide="x" class="h-4 w-4"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4 overflow-y-auto p-5">
+                <div class="rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">
+                    <div class="mb-1 text-xs font-black uppercase tracking-wide text-slate-500">Bot Bantuan</div>
+                    Silakan tulis pertanyaan Anda. Jika jawaban bot belum cukup, Anda tetap bisa meneruskan percakapan ke admin dari halaman bantuan.
+                </div>
+
+                <form method="post" action="{% url 'core:bantuan' %}" class="space-y-3">
+                    {% csrf_token %}
+                    <label for="id_floating_help_message" class="sr-only">Tulis pertanyaan</label>
+                    <textarea id="id_floating_help_message" name="pesan" rows="4" maxlength="1000" required class="min-h-28 resize-none" placeholder="Contoh: Bagaimana cara mengisi absensi aslab?"></textarea>
+                    <button type="submit" class="btn-primary w-full justify-center gap-2">
+                        <i data-lucide="send" class="h-4 w-4"></i>
+                        <span>Kirim Pertanyaan</span>
+                    </button>
+                </form>
+
+                <div class="grid gap-2 sm:grid-cols-2">
+                    <a href="{% url 'core:bantuan' %}" class="btn-secondary justify-center gap-2">
+                        <i data-lucide="messages-square" class="h-4 w-4"></i>
+                        <span>Halaman Bantuan</span>
+                    </a>
+                    {% if current_pengguna.role == 'admin' or current_pengguna.role == 'laboran' %}
+                    <a href="{% url 'core:bantuan_admin' %}" class="btn-secondary justify-center gap-2">
+                        <i data-lucide="headphones" class="h-4 w-4"></i>
+                        <span>Antrean Admin</span>
+                    </a>
+                    {% else %}
+                    <form method="post" action="{% url 'core:bantuan_escalate' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn-secondary w-full justify-center gap-2">
+                            <i data-lucide="headphones" class="h-4 w-4"></i>
+                            <span>Hubungi Admin</span>
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
     {% block extra_script %}{% endblock %}
     <script>
         lucide.createIcons();
+        document.addEventListener('DOMContentLoaded', function () {
+            const helpDialog = document.querySelector('[data-help-dialog]');
+            const helpOpen = document.querySelector('[data-help-dialog-open]');
+            const helpClose = document.querySelector('[data-help-dialog-close]');
+            const helpTextarea = document.getElementById('id_floating_help_message');
+
+            if (helpDialog && helpOpen && helpClose) {
+                function openHelpDialog() {
+                    helpDialog.classList.remove('hidden');
+                    helpDialog.classList.add('flex');
+                    if (helpTextarea) {
+                        window.setTimeout(function () { helpTextarea.focus(); }, 50);
+                    }
+                }
+
+                function closeHelpDialog() {
+                    helpDialog.classList.add('hidden');
+                    helpDialog.classList.remove('flex');
+                }
+
+                helpOpen.addEventListener('click', openHelpDialog);
+                helpClose.addEventListener('click', closeHelpDialog);
+                helpDialog.addEventListener('click', function (event) {
+                    if (event.target === helpDialog) {
+                        closeHelpDialog();
+                    }
+                });
+                document.addEventListener('keydown', function (event) {
+                    if (event.key === 'Escape' && !helpDialog.classList.contains('hidden')) {
+                        closeHelpDialog();
+                    }
+                });
+            }
+        });
         window.applyLabHubTheme = function (theme, bg, customBg) {
             if (theme) {
                 document.documentElement.dataset.theme = theme;

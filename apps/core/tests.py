@@ -61,6 +61,21 @@ class BantuanTests(TestCase):
         session['pengguna_id'] = pengguna.pk
         session.save()
 
+    def test_floating_chat_bantuan_muncul_setelah_login(self):
+        response = self.client.get(reverse('dashboard:home'))
+
+        self.assertContains(response, 'data-help-floating')
+        self.assertContains(response, 'data-help-dialog')
+        self.assertContains(response, reverse('core:bantuan'))
+        self.assertContains(response, 'Chat Bantuan')
+
+    def test_floating_chat_bantuan_tidak_muncul_untuk_guest(self):
+        self.client.session.flush()
+
+        response = self.client.get(reverse('pengguna:login'))
+
+        self.assertNotContains(response, 'data-help-floating')
+
     def test_bot_menjawab_pertanyaan_sederhana(self):
         response = self.client.post(reverse('core:bantuan'), {'pesan': 'Bagaimana cara daftar aslab?'})
 
