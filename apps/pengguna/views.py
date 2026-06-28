@@ -5,7 +5,6 @@ from urllib.parse import urlencode, urljoin
 
 from django.contrib import messages
 from django.contrib.auth.hashers import check_password, make_password
-from django.core.mail import send_mail
 from django.conf import settings
 from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
@@ -15,6 +14,7 @@ from django.views.generic import CreateView, DeleteView, DetailView, FormView, L
 
 from apps.asleb.models import Asleb
 from apps.core.views import PostOnlyDeleteMixin
+from apps.core.emails import send_branded_email
 from apps.pendaftaran_asleb.models import PendaftaranAsleb
 
 from .forms import (
@@ -122,15 +122,22 @@ def send_verification_code(request, pengguna, method, purpose, extra=None):
             )
         else:
             try:
-                send_mail(
+                text_body = (
+                    f'Kode verifikasi Anda adalah {code}.\n'
+                    f'Kode berlaku {OTP_EXPIRE_MINUTES} menit.\n\n'
+                    f'Buka halaman verifikasi: {verification_url}'
+                )
+                send_branded_email(
                     subject='Kode Verifikasi Project Laboran',
-                    message=(
-                        f'Kode verifikasi Anda adalah {code}.\n'
-                        f'Kode berlaku {OTP_EXPIRE_MINUTES} menit.\n\n'
-                        f'Buka halaman verifikasi: {verification_url}'
-                    ),
-                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'ricardo.dharma@trisakti.ac.id'),
-                    recipient_list=[pengguna.email],
+                    recipients=[pengguna.email],
+                    text_body=text_body,
+                    title='Verifikasi akun Anda',
+                    greeting=f'Halo {pengguna.nama_pengguna},',
+                    intro='Gunakan kode berikut untuk melanjutkan proses verifikasi akun LabHub.',
+                    highlight=code,
+                    action_url=verification_url,
+                    action_label='Buka Halaman Verifikasi',
+                    note=f'Kode hanya berlaku selama {OTP_EXPIRE_MINUTES} menit. Jangan berikan kode ini kepada siapa pun.',
                     fail_silently=False,
                 )
                 messages.info(request, f'Kode verifikasi dikirim ke email {pengguna.email}. Link verifikasi memakai {verification_url}.')

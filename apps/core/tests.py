@@ -1,9 +1,34 @@
+from django.core import mail
 from django.test import TestCase
 from django.urls import reverse
 
 from apps.pengguna.models import Pengguna
 
 from .models import PercakapanBantuan
+from .emails import send_branded_email
+
+
+class BrandedEmailTests(TestCase):
+    def test_email_memiliki_html_labhub_dan_fallback_teks(self):
+        sent = send_branded_email(
+            subject='Uji Email LabHub',
+            recipients=['user@example.com'],
+            text_body='Isi versi teks.',
+            title='Notifikasi pengujian',
+            intro='Ini adalah ringkasan notifikasi.',
+            details=[{'label': 'Status', 'value': 'Berhasil'}],
+            action_url='https://example.com/action',
+            action_label='Buka LabHub',
+        )
+
+        self.assertEqual(sent, 1)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].body, 'Isi versi teks.')
+        self.assertEqual(mail.outbox[0].alternatives[0][1], 'text/html')
+        html = mail.outbox[0].alternatives[0][0]
+        self.assertIn('LabHub', html)
+        self.assertIn('Buka LabHub', html)
+        self.assertIn('https://example.com/action', html)
 
 
 class BantuanTests(TestCase):

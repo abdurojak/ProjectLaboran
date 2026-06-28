@@ -2,7 +2,6 @@ from django.contrib import messages
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
-from django.core.mail import send_mail
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
@@ -14,6 +13,7 @@ import uuid
 
 from apps.asleb.models import Asleb
 from apps.core.views import PostOnlyDeleteMixin
+from apps.core.emails import send_branded_email
 from apps.pengguna.models import Pengguna
 
 from .forms import (
@@ -500,15 +500,27 @@ def notify_pendaftaran_dibuka():
     sent_count = 0
 
     for email in recipients:
-        sent = send_mail(
+        text_body = (
+            'Pendaftaran asisten laboratorium sudah dibuka.\n\n'
+            f'Silakan daftar melalui link berikut:\n{registration_url}\n\n'
+            'Jika Anda membuka link dalam kondisi sudah login, nama dan NIM akan otomatis terisi dari akun.'
+        )
+        current_period = get_current_period()
+        sent = send_branded_email(
             subject='Pendaftaran Aslab Project Laboran Dibuka',
-            message=(
-                'Pendaftaran asisten laboratorium sudah dibuka.\n\n'
-                f'Silakan daftar melalui link berikut:\n{registration_url}\n\n'
-                'Jika Anda membuka link dalam kondisi sudah login, nama dan NIM akan otomatis terisi dari akun.'
-            ),
-            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None),
-            recipient_list=[email],
+            recipients=[email],
+            text_body=text_body,
+            title='Pendaftaran aslab dibuka',
+            greeting='Halo Mahasiswa,',
+            intro='Pendaftaran asisten laboratorium LabHub sudah dibuka. Siapkan CV dan transkrip sebelum memilih mata kuliah.',
+            details=[
+                {'label': 'Periode', 'value': current_period.nama},
+                {'label': 'Batas pendaftaran', 'value': f'{current_period.pendaftaran_selesai:%d %b %Y}'},
+                {'label': 'Persyaratan', 'value': 'CV profil, transkrip sesuai NIM, dan nilai minimal C'},
+            ],
+            action_url=registration_url,
+            action_label='Daftar Sebagai Aslab',
+            note='Junior dapat mengambil maksimal 2 matkul dan Senior maksimal 1 matkul dalam satu periode.',
             fail_silently=True,
         )
         sent_count += sent

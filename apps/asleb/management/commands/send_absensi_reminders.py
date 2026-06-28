@@ -1,11 +1,11 @@
 from datetime import datetime
 
 from django.conf import settings
-from django.core.mail import send_mail
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from apps.jadwal.models import JadwalPraktikum
+from apps.core.emails import send_branded_email
 from apps.pengguna.models import Pengguna
 
 from apps.asleb.forms import get_asleb_matkul
@@ -64,17 +64,30 @@ class Command(BaseCommand):
         recipient = asleb.email or Pengguna.objects.filter(nim_nik=asleb.nim).values_list('email', flat=True).first()
         if not recipient:
             return 0
-        sent = send_mail(
+        text_body = (
+            f'Halo {asleb.nama},\n\n'
+            f'Anda belum mengisi absensi untuk {schedule.mata_kuliah} pada jadwal '
+            f'{schedule.waktu_mulai:%H:%M}-{schedule.waktu_selesai:%H:%M}.\n'
+            'Segera isi absensi dari lokasi praktikum sebelum jadwal berakhir. '
+            'Setelah waktu selesai, absensi akan tertutup otomatis.'
+        )
+        attendance_url = f"{settings.PUBLIC_ACCESS_BASE_URL.rstrip('/')}/asleb/absensi/tambah/"
+        sent = send_branded_email(
             subject=f'Pengingat Absensi Aslab {next_stage}/3',
-            message=(
-                f'Halo {asleb.nama},\n\n'
-                f'Anda belum mengisi absensi untuk {schedule.mata_kuliah} pada jadwal '
-                f'{schedule.waktu_mulai:%H:%M}-{schedule.waktu_selesai:%H:%M}.\n'
-                'Segera isi absensi dari lokasi praktikum sebelum jadwal berakhir. '
-                'Setelah waktu selesai, absensi akan tertutup otomatis.'
-            ),
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[recipient],
+            recipients=[recipient],
+            text_body=text_body,
+            title=f'Absensi belum diisi ({next_stage}/3)',
+            greeting=f'Halo {asleb.nama},',
+            intro='Jadwal praktikum sedang berlangsung dan absensi Anda belum tercatat.',
+            details=[
+                {'label': 'Mata kuliah', 'value': schedule.mata_kuliah},
+                {'label': 'Ruangan', 'value': schedule.ruangan.nama},
+                {'label': 'Waktu', 'value': f'{schedule.waktu_mulai:%H:%M} - {schedule.waktu_selesai:%H:%M}'},
+                {'label': 'Pengingat', 'value': f'{next_stage} dari 3'},
+            ],
+            action_url=attendance_url,
+            action_label='Isi Absensi Sekarang',
+            note='Absensi memerlukan lokasi kampus serta bukti foto dan video langsung dari kamera. Form tertutup otomatis saat jadwal berakhir.',
             fail_silently=False,
         )
         if sent:
