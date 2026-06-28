@@ -14,6 +14,7 @@ from apps.kalender.models import KegiatanKalender
 from apps.peminjaman.models import PeminjamanAlat
 from apps.peminjaman.notifications import send_peminjaman_approved_notification
 from apps.pendaftaran_asleb.models import PendaftaranAsleb, PengaturanPendaftaranAsleb
+from apps.pendaftaran_asleb.services import is_registration_open
 from apps.pendaftaran_asleb.utils import get_public_registration_url
 
 
@@ -106,7 +107,7 @@ class DashboardView(TemplateView):
                 hari=hari_ini,
                 status=JadwalPraktikum.STATUS_DITERIMA,
             )[:6] if hari_ini else jadwal_qs.none()
-            context['pendaftaran_asleb_dibuka'] = (is_mahasiswa or is_asisten_lab) and pengaturan_pendaftaran.dibuka
+            context['pendaftaran_asleb_dibuka'] = (is_mahasiswa or is_asisten_lab) and is_registration_open()
             context['kegiatan_kalender_mahasiswa'] = kegiatan_qs.filter(tanggal__gte=context['today'])[:6]
             context['public_registration_url'] = get_public_registration_url()
             stats_cards = [

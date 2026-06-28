@@ -28,7 +28,7 @@
     <form method="post" enctype="multipart/form-data" class="surface-card min-w-0 max-w-full overflow-hidden grid gap-5 p-5 md:grid-cols-2 md:p-8" data-location-form>
         {% csrf_token %}
         {% for field in form %}
-        {% if field.is_hidden %}
+        {% if field.is_hidden or field.name == 'bukti_foto' or field.name == 'bukti_video' %}
         {{ field }}
         {% else %}
         <div class="{% if field.name == 'pekerjaan' %}md:col-span-2{% endif %} min-w-0">
@@ -40,6 +40,34 @@
         </div>
         {% endif %}
         {% endfor %}
+        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-5 md:col-span-2" data-camera-capture>
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h3 class="font-black text-slate-900">Bukti Kamera Praktikum</h3>
+                    <p class="mt-1 text-sm text-slate-500">Ambil satu foto dan rekam video maksimal 15 detik langsung dari kamera perangkat.</p>
+                </div>
+                <button type="button" class="btn-secondary gap-2" data-camera-start><i data-lucide="camera" class="h-4 w-4"></i><span>Aktifkan Kamera</span></button>
+            </div>
+            <div class="mt-4 grid gap-4 lg:grid-cols-2">
+                <video class="aspect-video w-full rounded-lg bg-slate-950 object-cover" autoplay muted playsinline data-camera-live></video>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                        <img class="hidden aspect-video h-full w-full object-cover" alt="Preview bukti foto" data-photo-preview>
+                        <div class="flex aspect-video items-center justify-center text-sm text-slate-400" data-photo-empty>Foto belum diambil</div>
+                    </div>
+                    <video class="hidden aspect-video h-full w-full rounded-lg border border-slate-200 bg-slate-950 object-cover" controls playsinline data-video-preview></video>
+                    <div class="flex aspect-video items-center justify-center rounded-lg border border-slate-200 bg-white text-sm text-slate-400" data-video-empty>Video belum direkam</div>
+                </div>
+            </div>
+            <div class="mt-4 flex flex-wrap gap-3">
+                <button type="button" class="btn-secondary gap-2" disabled data-photo-capture><i data-lucide="camera" class="h-4 w-4"></i><span>Ambil Foto</span></button>
+                <button type="button" class="btn-secondary gap-2" disabled data-video-record><i data-lucide="circle" class="h-4 w-4"></i><span>Rekam Video</span></button>
+                <button type="button" class="btn-secondary hidden gap-2 text-rose-700" data-video-stop><i data-lucide="square" class="h-4 w-4"></i><span>Stop Rekaman</span></button>
+            </div>
+            <p class="mt-3 text-sm font-semibold text-slate-600" data-camera-status>Kamera belum aktif.</p>
+            {% if form.bukti_foto.errors %}<div class="mt-2 text-sm font-semibold text-rose-600">{{ form.bukti_foto.errors|striptags }}</div>{% endif %}
+            {% if form.bukti_video.errors %}<div class="mt-2 text-sm font-semibold text-rose-600">{{ form.bukti_video.errors|striptags }}</div>{% endif %}
+        </div>
         <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 md:col-span-2" data-location-status>
             Lokasi akan diperiksa saat tombol Simpan Absensi ditekan. Pastikan GPS perangkat aktif.
         </div>
@@ -71,6 +99,12 @@
             if (form.dataset.locationReady === '1') return;
             event.preventDefault();
             const button = form.querySelector('button[type="submit"]');
+            const photoInput = document.getElementById('id_bukti_foto');
+            const videoInput = document.getElementById('id_bukti_video');
+            if (!photoInput.files.length || !videoInput.files.length) {
+                status.textContent = 'Ambil bukti foto dan rekam video dari kamera sebelum mengirim absensi.';
+                return;
+            }
             button.disabled = true;
             status.textContent = 'Memeriksa lokasi perangkat...';
 
@@ -91,6 +125,86 @@
                 status.textContent = 'Lokasi tidak dapat dibaca. Izinkan akses lokasi, aktifkan GPS, lalu coba lagi.';
                 button.disabled = false;
             }, {enableHighAccuracy: true, timeout: 15000, maximumAge: 0});
+        });
+
+        const cameraRoot = document.querySelector('[data-camera-capture]');
+        if (!cameraRoot) return;
+        const liveVideo = cameraRoot.querySelector('[data-camera-live]');
+        const startButton = cameraRoot.querySelector('[data-camera-start]');
+        const photoButton = cameraRoot.querySelector('[data-photo-capture]');
+        const recordButton = cameraRoot.querySelector('[data-video-record]');
+        const stopButton = cameraRoot.querySelector('[data-video-stop]');
+        const cameraStatus = cameraRoot.querySelector('[data-camera-status]');
+        const photoPreview = cameraRoot.querySelector('[data-photo-preview]');
+        const photoEmpty = cameraRoot.querySelector('[data-photo-empty]');
+        const videoPreview = cameraRoot.querySelector('[data-video-preview]');
+        const videoEmpty = cameraRoot.querySelector('[data-video-empty]');
+        let cameraStream = null;
+        let mediaRecorder = null;
+        let videoChunks = [];
+        let stopTimer = null;
+
+        function attachCapture(inputId, blob, filename) {
+            const input = document.getElementById(inputId);
+            const transfer = new DataTransfer();
+            transfer.items.add(new File([blob], filename, {type: blob.type}));
+            input.files = transfer.files;
+        }
+
+        startButton.addEventListener('click', async function () {
+            try {
+                cameraStream = await navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment'}, audio: true});
+                liveVideo.srcObject = cameraStream;
+                photoButton.disabled = false;
+                recordButton.disabled = false;
+                startButton.disabled = true;
+                cameraStatus.textContent = 'Kamera aktif. Ambil foto lalu rekam video.';
+            } catch (error) {
+                cameraStatus.textContent = 'Kamera tidak dapat diakses. Izinkan kamera dan mikrofon pada browser.';
+            }
+        });
+
+        photoButton.addEventListener('click', function () {
+            const canvas = document.createElement('canvas');
+            canvas.width = liveVideo.videoWidth;
+            canvas.height = liveVideo.videoHeight;
+            canvas.getContext('2d').drawImage(liveVideo, 0, 0);
+            canvas.toBlob(function (blob) {
+                attachCapture('id_bukti_foto', blob, 'bukti-foto.jpg');
+                photoPreview.src = URL.createObjectURL(blob);
+                photoPreview.classList.remove('hidden');
+                photoEmpty.classList.add('hidden');
+                cameraStatus.textContent = 'Foto berhasil diambil.';
+            }, 'image/jpeg', 0.85);
+        });
+
+        recordButton.addEventListener('click', function () {
+            videoChunks = [];
+            mediaRecorder = new MediaRecorder(cameraStream);
+            mediaRecorder.addEventListener('dataavailable', function (event) {
+                if (event.data.size) videoChunks.push(event.data);
+            });
+            mediaRecorder.addEventListener('stop', function () {
+                const blob = new Blob(videoChunks, {type: mediaRecorder.mimeType || 'video/webm'});
+                const extension = blob.type.includes('mp4') ? 'mp4' : 'webm';
+                attachCapture('id_bukti_video', blob, 'bukti-video.' + extension);
+                videoPreview.src = URL.createObjectURL(blob);
+                videoPreview.classList.remove('hidden');
+                videoEmpty.classList.add('hidden');
+                recordButton.classList.remove('hidden');
+                stopButton.classList.add('hidden');
+                cameraStatus.textContent = 'Video berhasil direkam.';
+            });
+            mediaRecorder.start();
+            recordButton.classList.add('hidden');
+            stopButton.classList.remove('hidden');
+            cameraStatus.textContent = 'Sedang merekam video...';
+            stopTimer = setTimeout(function () { if (mediaRecorder.state === 'recording') mediaRecorder.stop(); }, 15000);
+        });
+
+        stopButton.addEventListener('click', function () {
+            clearTimeout(stopTimer);
+            if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
         });
     });
 </script>

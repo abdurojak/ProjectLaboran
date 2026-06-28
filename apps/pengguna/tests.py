@@ -642,6 +642,15 @@ class PenggunaAuthTests(TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertNotContains(response, 'id="dashboard-sidebar"', html=False)
 
+    def test_login_dan_register_membaca_tema_terakhir_dari_browser(self):
+        for url in [reverse('pengguna:login'), reverse('pengguna:register')]:
+            response = self.client.get(url)
+
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, "localStorage.getItem(storageKeys.theme)", html=False)
+            self.assertContains(response, "localStorage.getItem(storageKeys.background)", html=False)
+            self.assertContains(response, "labhub-custom-background", html=False)
+
     def test_register_dropdown_fakultas_prodi_mengambil_data_database(self):
         Fakultas.objects.create(nama='Fakultas Baru')
         Prodi.objects.create(nama='Prodi Baru')

@@ -15,6 +15,7 @@ from django.views.generic import CreateView, DeleteView, DetailView, FormView, L
 
 from apps.asleb.models import Asleb
 from apps.core.views import PostOnlyDeleteMixin
+from apps.pendaftaran_asleb.models import PendaftaranAsleb
 
 from .forms import (
     ChangePasswordForm,
@@ -198,8 +199,10 @@ class PenggunaDetailView(DetailView):
             current_pengguna=getattr(self.request, 'current_pengguna', None),
         )
         context['asleb_profile'] = None
-        if self.object.role == 'asisten_lab':
-            context['asleb_profile'] = Asleb.objects.filter(nim=self.object.nim_nik).first()
+        context['asleb_profile'] = Asleb.objects.filter(nim=self.object.nim_nik).first()
+        context['asleb_history'] = PendaftaranAsleb.objects.filter(
+            nim=self.object.nim_nik,
+        ).select_related('periode', 'matkul').order_by('-periode__tahun', '-periode__semester', 'matkul__nama')
         return context
 
 

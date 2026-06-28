@@ -1,3 +1,4 @@
+import base64
 from datetime import date, datetime
 from unittest.mock import patch
 
@@ -95,6 +96,12 @@ class AslebViewTests(TestCase):
             matkul=self.matkul,
             status='digenerate',
         )
+
+    def make_camera_photo(self, name='bukti.png'):
+        image = base64.b64decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+        )
+        return SimpleUploadedFile(name, image, content_type='image/png')
         fixed_now = timezone.make_aware(datetime(2026, 6, 29, 10, 0))
         self.create_active_schedule()
 
@@ -318,6 +325,7 @@ class AslebViewTests(TestCase):
                 'gps_accuracy': '10',
             },
             files={
+                'bukti_foto': self.make_camera_photo('foto-1.png'),
                 'bukti_video': SimpleUploadedFile('video-1.mp4', b'video 1', content_type='video/mp4'),
             },
             asleb=self.asleb,
@@ -337,6 +345,7 @@ class AslebViewTests(TestCase):
                 'gps_accuracy': '10',
             },
             files={
+                'bukti_foto': self.make_camera_photo('foto-2.png'),
                 'bukti_video': SimpleUploadedFile('video-2.mp4', b'video 2', content_type='video/mp4'),
             },
             asleb=self.asleb,
@@ -371,7 +380,10 @@ class AslebViewTests(TestCase):
                 'longitude': '106.8000000',
                 'gps_accuracy': '10',
             },
-            files={'bukti_video': SimpleUploadedFile('video.mp4', b'video', content_type='video/mp4')},
+            files={
+                'bukti_foto': self.make_camera_photo(),
+                'bukti_video': SimpleUploadedFile('video.mp4', b'video', content_type='video/mp4'),
+            },
             asleb=self.asleb,
             jadwal=self.create_active_schedule(),
         )

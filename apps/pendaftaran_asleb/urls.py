@@ -17,6 +17,7 @@ from .views import (
     generate_asleb,
     reject_pendaftaran,
     toggle_pendaftaran_status,
+    update_periode_schedule,
 )
 
 app_name = 'pendaftaran_asleb'
@@ -38,4 +39,5 @@ urlpatterns = [
     path('<int:pk>/generate-asleb/', generate_asleb, name='pendaftaran_generate_asleb'),
     path('generate-diterima/', generate_all_accepted_asleb, name='pendaftaran_generate_all_accepted'),
     path('toggle-status/', toggle_pendaftaran_status, name='pendaftaran_toggle_status'),
+    path('periode/<int:pk>/jadwal/', update_periode_schedule, name='periode_schedule_update'),
 ]

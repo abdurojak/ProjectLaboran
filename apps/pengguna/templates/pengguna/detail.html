@@ -98,6 +98,30 @@
             </div>
         </article>
     </div>
+
+    <section class="surface-card overflow-hidden">
+        <div class="border-b border-slate-200 px-6 py-5">
+            <h3 class="text-xl font-black text-slate-900">Riwayat Pendaftaran Aslab</h3>
+            <p class="mt-1 text-sm text-slate-500">Arsip setiap periode enam bulan tetap tersimpan pada akun.</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-[720px]">
+                <thead><tr><th>Periode</th><th>Mata Kuliah</th><th>Status</th><th>Tanggal Daftar</th></tr></thead>
+                <tbody>
+                    {% for item in asleb_history %}
+                    <tr>
+                        <td class="font-bold text-slate-900">{{ item.periode.nama|default:"Riwayat Lama" }}</td>
+                        <td>{{ item.matkul }}</td>
+                        <td>{{ item.get_status_display }}</td>
+                        <td>{{ item.tanggal_daftar|date:"d M Y" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="py-10 text-center text-slate-500">Belum ada riwayat pendaftaran aslab.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
 </section>
 
 <div data-profile-modal class="fixed inset-0 z-[70] hidden items-center justify-center bg-slate-950/50 px-4 py-6 backdrop-blur-sm">

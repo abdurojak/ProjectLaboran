@@ -128,6 +128,7 @@ class AbsensiAslebForm(forms.ModelForm):
         fields = [
             'modul_praktikum',
             'pekerjaan',
+            'bukti_foto',
             'bukti_video',
             'latitude',
             'longitude',
@@ -135,7 +136,8 @@ class AbsensiAslebForm(forms.ModelForm):
         ]
         widgets = {
             'pekerjaan': forms.Textarea(attrs={'rows': 4}),
-            'bukti_video': forms.FileInput(attrs={'accept': 'video/*'}),
+            'bukti_foto': forms.FileInput(attrs={'class': 'hidden', 'accept': 'image/jpeg'}),
+            'bukti_video': forms.FileInput(attrs={'class': 'hidden', 'accept': 'video/webm,video/mp4'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -151,6 +153,23 @@ class AbsensiAslebForm(forms.ModelForm):
         if matkul:
             queryset = ModulPraktikum.objects.filter(matkul=matkul).exclude(pk__in=used_modules)
         self.fields['modul_praktikum'].queryset = queryset
+        self.fields['bukti_foto'].required = True
+
+    def clean_bukti_foto(self):
+        photo = self.cleaned_data['bukti_foto']
+        if photo.content_type not in {'image/jpeg', 'image/png'}:
+            raise forms.ValidationError('Bukti foto harus diambil dari kamera dalam format gambar.')
+        if photo.size > 5 * 1024 * 1024:
+            raise forms.ValidationError('Ukuran bukti foto maksimal 5 MB.')
+        return photo
+
+    def clean_bukti_video(self):
+        video = self.cleaned_data['bukti_video']
+        if video.content_type not in {'video/webm', 'video/mp4'}:
+            raise forms.ValidationError('Bukti video harus direkam langsung dari kamera.')
+        if video.size > 20 * 1024 * 1024:
+            raise forms.ValidationError('Ukuran bukti video maksimal 20 MB.')
+        return video
 
     def clean_modul_praktikum(self):
         modul = self.cleaned_data['modul_praktikum']

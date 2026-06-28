@@ -21,11 +21,20 @@ from .forms import (
     PendaftaranAslebForm,
     PendaftaranAslebPublicForm,
     PublicBerkasPendaftaranForm,
+    PeriodeAslebForm,
     PublicPilihMatkulForm,
     PublicTranskripForm,
     decode_signature_data,
 )
-from .models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb
+from .models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb, PeriodeAsleb
+from .services import (
+    close_current_registration,
+    get_asleb_experience,
+    get_current_period,
+    get_period_registration_count,
+    is_registration_open,
+    open_current_registration,
+)
 from .utils import analyze_transcript, get_public_registration_url, is_passing_grade
 
 
@@ -38,7 +47,13 @@ class PendaftaranAslebListView(ListView):
     context_object_name = 'pendaftaran_list'
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        queryset = super().get_queryset().select_related('periode', 'matkul').order_by(
+            '-periode__tahun',
+            '-periode__semester',
+            'matkul__nama',
+            'matkul__kelas',
+            '-skor_nilai',
+        )
         search = self.request.GET.get('q', '').strip()
         status = self.request.GET.get('status', '').strip()
 
@@ -65,6 +80,10 @@ class PendaftaranAslebListView(ListView):
         context['selected_status'] = self.request.GET.get('status', '').strip()
         context['status_choices'] = PendaftaranAsleb.STATUS_CHOICES
         context['public_registration_url'] = get_public_registration_url()
+        current_period = get_current_period()
+        context['periode_aktif'] = current_period
+        context['periode_form'] = PeriodeAslebForm(instance=current_period)
+        context['pendaftaran_dibuka'] = is_registration_open()
         context['pengaturan_pendaftaran'] = PengaturanPendaftaranAsleb.get_solo()
         return context
 
@@ -85,6 +104,10 @@ class PendaftaranAslebCreateView(CreateView):
         kwargs = super().get_form_kwargs()
         kwargs['files'] = self.request.FILES or None
         return kwargs
+
+    def form_valid(self, form):
+        form.instance.periode = get_current_period()
+        return super().form_valid(form)
 
 
 class PendaftaranAslebUpdateView(UpdateView):
@@ -110,7 +133,7 @@ class PendaftaranAslebPublicCreateView(View):
     template_name = 'pendaftaran_asleb/pendaftaran_public_form.html'
 
     def dispatch(self, request, *args, **kwargs):
-        if not PengaturanPendaftaranAsleb.get_solo().dibuka:
+        if not is_registration_open():
             return render(request, 'pendaftaran_asleb/pendaftaran_closed.html')
 
         return super().dispatch(request, *args, **kwargs)
@@ -166,8 +189,23 @@ class PendaftaranAslebPublicCreateView(View):
                 return redirect('pengguna:detail', pk=current_pengguna.pk)
             return redirect('pengguna:login')
 
+        level, limit = get_asleb_experience(current_pengguna.nim_nik)
+        if get_period_registration_count(current_pengguna.nim_nik) >= limit:
+            messages.warning(
+                request,
+                f'Batas pengambilan matkul untuk level {level.title()} adalah maksimal {limit} matkul per periode.',
+            )
+            return redirect('pendaftaran_asleb:pendaftaran_success')
+
         form = PublicPilihMatkulForm(request.POST)
         if not form.is_valid():
+            return self.render_current_step(request, matkul_form=form)
+        if PendaftaranAsleb.objects.filter(
+            nim=current_pengguna.nim_nik,
+            periode=get_current_period(),
+            matkul=form.cleaned_data['matkul'],
+        ).exclude(status='ditolak').exists():
+            form.add_error('matkul', 'Matkul ini sudah Anda ambil pada periode sekarang.')
             return self.render_current_step(request, matkul_form=form)
 
         wizard = self.get_wizard(request)
@@ -271,6 +309,15 @@ class PendaftaranAslebPublicCreateView(View):
         if not form.is_valid():
             return self.render_current_step(request, berkas_form=form)
 
+        level, limit = get_asleb_experience(current_pengguna.nim_nik)
+        if get_period_registration_count(current_pengguna.nim_nik) >= limit:
+            self.clear_wizard(request)
+            messages.error(
+                request,
+                f'Batas pengambilan matkul {level.title()} ({limit} matkul) untuk periode ini sudah tercapai.',
+            )
+            return redirect('pendaftaran_asleb:pendaftaran_success')
+
         signature_file = decode_signature_data(form.cleaned_data.get('signature_data'))
         with default_storage.open(wizard['transkrip_path'], 'rb') as transkrip_file:
             transkrip_content = ContentFile(transkrip_file.read(), name=wizard.get('transkrip_name') or 'transkrip.pdf')
@@ -285,6 +332,7 @@ class PendaftaranAslebPublicCreateView(View):
             program_studi=form.cleaned_data['program_studi'],
             semester=form.cleaned_data['semester'],
             matkul=matkul,
+            periode=get_current_period(),
             cv=cv_content,
             transkrip=transkrip_content,
             tanda_tangan=signature_file,
@@ -318,6 +366,11 @@ class PendaftaranAslebPublicCreateView(View):
             'transkrip_form': forms.get('transkrip_form') or PublicTranskripForm(),
             'berkas_form': forms.get('berkas_form') or PublicBerkasPendaftaranForm(current_pengguna=current_pengguna),
         }
+        if current_pengguna:
+            level, limit = get_asleb_experience(current_pengguna.nim_nik)
+            context['registration_level'] = level
+            context['registration_limit'] = limit
+            context['registration_count'] = get_period_registration_count(current_pengguna.nim_nik)
         if step == 'transkrip' and not matkul:
             wizard['step'] = 'matkul'
             request.session.modified = True
@@ -384,7 +437,9 @@ def generate_asleb(request, pk):
 
 @require_POST
 def generate_all_accepted_asleb(request):
-    accepted_registrations = PendaftaranAsleb.objects.filter(status='diterima')
+    accepted_registrations = PendaftaranAsleb.objects.filter(status='diterima').filter(
+        Q(periode=get_current_period()) | Q(periode__isnull=True)
+    )
     generated_count = 0
 
     for pendaftaran in accepted_registrations:
@@ -404,10 +459,15 @@ def generate_all_accepted_asleb(request):
 @require_POST
 def toggle_pendaftaran_status(request):
     pengaturan = PengaturanPendaftaranAsleb.get_solo()
-    pengaturan.dibuka = not pengaturan.dibuka
+    currently_open = is_registration_open()
+    if currently_open:
+        close_current_registration()
+    else:
+        open_current_registration()
+    pengaturan.dibuka = not currently_open
     pengaturan.save(update_fields=['dibuka', 'diperbarui_pada'])
 
-    status = 'dibuka' if pengaturan.dibuka else 'ditutup'
+    status = 'dibuka selama 30 hari atau sampai periode berakhir' if pengaturan.dibuka else 'ditutup'
     notified_count = notify_pendaftaran_dibuka() if pengaturan.dibuka else 0
 
     if notified_count:
@@ -467,6 +527,7 @@ def create_or_update_asleb_from_pendaftaran(pendaftaran):
             'semester': pendaftaran.semester,
             'matkul': str(pendaftaran.matkul),
             'status': 'aktif',
+            'periode_aktif': pendaftaran.periode or get_current_period(),
             'tanggal_bergabung': timezone.localdate(),
             'catatan': f'Digenerate dari pendaftaran aslab tanggal {pendaftaran.tanggal_daftar:%d-%m-%Y}.',
         },
@@ -479,6 +540,22 @@ def promote_pengguna_to_asisten_lab(pendaftaran):
         nim_nik=pendaftaran.nim,
         role='mahasiswa',
     ).update(role='asisten_lab')
+
+
+@require_POST
+def update_periode_schedule(request, pk):
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not pengguna or pengguna.role not in {'admin', 'laboran'}:
+        messages.error(request, 'Hanya admin dan laboran yang dapat mengatur jadwal pendaftaran.')
+        return redirect('pendaftaran_asleb:pendaftaran_list')
+    period = get_object_or_404(PeriodeAsleb, pk=pk)
+    form = PeriodeAslebForm(request.POST, instance=period)
+    if form.is_valid():
+        form.save()
+        messages.success(request, f'Jadwal pendaftaran periode {period.nama} berhasil diperbarui.')
+    else:
+        messages.error(request, 'Jadwal periode tidak valid. Pastikan tanggal berada dalam periode enam bulan.')
+    return redirect('pendaftaran_asleb:pendaftaran_list')
 
 
 class MataKuliahAslebListView(ListView):

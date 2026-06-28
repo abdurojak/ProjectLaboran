@@ -17,6 +17,13 @@ class Asleb(models.Model):
     matkul = models.CharField('Matkul', max_length=200, blank=True)
     semester = models.PositiveSmallIntegerField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='aktif')
+    periode_aktif = models.ForeignKey(
+        'pendaftaran_asleb.PeriodeAsleb',
+        on_delete=models.SET_NULL,
+        related_name='asleb_aktif',
+        blank=True,
+        null=True,
+    )
     tanggal_bergabung = models.DateField()
     catatan = models.TextField(blank=True)
     dibuat_pada = models.DateTimeField(auto_now_add=True)
@@ -36,8 +43,14 @@ class Asleb(models.Model):
         periode_count = PendaftaranAsleb.objects.filter(
             nim=self.nim,
             status__in=['diterima', 'digenerate'],
+            periode__isnull=False,
+        ).values('periode_id').distinct().count()
+        legacy_count = PendaftaranAsleb.objects.filter(
+            nim=self.nim,
+            status__in=['diterima', 'digenerate'],
+            periode__isnull=True,
         ).count()
-        return periode_count or 1
+        return periode_count or legacy_count or 1
 
     @property
     def level_otomatis(self):
@@ -315,6 +328,7 @@ class AbsensiAsleb(models.Model):
     pekerjaan = models.TextField(blank=True)
     file_modul = models.FileField('Upload Modul Praktikum', upload_to='absensi_asleb/modul/')
     file_modul_hash = models.CharField(max_length=64, blank=True, db_index=True)
+    bukti_foto = models.ImageField('Bukti Foto Praktikum', upload_to='absensi_asleb/foto/', blank=True)
     bukti_video = models.FileField('Bukti Video Praktikum', upload_to='absensi_asleb/video/')
     latitude = models.DecimalField(max_digits=10, decimal_places=7, blank=True, null=True)
     longitude = models.DecimalField(max_digits=10, decimal_places=7, blank=True, null=True)

@@ -116,6 +116,7 @@
                         <th>Modul</th>
                         <th>Materi</th>
                         <th>Modul Praktikum</th>
+                        <th>Bukti Foto</th>
                         <th>Bukti Video</th>
                     </tr>
                 </thead>
@@ -128,11 +129,12 @@
                         <td>Modul {{ absensi.modul }}</td>
                         <td>{{ absensi.materi_praktikum|default:"-" }}</td>
                         <td>{% if absensi.modul_praktikum %}<a class="inline-flex whitespace-nowrap font-semibold text-brand-700 hover:text-brand-800" href="{% url 'asleb:modul_download' absensi.modul_praktikum.pk %}">Unduh modul</a>{% else %}<span class="text-slate-400">Modul lama</span>{% endif %}</td>
+                        <td>{% if absensi.bukti_foto %}<a class="inline-flex whitespace-nowrap font-semibold text-brand-700 hover:text-brand-800" href="{{ absensi.bukti_foto.url }}" target="_blank" rel="noreferrer">Lihat foto</a>{% else %}<span class="text-slate-400">-</span>{% endif %}</td>
                         <td><a class="inline-flex whitespace-nowrap font-semibold text-brand-700 hover:text-brand-800" href="{{ absensi.bukti_video.url }}" target="_blank" rel="noreferrer">Lihat video</a></td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="7" class="py-12 text-center text-slate-500">Belum ada absensi aslab.</td>
+                        <td colspan="8" class="py-12 text-center text-slate-500">Belum ada absensi aslab.</td>
                     </tr>
                     {% endfor %}
                 </tbody>

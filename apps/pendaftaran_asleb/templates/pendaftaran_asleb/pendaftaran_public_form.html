@@ -39,6 +39,10 @@
                 <div class="md:col-span-2"><span class="font-semibold">Prodi:</span> {{ current_pengguna.prodi }}</div>
             </div>
         </div>
+        <div class="mx-6 mt-4 rounded-2xl border border-cyan-200 bg-cyan-50 px-5 py-4 text-sm text-cyan-900 md:mx-8">
+            Level pendaftaran Anda: <strong>{{ registration_level|title }}</strong>.
+            Maksimal <strong>{{ registration_limit }} matkul</strong> per periode; saat ini sudah mengambil <strong>{{ registration_count }}</strong>.
+        </div>
         {% endif %}
 
         {% if step == 'matkul' %}

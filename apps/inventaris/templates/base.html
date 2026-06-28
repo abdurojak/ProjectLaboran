@@ -5,6 +5,45 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Project Laboran{% endblock %}</title>
+    <script>
+        (function () {
+            const root = document.documentElement;
+            const storageKeys = {
+                theme: 'labhub-theme-mode',
+                background: 'labhub-background-mode',
+                customBackground: 'labhub-custom-background'
+            };
+
+            try {
+                {% if current_pengguna %}
+                localStorage.setItem(storageKeys.theme, root.dataset.theme || 'light');
+                localStorage.setItem(storageKeys.background, root.dataset.bg || 'default');
+                {% if current_pengguna.background_image %}
+                localStorage.setItem(storageKeys.customBackground, '{{ current_pengguna.background_image.url|escapejs }}');
+                {% else %}
+                localStorage.removeItem(storageKeys.customBackground);
+                {% endif %}
+                {% else %}
+                const savedTheme = localStorage.getItem(storageKeys.theme);
+                const savedBackground = localStorage.getItem(storageKeys.background);
+                const savedCustomBackground = localStorage.getItem(storageKeys.customBackground);
+                if (savedTheme === 'light' || savedTheme === 'dark') {
+                    root.dataset.theme = savedTheme;
+                }
+                if (['default', 'clean', 'lab', 'aurora', 'grid', 'custom'].includes(savedBackground)) {
+                    root.dataset.bg = savedBackground;
+                }
+                if (root.dataset.bg === 'custom' && savedCustomBackground) {
+                    root.style.setProperty('--custom-bg-image', "url('" + savedCustomBackground + "')");
+                }
+                {% endif %}
+            } catch (error) {
+                // The server-rendered preference remains active when browser storage is unavailable.
+            }
+
+            window.LabHubThemeStorageKeys = storageKeys;
+        }());
+    </script>
     <link rel="icon" type="image/png" href="{% static 'core/img/labhub-logo.png' %}">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -647,6 +686,18 @@
             if (customBg) {
                 document.documentElement.style.setProperty('--custom-bg-image', "url('" + customBg + "')");
                 document.documentElement.dataset.bg = 'custom';
+            }
+            try {
+                const keys = window.LabHubThemeStorageKeys;
+                localStorage.setItem(keys.theme, document.documentElement.dataset.theme || 'light');
+                localStorage.setItem(keys.background, document.documentElement.dataset.bg || 'default');
+                if (customBg) {
+                    localStorage.setItem(keys.customBackground, customBg);
+                } else if (document.documentElement.dataset.bg !== 'custom') {
+                    localStorage.removeItem(keys.customBackground);
+                }
+            } catch (error) {
+                // Theme preview still works when browser storage is unavailable.
             }
             document.dispatchEvent(new CustomEvent('labhub-theme-change'));
         };
