@@ -3,6 +3,7 @@ from django.contrib.auth.hashers import check_password
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.db import OperationalError, ProgrammingError
+from pathlib import Path
 
 from .models import Fakultas, Pengguna, Prodi
 from .utils import validate_human_face_photo
@@ -155,6 +156,7 @@ class PenggunaProfileForm(forms.ModelForm):
         model = Pengguna
         fields = [
             'foto',
+            'cv',
             'nama_pengguna',
             'nim_nik',
             'email',
@@ -167,6 +169,7 @@ class PenggunaProfileForm(forms.ModelForm):
         ]
         widgets = {
             'foto': forms.FileInput(attrs={'class': 'hidden', 'accept': 'image/*'}),
+            'cv': forms.FileInput(attrs={'accept': '.pdf,.doc,.docx'}),
             'no_hp': forms.TextInput(attrs={'inputmode': 'numeric', 'pattern': '[0-9]*', 'placeholder': 'Angka saja'}),
             'alamat': forms.Textarea(attrs={'rows': 4}),
         }
@@ -183,6 +186,16 @@ class PenggunaProfileForm(forms.ModelForm):
         validate_human_face_photo(foto)
         return foto
 
+    def clean_cv(self):
+        cv = self.cleaned_data.get('cv')
+        if not cv:
+            return cv
+        if Path(cv.name).suffix.lower() not in {'.pdf', '.doc', '.docx'}:
+            raise forms.ValidationError('CV harus berupa file PDF, DOC, atau DOCX.')
+        if cv.size > 5 * 1024 * 1024:
+            raise forms.ValidationError('Ukuran CV maksimal 5 MB.')
+        return cv
+
     def clean_no_hp(self):
         no_hp = self.cleaned_data.get('no_hp', '').strip()
         if no_hp and not no_hp.isdigit():
@@ -192,6 +205,9 @@ class PenggunaProfileForm(forms.ModelForm):
     def save(self, commit=True):
         instance = super().save(commit=False)
         hapus_foto = self.data.get('hapus_foto') == '1'
+        old_cv = None
+        if instance.pk:
+            old_cv = Pengguna.objects.filter(pk=instance.pk).values_list('cv', flat=True).first()
 
         if self.current_pengguna and self.current_pengguna.role == 'mahasiswa':
             instance.role = self.instance.role
@@ -202,6 +218,9 @@ class PenggunaProfileForm(forms.ModelForm):
         if commit:
             instance.save()
             self.save_m2m()
+            new_cv = instance.cv.name if instance.cv else ''
+            if old_cv and old_cv != new_cv:
+                instance._meta.get_field('cv').storage.delete(old_cv)
 
         return instance
 
@@ -223,12 +242,29 @@ class ChangePasswordForm(forms.Form):
 
 
 class LoginPenggunaForm(forms.Form):
-    nim_nik = forms.CharField(
-        label='NIM/NIK',
-        max_length=40,
-        widget=forms.TextInput(attrs={'inputmode': 'numeric', 'pattern': '[0-9]*', 'placeholder': 'NIM/NIK terdaftar'}),
+    JENIS_LOGIN_CHOICES = [
+        ('mahasiswa', 'Mahasiswa'),
+        ('karyawan', 'Karyawan'),
+    ]
+
+    jenis_login = forms.ChoiceField(
+        label='Masuk sebagai',
+        choices=JENIS_LOGIN_CHOICES,
+        initial='mahasiswa',
+        required=False,
+        widget=forms.RadioSelect,
     )
-    password = forms.CharField(widget=forms.PasswordInput)
+    nim_nik = forms.CharField(
+        label='NIM atau NIK',
+        max_length=40,
+        widget=forms.TextInput(attrs={
+            'autocomplete': 'username',
+            'inputmode': 'numeric',
+            'pattern': '[0-9]*',
+            'placeholder': 'Masukkan NIM atau NIK',
+        }),
+    )
+    password = forms.CharField(widget=forms.PasswordInput(attrs={'autocomplete': 'current-password'}))
 
     error_messages = {
         'invalid_login': 'NIM/NIK atau password tidak sesuai.',
@@ -242,6 +278,7 @@ class LoginPenggunaForm(forms.Form):
 
     def clean(self):
         cleaned_data = super().clean()
+        jenis_login = cleaned_data.get('jenis_login') or 'mahasiswa'
         nim_nik = cleaned_data.get('nim_nik')
         password = cleaned_data.get('password')
 
@@ -259,6 +296,12 @@ class LoginPenggunaForm(forms.Form):
         if not check_password(password, pengguna.password):
             raise forms.ValidationError(self.error_messages['invalid_login'])
 
+        if jenis_login == 'mahasiswa' and pengguna.role not in ['mahasiswa', 'asisten_lab']:
+            raise forms.ValidationError('Akun ini bukan akun mahasiswa. Pilih login sebagai karyawan.')
+
+        if jenis_login == 'karyawan' and pengguna.role not in ['admin', 'laboran']:
+            raise forms.ValidationError('Akun ini bukan akun karyawan. Pilih login sebagai mahasiswa.')
+
         cleaned_data['pengguna'] = pengguna
         return cleaned_data
 
@@ -269,26 +312,37 @@ class RegisterPenggunaForm(forms.ModelForm):
     class Meta:
         model = Pengguna
         fields = [
-            'foto',
             'nama_pengguna',
             'nim_nik',
             'email',
             'password',
             'password_confirmation',
             'gender',
+            'foto',
             'alamat',
             'fakultas',
             'prodi',
         ]
+        labels = {
+            'nim_nik': 'NIM',
+        }
         widgets = {
             'foto': forms.FileInput(attrs={'class': 'hidden', 'accept': 'image/*'}),
-            'password': forms.PasswordInput(render_value=False),
+            'password': forms.PasswordInput(attrs={'autocomplete': 'new-password'}, render_value=False),
             'email': forms.EmailInput(attrs={
-                'placeholder': 'nama@std.trisakti.ac.id atau nama@trisakti.ac.id',
-                'pattern': '.+@(std\\.trisakti\\.ac\\.id|trisakti\\.ac\\.id)',
-                'title': 'Gunakan email dengan akhiran @std.trisakti.ac.id atau @trisakti.ac.id',
+                'autocomplete': 'email',
+                'placeholder': 'nama@std.trisakti.ac.id',
+                'pattern': '.+@std\\.trisakti\\.ac\\.id',
+                'title': 'Gunakan email mahasiswa dengan akhiran @std.trisakti.ac.id',
             }),
-            'nim_nik': forms.TextInput(attrs={'inputmode': 'numeric', 'pattern': '[0-9]*', 'placeholder': 'Angka saja'}),
+            'nim_nik': forms.TextInput(attrs={
+                'autocomplete': 'username',
+                'inputmode': 'numeric',
+                'minlength': '10',
+                'pattern': '[0-9]{10,}',
+                'placeholder': 'Minimal 10 digit',
+                'title': 'NIM harus berisi minimal 10 digit angka',
+            }),
             'alamat': forms.Textarea(attrs={'rows': 4}),
         }
 
@@ -299,14 +353,17 @@ class RegisterPenggunaForm(forms.ModelForm):
     def clean_nim_nik(self):
         nim_nik = self.cleaned_data['nim_nik'].strip()
         if not nim_nik.isdigit():
-            raise forms.ValidationError('NIM/NIK hanya boleh berisi angka.')
+            raise forms.ValidationError('NIM hanya boleh berisi angka.')
+        if len(nim_nik) < 10:
+            raise forms.ValidationError('NIM harus terdiri dari minimal 10 digit.')
         return nim_nik
 
     def clean_email(self):
         email = self.cleaned_data['email'].strip().lower()
-        valid_domains = ('@std.trisakti.ac.id', '@trisakti.ac.id')
-        if not email.endswith(valid_domains):
-            raise forms.ValidationError('Email harus menggunakan domain @std.trisakti.ac.id atau @trisakti.ac.id.')
+        if not email.endswith('@std.trisakti.ac.id'):
+            raise forms.ValidationError('Email harus menggunakan domain @std.trisakti.ac.id.')
+        if Pengguna.objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError('Email sudah terdaftar. Gunakan email Trisakti lain atau login.')
         return email
 
     def clean_foto(self):

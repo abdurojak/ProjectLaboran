@@ -1,6 +1,14 @@
 from django.contrib import admin
 
-from .models import AbsensiAsleb, Asleb, HonorAsleb, PengaturanAbsensiAsleb, SuratHonorAsleb
+from .models import (
+    AbsensiAsleb,
+    Asleb,
+    HonorAsleb,
+    ModulPraktikum,
+    PengaturanAbsensiAsleb,
+    PengingatAbsensiAsleb,
+    SuratHonorAsleb,
+)
 
 
 @admin.register(Asleb)
@@ -33,9 +41,23 @@ class AbsensiAslebAdmin(admin.ModelAdmin):
     search_fields = ('asleb__nama', 'asleb__nim', 'materi_praktikum')
 
 
+@admin.register(ModulPraktikum)
+class ModulPraktikumAdmin(admin.ModelAdmin):
+    list_display = ('nomor', 'judul', 'matkul', 'diunggah_oleh', 'diperbarui_pada')
+    list_filter = ('matkul',)
+    search_fields = ('judul', 'matkul__nama', 'matkul__kode')
+
+
 @admin.register(PengaturanAbsensiAsleb)
 class PengaturanAbsensiAslebAdmin(admin.ModelAdmin):
     list_display = ('dibuka', 'diperbarui_pada')
 
     def has_add_permission(self, request):
         return not PengaturanAbsensiAsleb.objects.exists()
+
+
+@admin.register(PengingatAbsensiAsleb)
+class PengingatAbsensiAslebAdmin(admin.ModelAdmin):
+    list_display = ('asleb', 'jadwal', 'tanggal', 'tahap', 'dikirim_pada')
+    list_filter = ('tanggal', 'tahap')
+    search_fields = ('asleb__nama', 'asleb__nim', 'jadwal__mata_kuliah')

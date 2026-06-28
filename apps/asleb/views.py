@@ -11,10 +11,19 @@ from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, UpdateView
 
 from apps.core.views import PostOnlyDeleteMixin
+from apps.jadwal.models import JadwalPraktikum
 from apps.pengguna.models import Pengguna
 
-from .forms import AbsensiAslebForm, AslebForm, HonorAslebForm, KonfirmasiTransferHonorForm, SuratHonorAslebGenerateForm
-from .models import AbsensiAsleb, Asleb, HonorAsleb, PengaturanAbsensiAsleb, SuratHonorAsleb
+from .forms import (
+    AbsensiAslebForm,
+    AslebForm,
+    HonorAslebForm,
+    KonfirmasiTransferHonorForm,
+    ModulPraktikumForm,
+    SuratHonorAslebGenerateForm,
+    get_asleb_matkul,
+)
+from .models import AbsensiAsleb, Asleb, HonorAsleb, ModulPraktikum, PengaturanAbsensiAsleb, SuratHonorAsleb
 from .surat_honor import generate_surat_honor_pdf, month_year_label
 
 
@@ -325,7 +334,21 @@ class AbsensiAslebListView(ListView):
         context['selected_modul'] = self.request.GET.get('modul', '').strip()
         context['modul_choices'] = AbsensiAsleb.MODUL_CHOICES
         context['asleb_profile'] = self.get_asleb_profile(pengguna) if pengguna else None
+        context['jadwal_aktif'] = (
+            get_active_absensi_schedule(context['asleb_profile'])
+            if context['asleb_profile'] and context['pengaturan_absensi'].dibuka
+            else None
+        )
+        context['modul_list'] = self.get_modul_list(pengguna, context['asleb_profile'])
+        context['can_manage_modul'] = bool(pengguna and pengguna.role in {'admin', 'laboran'})
         return context
+
+    def get_modul_list(self, pengguna, asleb_profile):
+        queryset = ModulPraktikum.objects.select_related('matkul', 'diunggah_oleh')
+        if pengguna and pengguna.role == 'asisten_lab':
+            matkul = get_asleb_matkul(asleb_profile) if asleb_profile else None
+            return queryset.filter(matkul=matkul) if matkul else queryset.none()
+        return queryset
 
     def get_asleb_profile(self, pengguna):
         if not pengguna or pengguna.role != 'asisten_lab':
@@ -356,12 +379,18 @@ class AbsensiAslebCreateView(CreateView):
             messages.warning(request, 'Absensi aslab sedang ditutup oleh admin/laboran.')
             return redirect('asleb:absensi_list')
 
+        self.jadwal = get_active_absensi_schedule(self.asleb)
+        if not self.jadwal:
+            messages.warning(request, 'Absensi hanya dapat diisi saat jadwal praktikum sedang berlangsung.')
+            return redirect('asleb:absensi_list')
+
         return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs['files'] = self.request.FILES or None
         kwargs['asleb'] = self.asleb
+        kwargs['jadwal'] = self.jadwal
         return kwargs
 
     def form_valid(self, form):
@@ -370,6 +399,90 @@ class AbsensiAslebCreateView(CreateView):
         sync_honor_from_absensi(self.object)
         messages.success(self.request, f'Absensi Modul {self.object.modul} berhasil disimpan.')
         return response
+
+
+def get_active_absensi_schedule(asleb, current_time=None):
+    current_time = current_time or timezone.localtime()
+    matkul = get_asleb_matkul(asleb)
+    if not matkul:
+        return None
+    day_keys = [key for key, _ in JadwalPraktikum.HARI_CHOICES]
+    weekday = current_time.weekday()
+    if weekday >= len(day_keys):
+        return None
+    current_clock = current_time.time().replace(tzinfo=None)
+    return JadwalPraktikum.objects.filter(
+        mata_kuliah=str(matkul),
+        hari=day_keys[weekday],
+        status=JadwalPraktikum.STATUS_DITERIMA,
+        waktu_mulai__lte=current_clock,
+        waktu_selesai__gte=current_clock,
+    ).order_by('waktu_mulai').first()
+
+
+class ModulManageRequiredMixin:
+    def dispatch(self, request, *args, **kwargs):
+        pengguna = getattr(request, 'current_pengguna', None)
+        if not pengguna or pengguna.role not in {'admin', 'laboran'}:
+            messages.error(request, 'Hanya laboran dan admin yang bisa mengelola modul praktikum.')
+            return redirect('asleb:absensi_list')
+        return super().dispatch(request, *args, **kwargs)
+
+
+class ModulPraktikumCreateView(ModulManageRequiredMixin, CreateView):
+    model = ModulPraktikum
+    form_class = ModulPraktikumForm
+    template_name = 'asleb/modul_form.html'
+    success_url = reverse_lazy('asleb:absensi_list')
+
+    def form_valid(self, form):
+        form.instance.diunggah_oleh = getattr(self.request, 'current_pengguna', None)
+        messages.success(self.request, 'Modul praktikum berhasil ditambahkan.')
+        return super().form_valid(form)
+
+
+class ModulPraktikumUpdateView(ModulManageRequiredMixin, UpdateView):
+    model = ModulPraktikum
+    form_class = ModulPraktikumForm
+    template_name = 'asleb/modul_form.html'
+    success_url = reverse_lazy('asleb:absensi_list')
+
+    def form_valid(self, form):
+        form.instance.diunggah_oleh = getattr(self.request, 'current_pengguna', None)
+        messages.success(self.request, 'Modul praktikum berhasil diperbarui.')
+        return super().form_valid(form)
+
+
+class ModulPraktikumDeleteView(ModulManageRequiredMixin, PostOnlyDeleteMixin, DeleteView):
+    model = ModulPraktikum
+    success_url = reverse_lazy('asleb:absensi_list')
+
+    def form_valid(self, form):
+        if self.object.absensi.exists():
+            messages.error(self.request, 'Modul yang sudah digunakan untuk absensi tidak dapat dihapus.')
+            return redirect(self.success_url)
+        messages.success(self.request, 'Modul praktikum berhasil dihapus.')
+        return super().form_valid(form)
+
+
+def download_modul_praktikum(request, pk):
+    pengguna = getattr(request, 'current_pengguna', None)
+    modul = get_object_or_404(ModulPraktikum.objects.select_related('matkul'), pk=pk)
+    allowed = bool(pengguna and pengguna.role in {'admin', 'laboran'})
+
+    if pengguna and pengguna.role == 'asisten_lab':
+        asleb = Asleb.objects.filter(nim=pengguna.nim_nik).first()
+        allowed = bool(asleb and get_asleb_matkul(asleb) == modul.matkul)
+
+    if not allowed:
+        messages.error(request, 'Anda tidak memiliki akses ke modul praktikum ini.')
+        return redirect('asleb:absensi_list')
+
+    return FileResponse(
+        modul.file.open('rb'),
+        as_attachment=True,
+        filename=modul.file.name.rsplit('/', 1)[-1],
+    )
 
 
 @require_POST

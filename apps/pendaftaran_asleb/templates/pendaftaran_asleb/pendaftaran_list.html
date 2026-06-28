@@ -41,13 +41,13 @@
     <div class="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
         <div class="surface-card p-6">
             <div class="flex items-start gap-4">
-                <span class="{% if pengaturan_pendaftaran.dibuka %}bg-teal-50 text-teal-700{% else %}bg-slate-100 text-slate-500{% endif %} flex h-14 w-14 items-center justify-center rounded-2xl">
+                <span class="{% if pendaftaran_dibuka %}bg-teal-50 text-teal-700{% else %}bg-slate-100 text-slate-500{% endif %} flex h-14 w-14 items-center justify-center rounded-2xl">
                     <i data-lucide="qr-code" class="h-7 w-7"></i>
                 </span>
                 <div>
                     <h3 class="text-xl font-bold text-slate-900">QR Pendaftaran</h3>
                     <p class="mt-2 text-sm leading-7 text-slate-500">
-                        {% if pengaturan_pendaftaran.dibuka %}
+                        {% if pendaftaran_dibuka %}
                         Pendaftaran sedang dibuka. QR ini akan tampil di dashboard mahasiswa.
                         {% else %}
                         Pendaftaran sedang ditutup. QR tidak tampil di dashboard mahasiswa.
@@ -55,10 +55,10 @@
                     </p>
                 </div>
             </div>
-            <div class="mt-5 inline-flex rounded-full px-4 py-2 text-sm font-bold {% if pengaturan_pendaftaran.dibuka %}bg-emerald-100 text-emerald-700{% else %}bg-slate-100 text-slate-600{% endif %}">
-                {% if pengaturan_pendaftaran.dibuka %}Status: Dibuka{% else %}Status: Ditutup{% endif %}
+            <div class="mt-5 inline-flex rounded-full px-4 py-2 text-sm font-bold {% if pendaftaran_dibuka %}bg-emerald-100 text-emerald-700{% else %}bg-slate-100 text-slate-600{% endif %}">
+                {% if pendaftaran_dibuka %}Status: Dibuka{% else %}Status: Ditutup Otomatis{% endif %}
             </div>
-            {% if pengaturan_pendaftaran.dibuka %}
+            {% if pendaftaran_dibuka %}
             <div class="mt-5 rounded-[24px] border border-slate-200 bg-white p-4">
                 <img src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data={{ public_registration_url|urlencode }}" alt="QR pendaftaran aslab" class="mx-auto h-52 w-52 rounded-2xl object-contain">
             </div>
@@ -69,14 +69,24 @@
             {% endif %}
         </div>
         <div class="surface-card p-6">
+            <div class="mb-5 rounded-2xl border border-cyan-200 bg-cyan-50 p-4 text-cyan-950">
+                <div class="font-black">Periode {{ periode_aktif.nama }}</div>
+                <div class="mt-1 text-sm">Masa tugas: {{ periode_aktif.mulai|date:"d M Y" }} - {{ periode_aktif.selesai|date:"d M Y" }}</div>
+            </div>
             <label for="public-registration-url">Link Pendaftaran</label>
             <input id="public-registration-url" type="text" value="{{ public_registration_url }}" readonly>
             <form method="post" action="{% url 'pendaftaran_asleb:pendaftaran_toggle_status' %}" class="mt-4">
                 {% csrf_token %}
-                <button type="submit" class="{% if pengaturan_pendaftaran.dibuka %}border-rose-200 text-rose-700 hover:bg-rose-50{% else %}border-emerald-200 text-emerald-700 hover:bg-emerald-50{% endif %} inline-flex items-center gap-2 rounded-2xl border bg-white px-4 py-3 text-sm font-bold transition">
-                    <i data-lucide="{% if pengaturan_pendaftaran.dibuka %}lock{% else %}unlock{% endif %}" class="h-4 w-4"></i>
-                    <span>{% if pengaturan_pendaftaran.dibuka %}Tutup Pendaftaran{% else %}Buka Pendaftaran{% endif %}</span>
+                <button type="submit" class="{% if pendaftaran_dibuka %}border-rose-200 text-rose-700 hover:bg-rose-50{% else %}border-emerald-200 text-emerald-700 hover:bg-emerald-50{% endif %} inline-flex items-center gap-2 rounded-2xl border bg-white px-4 py-3 text-sm font-bold transition">
+                    <i data-lucide="{% if pendaftaran_dibuka %}lock{% else %}unlock{% endif %}" class="h-4 w-4"></i>
+                    <span>{% if pendaftaran_dibuka %}Tutup Sekarang{% else %}Buka Pendaftaran 30 Hari{% endif %}</span>
                 </button>
+            </form>
+            <form method="post" action="{% url 'pendaftaran_asleb:periode_schedule_update' periode_aktif.pk %}" class="mt-5 grid gap-3 sm:grid-cols-2">
+                {% csrf_token %}
+                <div>{{ periode_form.pendaftaran_mulai.label_tag }}{{ periode_form.pendaftaran_mulai }}</div>
+                <div>{{ periode_form.pendaftaran_selesai.label_tag }}{{ periode_form.pendaftaran_selesai }}</div>
+                <button type="submit" class="btn-secondary gap-2 sm:col-span-2"><i data-lucide="calendar-check" class="h-4 w-4"></i><span>Simpan Jadwal Otomatis</span></button>
             </form>
             <div class="mt-4 grid gap-3 text-sm text-slate-600 md:grid-cols-3">
                 <div class="rounded-2xl bg-amber-50 p-4 text-amber-800"><strong>Diajukan:</strong> perlu dicek admin.</div>
@@ -130,6 +140,18 @@
                 </thead>
                 <tbody>
                     {% for pendaftaran in pendaftaran_list %}
+                    {% ifchanged pendaftaran.periode_id %}
+                    <tr>
+                        <td colspan="9" class="bg-cyan-50 px-5 py-4 text-base font-black text-cyan-950">
+                            {% if pendaftaran.periode %}
+                            Grup {{ pendaftaran.periode.nama }}
+                            <span class="ml-2 text-xs font-semibold text-cyan-700">{{ pendaftaran.periode.mulai|date:"d M Y" }} - {{ pendaftaran.periode.selesai|date:"d M Y" }}</span>
+                            {% else %}
+                            Riwayat Sebelum Sistem Periode
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endifchanged %}
                     <tr class="hover:bg-slate-50/70">
                         <td>
                             <div class="font-semibold text-slate-900">{{ pendaftaran.nama }}</div>

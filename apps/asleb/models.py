@@ -17,6 +17,13 @@ class Asleb(models.Model):
     matkul = models.CharField('Matkul', max_length=200, blank=True)
     semester = models.PositiveSmallIntegerField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='aktif')
+    periode_aktif = models.ForeignKey(
+        'pendaftaran_asleb.PeriodeAsleb',
+        on_delete=models.SET_NULL,
+        related_name='asleb_aktif',
+        blank=True,
+        null=True,
+    )
     tanggal_bergabung = models.DateField()
     catatan = models.TextField(blank=True)
     dibuat_pada = models.DateTimeField(auto_now_add=True)
@@ -36,8 +43,14 @@ class Asleb(models.Model):
         periode_count = PendaftaranAsleb.objects.filter(
             nim=self.nim,
             status__in=['diterima', 'digenerate'],
+            periode__isnull=False,
+        ).values('periode_id').distinct().count()
+        legacy_count = PendaftaranAsleb.objects.filter(
+            nim=self.nim,
+            status__in=['diterima', 'digenerate'],
+            periode__isnull=True,
         ).count()
-        return periode_count or 1
+        return periode_count or legacy_count or 1
 
     @property
     def level_otomatis(self):
@@ -260,17 +273,66 @@ class PengaturanAbsensiAsleb(models.Model):
         return 'Absensi Aslab Dibuka' if self.dibuka else 'Absensi Aslab Ditutup'
 
 
+class ModulPraktikum(models.Model):
+    matkul = models.ForeignKey(
+        'pendaftaran_asleb.MataKuliahAsleb',
+        on_delete=models.PROTECT,
+        related_name='modul_praktikum',
+    )
+    nomor = models.PositiveSmallIntegerField()
+    judul = models.CharField(max_length=200)
+    file = models.FileField(upload_to='modul_praktikum/')
+    diunggah_oleh = models.ForeignKey(
+        'pengguna.Pengguna',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='modul_praktikum_diunggah',
+    )
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+    diperbarui_pada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['matkul__nama', 'matkul__kelas', 'nomor']
+        constraints = [
+            models.UniqueConstraint(fields=['matkul', 'nomor'], name='unique_nomor_modul_per_matkul'),
+        ]
+        verbose_name = 'Modul Praktikum'
+        verbose_name_plural = 'Modul Praktikum'
+
+    def __str__(self):
+        return f'Modul {self.nomor} - {self.judul}'
+
+
 class AbsensiAsleb(models.Model):
     MODUL_CHOICES = [(number, f'Modul {number}') for number in range(1, 17)]
 
     asleb = models.ForeignKey(Asleb, on_delete=models.CASCADE, related_name='absensi')
+    jadwal = models.ForeignKey(
+        'jadwal.JadwalPraktikum',
+        on_delete=models.PROTECT,
+        related_name='absensi_asleb',
+        blank=True,
+        null=True,
+    )
+    modul_praktikum = models.ForeignKey(
+        ModulPraktikum,
+        on_delete=models.PROTECT,
+        related_name='absensi',
+        blank=True,
+        null=True,
+    )
     tanggal_praktikum = models.DateField(default=timezone.localdate)
     modul = models.PositiveSmallIntegerField(choices=MODUL_CHOICES)
     materi_praktikum = models.CharField(max_length=200, blank=True)
     pekerjaan = models.TextField(blank=True)
     file_modul = models.FileField('Upload Modul Praktikum', upload_to='absensi_asleb/modul/')
     file_modul_hash = models.CharField(max_length=64, blank=True, db_index=True)
+    bukti_foto = models.ImageField('Bukti Foto Praktikum', upload_to='absensi_asleb/foto/', blank=True)
     bukti_video = models.FileField('Bukti Video Praktikum', upload_to='absensi_asleb/video/')
+    latitude = models.DecimalField(max_digits=10, decimal_places=7, blank=True, null=True)
+    longitude = models.DecimalField(max_digits=10, decimal_places=7, blank=True, null=True)
+    jarak_lokasi_meter = models.PositiveIntegerField(blank=True, null=True)
     dibuat_pada = models.DateTimeField(auto_now_add=True)
     diperbarui_pada = models.DateTimeField(auto_now=True)
 
@@ -278,9 +340,32 @@ class AbsensiAsleb(models.Model):
         ordering = ['-tanggal_praktikum', 'asleb__nama', 'modul']
         constraints = [
             models.UniqueConstraint(fields=['asleb', 'modul'], name='unique_absensi_asleb_per_modul'),
+            models.UniqueConstraint(
+                fields=['asleb', 'modul_praktikum'],
+                name='unique_absensi_asleb_per_modul_praktikum',
+            ),
         ]
         verbose_name = 'Absensi Aslab'
         verbose_name_plural = 'Absensi Aslab'
 
     def __str__(self):
         return f'{self.asleb.nama} - Modul {self.modul}'
+
+
+class PengingatAbsensiAsleb(models.Model):
+    asleb = models.ForeignKey(Asleb, on_delete=models.CASCADE, related_name='pengingat_absensi')
+    jadwal = models.ForeignKey('jadwal.JadwalPraktikum', on_delete=models.CASCADE, related_name='pengingat_absensi_asleb')
+    tanggal = models.DateField()
+    tahap = models.PositiveSmallIntegerField()
+    dikirim_pada = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['tanggal', 'jadwal__waktu_mulai', 'tahap']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['asleb', 'jadwal', 'tanggal', 'tahap'],
+                name='unique_pengingat_absensi_asleb',
+            ),
+        ]
+        verbose_name = 'Pengingat Absensi Aslab'
+        verbose_name_plural = 'Pengingat Absensi Aslab'

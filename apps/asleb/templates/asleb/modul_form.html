@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}{% if object %}Edit{% else %}Tambah{% endif %} Modul Praktikum{% endblock %}
+
+{% block content %}
+<section class="mx-auto max-w-3xl space-y-6">
+    <div>
+        <p class="text-sm font-bold uppercase tracking-[0.2em] text-cyan-700">Modul Praktikum</p>
+        <h2 class="mt-2 text-2xl font-black text-slate-900 md:text-3xl">{% if object %}Edit{% else %}Tambah{% endif %} Modul</h2>
+        <p class="mt-2 text-sm text-slate-500">Modul akan tersedia untuk aslab yang terpilih pada mata kuliah tersebut.</p>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" class="surface-card grid gap-5 p-6 md:grid-cols-2 md:p-8">
+        {% csrf_token %}
+        {% for field in form %}
+        <div class="{% if field.name == 'judul' or field.name == 'file' %}md:col-span-2{% endif %}">
+            {{ field.label_tag }}
+            {{ field }}
+            {% if field.errors %}<div class="mt-2 text-sm font-semibold text-rose-600">{{ field.errors|striptags }}</div>{% endif %}
+        </div>
+        {% endfor %}
+        <div class="flex flex-wrap gap-3 md:col-span-2">
+            <button type="submit" class="btn-primary gap-2">
+                <i data-lucide="save" class="h-4 w-4"></i><span>Simpan Modul</span>
+            </button>
+            <a href="{% url 'asleb:absensi_list' %}" class="btn-secondary gap-2">
+                <i data-lucide="arrow-left" class="h-4 w-4"></i><span>Batal</span>
+            </a>
+        </div>
+    </form>
+</section>
+{% endblock %}

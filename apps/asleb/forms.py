@@ -1,10 +1,11 @@
-import hashlib
-
 from django import forms
+from django.conf import settings
+from django.utils import timezone
+from math import asin, cos, radians, sin, sqrt
 
 from apps.pengguna.models import Pengguna
 
-from .models import AbsensiAsleb, Asleb, HonorAsleb, SuratHonorAsleb
+from .models import AbsensiAsleb, Asleb, HonorAsleb, ModulPraktikum, SuratHonorAsleb
 
 
 class AslebForm(forms.ModelForm):
@@ -113,63 +114,106 @@ class SuratHonorAslebGenerateForm(forms.Form):
 
 
 class AbsensiAslebForm(forms.ModelForm):
+    latitude = forms.DecimalField(max_digits=10, decimal_places=7, widget=forms.HiddenInput)
+    longitude = forms.DecimalField(max_digits=10, decimal_places=7, widget=forms.HiddenInput)
+    gps_accuracy = forms.FloatField(widget=forms.HiddenInput)
+    modul_praktikum = forms.ModelChoiceField(
+        label='Modul Praktikum',
+        queryset=ModulPraktikum.objects.none(),
+        empty_label='Pilih modul yang belum diabsen',
+    )
+
     class Meta:
         model = AbsensiAsleb
         fields = [
-            'tanggal_praktikum',
-            'modul',
-            'materi_praktikum',
+            'modul_praktikum',
             'pekerjaan',
-            'file_modul',
+            'bukti_foto',
             'bukti_video',
+            'latitude',
+            'longitude',
+            'gps_accuracy',
         ]
         widgets = {
-            'tanggal_praktikum': forms.DateInput(attrs={'type': 'date'}),
             'pekerjaan': forms.Textarea(attrs={'rows': 4}),
-            'file_modul': forms.FileInput(attrs={'accept': '.pdf,.doc,.docx,.ppt,.pptx,.zip'}),
-            'bukti_video': forms.FileInput(attrs={'accept': 'video/*'}),
+            'bukti_foto': forms.FileInput(attrs={'class': 'hidden', 'accept': 'image/jpeg'}),
+            'bukti_video': forms.FileInput(attrs={'class': 'hidden', 'accept': 'video/webm,video/mp4'}),
         }
 
     def __init__(self, *args, **kwargs):
         self.asleb = kwargs.pop('asleb')
+        self.jadwal = kwargs.pop('jadwal')
         super().__init__(*args, **kwargs)
-        used_modules = set(AbsensiAsleb.objects.filter(asleb=self.asleb).values_list('modul', flat=True))
-        current_module = self.instance.modul if self.instance and self.instance.pk else None
-        choices = [
-            (value, label)
-            for value, label in AbsensiAsleb.MODUL_CHOICES
-            if value not in used_modules or value == current_module
-        ]
-        self.fields['modul'].choices = [('', 'Pilih modul'), *choices]
+        matkul = get_asleb_matkul(self.asleb)
+        used_modules = AbsensiAsleb.objects.filter(
+            asleb=self.asleb,
+            modul_praktikum__isnull=False,
+        ).values_list('modul_praktikum_id', flat=True)
+        queryset = ModulPraktikum.objects.none()
+        if matkul:
+            queryset = ModulPraktikum.objects.filter(matkul=matkul).exclude(pk__in=used_modules)
+        self.fields['modul_praktikum'].queryset = queryset
+        self.fields['bukti_foto'].required = True
 
-    def clean_modul(self):
-        modul = self.cleaned_data['modul']
-        duplicate = AbsensiAsleb.objects.filter(asleb=self.asleb, modul=modul)
-        if self.instance and self.instance.pk:
-            duplicate = duplicate.exclude(pk=self.instance.pk)
+    def clean_bukti_foto(self):
+        photo = self.cleaned_data['bukti_foto']
+        if photo.content_type not in {'image/jpeg', 'image/png'}:
+            raise forms.ValidationError('Bukti foto harus diambil dari kamera dalam format gambar.')
+        if photo.size > 5 * 1024 * 1024:
+            raise forms.ValidationError('Ukuran bukti foto maksimal 5 MB.')
+        return photo
 
-        if duplicate.exists():
-            raise forms.ValidationError('Modul ini sudah pernah diabsen. Pilih modul lain.')
+    def clean_bukti_video(self):
+        video = self.cleaned_data['bukti_video']
+        if video.content_type not in {'video/webm', 'video/mp4'}:
+            raise forms.ValidationError('Bukti video harus direkam langsung dari kamera.')
+        if video.size > 20 * 1024 * 1024:
+            raise forms.ValidationError('Ukuran bukti video maksimal 20 MB.')
+        return video
 
+    def clean_modul_praktikum(self):
+        modul = self.cleaned_data['modul_praktikum']
+        if modul.matkul != get_asleb_matkul(self.asleb) or self.jadwal.mata_kuliah != str(modul.matkul):
+            raise forms.ValidationError('Modul tidak sesuai dengan mata kuliah pada jadwal aktif.')
+        if AbsensiAsleb.objects.filter(asleb=self.asleb, modul_praktikum=modul).exists():
+            raise forms.ValidationError('Modul ini sudah pernah diabsen dan tidak dapat dipilih lagi.')
         return modul
 
-    def clean_file_modul(self):
-        file_modul = self.cleaned_data['file_modul']
-        file_hash = hash_uploaded_file(file_modul)
-        duplicate = AbsensiAsleb.objects.filter(file_modul_hash=file_hash)
+    def clean(self):
+        cleaned_data = super().clean()
+        latitude = cleaned_data.get('latitude')
+        longitude = cleaned_data.get('longitude')
+        accuracy = cleaned_data.get('gps_accuracy')
+        if latitude is None or longitude is None or accuracy is None:
+            raise forms.ValidationError('Lokasi perangkat wajib diaktifkan untuk melakukan absensi.')
+        if accuracy > settings.ABSENSI_MAX_GPS_ACCURACY_METERS:
+            raise forms.ValidationError('Akurasi lokasi belum cukup baik. Aktifkan GPS dan coba kembali di area terbuka.')
 
-        if self.instance and self.instance.pk:
-            duplicate = duplicate.exclude(pk=self.instance.pk)
-
-        if duplicate.exists():
-            raise forms.ValidationError('Berkas modul ini sudah pernah diupload. Gunakan file modul yang berbeda.')
-
-        self.cleaned_data['file_modul_hash'] = file_hash
-        return file_modul
+        distance = calculate_distance_meters(
+            latitude,
+            longitude,
+            settings.ABSENSI_CENTER_LATITUDE,
+            settings.ABSENSI_CENTER_LONGITUDE,
+        )
+        if distance > settings.ABSENSI_RADIUS_METERS:
+            raise forms.ValidationError(
+                f'Anda berada sekitar {round(distance)} meter dari lokasi praktikum. '
+                f'Absensi hanya dapat dilakukan dalam radius {settings.ABSENSI_RADIUS_METERS} meter.'
+            )
+        cleaned_data['distance_meters'] = round(distance)
+        return cleaned_data
 
     def save(self, commit=True):
         instance = super().save(commit=False)
-        instance.file_modul_hash = self.cleaned_data.get('file_modul_hash', instance.file_modul_hash)
+        modul = self.cleaned_data['modul_praktikum']
+        instance.jadwal = self.jadwal
+        instance.tanggal_praktikum = timezone.localdate()
+        instance.modul = modul.nomor
+        instance.materi_praktikum = modul.judul
+        instance.file_modul.name = modul.file.name
+        instance.latitude = self.cleaned_data['latitude']
+        instance.longitude = self.cleaned_data['longitude']
+        instance.jarak_lokasi_meter = self.cleaned_data['distance_meters']
 
         if commit:
             instance.save()
@@ -177,9 +221,35 @@ class AbsensiAslebForm(forms.ModelForm):
         return instance
 
 
-def hash_uploaded_file(uploaded_file):
-    digest = hashlib.sha256()
-    for chunk in uploaded_file.chunks():
-        digest.update(chunk)
-    uploaded_file.seek(0)
-    return digest.hexdigest()
+def calculate_distance_meters(latitude, longitude, target_latitude, target_longitude):
+    latitude = float(latitude)
+    longitude = float(longitude)
+    earth_radius = 6371000
+    lat1, lat2 = radians(latitude), radians(target_latitude)
+    delta_lat = radians(target_latitude - latitude)
+    delta_lon = radians(target_longitude - longitude)
+    value = sin(delta_lat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(delta_lon / 2) ** 2
+    return earth_radius * 2 * asin(sqrt(value))
+
+
+class ModulPraktikumForm(forms.ModelForm):
+    class Meta:
+        model = ModulPraktikum
+        fields = ['matkul', 'nomor', 'judul', 'file']
+        widgets = {
+            'nomor': forms.NumberInput(attrs={'min': 1}),
+            'judul': forms.TextInput(attrs={'placeholder': 'Judul atau materi modul'}),
+            'file': forms.FileInput(attrs={'accept': '.pdf,.doc,.docx,.ppt,.pptx,.zip'}),
+        }
+
+
+def get_asleb_matkul(asleb):
+    from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb
+
+    registration = PendaftaranAsleb.objects.filter(
+        nim=asleb.nim,
+        status__in=['diterima', 'digenerate'],
+    ).select_related('matkul').order_by('-pk').first()
+    if registration:
+        return registration.matkul
+    return next((matkul for matkul in MataKuliahAsleb.objects.filter(aktif=True) if str(matkul) == asleb.matkul), None)

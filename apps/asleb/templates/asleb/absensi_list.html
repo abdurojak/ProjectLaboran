@@ -8,9 +8,15 @@
         <div class="min-w-0">
             <p class="text-sm font-bold uppercase tracking-[0.2em] text-cyan-700">Absensi</p>
             <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 md:text-3xl">Absensi Aslab</h2>
-            <p class="mt-2 text-sm text-slate-500">Asisten lab mengisi absensi per modul, upload modul praktikum, dan bukti video kegiatan.</p>
+            <p class="mt-2 text-sm text-slate-500">Laboran menyediakan modul per mata kuliah. Asisten lab mengunduh modul lalu mengisi absensi dan bukti video.</p>
         </div>
         <div class="flex w-full flex-wrap gap-3 sm:w-auto">
+            {% if can_manage_modul %}
+            <a class="btn-secondary w-full justify-center gap-2 sm:w-auto" href="{% url 'asleb:modul_create' %}">
+                <i data-lucide="file-plus-2" class="h-4 w-4"></i>
+                <span>Tambah Modul</span>
+            </a>
+            {% endif %}
             {% if current_pengguna.role == 'admin' or current_pengguna.role == 'laboran' %}
             <form method="post" action="{% url 'asleb:absensi_toggle_status' %}">
                 {% csrf_token %}
@@ -21,7 +27,7 @@
             </form>
             {% endif %}
 
-            {% if is_asisten_lab and pengaturan_absensi.dibuka and asleb_profile %}
+            {% if is_asisten_lab and pengaturan_absensi.dibuka and asleb_profile and jadwal_aktif %}
             <a class="btn-primary w-full justify-center gap-2 sm:w-auto" href="{% url 'asleb:absensi_create' %}">
                 <i data-lucide="clipboard-check" class="h-4 w-4"></i>
                 <span>Isi Absensi</span>
@@ -30,9 +36,47 @@
         </div>
     </div>
 
+    <div class="surface-card min-w-0 max-w-full overflow-hidden p-5 md:p-6">
+        <div class="flex flex-wrap items-end justify-between gap-3">
+            <div>
+                <h3 class="text-xl font-black text-slate-900">Modul Mata Kuliah</h3>
+                <p class="mt-1 text-sm text-slate-500">{{ modul_list|length }} modul tersedia. Modul yang sudah dipakai tidak muncul lagi pada pilihan absensi.</p>
+            </div>
+        </div>
+        <div class="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {% for modul in modul_list %}
+            <article class="rounded-lg border border-slate-200 bg-white p-5">
+                <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                        <div class="text-xs font-black uppercase text-cyan-700">Modul {{ modul.nomor }}</div>
+                        <h4 class="mt-2 break-words font-black text-slate-900">{{ modul.judul }}</h4>
+                        <p class="mt-2 break-words text-xs text-slate-500">{{ modul.matkul }}</p>
+                    </div>
+                    <i data-lucide="book-open" class="h-5 w-5 shrink-0 text-cyan-700"></i>
+                </div>
+                <div class="mt-4 flex flex-wrap gap-2">
+                    <a href="{% url 'asleb:modul_download' modul.pk %}" class="btn-secondary gap-2">
+                        <i data-lucide="download" class="h-4 w-4"></i><span>Unduh</span>
+                    </a>
+                    {% if can_manage_modul %}
+                    <a href="{% url 'asleb:modul_update' modul.pk %}" class="btn-secondary" title="Edit modul"><i data-lucide="pencil" class="h-4 w-4"></i></a>
+                    <form method="post" action="{% url 'asleb:modul_delete' modul.pk %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn-secondary text-rose-700" title="Hapus modul"><i data-lucide="trash-2" class="h-4 w-4"></i></button>
+                    </form>
+                    {% endif %}
+                </div>
+            </article>
+            {% empty %}
+            <div class="rounded-lg border border-dashed border-slate-300 p-7 text-center text-sm text-slate-500 sm:col-span-2 xl:col-span-3">Belum ada modul untuk mata kuliah ini.</div>
+            {% endfor %}
+        </div>
+    </div>
+
     <div class="{% if pengaturan_absensi.dibuka %}border-emerald-200 bg-emerald-50 text-emerald-800{% else %}border-amber-200 bg-amber-50 text-amber-800{% endif %} rounded-3xl border px-5 py-4 text-sm font-semibold">
         Status absensi: {% if pengaturan_absensi.dibuka %}Dibuka{% else %}Ditutup{% endif %}.
         {% if is_asisten_lab and not asleb_profile %} Data Aslab untuk akun Anda belum ditemukan, hubungi admin/laboran.{% endif %}
+        {% if is_asisten_lab and asleb_profile and pengaturan_absensi.dibuka and not jadwal_aktif %} Belum ada jadwal praktikum yang sedang berlangsung; absensi tertutup otomatis.{% endif %}
     </div>
 
     <form id="absensi-filter-form" method="get" class="surface-card min-w-0 max-w-full overflow-hidden grid gap-4 p-4 sm:p-5 md:grid-cols-[minmax(0,1.4fr)_180px_auto] md:items-end">
@@ -71,7 +115,8 @@
                         <th>Tanggal Praktikum</th>
                         <th>Modul</th>
                         <th>Materi</th>
-                        <th>Upload Modul</th>
+                        <th>Modul Praktikum</th>
+                        <th>Bukti Foto</th>
                         <th>Bukti Video</th>
                     </tr>
                 </thead>
@@ -83,12 +128,13 @@
                         <td>{{ absensi.tanggal_praktikum|date:"d M Y" }}</td>
                         <td>Modul {{ absensi.modul }}</td>
                         <td>{{ absensi.materi_praktikum|default:"-" }}</td>
-                        <td><a class="inline-flex whitespace-nowrap font-semibold text-brand-700 hover:text-brand-800" href="{{ absensi.file_modul.url }}" target="_blank" rel="noreferrer">Lihat modul</a></td>
+                        <td>{% if absensi.modul_praktikum %}<a class="inline-flex whitespace-nowrap font-semibold text-brand-700 hover:text-brand-800" href="{% url 'asleb:modul_download' absensi.modul_praktikum.pk %}">Unduh modul</a>{% else %}<span class="text-slate-400">Modul lama</span>{% endif %}</td>
+                        <td>{% if absensi.bukti_foto %}<a class="inline-flex whitespace-nowrap font-semibold text-brand-700 hover:text-brand-800" href="{{ absensi.bukti_foto.url }}" target="_blank" rel="noreferrer">Lihat foto</a>{% else %}<span class="text-slate-400">-</span>{% endif %}</td>
                         <td><a class="inline-flex whitespace-nowrap font-semibold text-brand-700 hover:text-brand-800" href="{{ absensi.bukti_video.url }}" target="_blank" rel="noreferrer">Lihat video</a></td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="7" class="py-12 text-center text-slate-500">Belum ada absensi aslab.</td>
+                        <td colspan="8" class="py-12 text-center text-slate-500">Belum ada absensi aslab.</td>
                     </tr>
                     {% endfor %}
                 </tbody>

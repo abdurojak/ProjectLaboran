@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Bantuan{% endblock %}
+
+{% block content %}
+<section class="mx-auto max-w-4xl space-y-6">
+    <div class="flex flex-wrap items-end justify-between gap-4">
+        <div>
+            <p class="text-sm font-bold uppercase tracking-[0.2em] text-cyan-700">Pusat Bantuan</p>
+            <h2 class="mt-2 text-3xl font-black text-slate-900">Chat Bantuan</h2>
+            <p class="mt-2 text-sm text-slate-500">Tanyakan hal sederhana kepada bot, lalu hubungi admin bila masih memerlukan bantuan.</p>
+        </div>
+        <span class="inline-flex items-center gap-2 rounded-full {% if percakapan.status == 'admin' %}bg-amber-100 text-amber-800{% else %}bg-emerald-100 text-emerald-800{% endif %} px-4 py-2 text-sm font-bold">
+            <i data-lucide="{% if percakapan.status == 'admin' %}headphones{% else %}bot{% endif %}" class="h-4 w-4"></i>
+            {{ percakapan.get_status_display }}
+        </span>
+    </div>
+
+    <div class="surface-card overflow-hidden">
+        <div class="max-h-[56vh] min-h-[360px] space-y-4 overflow-y-auto p-5 md:p-7" data-chat-messages>
+            {% for pesan in percakapan.pesan.all %}
+            <div class="flex {% if pesan.pengirim == 'pengguna' %}justify-end{% else %}justify-start{% endif %}">
+                <div class="max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-6 {% if pesan.pengirim == 'pengguna' %}bg-brand-700 text-white{% elif pesan.pengirim == 'admin' %}border border-cyan-200 bg-cyan-50 text-cyan-950{% else %}bg-slate-100 text-slate-700{% endif %}">
+                    <div class="mb-1 text-xs font-black uppercase opacity-70">{{ pesan.get_pengirim_display }}</div>
+                    <div class="whitespace-pre-wrap break-words">{{ pesan.isi }}</div>
+                    <div class="mt-1 text-[11px] opacity-60">{{ pesan.dibuat_pada|date:"d M Y H:i" }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="border-t border-slate-200 bg-slate-50 p-4 md:p-5">
+            <form method="post" class="flex flex-col gap-3 sm:flex-row">
+                {% csrf_token %}
+                <label for="id_pesan" class="sr-only">Tulis pertanyaan</label>
+                <textarea id="id_pesan" name="pesan" rows="2" maxlength="1000" required class="min-h-14 flex-1 resize-none" placeholder="Tulis pertanyaan Anda..."></textarea>
+                <button type="submit" class="btn-primary justify-center gap-2 sm:self-end">
+                    <i data-lucide="send" class="h-4 w-4"></i><span>Kirim</span>
+                </button>
+            </form>
+            {% if percakapan.status == 'bot' %}
+            <form method="post" action="{% url 'core:bantuan_escalate' %}" class="mt-3">
+                {% csrf_token %}
+                <button type="submit" class="btn-secondary w-full justify-center gap-2 sm:w-auto">
+                    <i data-lucide="headphones" class="h-4 w-4"></i><span>Masih Tidak Paham, Hubungi Admin</span>
+                </button>
+            </form>
+            {% else %}
+            <p class="mt-3 text-xs font-semibold text-amber-700">Percakapan sudah masuk antrean admin. Pesan baru akan terlihat oleh admin.</p>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const messages = document.querySelector('[data-chat-messages]');
+        if (messages) messages.scrollTop = messages.scrollHeight;
+    });
+</script>
+{% endblock %}

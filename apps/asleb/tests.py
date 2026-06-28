@@ -1,15 +1,22 @@
-from datetime import date
+import base64
+from datetime import date, datetime
+from unittest.mock import patch
 
+from django.core import mail
+from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.utils import timezone
 from reportlab.lib.enums import TA_RIGHT
 
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb
 from apps.pengguna.models import Pengguna
+from apps.jadwal.models import JadwalPraktikum
+from apps.ruangan.models import RuanganLab
 
 from .forms import AbsensiAslebForm
-from .models import Asleb, HonorAsleb, PengaturanAbsensiAsleb
+from .models import AbsensiAsleb, Asleb, HonorAsleb, ModulPraktikum, PengaturanAbsensiAsleb
 from .surat_honor import LAB_SIGNATURES, build_lab_signature, build_lampiran_page, build_styles
 
 
@@ -79,12 +86,102 @@ class AslebViewTests(TestCase):
         session['pengguna_id'] = aslab_user.pk
         session.save()
 
-        response = self.client.get(reverse('asleb:absensi_create'))
+        PendaftaranAsleb.objects.create(
+            nama=self.asleb.nama,
+            nim=self.asleb.nim,
+            no_hp=self.asleb.no_hp,
+            email=self.asleb.email,
+            program_studi=self.asleb.program_studi,
+            semester=self.asleb.semester,
+            matkul=self.matkul,
+            status='digenerate',
+        )
+
+    def make_camera_photo(self, name='bukti.png'):
+        image = base64.b64decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+        )
+        return SimpleUploadedFile(name, image, content_type='image/png')
+        fixed_now = timezone.make_aware(datetime(2026, 6, 29, 10, 0))
+        self.create_active_schedule()
+
+        with patch('apps.asleb.views.timezone.localtime', return_value=fixed_now):
+            response = self.client.get(reverse('asleb:absensi_create'))
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'mx-auto min-w-0 max-w-4xl')
         self.assertContains(response, 'min-w-0 max-w-full overflow-hidden')
         self.assertContains(response, 'w-full justify-center sm:w-auto')
+
+    def test_asisten_lab_tidak_dapat_menambah_modul(self):
+        aslab_user = Pengguna.objects.create(
+            nama_pengguna='Siti Nurhaliza',
+            nim_nik=self.asleb.nim,
+            email='siti-modul@example.com',
+            password='rahasia123',
+            no_hp='081234567891',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='asisten_lab',
+        )
+        session = self.client.session
+        session['pengguna_id'] = aslab_user.pk
+        session.save()
+
+        response = self.client.get(reverse('asleb:modul_create'))
+
+        self.assertRedirects(response, reverse('dashboard:home'))
+
+    def test_laboran_dapat_menambah_modul_matkul(self):
+        laboran = Pengguna.objects.create(
+            nama_pengguna='Laboran Modul',
+            nim_nik='1000000099',
+            email='laboran-modul@example.com',
+            password='rahasia123',
+            no_hp='081234567899',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='laboran',
+        )
+        session = self.client.session
+        session['pengguna_id'] = laboran.pk
+        session.save()
+
+        response = self.client.post(reverse('asleb:modul_create'), {
+            'matkul': self.matkul.pk,
+            'nomor': 1,
+            'judul': 'Pengenalan Struktur Data',
+            'file': SimpleUploadedFile('modul-sda.pdf', b'isi modul', content_type='application/pdf'),
+        })
+
+        self.assertRedirects(response, reverse('asleb:absensi_list'))
+        self.assertTrue(ModulPraktikum.objects.filter(matkul=self.matkul, nomor=1, diunggah_oleh=laboran).exists())
+
+    def test_laboran_dapat_membuka_absensi_aslab(self):
+        laboran = Pengguna.objects.create(
+            nama_pengguna='Laboran Absensi',
+            nim_nik='1000000098',
+            email='laboran-absensi@example.com',
+            password='rahasia123',
+            no_hp='081234567898',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='laboran',
+        )
+        session = self.client.session
+        session['pengguna_id'] = laboran.pk
+        session.save()
+
+        response = self.client.post(reverse('asleb:absensi_toggle_status'))
+
+        self.assertRedirects(response, reverse('asleb:absensi_list'))
+        self.assertTrue(PengaturanAbsensiAsleb.get_solo().dibuka)
 
     def test_asleb_search_filters_data(self):
         response = self.client.get(reverse('asleb:asleb_list'), {'q': '2301001'})
@@ -201,19 +298,38 @@ class AslebViewTests(TestCase):
         self.assertEqual(signature._cellvalues[2][0].style.alignment, TA_RIGHT)
         self.assertEqual(build_lab_signature(build_styles(), lab_name)._cellvalues[0][1]._cellvalues[2][0].text, LAB_SIGNATURES[lab_name])
 
-    def test_absensi_menolak_file_modul_yang_sama(self):
+    def test_absensi_menolak_modul_yang_sudah_dipakai(self):
+        PendaftaranAsleb.objects.create(
+            nama=self.asleb.nama,
+            nim=self.asleb.nim,
+            no_hp=self.asleb.no_hp,
+            email=self.asleb.email,
+            program_studi=self.asleb.program_studi,
+            semester=self.asleb.semester,
+            matkul=self.matkul,
+            status='digenerate',
+        )
+        modul = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=1,
+            judul='Pengenalan Struktur Data',
+            file=SimpleUploadedFile('modul-1.pdf', b'isi modul', content_type='application/pdf'),
+        )
+        jadwal = self.create_active_schedule()
         first_form = AbsensiAslebForm(
             data={
-                'tanggal_praktikum': '2026-04-01',
-                'modul': 1,
-                'materi_praktikum': 'Materi 1',
+                'modul_praktikum': modul.pk,
                 'pekerjaan': 'Membantu praktikum',
+                'latitude': '-6.1680678',
+                'longitude': '106.7916257',
+                'gps_accuracy': '10',
             },
             files={
-                'file_modul': SimpleUploadedFile('modul-1.pdf', b'isi modul sama', content_type='application/pdf'),
+                'bukti_foto': self.make_camera_photo('foto-1.png'),
                 'bukti_video': SimpleUploadedFile('video-1.mp4', b'video 1', content_type='video/mp4'),
             },
             asleb=self.asleb,
+            jadwal=jadwal,
         )
         self.assertTrue(first_form.is_valid(), first_form.errors)
         first_absensi = first_form.save(commit=False)
@@ -222,20 +338,101 @@ class AslebViewTests(TestCase):
 
         second_form = AbsensiAslebForm(
             data={
-                'tanggal_praktikum': '2026-04-02',
-                'modul': 2,
-                'materi_praktikum': 'Materi 2',
+                'modul_praktikum': modul.pk,
                 'pekerjaan': 'Membantu praktikum',
+                'latitude': '-6.1680678',
+                'longitude': '106.7916257',
+                'gps_accuracy': '10',
             },
             files={
-                'file_modul': SimpleUploadedFile('modul-duplikat.pdf', b'isi modul sama', content_type='application/pdf'),
+                'bukti_foto': self.make_camera_photo('foto-2.png'),
                 'bukti_video': SimpleUploadedFile('video-2.mp4', b'video 2', content_type='video/mp4'),
             },
             asleb=self.asleb,
+            jadwal=jadwal,
         )
 
         self.assertFalse(second_form.is_valid())
-        self.assertIn('file_modul', second_form.errors)
+        self.assertIn('modul_praktikum', second_form.errors)
+
+    def test_absensi_ditolak_jika_di_luar_radius_kampus(self):
+        PendaftaranAsleb.objects.create(
+            nama=self.asleb.nama,
+            nim=self.asleb.nim,
+            no_hp=self.asleb.no_hp,
+            email=self.asleb.email,
+            program_studi=self.asleb.program_studi,
+            semester=self.asleb.semester,
+            matkul=self.matkul,
+            status='digenerate',
+        )
+        modul = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=2,
+            judul='Linked List',
+            file=SimpleUploadedFile('modul-2.pdf', b'isi modul', content_type='application/pdf'),
+        )
+        form = AbsensiAslebForm(
+            data={
+                'modul_praktikum': modul.pk,
+                'pekerjaan': 'Membantu praktikum',
+                'latitude': '-6.2000000',
+                'longitude': '106.8000000',
+                'gps_accuracy': '10',
+            },
+            files={
+                'bukti_foto': self.make_camera_photo(),
+                'bukti_video': SimpleUploadedFile('video.mp4', b'video', content_type='video/mp4'),
+            },
+            asleb=self.asleb,
+            jadwal=self.create_active_schedule(),
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('radius 150 meter', str(form.non_field_errors()))
+
+    def test_pengingat_email_maksimal_tiga_kali(self):
+        PendaftaranAsleb.objects.create(
+            nama=self.asleb.nama,
+            nim=self.asleb.nim,
+            no_hp=self.asleb.no_hp,
+            email=self.asleb.email,
+            program_studi=self.asleb.program_studi,
+            semester=self.asleb.semester,
+            matkul=self.matkul,
+            status='digenerate',
+        )
+        self.create_active_schedule()
+        reminder_times = [
+            timezone.make_aware(datetime(2026, 6, 29, 9, 31)),
+            timezone.make_aware(datetime(2026, 6, 29, 10, 7)),
+            timezone.make_aware(datetime(2026, 6, 29, 10, 43)),
+            timezone.make_aware(datetime(2026, 6, 29, 10, 50)),
+        ]
+
+        for current_time in reminder_times:
+            with patch(
+                'apps.asleb.management.commands.send_absensi_reminders.timezone.localtime',
+                return_value=current_time,
+            ):
+                call_command('send_absensi_reminders')
+
+        self.assertEqual(len(mail.outbox), 3)
+        self.assertIn('1/3', mail.outbox[0].subject)
+        self.assertIn('3/3', mail.outbox[2].subject)
+
+    def create_active_schedule(self):
+        room = RuanganLab.objects.filter(aktif=True).first()
+        return JadwalPraktikum.objects.create(
+            mata_kuliah=str(self.matkul),
+            kelas=self.matkul.kelas,
+            ruangan=room,
+            pengampu=self.matkul.dosen,
+            hari='senin',
+            waktu_mulai='09:00',
+            waktu_selesai='11:00',
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
 
     def create_pendaftaran_history(self, nim, count):
         for index in range(count):

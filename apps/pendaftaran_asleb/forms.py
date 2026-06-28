@@ -5,7 +5,7 @@ import uuid
 from django import forms
 from django.core.files.base import ContentFile
 
-from .models import MataKuliahAsleb, PendaftaranAsleb
+from .models import MataKuliahAsleb, PendaftaranAsleb, PeriodeAsleb
 from .utils import extract_grade_from_transcript
 
 
@@ -69,6 +69,9 @@ class PendaftaranAslebForm(forms.ModelForm):
 
     def save(self, commit=True):
         instance = super().save(commit=False)
+        if not instance.periode_id:
+            from .services import get_current_period
+            instance.periode = get_current_period()
         detected_grade = self.cleaned_data.get('nilai_transkrip') or instance.nilai_transkrip
         instance.nilai_transkrip = detected_grade
         instance.skor_nilai = PendaftaranAsleb.grade_to_score(detected_grade)
@@ -166,7 +169,7 @@ class PublicTranskripForm(forms.Form):
     transkrip = forms.FileField(
         label='Upload Transkrip Nilai',
         widget=forms.FileInput(attrs={'accept': '.pdf,.png,.jpg,.jpeg,.webp,.txt,.csv'}),
-        help_text='Upload transkrip PDF/gambar. Sistem akan membaca nilai mata kuliah yang dipilih.',
+        help_text='Upload transkrip PDF/gambar. Sistem akan mencocokkan NIM akun dan membaca nilai mata kuliah yang dipilih.',
     )
 
 
@@ -180,7 +183,6 @@ class PublicBerkasPendaftaranForm(forms.Form):
     email = forms.EmailField(required=False)
     program_studi = forms.CharField(max_length=120, widget=forms.TextInput(attrs={'placeholder': 'Program studi'}))
     semester = forms.ChoiceField(choices=SEMESTER_CHOICES)
-    cv = forms.FileField(label='CV', widget=forms.FileInput(attrs={'accept': '.pdf,.doc,.docx'}))
     metode_rekening = forms.ChoiceField(choices=PendaftaranAsleb.METODE_REKENING_CHOICES)
     rekening = forms.CharField(max_length=150, widget=forms.TextInput(attrs={'placeholder': 'Contoh: BCA 123456789 / DANA 0812xxxx / OVO 0812xxxx'}))
     alasan = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 4, 'placeholder': 'Alasan atau catatan pendaftaran'}))
@@ -218,6 +220,28 @@ class PublicBerkasPendaftaranForm(forms.Form):
             cleaned_data['no_hp'] = self.current_pengguna.no_hp
             cleaned_data['email'] = self.current_pengguna.email
             cleaned_data['program_studi'] = self.current_pengguna.prodi
+        return cleaned_data
+
+
+class PeriodeAslebForm(forms.ModelForm):
+    class Meta:
+        model = PeriodeAsleb
+        fields = ['pendaftaran_mulai', 'pendaftaran_selesai']
+        widgets = {
+            'pendaftaran_mulai': forms.DateInput(attrs={'type': 'date'}),
+            'pendaftaran_selesai': forms.DateInput(attrs={'type': 'date'}),
+        }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        start = cleaned_data.get('pendaftaran_mulai')
+        end = cleaned_data.get('pendaftaran_selesai')
+        if start and end and start > end:
+            self.add_error('pendaftaran_selesai', 'Tanggal tutup harus setelah tanggal buka.')
+        if start and (start < self.instance.mulai or start > self.instance.selesai):
+            self.add_error('pendaftaran_mulai', 'Tanggal buka harus berada dalam periode aslab.')
+        if end and (end < self.instance.mulai or end > self.instance.selesai):
+            self.add_error('pendaftaran_selesai', 'Tanggal tutup harus berada dalam periode aslab.')
         return cleaned_data
 
 

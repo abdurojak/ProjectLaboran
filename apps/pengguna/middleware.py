@@ -61,6 +61,11 @@ class PenggunaLoginRequiredMiddleware:
                     return self.get_response(request)
                 return redirect(f'{login_url}?next={path}')
 
+            if pengguna.role == 'asisten_lab':
+                from apps.pendaftaran_asleb.services import sync_expired_asleb_periods
+                sync_expired_asleb_periods()
+                pengguna.refresh_from_db(fields=['role'])
+
             request.current_pengguna = pengguna
 
         if not pengguna_id and not is_exempt:

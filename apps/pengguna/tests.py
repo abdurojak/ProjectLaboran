@@ -499,6 +499,7 @@ class PenggunaAuthTests(TestCase):
         response = self.client.post(
             reverse('pengguna:login'),
             {
+                'jenis_login': 'mahasiswa',
                 'nim_nik': '2201001',
                 'password': 'rahasia123',
             },
@@ -511,6 +512,7 @@ class PenggunaAuthTests(TestCase):
         response = self.client.post(
             f"{reverse('pengguna:login')}?next=https://evil.example/phish",
             {
+                'jenis_login': 'mahasiswa',
                 'nim_nik': '2201001',
                 'password': 'rahasia123',
             },
@@ -522,6 +524,7 @@ class PenggunaAuthTests(TestCase):
         response = self.client.post(
             reverse('pengguna:login'),
             {
+                'jenis_login': 'mahasiswa',
                 'nim_nik': '2201001',
                 'password': 'salah',
             },
@@ -537,6 +540,7 @@ class PenggunaAuthTests(TestCase):
         response = self.client.post(
             reverse('pengguna:login'),
             {
+                'jenis_login': 'mahasiswa',
                 'nim_nik': '9999999',
                 'password': 'passwordasal',
             },
@@ -552,6 +556,7 @@ class PenggunaAuthTests(TestCase):
         response = self.client.post(
             reverse('pengguna:login'),
             {
+                'jenis_login': 'mahasiswa',
                 'nim_nik': 'ABC123',
                 'password': 'passwordasal',
             },
@@ -568,6 +573,7 @@ class PenggunaAuthTests(TestCase):
         response = self.client.post(
             reverse('pengguna:login'),
             {
+                'jenis_login': 'mahasiswa',
                 'nim_nik': '2201001',
                 'password': 'rahasia123',
             },
@@ -577,10 +583,53 @@ class PenggunaAuthTests(TestCase):
         self.assertContains(response, 'Akun belum diverifikasi')
         self.assertNotIn('pengguna_id', self.client.session)
 
+    def test_login_karyawan_hanya_untuk_admin_dan_laboran(self):
+        admin = Pengguna.objects.create(
+            nama_pengguna='Admin Lab',
+            nim_nik='3301001',
+            email='admin@example.com',
+            password='rahasia123',
+            no_hp='081111111111',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='admin',
+        )
+
+        response = self.client.post(
+            reverse('pengguna:login'),
+            {
+                'jenis_login': 'karyawan',
+                'nim_nik': admin.nim_nik,
+                'password': 'rahasia123',
+            },
+        )
+
+        self.assertRedirects(response, reverse('dashboard:home'))
+        self.assertEqual(self.client.session['pengguna_id'], admin.pk)
+
+    def test_login_mahasiswa_ditolak_di_mode_karyawan(self):
+        response = self.client.post(
+            reverse('pengguna:login'),
+            {
+                'jenis_login': 'karyawan',
+                'nim_nik': self.pengguna.nim_nik,
+                'password': 'rahasia123',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Akun ini bukan akun karyawan')
+        self.assertNotIn('pengguna_id', self.client.session)
+
     def test_register_fakultas_dan_prodi_berupa_dropdown(self):
         response = self.client.get(reverse('pengguna:register'))
 
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="nama_pengguna"', html=False)
+        self.assertContains(response, 'name="nim_nik"', html=False)
+        self.assertContains(response, 'minlength="10"', html=False)
         self.assertContains(response, '<select name="fakultas"', html=False)
         self.assertContains(response, '<select name="prodi"', html=False)
         self.assertContains(response, 'Teknologi Industri')
@@ -592,6 +641,15 @@ class PenggunaAuthTests(TestCase):
 
             self.assertEqual(response.status_code, 200)
             self.assertNotContains(response, 'id="dashboard-sidebar"', html=False)
+
+    def test_login_dan_register_membaca_tema_terakhir_dari_browser(self):
+        for url in [reverse('pengguna:login'), reverse('pengguna:register')]:
+            response = self.client.get(url)
+
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, "localStorage.getItem(storageKeys.theme)", html=False)
+            self.assertContains(response, "localStorage.getItem(storageKeys.background)", html=False)
+            self.assertContains(response, "labhub-custom-background", html=False)
 
     def test_register_dropdown_fakultas_prodi_mengambil_data_database(self):
         Fakultas.objects.create(nama='Fakultas Baru')
@@ -608,20 +666,21 @@ class PenggunaAuthTests(TestCase):
             reverse('pengguna:register'),
             {
                 'nama_pengguna': 'Siti Aminah',
-                'nim_nik': '2201002',
+                'nim_nik': '0642201002',
                 'email': 'siti@std.trisakti.ac.id',
                 'password': 'passwordku123',
                 'password_confirmation': 'passwordku123',
                 'alamat': 'Jakarta',
-                'fakultas': 'Ekonomi',
-                'prodi': 'Manajemen',
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Informatika',
                 'gender': 'perempuan',
             },
             follow=True,
         )
 
-        pengguna = Pengguna.objects.get(nim_nik='2201002')
+        pengguna = Pengguna.objects.get(nim_nik='0642201002')
         self.assertRedirects(response, reverse('pengguna:verify_register'))
+        self.assertEqual(pengguna.nama_pengguna, 'Siti Aminah')
         self.assertTrue(check_password('passwordku123', pengguna.password))
         self.assertEqual(pengguna.role, 'mahasiswa')
         self.assertEqual(pengguna.no_hp, '')
@@ -642,18 +701,18 @@ class PenggunaAuthTests(TestCase):
             reverse('pengguna:register'),
             {
                 'nama_pengguna': 'Link Verifikasi',
-                'nim_nik': '2201008',
+                'nim_nik': '0642201008',
                 'email': 'link@std.trisakti.ac.id',
                 'password': 'passwordku123',
                 'password_confirmation': 'passwordku123',
                 'alamat': 'Jakarta',
-                'fakultas': 'Ekonomi',
-                'prodi': 'Manajemen',
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Informatika',
                 'gender': 'laki_laki',
             },
         )
 
-        pengguna = Pengguna.objects.get(nim_nik='2201008')
+        pengguna = Pengguna.objects.get(nim_nik='0642201008')
         kode = self.client.session['pengguna_otp']['code']
 
         self.assertRedirects(response, reverse('pengguna:verify_register'))
@@ -667,31 +726,32 @@ class PenggunaAuthTests(TestCase):
         self.assertEqual(self.client.session['pengguna_id'], pengguna.pk)
         self.assertNotIn('pengguna_otp', self.client.session)
 
-    def test_register_menerima_email_domain_trisakti_tanpa_std(self):
+    def test_register_menolak_email_domain_trisakti_tanpa_std(self):
         response = self.client.post(
             reverse('pengguna:register'),
             {
                 'nama_pengguna': 'Dina Pratama',
-                'nim_nik': '2201003',
+                'nim_nik': '0642201003',
                 'email': 'dina@trisakti.ac.id',
                 'password': 'passwordku123',
                 'password_confirmation': 'passwordku123',
                 'alamat': 'Jakarta',
-                'fakultas': 'Ekonomi',
-                'prodi': 'Manajemen',
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Informatika',
                 'gender': 'perempuan',
             },
         )
 
-        self.assertRedirects(response, reverse('pengguna:verify_register'))
-        self.assertTrue(Pengguna.objects.filter(nim_nik='2201003', email='dina@trisakti.ac.id').exists())
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Email harus menggunakan domain @std.trisakti.ac.id.')
+        self.assertFalse(Pengguna.objects.filter(nim_nik='0642201003').exists())
 
     def test_register_menolak_password_lemah(self):
         response = self.client.post(
             reverse('pengguna:register'),
             {
                 'nama_pengguna': 'Password Lemah',
-                'nim_nik': '2201009',
+                'nim_nik': '0642201009',
                 'email': 'lemah@std.trisakti.ac.id',
                 'password': '123',
                 'password_confirmation': '123',
@@ -703,27 +763,60 @@ class PenggunaAuthTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertFalse(Pengguna.objects.filter(nim_nik='2201009').exists())
+        self.assertFalse(Pengguna.objects.filter(nim_nik='0642201009').exists())
 
     def test_register_menolak_email_non_trisakti(self):
         response = self.client.post(
             reverse('pengguna:register'),
             {
                 'nama_pengguna': 'Siti Aminah',
-                'nim_nik': '2201002',
+                'nim_nik': '0642201002',
                 'email': 'siti@gmail.com',
                 'password': 'passwordku123',
                 'password_confirmation': 'passwordku123',
                 'alamat': 'Jakarta',
-                'fakultas': 'Ekonomi',
-                'prodi': 'Manajemen',
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Informatika',
                 'gender': 'perempuan',
             },
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Email harus menggunakan domain @std.trisakti.ac.id atau @trisakti.ac.id.')
-        self.assertFalse(Pengguna.objects.filter(nim_nik='2201002').exists())
+        self.assertContains(response, 'Email harus menggunakan domain @std.trisakti.ac.id.')
+        self.assertFalse(Pengguna.objects.filter(nim_nik='0642201002').exists())
+
+    def test_register_menolak_email_yang_sudah_terdaftar(self):
+        Pengguna.objects.create(
+            nama_pengguna='Pemilik Email',
+            nim_nik='2201999',
+            email='sama@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081111111111',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+        )
+
+        response = self.client.post(
+            reverse('pengguna:register'),
+            {
+                'nama_pengguna': 'Email Sama',
+                'nim_nik': '0642201010',
+                'email': 'SAMA@std.trisakti.ac.id',
+                'password': 'passwordku123',
+                'password_confirmation': 'passwordku123',
+                'alamat': 'Jakarta',
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Informatika',
+                'gender': 'laki_laki',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Email sudah terdaftar')
+        self.assertFalse(Pengguna.objects.filter(nim_nik='0642201010').exists())
 
     def test_register_menolak_nim_berhuruf(self):
         response = self.client.post(
@@ -735,14 +828,34 @@ class PenggunaAuthTests(TestCase):
                 'password': 'passwordku123',
                 'password_confirmation': 'passwordku123',
                 'alamat': 'Jakarta',
-                'fakultas': 'Ekonomi',
-                'prodi': 'Manajemen',
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Informatika',
                 'gender': 'perempuan',
             },
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'NIM/NIK hanya boleh berisi angka.')
+        self.assertContains(response, 'NIM hanya boleh berisi angka.')
+
+    def test_register_menolak_nim_kurang_dari_10_digit(self):
+        response = self.client.post(
+            reverse('pengguna:register'),
+            {
+                'nama_pengguna': 'NIM Pendek',
+                'nim_nik': '123456789',
+                'email': 'nimpendek@std.trisakti.ac.id',
+                'password': 'passwordku123',
+                'password_confirmation': 'passwordku123',
+                'alamat': 'Jakarta',
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Informatika',
+                'gender': 'perempuan',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'NIM harus terdiri dari minimal 10 digit.')
+        self.assertFalse(Pengguna.objects.filter(nim_nik='123456789').exists())
 
     def test_forgot_password_mengganti_password_dengan_otp(self):
         response = self.client.post(
