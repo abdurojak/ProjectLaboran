@@ -73,6 +73,16 @@ class PeminjamanAlatDetailView(DetailView):
     template_name = 'peminjaman/peminjaman_detail.html'
     context_object_name = 'peminjaman'
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        pengguna = getattr(self.request, 'current_pengguna', None)
+        context['can_current_pengguna_change'] = (
+            not pengguna
+            or pengguna.role not in BORROWER_ROLES
+            or (self.object.nim == pengguna.nim_nik and self.object.status == 'diajukan')
+        )
+        return context
+
 
 class PeminjamanAlatCreateView(CreateView):
     model = PeminjamanAlat

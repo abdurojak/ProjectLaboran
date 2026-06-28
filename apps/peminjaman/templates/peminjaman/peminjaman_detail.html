@@ -11,6 +11,7 @@
             <p class="mt-2 text-sm text-slate-500">Detail lengkap transaksi peminjaman alat laboratorium.</p>
         </div>
         <div class="flex flex-wrap gap-3">
+            {% if can_current_pengguna_change %}
             <a class="btn-primary bg-amber-500 hover:bg-amber-600 shadow-amber-500/20" href="{% url 'peminjaman:peminjaman_update' peminjaman.pk %}">
                 <i data-lucide="pencil" class="h-4 w-4"></i>
                 <span>Edit</span>
@@ -22,6 +23,7 @@
                                         <span>Hapus</span>
                                     </button>
                                 </form>
+            {% endif %}
             <a class="btn-secondary" href="{% url 'peminjaman:peminjaman_list' %}">
                 <i data-lucide="arrow-left" class="h-4 w-4"></i>
                 <span>Kembali</span>

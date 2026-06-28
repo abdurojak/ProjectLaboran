@@ -141,6 +141,9 @@ class PeminjamanViewsTests(TestCase):
         self.assertContains(response, f'{self.barang.kode_barang} - {self.barang.nama}')
         self.assertContains(response, 'name="selected_barang_ids"')
         self.assertContains(response, 'data-barang-picker-done')
+        self.assertContains(response, '<th>Jumlah</th>')
+        self.assertContains(response, 'data-barang-quantity')
+        self.assertContains(response, 'data-barang-group="nama-mikroskop"')
         self.assertContains(response, '<th>Foto</th>')
         self.assertContains(response, 'data-barang-photo-preview')
         self.assertContains(response, 'data-barang-photo-modal')
@@ -418,6 +421,59 @@ class PeminjamanMahasiswaTests(TestCase):
         response = self.client.get(reverse('peminjaman:peminjaman_update', args=[peminjaman.pk]))
 
         self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
+
+    def test_mahasiswa_tidak_melihat_tombol_edit_hapus_di_detail_peminjaman_orang_lain(self):
+        peminjaman = PeminjamanAlat.objects.create(
+            barang=self.barang,
+            nama_peminjam='Budi',
+            nim='2201003',
+            no_hp='081222222222',
+            tanggal_pinjam=date(2026, 6, 21),
+            tanggal_kembali=date(2026, 6, 22),
+            status='diajukan',
+        )
+
+        response = self.client.get(reverse('peminjaman:peminjaman_detail', args=[peminjaman.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, reverse('peminjaman:peminjaman_update', args=[peminjaman.pk]))
+        self.assertNotContains(response, reverse('peminjaman:peminjaman_delete', args=[peminjaman.pk]))
+        self.assertContains(response, reverse('peminjaman:peminjaman_list'))
+
+    def test_mahasiswa_melihat_tombol_edit_hapus_di_detail_pengajuan_miliknya(self):
+        peminjaman = PeminjamanAlat.objects.create(
+            barang=self.barang,
+            nama_peminjam='Siti Aminah',
+            nim='2201002',
+            no_hp='081111111111',
+            tanggal_pinjam=date(2026, 6, 21),
+            tanggal_kembali=date(2026, 6, 22),
+            status='diajukan',
+        )
+
+        response = self.client.get(reverse('peminjaman:peminjaman_detail', args=[peminjaman.pk]))
+
+        self.assertContains(response, reverse('peminjaman:peminjaman_update', args=[peminjaman.pk]))
+        self.assertContains(response, reverse('peminjaman:peminjaman_delete', args=[peminjaman.pk]))
+
+    def test_asisten_lab_tidak_melihat_tombol_edit_hapus_di_detail_peminjaman_orang_lain(self):
+        self.mahasiswa.role = 'asisten_lab'
+        self.mahasiswa.save(update_fields=['role'])
+        peminjaman = PeminjamanAlat.objects.create(
+            barang=self.barang,
+            nama_peminjam='Budi',
+            nim='2201003',
+            no_hp='081222222222',
+            tanggal_pinjam=date(2026, 6, 21),
+            tanggal_kembali=date(2026, 6, 22),
+            status='diajukan',
+        )
+
+        response = self.client.get(reverse('peminjaman:peminjaman_detail', args=[peminjaman.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, reverse('peminjaman:peminjaman_update', args=[peminjaman.pk]))
+        self.assertNotContains(response, reverse('peminjaman:peminjaman_delete', args=[peminjaman.pk]))
 
     def test_asisten_lab_melihat_riwayat_peminjaman_milik_saya_setelah_dikembalikan(self):
         asisten = Pengguna.objects.create(

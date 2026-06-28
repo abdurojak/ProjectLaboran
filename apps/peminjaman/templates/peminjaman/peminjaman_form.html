@@ -98,6 +98,7 @@
                 <thead class="bg-slate-50">
                     <tr>
                         <th>Pilih</th>
+                        <th>Jumlah</th>
                         <th>Kode Barang</th>
                         <th>Nama Barang</th>
                         <th>Lokasi</th>
@@ -108,9 +109,12 @@
                 </thead>
                 <tbody>
                     {% for barang in detail_barang_list %}
-                    <tr data-barang-picker-row data-search="{{ barang.kode_barang }} {{ barang.nama }} {{ barang.inventaris.nama }} {{ barang.lokasi.nama_lokasi }} {{ barang.get_kondisi_display }} {{ barang.status_pinjam }}">
+                    <tr data-barang-picker-row data-barang-group="{% if barang.inventaris_id %}inventaris-{{ barang.inventaris_id }}{% else %}nama-{{ barang.nama|slugify }}{% endif %}" data-search="{{ barang.kode_barang }} {{ barang.nama }} {{ barang.inventaris.nama }} {{ barang.lokasi.nama_lokasi }} {{ barang.get_kondisi_display }} {{ barang.status_pinjam }}">
                         <td>
-                            <input type="checkbox" class="h-4 w-4 rounded border-slate-300 text-brand-700 focus:ring-brand-100" data-barang-picker-choice data-barang-id="{{ barang.pk }}" data-barang-label="{{ barang.kode_barang }} - {{ barang.nama }}"{% if barang.kondisi == 'rusak_berat' or barang.sedang_dipinjam %} disabled data-barang-disabled="true"{% endif %}>
+                            <input type="checkbox" class="h-4 w-4 rounded border-slate-300 text-brand-700 focus:ring-brand-100" data-barang-picker-choice data-barang-id="{{ barang.pk }}" data-barang-label="{{ barang.kode_barang }} - {{ barang.nama }}" data-barang-group="{% if barang.inventaris_id %}inventaris-{{ barang.inventaris_id }}{% else %}nama-{{ barang.nama|slugify }}{% endif %}"{% if barang.kondisi == 'rusak_berat' or barang.sedang_dipinjam %} disabled data-barang-disabled="true"{% endif %}>
+                        </td>
+                        <td>
+                            <input type="number" min="1" value="1" class="hidden h-10 w-20 rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold" data-barang-quantity data-barang-group="{% if barang.inventaris_id %}inventaris-{{ barang.inventaris_id }}{% else %}nama-{{ barang.nama|slugify }}{% endif %}" aria-label="Jumlah {{ barang.nama }}">
                         </td>
                         <td class="font-semibold text-slate-900">{{ barang.kode_barang }}</td>
                         <td>{{ barang.nama }}</td>
@@ -129,7 +133,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="7" class="py-12 text-center text-slate-500">Belum ada detail barang.</td>
+                        <td colspan="8" class="py-12 text-center text-slate-500">Belum ada detail barang.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -181,6 +185,7 @@
         const emptyState = document.querySelector('[data-selected-barang-empty]');
         const rows = Array.from(document.querySelectorAll('[data-barang-picker-row]'));
         const choices = Array.from(document.querySelectorAll('[data-barang-picker-choice]'));
+        const quantityInputs = Array.from(document.querySelectorAll('[data-barang-quantity]'));
         const doneButton = document.querySelector('[data-barang-picker-done]');
         const photoModal = document.querySelector('[data-barang-photo-modal]');
         const photoTitle = document.querySelector('[data-barang-photo-heading]');
@@ -251,6 +256,90 @@
             });
         });
 
+        function getGroupChoices(group) {
+            return choices.filter(function (choice) {
+                return choice.dataset.barangGroup === group && !choice.disabled;
+            });
+        }
+
+        function getGroupQuantities(group) {
+            return quantityInputs.filter(function (input) {
+                return input.dataset.barangGroup === group;
+            });
+        }
+
+        function getQuantityInput(choice) {
+            const row = choice.closest('[data-barang-picker-row]');
+            return row ? row.querySelector('[data-barang-quantity]') : null;
+        }
+
+        function updateQuantityFields(group) {
+            const groupChoices = getGroupChoices(group);
+            const selectedCount = groupChoices.filter(function (choice) {
+                return choice.checked;
+            }).length;
+
+            getGroupQuantities(group).forEach(function (input) {
+                const rowChoice = input.closest('[data-barang-picker-row]').querySelector('[data-barang-picker-choice]');
+                input.max = String(groupChoices.length || 1);
+                input.value = String(Math.max(selectedCount, 1));
+                input.classList.toggle('hidden', !rowChoice.checked);
+            });
+        }
+
+        function clampQuantity(value, max) {
+            const parsed = Number.parseInt(value, 10);
+            if (!Number.isFinite(parsed) || parsed < 1) {
+                return 1;
+            }
+            return Math.min(parsed, max);
+        }
+
+        function applyGroupQuantity(group, requestedQuantity, preferredChoice) {
+            const groupChoices = getGroupChoices(group);
+            if (!groupChoices.length) {
+                return;
+            }
+
+            const quantity = clampQuantity(requestedQuantity, groupChoices.length);
+            const orderedChoices = preferredChoice
+                ? [preferredChoice].concat(groupChoices.filter(function (choice) { return choice !== preferredChoice; }))
+                : groupChoices;
+
+            groupChoices.forEach(function (choice) {
+                choice.checked = false;
+            });
+            orderedChoices.slice(0, quantity).forEach(function (choice) {
+                choice.checked = true;
+            });
+            updateQuantityFields(group);
+        }
+
+        choices.forEach(function (choice) {
+            choice.addEventListener('change', function () {
+                const group = choice.dataset.barangGroup;
+                if (choice.checked) {
+                    const selectedCount = getGroupChoices(group).filter(function (item) {
+                        return item.checked;
+                    }).length;
+                    applyGroupQuantity(group, selectedCount || 1, choice);
+                } else {
+                    updateQuantityFields(group);
+                }
+            });
+        });
+
+        quantityInputs.forEach(function (input) {
+            input.addEventListener('input', function () {
+                const group = input.dataset.barangGroup;
+                const max = getGroupChoices(group).length || 1;
+                const quantity = clampQuantity(input.value, max);
+                input.value = String(quantity);
+                const preferredChoice = input.closest('[data-barang-picker-row]').querySelector('[data-barang-picker-choice]');
+                applyGroupQuantity(group, quantity, preferredChoice);
+            });
+        });
+
         function syncSelectedInputs() {
             const badges = Array.from(selectedList.querySelectorAll('[data-selected-barang-badge]'));
             const selectedIds = badges.map(function (badge) {
@@ -263,6 +352,9 @@
             choices.forEach(function (choice) {
                 choice.checked = selectedIds.includes(choice.dataset.barangId);
             });
+            Array.from(new Set(choices.map(function (choice) {
+                return choice.dataset.barangGroup;
+            }))).forEach(updateQuantityFields);
         }
 
         function createBadge(id, label) {
