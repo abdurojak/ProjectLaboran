@@ -25,9 +25,12 @@
         </div>
     </div>
 
-    <form method="post" enctype="multipart/form-data" class="surface-card min-w-0 max-w-full overflow-hidden grid gap-5 p-5 md:grid-cols-2 md:p-8">
+    <form method="post" enctype="multipart/form-data" class="surface-card min-w-0 max-w-full overflow-hidden grid gap-5 p-5 md:grid-cols-2 md:p-8" data-location-form>
         {% csrf_token %}
         {% for field in form %}
+        {% if field.is_hidden %}
+        {{ field }}
+        {% else %}
         <div class="{% if field.name == 'pekerjaan' %}md:col-span-2{% endif %} min-w-0">
             {{ field.label_tag }}
             {{ field }}
@@ -35,7 +38,11 @@
             <div class="mt-2 text-sm font-semibold text-rose-600">{{ field.errors|striptags }}</div>
             {% endif %}
         </div>
+        {% endif %}
         {% endfor %}
+        <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 md:col-span-2" data-location-status>
+            Lokasi akan diperiksa saat tombol Simpan Absensi ditekan. Pastikan GPS perangkat aktif.
+        </div>
         <div class="rounded-3xl bg-cyan-50 p-5 text-sm leading-7 text-cyan-900 md:col-span-2">
             Setiap absensi menambah total pertemuan pada rekap honorarium. Satu aslab hanya dapat mengisi satu kali untuk setiap modul yang disediakan laboran.
         </div>
@@ -51,4 +58,40 @@
         </div>
     </form>
 </section>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.querySelector('[data-location-form]');
+        const status = document.querySelector('[data-location-status]');
+        if (!form || !status) return;
+
+        form.addEventListener('submit', function (event) {
+            if (form.dataset.locationReady === '1') return;
+            event.preventDefault();
+            const button = form.querySelector('button[type="submit"]');
+            button.disabled = true;
+            status.textContent = 'Memeriksa lokasi perangkat...';
+
+            if (!navigator.geolocation) {
+                status.textContent = 'Perangkat atau browser ini tidak mendukung pemeriksaan lokasi.';
+                button.disabled = false;
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(function (position) {
+                document.getElementById('id_latitude').value = position.coords.latitude;
+                document.getElementById('id_longitude').value = position.coords.longitude;
+                document.getElementById('id_gps_accuracy').value = position.coords.accuracy;
+                form.dataset.locationReady = '1';
+                status.textContent = 'Lokasi ditemukan. Mengirim absensi...';
+                form.submit();
+            }, function () {
+                status.textContent = 'Lokasi tidak dapat dibaca. Izinkan akses lokasi, aktifkan GPS, lalu coba lagi.';
+                button.disabled = false;
+            }, {enableHighAccuracy: true, timeout: 15000, maximumAge: 0});
+        });
+    });
+</script>
 {% endblock %}

@@ -295,6 +295,13 @@ class AbsensiAsleb(models.Model):
     MODUL_CHOICES = [(number, f'Modul {number}') for number in range(1, 17)]
 
     asleb = models.ForeignKey(Asleb, on_delete=models.CASCADE, related_name='absensi')
+    jadwal = models.ForeignKey(
+        'jadwal.JadwalPraktikum',
+        on_delete=models.PROTECT,
+        related_name='absensi_asleb',
+        blank=True,
+        null=True,
+    )
     modul_praktikum = models.ForeignKey(
         ModulPraktikum,
         on_delete=models.PROTECT,
@@ -309,6 +316,9 @@ class AbsensiAsleb(models.Model):
     file_modul = models.FileField('Upload Modul Praktikum', upload_to='absensi_asleb/modul/')
     file_modul_hash = models.CharField(max_length=64, blank=True, db_index=True)
     bukti_video = models.FileField('Bukti Video Praktikum', upload_to='absensi_asleb/video/')
+    latitude = models.DecimalField(max_digits=10, decimal_places=7, blank=True, null=True)
+    longitude = models.DecimalField(max_digits=10, decimal_places=7, blank=True, null=True)
+    jarak_lokasi_meter = models.PositiveIntegerField(blank=True, null=True)
     dibuat_pada = models.DateTimeField(auto_now_add=True)
     diperbarui_pada = models.DateTimeField(auto_now=True)
 
@@ -326,3 +336,22 @@ class AbsensiAsleb(models.Model):
 
     def __str__(self):
         return f'{self.asleb.nama} - Modul {self.modul}'
+
+
+class PengingatAbsensiAsleb(models.Model):
+    asleb = models.ForeignKey(Asleb, on_delete=models.CASCADE, related_name='pengingat_absensi')
+    jadwal = models.ForeignKey('jadwal.JadwalPraktikum', on_delete=models.CASCADE, related_name='pengingat_absensi_asleb')
+    tanggal = models.DateField()
+    tahap = models.PositiveSmallIntegerField()
+    dikirim_pada = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['tanggal', 'jadwal__waktu_mulai', 'tahap']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['asleb', 'jadwal', 'tanggal', 'tahap'],
+                name='unique_pengingat_absensi_asleb',
+            ),
+        ]
+        verbose_name = 'Pengingat Absensi Aslab'
+        verbose_name_plural = 'Pengingat Absensi Aslab'

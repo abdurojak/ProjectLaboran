@@ -11,6 +11,7 @@ from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, UpdateView
 
 from apps.core.views import PostOnlyDeleteMixin
+from apps.jadwal.models import JadwalPraktikum
 from apps.pengguna.models import Pengguna
 
 from .forms import (
@@ -333,6 +334,11 @@ class AbsensiAslebListView(ListView):
         context['selected_modul'] = self.request.GET.get('modul', '').strip()
         context['modul_choices'] = AbsensiAsleb.MODUL_CHOICES
         context['asleb_profile'] = self.get_asleb_profile(pengguna) if pengguna else None
+        context['jadwal_aktif'] = (
+            get_active_absensi_schedule(context['asleb_profile'])
+            if context['asleb_profile'] and context['pengaturan_absensi'].dibuka
+            else None
+        )
         context['modul_list'] = self.get_modul_list(pengguna, context['asleb_profile'])
         context['can_manage_modul'] = bool(pengguna and pengguna.role in {'admin', 'laboran'})
         return context
@@ -373,12 +379,18 @@ class AbsensiAslebCreateView(CreateView):
             messages.warning(request, 'Absensi aslab sedang ditutup oleh admin/laboran.')
             return redirect('asleb:absensi_list')
 
+        self.jadwal = get_active_absensi_schedule(self.asleb)
+        if not self.jadwal:
+            messages.warning(request, 'Absensi hanya dapat diisi saat jadwal praktikum sedang berlangsung.')
+            return redirect('asleb:absensi_list')
+
         return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs['files'] = self.request.FILES or None
         kwargs['asleb'] = self.asleb
+        kwargs['jadwal'] = self.jadwal
         return kwargs
 
     def form_valid(self, form):
@@ -387,6 +399,25 @@ class AbsensiAslebCreateView(CreateView):
         sync_honor_from_absensi(self.object)
         messages.success(self.request, f'Absensi Modul {self.object.modul} berhasil disimpan.')
         return response
+
+
+def get_active_absensi_schedule(asleb, current_time=None):
+    current_time = current_time or timezone.localtime()
+    matkul = get_asleb_matkul(asleb)
+    if not matkul:
+        return None
+    day_keys = [key for key, _ in JadwalPraktikum.HARI_CHOICES]
+    weekday = current_time.weekday()
+    if weekday >= len(day_keys):
+        return None
+    current_clock = current_time.time().replace(tzinfo=None)
+    return JadwalPraktikum.objects.filter(
+        mata_kuliah=str(matkul),
+        hari=day_keys[weekday],
+        status=JadwalPraktikum.STATUS_DITERIMA,
+        waktu_mulai__lte=current_clock,
+        waktu_selesai__gte=current_clock,
+    ).order_by('waktu_mulai').first()
 
 
 class ModulManageRequiredMixin:

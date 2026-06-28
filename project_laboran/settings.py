@@ -151,6 +151,11 @@ STATIC_URL = 'static/'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+ABSENSI_CENTER_LATITUDE = float(os.getenv('ABSENSI_CENTER_LATITUDE', '-6.1680678'))
+ABSENSI_CENTER_LONGITUDE = float(os.getenv('ABSENSI_CENTER_LONGITUDE', '106.7916257'))
+ABSENSI_RADIUS_METERS = int(os.getenv('ABSENSI_RADIUS_METERS', '150'))
+ABSENSI_MAX_GPS_ACCURACY_METERS = int(os.getenv('ABSENSI_MAX_GPS_ACCURACY_METERS', '100'))
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
