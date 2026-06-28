@@ -128,7 +128,7 @@ class DashboardViewTests(TestCase):
         self.assertEqual(barang.stok_tersedia, 0)
         self.assertContains(response, 'Proyektor sedang dipinjam.')
 
-    def test_reject_pending_peminjaman_deletes_record(self):
+    def test_reject_pending_peminjaman_keeps_history(self):
         peminjaman = PeminjamanAlat.objects.create(
             barang=self.barang,
             nama_peminjam='Budi',
@@ -138,9 +138,10 @@ class DashboardViewTests(TestCase):
         )
 
         response = self.client.post(reverse('dashboard:peminjaman_reject', args=[peminjaman.pk]))
+        peminjaman.refresh_from_db()
 
         self.assertRedirects(response, reverse('dashboard:home'))
-        self.assertFalse(PeminjamanAlat.objects.filter(pk=peminjaman.pk).exists())
+        self.assertEqual(peminjaman.status, 'ditolak')
 
     def test_dashboard_shows_pending_jadwal_praktikum(self):
         ruangan = RuanganLab.objects.create(nama='Lab Dashboard', kode='LAB-DASH', kapasitas=24)
@@ -354,7 +355,7 @@ class DashboardViewTests(TestCase):
         self.assertEqual(self.barang.status_pinjam, 'Tersedia')
         self.assertEqual(self.barang.stok_tersedia, self.barang.jumlah)
 
-    def test_delete_active_peminjaman_makes_barang_available_again(self):
+    def test_delete_active_peminjaman_is_blocked_to_preserve_history(self):
         peminjaman = PeminjamanAlat.objects.create(
             barang=self.barang,
             nama_peminjam='Budi',
@@ -367,10 +368,8 @@ class DashboardViewTests(TestCase):
         response = self.client.post(reverse('peminjaman:peminjaman_delete', args=[peminjaman.pk]))
 
         self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
-        self.assertFalse(PeminjamanAlat.objects.filter(pk=peminjaman.pk).exists())
-        self.assertFalse(self.barang.sedang_dipinjam)
-        self.assertEqual(self.barang.status_pinjam, 'Tersedia')
-        self.assertEqual(self.barang.stok_tersedia, self.barang.jumlah)
+        self.assertTrue(PeminjamanAlat.objects.filter(pk=peminjaman.pk).exists())
+        self.assertTrue(self.barang.sedang_dipinjam)
 
     def test_dashboard_mahasiswa_menyembunyikan_panel_operasional_admin(self):
         mahasiswa = Pengguna.objects.create(

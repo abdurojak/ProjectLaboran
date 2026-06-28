@@ -184,9 +184,6 @@
             --page-bg:
                 linear-gradient(rgba(248, 250, 252, 0.82), rgba(226, 232, 240, 0.86)),
                 var(--custom-bg-image);
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
         }
 
         html[data-theme="dark"][data-bg="clean"] {
@@ -222,9 +219,36 @@
         }
 
         body {
-            background: var(--page-bg) !important;
+            background: transparent !important;
             color: var(--text-soft) !important;
             min-height: 100vh;
+        }
+
+        .app-page-background {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 0;
+            pointer-events: none;
+            background: var(--page-bg);
+            background-position: center top;
+            background-repeat: no-repeat;
+            background-size: cover;
+            transform: translateZ(0);
+            will-change: transform;
+        }
+
+        body > header,
+        body > main {
+            position: relative;
+            z-index: 1;
+        }
+
+        html[data-bg="grid"] .app-page-background {
+            background-position: left top !important;
+            background-repeat: repeat !important;
+            background-size: 34px 34px, 34px 34px, auto !important;
         }
 
         main,
@@ -652,6 +676,7 @@
     </style>
 </head>
 <body>
+    <div class="app-page-background" aria-hidden="true"></div>
     {% if current_pengguna %}
     {% include "components/navbar.html" %}
     {% endif %}

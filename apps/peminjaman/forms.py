@@ -48,7 +48,11 @@ class PeminjamanAlatForm(forms.ModelForm):
             self.fields['nim'].widget = forms.HiddenInput()
             self.fields['no_hp'].widget = forms.HiddenInput()
             self.fields['status'].initial = 'diajukan'
+            self.fields['status'].required = False
             self.fields['status'].widget = forms.HiddenInput()
+        elif self.instance.pk:
+            self.fields['status'].disabled = True
+            self.fields['status'].help_text = 'Ubah status melalui aksi peminjaman pada dashboard agar alur dan notifikasi tercatat.'
 
     def clean(self):
         cleaned_data = super().clean()

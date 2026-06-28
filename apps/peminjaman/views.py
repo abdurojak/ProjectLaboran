@@ -1,23 +1,121 @@
 from django.contrib import messages
-from django.db.models import Q
+from django.core.paginator import Paginator
+from django.db import transaction
+from django.db.models import Exists, OuterRef, Q
+from django.http import JsonResponse
 from django.urls import reverse_lazy
 from django.shortcuts import redirect
+from django.utils.text import slugify
+from django.utils.dateparse import parse_date
+from django.views.decorators.http import require_GET
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
 from apps.core.views import PostOnlyDeleteMixin
-from apps.inventaris.models import Barang
+from apps.inventaris.models import ACTIVE_PEMINJAMAN_STATUSES, Barang
 from .forms import PeminjamanAlatForm
 from .models import PeminjamanAlat
 from .notifications import send_peminjaman_request_notifications
 
 
 BORROWER_ROLES = {'mahasiswa', 'asisten_lab'}
+MANAGER_ROLES = {'admin', 'laboran'}
+
+
+def scope_peminjaman_for_pengguna(queryset, pengguna):
+    if not pengguna:
+        return queryset.none()
+    if pengguna.role in MANAGER_ROLES:
+        return queryset
+    if pengguna.role in BORROWER_ROLES:
+        return queryset.filter(nim=pengguna.nim_nik)
+    return queryset.none()
+
+
+@require_GET
+def barang_options(request):
+    keyword = request.GET.get('q', '').strip()
+    active_loans = PeminjamanAlat.objects.filter(
+        barang_id=OuterRef('pk'),
+        status__in=ACTIVE_PEMINJAMAN_STATUSES,
+    )
+    queryset = (
+        Barang.objects.select_related('inventaris', 'lokasi')
+        .annotate(is_borrowed=Exists(active_loans))
+        .order_by('kode_barang')
+    )
+    if keyword:
+        queryset = queryset.filter(
+            Q(kode_barang__icontains=keyword)
+            | Q(nama__icontains=keyword)
+            | Q(inventaris__nama__icontains=keyword)
+            | Q(lokasi__nama_lokasi__icontains=keyword)
+        )
+
+    page_obj = Paginator(queryset, 20).get_page(request.GET.get('page', 1))
+    results = []
+    group_cache = {}
+
+    def get_group_key(barang):
+        return f'inventaris-{barang.inventaris_id}' if barang.inventaris_id else f'nama-{slugify(barang.nama)}'
+
+    def get_available_items_for_group(barang):
+        group_key = get_group_key(barang)
+        if group_key in group_cache:
+            return group_cache[group_key]
+
+        group_queryset = Barang.objects.select_related('inventaris').annotate(
+            is_borrowed=Exists(active_loans),
+        ).exclude(kondisi='rusak_berat').filter(is_borrowed=False)
+        if barang.inventaris_id:
+            group_queryset = group_queryset.filter(inventaris_id=barang.inventaris_id)
+        else:
+            group_queryset = group_queryset.filter(inventaris__isnull=True, nama=barang.nama)
+
+        group_cache[group_key] = [
+            {
+                'id': item.pk,
+                'label': f'{item.kode_barang} - {item.nama}',
+            }
+            for item in group_queryset.order_by('kode_barang')
+        ]
+        return group_cache[group_key]
+
+    for barang in page_obj.object_list:
+        photo_url = ''
+        if barang.foto:
+            photo_url = barang.foto.url
+        elif barang.inventaris_id and barang.inventaris.foto:
+            photo_url = barang.inventaris.foto.url
+        group_available_items = get_available_items_for_group(barang)
+        results.append({
+            'id': barang.pk,
+            'kode': barang.kode_barang,
+            'nama': barang.nama,
+            'group': get_group_key(barang),
+            'group_available_count': len(group_available_items),
+            'group_available_items': group_available_items,
+            'lokasi': barang.lokasi.nama_lokasi if barang.lokasi_id else '-',
+            'kondisi': barang.get_kondisi_display(),
+            'kondisi_key': barang.kondisi,
+            'status': 'Dipinjam' if barang.is_borrowed else 'Tersedia',
+            'disabled': barang.kondisi == 'rusak_berat' or barang.is_borrowed,
+            'photo_url': photo_url,
+        })
+
+    return JsonResponse({
+        'results': results,
+        'page': page_obj.number,
+        'num_pages': page_obj.paginator.num_pages,
+        'has_previous': page_obj.has_previous(),
+        'has_next': page_obj.has_next(),
+    })
 
 
 class PeminjamanAlatListView(ListView):
     model = PeminjamanAlat
     template_name = 'peminjaman/peminjaman_list.html'
     context_object_name = 'peminjaman_list'
+    paginate_by = 25
 
     def get_queryset(self):
         queryset = super().get_queryset().select_related('barang')
@@ -25,8 +123,8 @@ class PeminjamanAlatListView(ListView):
         tanggal_mulai = self.request.GET.get('tanggal_mulai', '').strip()
         tanggal_selesai = self.request.GET.get('tanggal_selesai', '').strip()
         status = self.request.GET.get('status', '').strip()
-        milik_saya = self.request.GET.get('milik_saya') == '1'
         pengguna = getattr(self.request, 'current_pengguna', None)
+        queryset = scope_peminjaman_for_pengguna(queryset, pengguna)
 
         if barang:
             queryset = queryset.filter(
@@ -34,24 +132,29 @@ class PeminjamanAlatListView(ListView):
                 Q(barang__kode_barang__icontains=barang)
             )
 
-        if tanggal_mulai:
-            queryset = queryset.filter(tanggal_pinjam__gte=tanggal_mulai)
+        parsed_tanggal_mulai = parse_date(tanggal_mulai)
+        if parsed_tanggal_mulai:
+            queryset = queryset.filter(tanggal_pinjam__gte=parsed_tanggal_mulai)
 
-        if tanggal_selesai:
-            queryset = queryset.filter(tanggal_pinjam__lte=tanggal_selesai)
+        parsed_tanggal_selesai = parse_date(tanggal_selesai)
+        if parsed_tanggal_selesai:
+            queryset = queryset.filter(tanggal_pinjam__lte=parsed_tanggal_selesai)
 
         if status:
             queryset = queryset.filter(status=status)
 
-        if milik_saya and pengguna and pengguna.role in BORROWER_ROLES:
-            queryset = queryset.filter(nim=pengguna.nim_nik)
-
         peminjaman_list = list(queryset)
         for peminjaman in peminjaman_list:
-            peminjaman.can_current_pengguna_change = (
-                not pengguna
-                or pengguna.role not in BORROWER_ROLES
+            peminjaman.can_current_pengguna_edit = (
+                pengguna.role in MANAGER_ROLES
                 or (peminjaman.nim == pengguna.nim_nik and peminjaman.status == 'diajukan')
+            )
+            peminjaman.can_current_pengguna_delete = (
+                peminjaman.status == 'diajukan'
+                and (
+                    pengguna.role in MANAGER_ROLES
+                    or peminjaman.nim == pengguna.nim_nik
+                )
             )
 
         return peminjaman_list
@@ -62,9 +165,11 @@ class PeminjamanAlatListView(ListView):
         context['filter_tanggal_mulai'] = self.request.GET.get('tanggal_mulai', '').strip()
         context['filter_tanggal_selesai'] = self.request.GET.get('tanggal_selesai', '').strip()
         context['filter_status'] = self.request.GET.get('status', '').strip()
-        context['filter_milik_saya'] = self.request.GET.get('milik_saya') == '1'
         context['status_choices'] = PeminjamanAlat.STATUS_CHOICES
         context['current_pengguna'] = getattr(self.request, 'current_pengguna', None)
+        context['is_borrower'] = bool(
+            context['current_pengguna'] and context['current_pengguna'].role in BORROWER_ROLES
+        )
         return context
 
 
@@ -73,13 +178,22 @@ class PeminjamanAlatDetailView(DetailView):
     template_name = 'peminjaman/peminjaman_detail.html'
     context_object_name = 'peminjaman'
 
+    def get_queryset(self):
+        return super().get_queryset().select_related('barang', 'barang__inventaris', 'barang__lokasi')
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         pengguna = getattr(self.request, 'current_pengguna', None)
-        context['can_current_pengguna_change'] = (
-            not pengguna
-            or pengguna.role not in BORROWER_ROLES
-            or (self.object.nim == pengguna.nim_nik and self.object.status == 'diajukan')
+        context['can_edit'] = bool(
+            pengguna and (
+                pengguna.role in MANAGER_ROLES
+                or (self.object.nim == pengguna.nim_nik and self.object.status == 'diajukan')
+            )
+        )
+        context['can_delete'] = bool(
+            pengguna
+            and self.object.status == 'diajukan'
+            and (pengguna.role in MANAGER_ROLES or self.object.nim == pengguna.nim_nik)
         )
         return context
 
@@ -92,7 +206,6 @@ class PeminjamanAlatCreateView(CreateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['detail_barang_list'] = Barang.objects.select_related('inventaris', 'lokasi')
         context['current_pengguna'] = getattr(self.request, 'current_pengguna', None)
         return context
 
@@ -103,42 +216,47 @@ class PeminjamanAlatCreateView(CreateView):
 
     def form_valid(self, form):
         pengguna = getattr(self.request, 'current_pengguna', None)
-        selected_ids = [
+        selected_ids = list(dict.fromkeys(
             item.strip()
             for item in form.cleaned_data.get('selected_barang_ids', '').split(',')
-            if item.strip()
-        ]
-        barang_list = Barang.objects.select_related('inventaris', 'lokasi').filter(pk__in=selected_ids)
-        barang_by_id = {str(barang.pk): barang for barang in barang_list}
-        selectable_barang = [
-            barang_by_id[item]
-            for item in selected_ids
-            if (
-                item in barang_by_id
-                and barang_by_id[item].kondisi != 'rusak_berat'
-                and not barang_by_id[item].sedang_dipinjam
-            )
-        ]
-
-        if not selectable_barang:
-            form.add_error('barang', 'Pilih minimal satu detail barang yang tersedia dan tidak rusak berat.')
-            return self.form_invalid(form)
-
-        created_peminjaman = []
+            if item.strip().isdigit()
+        ))
         is_borrower = bool(pengguna and pengguna.role in BORROWER_ROLES)
+        created_peminjaman = []
 
-        for barang in selectable_barang:
-            peminjaman = PeminjamanAlat.objects.create(
-                barang=barang,
-                nama_peminjam=pengguna.nama_pengguna if is_borrower else form.cleaned_data['nama_peminjam'],
-                nim=pengguna.nim_nik if is_borrower else form.cleaned_data['nim'],
-                no_hp=pengguna.no_hp if is_borrower else form.cleaned_data['no_hp'],
-                tanggal_pinjam=form.cleaned_data['tanggal_pinjam'],
-                tanggal_kembali=form.cleaned_data['tanggal_kembali'],
-                status='diajukan' if is_borrower else form.cleaned_data['status'],
-                catatan=form.cleaned_data['catatan'],
+        with transaction.atomic():
+            barang_list = (
+                Barang.objects.select_for_update()
+                .select_related('inventaris', 'lokasi')
+                .filter(pk__in=selected_ids)
             )
-            created_peminjaman.append(peminjaman)
+            barang_by_id = {str(barang.pk): barang for barang in barang_list}
+            selectable_barang = [
+                barang_by_id[item]
+                for item in selected_ids
+                if (
+                    item in barang_by_id
+                    and barang_by_id[item].kondisi != 'rusak_berat'
+                    and not barang_by_id[item].sedang_dipinjam
+                )
+            ]
+
+            if not selectable_barang:
+                form.add_error('barang', 'Pilih minimal satu detail barang yang tersedia dan tidak rusak berat.')
+                return self.form_invalid(form)
+
+            for barang in selectable_barang:
+                peminjaman = PeminjamanAlat.objects.create(
+                    barang=barang,
+                    nama_peminjam=pengguna.nama_pengguna if is_borrower else form.cleaned_data['nama_peminjam'],
+                    nim=pengguna.nim_nik if is_borrower else form.cleaned_data['nim'],
+                    no_hp=pengguna.no_hp if is_borrower else form.cleaned_data['no_hp'],
+                    tanggal_pinjam=form.cleaned_data['tanggal_pinjam'],
+                    tanggal_kembali=form.cleaned_data['tanggal_kembali'],
+                    status='diajukan' if is_borrower else form.cleaned_data['status'],
+                    catatan=form.cleaned_data['catatan'],
+                )
+                created_peminjaman.append(peminjaman)
 
         for peminjaman in created_peminjaman:
             if peminjaman.status == 'diajukan':
@@ -172,7 +290,6 @@ class PeminjamanAlatUpdateView(UpdateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['detail_barang_list'] = Barang.objects.select_related('inventaris', 'lokasi')
         context['current_pengguna'] = getattr(self.request, 'current_pengguna', None)
         return context
 
@@ -186,6 +303,9 @@ class PeminjamanAlatDeleteView(PostOnlyDeleteMixin, DeleteView):
     def dispatch(self, request, *args, **kwargs):
         self.object = self.get_object()
         pengguna = getattr(request, 'current_pengguna', None)
+        if self.object.status != 'diajukan':
+            messages.warning(request, 'Riwayat peminjaman yang sudah diproses tidak dapat dihapus.')
+            return redirect('peminjaman:peminjaman_list')
         if pengguna and pengguna.role in BORROWER_ROLES and not self.mahasiswa_can_change(pengguna):
             messages.warning(request, 'Anda hanya bisa menghapus pengajuan milik sendiri yang masih berstatus Diajukan.')
             return redirect('peminjaman:peminjaman_list')

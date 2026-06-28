@@ -2,6 +2,15 @@ from django.core import mail
 from django.test import TestCase
 from django.urls import reverse
 
+
+class GlobalBackgroundTests(TestCase):
+    def test_base_background_tetap_saat_halaman_discroll(self):
+        response = self.client.get(reverse('pengguna:login'))
+
+        self.assertContains(response, 'class="app-page-background"', html=False)
+        self.assertContains(response, 'position: fixed;')
+        self.assertContains(response, 'background: transparent !important;')
+
 from apps.pengguna.models import Pengguna
 
 from .models import PercakapanBantuan

@@ -10,7 +10,7 @@ from .models import KegiatanKalender
 from .utils import build_manual_notification, get_perayaan_notifications
 
 
-PEMINJAMAN_NOTIFICATION_STATUSES = ['dipinjam', 'dikembalikan', 'hilang', 'rusak', 'digantikan']
+PEMINJAMAN_NOTIFICATION_STATUSES = ['ditolak', 'dipinjam', 'dikembalikan', 'hilang', 'rusak', 'digantikan']
 
 
 def get_unread_peminjaman_notification_count(pengguna):
