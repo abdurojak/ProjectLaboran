@@ -40,12 +40,9 @@
         {% if not is_mahasiswa_dashboard or is_asisten_lab_dashboard %}
         <div class="grid gap-4 md:grid-cols-4">
             {% for stat in stats_cards %}
-            <article class="surface-card flex items-center gap-4 p-4">
-                <div class="{{ stat.icon_bg }} {{ stat.icon_text }} flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
-                    <i data-lucide="{{ stat.icon }}" class="h-5 w-5"></i>
-                </div>
+            <article class="surface-card min-w-0 p-4">
                 <div class="min-w-0">
-                    <div class="truncate text-sm font-semibold text-slate-500">{{ stat.label }}</div>
+                    <div class="text-sm font-bold leading-5 text-slate-500">{{ stat.label }}</div>
                     <div class="{{ stat.value_text }} mt-1 text-3xl font-black tracking-tight">{{ stat.value }}</div>
                 </div>
             </article>

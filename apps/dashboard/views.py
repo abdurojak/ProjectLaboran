@@ -131,13 +131,6 @@ class DashboardView(TemplateView):
                     'icon': 'hourglass',
                     'tone': 'purple',
                 },
-                {
-                    'label': 'Jadwal Hari Ini',
-                    'value': jadwal_qs.filter(hari=hari_ini, status=JadwalPraktikum.STATUS_DITERIMA).count() if hari_ini else 0,
-                    'note': 'Jadwal praktikum hari ini',
-                    'icon': 'calendar-days',
-                    'tone': 'green',
-                },
             ]
 
             if is_asisten_lab:
@@ -237,13 +230,6 @@ class DashboardView(TemplateView):
                 'note': 'Transaksi yang belum ditandai selesai',
                 'icon': 'arrow-left-right',
                 'tone': 'orange',
-            },
-            {
-                'label': 'Jadwal Hari Ini',
-                'value': jadwal_qs.filter(hari=hari_ini, status=JadwalPraktikum.STATUS_DITERIMA).count() if hari_ini else 0,
-                'note': 'Jadwal praktikum yang terdaftar hari ini',
-                'icon': 'calendar-days',
-                'tone': 'blue',
             },
             {
                 'label': 'Honorarium Bulan Ini',

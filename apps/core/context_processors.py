@@ -41,7 +41,8 @@ SIDEBAR_LINKS = [
         'icon': 'clipboard-check',
         'url': 'asleb:absensi_list',
         'namespace': 'asleb_absensi',
-        'url_names': {'absensi_list', 'absensi_create'},
+        'active_namespace': 'asleb',
+        'url_names': {'absensi_list', 'absensi_create', 'absensi_toggle_status'},
     },
     {
         'title': 'Data Aslab',
@@ -108,7 +109,8 @@ def dashboard_sidebar(request):
         item = link.copy()
         url_names = item.get('url_names')
         if url_names:
-            item['active'] = current_namespace == item['namespace'] and current_url_name in url_names
+            active_namespace = item.get('active_namespace', item['namespace'])
+            item['active'] = current_namespace == active_namespace and current_url_name in url_names
         else:
             item['active'] = bool(item['namespace'] and item['namespace'] == current_namespace)
         item.update(TONES['teal'] if item['active'] else TONES['gray'])
