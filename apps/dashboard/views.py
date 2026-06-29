@@ -90,6 +90,26 @@ class DashboardView(TemplateView):
         if context['is_mahasiswa_dashboard']:
             pengaturan_pendaftaran = PengaturanPendaftaranAsleb.get_solo()
             peminjaman_saya = peminjaman_qs.filter(nim=pengguna.nim_nik)
+            ringkasan_barang_saya = [
+                {
+                    'label': 'Sedang dipinjam',
+                    'value': peminjaman_saya.filter(status='dipinjam').count(),
+                    'note': 'Barang yang masih aktif dipinjam',
+                    'tone': 'blue',
+                },
+                {
+                    'label': 'Rusak',
+                    'value': peminjaman_saya.filter(status='rusak').count(),
+                    'note': 'Barang yang perlu tindak lanjut',
+                    'tone': 'orange',
+                },
+                {
+                    'label': 'Hilang',
+                    'value': peminjaman_saya.filter(status='hilang').count(),
+                    'note': 'Barang yang perlu penggantian',
+                    'tone': 'gray',
+                },
+            ]
             awal_bulan = timezone.localdate().replace(day=1)
             honor_bulan_ini = HonorAsleb.objects.filter(
                 asleb__nim=pengguna.nim_nik,
@@ -102,6 +122,8 @@ class DashboardView(TemplateView):
             context['today'] = timezone.localdate()
             hari_ini = self.WEEKDAY_TO_HARI.get(context['today'].weekday())
             context['peminjaman_saya'] = peminjaman_saya[:6]
+            context['ringkasan_barang_saya'] = self._decorate_items(ringkasan_barang_saya)
+            context['has_ringkasan_barang_saya'] = any(item['value'] for item in ringkasan_barang_saya)
             context['riwayat_honor_saya'] = riwayat_honor_saya
             context['jadwal_hari_ini'] = jadwal_qs.filter(
                 hari=hari_ini,

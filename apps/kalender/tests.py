@@ -360,6 +360,52 @@ class KalenderViewsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Status peminjaman Kamera: Dipinjam')
 
+    def test_notifikasi_mahasiswa_menampilkan_barang_dipinjam_rusak_dan_hilang(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Reno Pratama',
+            nim_nik='2201012',
+            email='reno@example.com',
+            password='rahasia123',
+            no_hp='081111111112',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+        )
+        status_data = [
+            ('Kamera Lapangan', 'dipinjam', 'Dipinjam'),
+            ('Tripod Praktikum', 'rusak', 'Rusak'),
+            ('Recorder Audio', 'hilang', 'Hilang'),
+        ]
+        for nama_barang, status, _label in status_data:
+            barang = Barang.objects.create(nama=nama_barang, jumlah=1)
+            PeminjamanAlat.objects.create(
+                barang=barang,
+                nama_peminjam='Reno Pratama',
+                nim=mahasiswa.nim_nik,
+                tanggal_pinjam=date.today(),
+                tanggal_kembali=date.today(),
+                status=status,
+            )
+        PeminjamanAlat.objects.create(
+            barang=Barang.objects.create(nama='Laptop Lain', jumlah=1),
+            nama_peminjam='User Lain',
+            nim='2201999',
+            tanggal_pinjam=date.today(),
+            tanggal_kembali=date.today(),
+            status='rusak',
+        )
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+
+        response = self.client.get(reverse('kalender:notifikasi_list'))
+
+        for nama_barang, _status, label in status_data:
+            self.assertContains(response, f'Status peminjaman {nama_barang}: {label}')
+        self.assertNotContains(response, 'Laptop Lain')
+
     def test_unread_notification_count_menghitung_status_peminjaman_mahasiswa(self):
         mahasiswa = Pengguna.objects.create(
             nama_pengguna='Siti Aminah',

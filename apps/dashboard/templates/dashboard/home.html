@@ -37,6 +37,27 @@
         </div>
         {% endcomment %}
 
+        {% if has_ringkasan_barang_saya %}
+        <section class="surface-card min-w-0 overflow-hidden p-5 md:p-6">
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <p class="text-xs font-black uppercase tracking-[0.22em] text-brand-700">Status Barang</p>
+                    <h3 class="mt-2 text-2xl font-bold tracking-tight text-slate-900">Ringkasan Barang Saya</h3>
+                </div>
+                <a href="{% url 'peminjaman:peminjaman_list' %}?milik_saya=1" class="btn-secondary">Lihat detail</a>
+            </div>
+            <div class="grid gap-3 sm:grid-cols-3">
+                {% for item in ringkasan_barang_saya %}
+                <article class="rounded-2xl border border-slate-200 bg-white p-4">
+                    <p class="text-sm font-bold text-slate-500">{{ item.label }}</p>
+                    <div class="{{ item.value_text }} mt-2 text-3xl font-black tracking-tight">{{ item.value }}</div>
+                    <p class="mt-1 text-xs font-semibold leading-5 text-slate-400">{{ item.note }}</p>
+                </article>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+
         {% if not is_mahasiswa_dashboard or is_asisten_lab_dashboard %}
         <div class="grid gap-4 md:grid-cols-4">
             {% for stat in stats_cards %}

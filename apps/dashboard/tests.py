@@ -444,6 +444,94 @@ class DashboardViewTests(TestCase):
         self.assertContains(response, reverse('kalender:kegiatan_list'))
         self.assertLess(content.index('Kegiatan Terdekat'), content.index('Peminjaman Saya'))
 
+    def test_dashboard_mahasiswa_menampilkan_ringkasan_barang_bermasalah_paling_atas(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Reno Pratama',
+            nim_nik='2201012',
+            email='reno-dashboard@example.com',
+            password='rahasia123',
+            no_hp='081111111112',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+        )
+        for status in ['dipinjam', 'rusak', 'hilang']:
+            PeminjamanAlat.objects.create(
+                barang=Barang.objects.create(nama=f'Barang {status}', jumlah=1),
+                nama_peminjam='Reno Pratama',
+                nim=mahasiswa.nim_nik,
+                tanggal_pinjam=timezone.localdate(),
+                tanggal_kembali=timezone.localdate(),
+                status=status,
+            )
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+
+        response = self.client.get(reverse('dashboard:home'))
+        content = response.content.decode()
+
+        self.assertContains(response, 'Ringkasan Barang Saya')
+        self.assertContains(response, 'Sedang dipinjam')
+        self.assertContains(response, 'Rusak')
+        self.assertContains(response, 'Hilang')
+        self.assertLess(content.index('Ringkasan Barang Saya'), content.index('Pendaftaran Aslab') if 'Pendaftaran Aslab' in content else content.index('Kegiatan Terdekat'))
+
+    def test_dashboard_mahasiswa_menyembunyikan_ringkasan_barang_jika_kosong(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Nina Putri',
+            nim_nik='2201013',
+            email='nina-dashboard@example.com',
+            password='rahasia123',
+            no_hp='081111111113',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='mahasiswa',
+        )
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+
+        response = self.client.get(reverse('dashboard:home'))
+
+        self.assertNotContains(response, 'Ringkasan Barang Saya')
+
+    def test_dashboard_asisten_lab_menampilkan_ringkasan_barang_saya_paling_atas(self):
+        asisten = Pengguna.objects.create(
+            nama_pengguna='Aldi Asisten',
+            nim_nik='2202012',
+            email='aldi.asisten@example.com',
+            password='rahasia123',
+            no_hp='081222222212',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='asisten_lab',
+        )
+        PeminjamanAlat.objects.create(
+            barang=Barang.objects.create(nama='Kamera Aslab', jumlah=1),
+            nama_peminjam='Aldi Asisten',
+            nim=asisten.nim_nik,
+            tanggal_pinjam=timezone.localdate(),
+            tanggal_kembali=timezone.localdate(),
+            status='dipinjam',
+        )
+        session = self.client.session
+        session['pengguna_id'] = asisten.pk
+        session.save()
+
+        response = self.client.get(reverse('dashboard:home'))
+        content = response.content.decode()
+
+        self.assertContains(response, 'Ringkasan Barang Saya')
+        self.assertContains(response, 'Honor Bulan Ini')
+        self.assertLess(content.index('Ringkasan Barang Saya'), content.index('Honor Bulan Ini'))
+
     def test_dashboard_mahasiswa_menampilkan_qr_pendaftaran_asleb_saat_dibuka(self):
         mahasiswa = Pengguna.objects.create(
             nama_pengguna='Siti Aminah',
