@@ -33,7 +33,7 @@
             </div>
             <div class="max-h-[430px] flex-1 space-y-3 overflow-y-auto p-5" data-chat-messages>
                 {% for pesan in percakapan.pesan.all %}
-                <div class="flex {% if pesan.pengirim == 'admin' %}justify-end{% else %}justify-start{% endif %}">
+                <div class="flex {% if pesan.pengirim == 'admin' %}justify-end{% else %}justify-start{% endif %}" data-chat-message-id="{{ pesan.pk }}">
                     <div class="max-w-[85%] rounded-2xl {% if pesan.pengirim == 'admin' %}bg-brand-700 text-white{% elif pesan.pengirim == 'pengguna' %}bg-slate-100 text-slate-800{% else %}border border-cyan-200 bg-cyan-50 text-cyan-900{% endif %} px-4 py-3 text-sm">
                         <div class="text-xs font-black uppercase opacity-70">{{ pesan.get_pengirim_display }}</div>
                         <div class="mt-1 whitespace-pre-wrap break-words">{{ pesan.isi }}</div>
@@ -42,9 +42,9 @@
                 {% endfor %}
             </div>
             <div class="border-t border-slate-200 bg-slate-50 p-4">
-                <form method="post" class="flex flex-col gap-3 sm:flex-row">
+                <form method="post" class="flex flex-col gap-3 sm:flex-row" data-chat-form>
                     {% csrf_token %}<input type="hidden" name="percakapan" value="{{ percakapan.pk }}">
-                    <textarea name="pesan" rows="2" maxlength="1000" class="flex-1 resize-none" placeholder="Tulis balasan admin..."></textarea>
+                    <textarea name="pesan" rows="2" maxlength="1000" class="flex-1 resize-none" placeholder="Tulis balasan admin..." data-chat-input></textarea>
                     <button type="submit" class="btn-primary justify-center gap-2"><i data-lucide="send" class="h-4 w-4"></i><span>Balas</span></button>
                     <button type="submit" name="action" value="selesai" class="btn-secondary justify-center gap-2"><i data-lucide="check" class="h-4 w-4"></i><span>Selesai</span></button>
                 </form>
@@ -57,4 +57,74 @@
 </section>
 {% endblock %}
 
-{% block extra_script %}<script>document.addEventListener('DOMContentLoaded',function(){const e=document.querySelector('[data-chat-messages]');if(e)e.scrollTop=e.scrollHeight;});</script>{% endblock %}
+{% block extra_script %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const messages = document.querySelector('[data-chat-messages]');
+        const form = document.querySelector('[data-chat-form]');
+        const textarea = document.querySelector('[data-chat-input]');
+        if (messages) messages.scrollTop = messages.scrollHeight;
+
+        function appendMessage(message) {
+            if (!messages || document.querySelector('[data-chat-message-id="' + message.id + '"]')) {
+                return;
+            }
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'flex ' + (message.pengirim === 'admin' ? 'justify-end' : 'justify-start');
+            wrapper.dataset.chatMessageId = String(message.id);
+
+            const bubble = document.createElement('div');
+            bubble.className = 'max-w-[85%] rounded-2xl px-4 py-3 text-sm ' + (
+                message.pengirim === 'admin'
+                    ? 'bg-brand-700 text-white'
+                    : (message.pengirim === 'pengguna' ? 'bg-slate-100 text-slate-800' : 'border border-cyan-200 bg-cyan-50 text-cyan-900')
+            );
+
+            const sender = document.createElement('div');
+            sender.className = 'text-xs font-black uppercase opacity-70';
+            sender.textContent = message.pengirim_label;
+
+            const content = document.createElement('div');
+            content.className = 'mt-1 whitespace-pre-wrap break-words';
+            content.textContent = message.isi;
+
+            bubble.append(sender, content);
+            wrapper.appendChild(bubble);
+            messages.appendChild(wrapper);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        {% if percakapan %}
+        const socketProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        const chatSocket = new WebSocket(socketProtocol + window.location.host + '/ws/bantuan/{{ percakapan.pk }}/');
+
+        chatSocket.addEventListener('message', function (event) {
+            const payload = JSON.parse(event.data);
+            if (payload.type === 'message') {
+                appendMessage(payload.message);
+            }
+        });
+
+        form.addEventListener('submit', function (event) {
+            const submitter = event.submitter;
+            if (submitter && submitter.name === 'action') {
+                return;
+            }
+            if (chatSocket.readyState !== WebSocket.OPEN) {
+                return;
+            }
+
+            const content = textarea.value.trim();
+            if (!content) {
+                return;
+            }
+
+            event.preventDefault();
+            chatSocket.send(JSON.stringify({pesan: content}));
+            textarea.value = '';
+        });
+        {% endif %}
+    });
+</script>
+{% endblock %}

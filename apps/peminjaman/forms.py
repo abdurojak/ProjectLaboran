@@ -72,6 +72,8 @@ class PeminjamanAlatForm(forms.ModelForm):
         selected_barang_ids = cleaned_data.get('selected_barang_ids')
         paket = cleaned_data.get('paket')
         status = cleaned_data.get('status')
+        if paket:
+            cleaned_data['selected_barang_ids'] = ''
 
         if not self.instance.pk and not selected_barang_ids and not paket:
             self.add_error('barang', 'Pilih minimal satu detail barang.')

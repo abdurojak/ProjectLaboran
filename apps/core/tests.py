@@ -1,5 +1,9 @@
 from django.core import mail
-from django.test import TestCase
+from asgiref.sync import async_to_sync
+from channels.testing import WebsocketCommunicator
+from django.conf import settings
+from django.contrib.sessions.backends.db import SessionStore
+from django.test import TestCase, TransactionTestCase
 from django.urls import reverse
 
 
@@ -13,7 +17,9 @@ class GlobalBackgroundTests(TestCase):
 
 from apps.pengguna.models import Pengguna
 
-from .models import PercakapanBantuan
+from project_laboran.asgi import application
+
+from .models import PercakapanBantuan, PesanBantuan
 from .emails import send_branded_email
 
 
@@ -123,3 +129,102 @@ class BantuanTests(TestCase):
 
         self.assertRedirects(response, f"{reverse('core:bantuan_admin')}?percakapan={conversation.pk}")
         self.assertTrue(conversation.pesan.filter(pengirim='admin', isi__icontains='lengkapi CV').exists())
+
+
+class BantuanWebSocketTests(TransactionTestCase):
+    reset_sequences = True
+
+    def setUp(self):
+        self.mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Mahasiswa Socket',
+            nim_nik='0642201099',
+            email='socket@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081234567899',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+        )
+        self.admin = Pengguna.objects.create(
+            nama_pengguna='Admin Socket',
+            nim_nik='ADM-SOCKET',
+            email='admin-socket@example.com',
+            password='rahasia123',
+            no_hp='081234567800',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='admin',
+        )
+        self.conversation = PercakapanBantuan.objects.create(
+            pengguna=self.mahasiswa,
+            status='admin',
+        )
+
+    def session_headers(self, pengguna):
+        session = SessionStore()
+        session['pengguna_id'] = pengguna.pk
+        session.save()
+        return [(b'cookie', f'{settings.SESSION_COOKIE_NAME}={session.session_key}'.encode())]
+
+    def test_pengguna_menerima_pesan_admin_via_websocket(self):
+        user_headers = self.session_headers(self.mahasiswa)
+        admin_headers = self.session_headers(self.admin)
+
+        async def scenario():
+            user_socket = WebsocketCommunicator(
+                application,
+                f'/ws/bantuan/{self.conversation.pk}/',
+                headers=user_headers,
+            )
+            admin_socket = WebsocketCommunicator(
+                application,
+                f'/ws/bantuan/{self.conversation.pk}/',
+                headers=admin_headers,
+            )
+            user_connected, _ = await user_socket.connect()
+            admin_connected, _ = await admin_socket.connect()
+            self.assertTrue(user_connected)
+            self.assertTrue(admin_connected)
+
+            await admin_socket.send_json_to({'pesan': 'Halo, ada yang bisa dibantu?'})
+            payload = await user_socket.receive_json_from()
+
+            self.assertEqual(payload['type'], 'message')
+            self.assertEqual(payload['message']['pengirim'], 'admin')
+            self.assertEqual(payload['message']['isi'], 'Halo, ada yang bisa dibantu?')
+
+            await user_socket.disconnect()
+            await admin_socket.disconnect()
+
+        async_to_sync(scenario)()
+        self.assertTrue(PesanBantuan.objects.filter(percakapan=self.conversation, pengirim='admin').exists())
+
+    def test_pengguna_tidak_bisa_membuka_percakapan_orang_lain(self):
+        pengguna_lain = Pengguna.objects.create(
+            nama_pengguna='User Lain',
+            nim_nik='0642201100',
+            email='lain@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081234567811',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='mahasiswa',
+        )
+        headers = self.session_headers(pengguna_lain)
+
+        async def scenario():
+            communicator = WebsocketCommunicator(
+                application,
+                f'/ws/bantuan/{self.conversation.pk}/',
+                headers=headers,
+            )
+            connected, _ = await communicator.connect()
+            self.assertFalse(connected)
+
+        async_to_sync(scenario)()

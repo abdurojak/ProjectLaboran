@@ -496,6 +496,15 @@ class PeminjamanMahasiswaTests(TestCase):
         self.assertNotContains(response, 'type="text" name="nim"')
         self.assertNotContains(response, 'type="text" name="no_hp"')
 
+    def test_form_paket_menjelaskan_barang_manual_dinonaktifkan(self):
+        response = self.client.get(reverse('peminjaman:peminjaman_create'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-paket-select')
+        self.assertContains(response, 'data-barang-manual-section')
+        self.assertContains(response, 'data-paket-manual-message')
+        self.assertContains(response, 'Kosongkan paket untuk memilih barang manual.')
+
     def test_mahasiswa_bisa_edit_atau_hapus_peminjaman_miliknya_yang_masih_diajukan(self):
         peminjaman = PeminjamanAlat.objects.create(
             barang=self.barang,

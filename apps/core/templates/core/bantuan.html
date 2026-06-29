@@ -10,16 +10,16 @@
             <h2 class="mt-2 text-3xl font-black text-slate-900">Chat Bantuan</h2>
             <p class="mt-2 text-sm text-slate-500">Tanyakan hal sederhana kepada bot, lalu hubungi admin bila masih memerlukan bantuan.</p>
         </div>
-        <span class="inline-flex items-center gap-2 rounded-full {% if percakapan.status == 'admin' %}bg-amber-100 text-amber-800{% else %}bg-emerald-100 text-emerald-800{% endif %} px-4 py-2 text-sm font-bold">
+        <span class="inline-flex items-center gap-2 rounded-full {% if percakapan.status == 'admin' %}bg-amber-100 text-amber-800{% else %}bg-emerald-100 text-emerald-800{% endif %} px-4 py-2 text-sm font-bold" data-chat-status>
             <i data-lucide="{% if percakapan.status == 'admin' %}headphones{% else %}bot{% endif %}" class="h-4 w-4"></i>
-            {{ percakapan.get_status_display }}
+            <span data-chat-status-label>{{ percakapan.get_status_display }}</span>
         </span>
     </div>
 
     <div class="surface-card overflow-hidden">
         <div class="max-h-[56vh] min-h-[360px] space-y-4 overflow-y-auto p-5 md:p-7" data-chat-messages>
             {% for pesan in percakapan.pesan.all %}
-            <div class="flex {% if pesan.pengirim == 'pengguna' %}justify-end{% else %}justify-start{% endif %}">
+            <div class="flex {% if pesan.pengirim == 'pengguna' %}justify-end{% else %}justify-start{% endif %}" data-chat-message-id="{{ pesan.pk }}">
                 <div class="max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-6 {% if pesan.pengirim == 'pengguna' %}bg-brand-700 text-white{% elif pesan.pengirim == 'admin' %}border border-cyan-200 bg-cyan-50 text-cyan-950{% else %}bg-slate-100 text-slate-700{% endif %}">
                     <div class="mb-1 text-xs font-black uppercase opacity-70">{{ pesan.get_pengirim_display }}</div>
                     <div class="whitespace-pre-wrap break-words">{{ pesan.isi }}</div>
@@ -30,7 +30,7 @@
         </div>
 
         <div class="border-t border-slate-200 bg-slate-50 p-4 md:p-5">
-            <form method="post" class="flex flex-col gap-3 sm:flex-row">
+            <form method="post" class="flex flex-col gap-3 sm:flex-row" data-chat-form>
                 {% csrf_token %}
                 <label for="id_pesan" class="sr-only">Tulis pertanyaan</label>
                 <textarea id="id_pesan" name="pesan" rows="2" maxlength="1000" required class="min-h-14 flex-1 resize-none" placeholder="Tulis pertanyaan Anda..."></textarea>
@@ -57,7 +57,86 @@
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const messages = document.querySelector('[data-chat-messages]');
+        const form = document.querySelector('[data-chat-form]');
+        const textarea = document.getElementById('id_pesan');
+        const statusLabel = document.querySelector('[data-chat-status-label]');
+        const statusBadge = document.querySelector('[data-chat-status]');
         if (messages) messages.scrollTop = messages.scrollHeight;
+
+        function appendMessage(message) {
+            if (!messages || document.querySelector('[data-chat-message-id="' + message.id + '"]')) {
+                return;
+            }
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'flex ' + (message.pengirim === 'pengguna' ? 'justify-end' : 'justify-start');
+            wrapper.dataset.chatMessageId = String(message.id);
+
+            const bubble = document.createElement('div');
+            bubble.className = 'max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-6 ' + (
+                message.pengirim === 'pengguna'
+                    ? 'bg-brand-700 text-white'
+                    : (message.pengirim === 'admin' ? 'border border-cyan-200 bg-cyan-50 text-cyan-950' : 'bg-slate-100 text-slate-700')
+            );
+
+            const sender = document.createElement('div');
+            sender.className = 'mb-1 text-xs font-black uppercase opacity-70';
+            sender.textContent = message.pengirim_label;
+
+            const content = document.createElement('div');
+            content.className = 'whitespace-pre-wrap break-words';
+            content.textContent = message.isi;
+
+            const time = document.createElement('div');
+            time.className = 'mt-1 text-[11px] opacity-60';
+            time.textContent = message.dibuat_pada;
+
+            bubble.append(sender, content, time);
+            wrapper.appendChild(bubble);
+            messages.appendChild(wrapper);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        function updateStatus(statusLabelText, status) {
+            if (statusLabel) {
+                statusLabel.textContent = statusLabelText;
+            }
+            if (statusBadge) {
+                statusBadge.classList.toggle('bg-amber-100', status === 'admin');
+                statusBadge.classList.toggle('text-amber-800', status === 'admin');
+                statusBadge.classList.toggle('bg-emerald-100', status !== 'admin');
+                statusBadge.classList.toggle('text-emerald-800', status !== 'admin');
+            }
+        }
+
+        {% if percakapan %}
+        const socketProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        const chatSocket = new WebSocket(socketProtocol + window.location.host + '/ws/bantuan/{{ percakapan.pk }}/');
+
+        chatSocket.addEventListener('message', function (event) {
+            const payload = JSON.parse(event.data);
+            if (payload.type === 'message') {
+                appendMessage(payload.message);
+            } else if (payload.type === 'status') {
+                updateStatus(payload.status_label, payload.status);
+            }
+        });
+
+        form.addEventListener('submit', function (event) {
+            if (chatSocket.readyState !== WebSocket.OPEN) {
+                return;
+            }
+
+            const content = textarea.value.trim();
+            if (!content) {
+                return;
+            }
+
+            event.preventDefault();
+            chatSocket.send(JSON.stringify({pesan: content}));
+            textarea.value = '';
+        });
+        {% endif %}
     });
 </script>
 {% endblock %}

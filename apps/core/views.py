@@ -7,6 +7,7 @@ from django.views.generic import TemplateView
 from apps.pengguna.forms import PenggunaAppearanceForm
 
 from .models import PercakapanBantuan, PesanBantuan
+from .realtime import broadcast_help_message, broadcast_help_status
 
 
 BOT_ANSWERS = [
@@ -160,9 +161,11 @@ class BantuanView(TemplateView):
             messages.error(request, 'Tulis pertanyaan terlebih dahulu.')
             return redirect('core:bantuan')
 
-        PesanBantuan.objects.create(percakapan=conversation, pengirim='pengguna', isi=content)
+        user_message = PesanBantuan.objects.create(percakapan=conversation, pengirim='pengguna', isi=content)
+        broadcast_help_message(user_message)
         if conversation.status == 'bot':
-            PesanBantuan.objects.create(percakapan=conversation, pengirim='bot', isi=bot_answer(content))
+            bot_message = PesanBantuan.objects.create(percakapan=conversation, pengirim='bot', isi=bot_answer(content))
+            broadcast_help_message(bot_message)
         conversation.save(update_fields=['diperbarui_pada'])
         return redirect('core:bantuan')
 
@@ -176,11 +179,13 @@ class EskalasiBantuanView(View):
         if conversation.status == 'bot':
             conversation.status = 'admin'
             conversation.save(update_fields=['status', 'diperbarui_pada'])
-            PesanBantuan.objects.create(
+            broadcast_help_status(conversation)
+            message = PesanBantuan.objects.create(
                 percakapan=conversation,
                 pengirim='bot',
                 isi='Pertanyaan Anda sudah diteruskan ke admin. Silakan tunggu balasan pada halaman ini.',
             )
+            broadcast_help_message(message)
         return redirect('core:bantuan')
 
 
@@ -214,11 +219,13 @@ class AdminBantuanView(TemplateView):
         if request.POST.get('action') == 'selesai':
             conversation.status = 'selesai'
             conversation.save(update_fields=['status', 'diperbarui_pada'])
+            broadcast_help_status(conversation)
             messages.success(request, 'Percakapan bantuan ditandai selesai.')
             return redirect('core:bantuan_admin')
 
         content = request.POST.get('pesan', '').strip()[:1000]
         if content:
-            PesanBantuan.objects.create(percakapan=conversation, pengirim='admin', isi=content)
+            admin_message = PesanBantuan.objects.create(percakapan=conversation, pengirim='admin', isi=content)
             conversation.save(update_fields=['diperbarui_pada'])
+            broadcast_help_message(admin_message)
         return redirect(f"{reverse('core:bantuan_admin')}?percakapan={conversation.pk}")

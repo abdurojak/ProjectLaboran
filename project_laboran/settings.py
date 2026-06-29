@@ -41,6 +41,8 @@ PUBLIC_ACCESS_BASE_URL = os.getenv('PUBLIC_ACCESS_BASE_URL', 'http://127.0.0.1:8
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
+    'channels',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -92,6 +94,13 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'project_laboran.wsgi.application'
+ASGI_APPLICATION = 'project_laboran.asgi.application'
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    },
+}
 
 
 # Database
