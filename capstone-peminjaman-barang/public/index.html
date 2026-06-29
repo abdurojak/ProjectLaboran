@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Peminjaman Barang Capstone</title>
+    <meta
+      name="description"
+      content="Aplikasi peminjaman barang capstone dengan penyimpanan Google Sheet."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div class="hero-copy reveal">
+          <span class="eyebrow">Capstone Inventory Flow</span>
+          <h1>Web peminjaman barang yang rapi, cepat, dan siap disambungkan ke Google Sheet.</h1>
+          <p>
+            Kelola stok, catat peminjaman, dan proses pengembalian dari satu dashboard
+            ringan. Cocok untuk demo tugas akhir, lab kampus, atau inventaris organisasi.
+          </p>
+          <div class="hero-chips">
+            <span>Realtime stok tersedia</span>
+            <span>Riwayat peminjam</span>
+            <span>Mode demo & Google Sheet</span>
+          </div>
+        </div>
+        <aside class="hero-panel reveal">
+          <div class="panel-topline">
+            <span>Status integrasi</span>
+            <strong id="modeBadge">Memuat...</strong>
+          </div>
+          <p id="modeDescription">
+            Dashboard akan otomatis membaca sumber data yang aktif dari server.
+          </p>
+          <div class="panel-mini-grid">
+            <article>
+              <span>Total Barang</span>
+              <strong id="miniTotalItems">0</strong>
+            </article>
+            <article>
+              <span>Dipinjam</span>
+              <strong id="miniActiveLoans">0</strong>
+            </article>
+          </div>
+        </aside>
+      </header>
+
+      <main class="content-grid">
+        <section class="kpi-grid reveal" id="kpiGrid">
+          <article class="kpi-card accent-coral">
+            <span>Total Barang</span>
+            <strong id="statTotalItems">0</strong>
+            <small>Jenis inventaris aktif</small>
+          </article>
+          <article class="kpi-card accent-emerald">
+            <span>Peminjaman Aktif</span>
+            <strong id="statActiveLoans">0</strong>
+            <small>Belum dikembalikan</small>
+          </article>
+          <article class="kpi-card accent-gold">
+            <span>Stok Siap Pinjam</span>
+            <strong id="statItemsReady">0</strong>
+            <small>Unit tersedia hari ini</small>
+          </article>
+          <article class="kpi-card accent-ink">
+            <span>Terlambat</span>
+            <strong id="statOverdueLoans">0</strong>
+            <small>Perlu follow up</small>
+          </article>
+        </section>
+
+        <section class="panel live-panel reveal">
+          <div class="panel-heading live-head">
+            <div>
+              <span class="section-label">Live Update</span>
+              <h2>Aktivitas realtime aplikasi</h2>
+            </div>
+            <div class="live-summary">
+              <strong id="liveClientCount">0 client aktif</strong>
+              <span id="liveUpdateText">Menunggu sinkronisasi realtime...</span>
+            </div>
+          </div>
+
+          <div class="activity-feed" id="activityFeed"></div>
+        </section>
+
+        <section class="panel inventory-panel reveal">
+          <div class="panel-heading">
+            <div>
+              <span class="section-label">Inventaris</span>
+              <h2>Ketersediaan barang</h2>
+            </div>
+            <p>Stok otomatis dihitung dari item yang sedang dipinjam.</p>
+          </div>
+          <div class="table-shell">
+            <table>
+              <thead>
+                <tr>
+                  <th>Kode</th>
+                  <th>Barang</th>
+                  <th>Kategori</th>
+                  <th>Lokasi</th>
+                  <th>Tersedia</th>
+                </tr>
+              </thead>
+              <tbody id="itemsTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel form-panel reveal">
+          <div class="panel-heading">
+            <div>
+              <span class="section-label">Peminjaman</span>
+              <h2>Buat permintaan baru</h2>
+            </div>
+            <p>Isi form di bawah untuk menambahkan transaksi peminjaman.</p>
+          </div>
+
+          <form id="loanForm" class="form-grid">
+            <label>
+              <span>Nama peminjam</span>
+              <input type="text" name="borrowerName" placeholder="Contoh: Alya Putri" required />
+            </label>
+            <label>
+              <span>NIM / ID</span>
+              <input type="text" name="borrowerId" placeholder="2211001" required />
+            </label>
+            <label>
+              <span>Program / divisi</span>
+              <input type="text" name="department" placeholder="Teknik Informatika" required />
+            </label>
+            <label>
+              <span>Barang</span>
+              <select name="itemId" id="itemSelect" required></select>
+            </label>
+            <label>
+              <span>Jumlah</span>
+              <input type="number" name="quantity" min="1" value="1" required />
+            </label>
+            <label>
+              <span>Keperluan</span>
+              <input type="text" name="purpose" placeholder="Demo capstone / dokumentasi / sidang" required />
+            </label>
+            <label>
+              <span>Tanggal pinjam</span>
+              <input type="date" name="loanDate" id="loanDateInput" required />
+            </label>
+            <label>
+              <span>Batas kembali</span>
+              <input type="date" name="dueDate" id="dueDateInput" required />
+            </label>
+            <label class="full-span">
+              <span>Catatan</span>
+              <textarea
+                name="requestNotes"
+                rows="4"
+                placeholder="Tambahkan adaptor, lokasi pengambilan, atau catatan lain"
+              ></textarea>
+            </label>
+            <div class="form-actions full-span">
+              <button type="submit" id="loanSubmitButton">Simpan peminjaman</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel return-panel reveal">
+          <div class="panel-heading">
+            <div>
+              <span class="section-label">Pengembalian</span>
+              <h2>Selesaikan transaksi aktif</h2>
+            </div>
+            <p>Pilih baris peminjaman aktif di tabel bawah untuk memuat data ke panel ini.</p>
+          </div>
+
+          <div class="return-summary" id="returnSummary">
+            <strong>Belum ada transaksi dipilih</strong>
+            <p>Pilih tombol <em>Proses kembali</em> pada daftar peminjaman aktif.</p>
+          </div>
+
+          <form id="returnForm" class="form-grid">
+            <input type="hidden" name="loanId" id="returnLoanId" />
+            <label>
+              <span>Tanggal kembali</span>
+              <input type="date" name="returnedAt" id="returnedAtInput" required />
+            </label>
+            <label class="full-span">
+              <span>Catatan pengembalian</span>
+              <textarea
+                name="returnNotes"
+                rows="4"
+                placeholder="Contoh: barang lengkap, charger sudah dicek"
+              ></textarea>
+            </label>
+            <div class="form-actions full-span">
+              <button type="submit" class="secondary" id="returnSubmitButton">Tandai sudah kembali</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel history-panel reveal">
+          <div class="panel-heading history-head">
+            <div>
+              <span class="section-label">Riwayat</span>
+              <h2>Daftar peminjaman</h2>
+            </div>
+            <div class="toolbar">
+              <input
+                type="search"
+                id="searchInput"
+                placeholder="Cari nama, barang, atau loan ID"
+              />
+              <select id="statusFilter">
+                <option value="Semua">Semua status</option>
+                <option value="Dipinjam">Dipinjam</option>
+                <option value="Terlambat">Terlambat</option>
+                <option value="Dikembalikan">Dikembalikan</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="table-shell">
+            <table>
+              <thead>
+                <tr>
+                  <th>Loan ID</th>
+                  <th>Peminjam</th>
+                  <th>Barang</th>
+                  <th>Tanggal</th>
+                  <th>Status</th>
+                  <th>Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="loansTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel chat-panel reveal">
+          <div class="panel-heading chat-head">
+            <div>
+              <span class="section-label">Chat Realtime</span>
+              <h2>Diskusi cepat peminjaman</h2>
+            </div>
+            <div class="chat-status">
+              <strong id="chatConnectionBadge">Menghubungkan...</strong>
+              <span id="chatPresenceText">0 pengguna online</span>
+            </div>
+          </div>
+
+          <div class="chat-layout">
+            <aside class="chat-sidebar">
+              <h3>Masuk ke chat</h3>
+              <p>Nama ini akan tampil saat kamu mengirim pesan.</p>
+              <label>
+                <span>Nama pengirim</span>
+                <input
+                  type="text"
+                  id="chatSenderInput"
+                  maxlength="40"
+                  placeholder="Contoh: Alya / Admin Lab"
+                />
+              </label>
+              <label>
+                <span>Peran</span>
+                <select id="chatRoleSelect">
+                  <option value="pengguna">Pengguna</option>
+                  <option value="admin">Admin Lab</option>
+                </select>
+              </label>
+              <label>
+                <span>Room chat</span>
+                <select id="chatRoomSelect"></select>
+              </label>
+              <div class="chat-room-meta">
+                <strong id="chatRoomTitle">Chat Umum</strong>
+                <small id="chatRoomSubtitle">Untuk pertanyaan umum seputar peminjaman.</small>
+              </div>
+              <div class="chat-role-banner" id="chatRoleBanner">
+                Mode pengguna aktif. Kamu bisa tanya status stok, loan, atau pengembalian.
+              </div>
+              <div class="chat-tip">
+                Chat ini realtime antar tab/browser yang sedang membuka aplikasi. Room loan cocok untuk follow up satu transaksi, sedangkan room barang cocok untuk diskusi stok barang tertentu.
+              </div>
+            </aside>
+
+            <div class="chat-main">
+              <div class="chat-feed" id="chatFeed"></div>
+              <div class="typing-indicator" id="chatTypingIndicator"></div>
+              <form id="chatForm" class="chat-form">
+                <textarea
+                  id="chatMessageInput"
+                  rows="3"
+                  placeholder="Tulis pertanyaan tentang stok, jadwal ambil, atau kendala peminjaman..."
+                ></textarea>
+                <div class="chat-actions">
+                  <small id="chatHelperText">Pesan akan dikirim ke semua orang yang sedang berada di room ini.</small>
+                  <button type="submit" id="chatSubmitButton">Kirim pesan</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast"></div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

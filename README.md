@@ -10,6 +10,10 @@ Project Laboran adalah aplikasi Django sederhana untuk membantu pencatatan inven
 - Mengubah data barang
 - Menghapus data barang
 
+## Folder tambahan
+
+- `capstone-peminjaman-barang/` berisi web app Node.js untuk demo peminjaman barang realtime dengan Socket.IO dan integrasi Google Sheet.
+
 ## Menjalankan proyek
 
 ```bash
