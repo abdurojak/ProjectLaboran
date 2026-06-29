@@ -444,7 +444,7 @@ class DashboardViewTests(TestCase):
         self.assertContains(response, reverse('kalender:kegiatan_list'))
         self.assertLess(content.index('Kegiatan Terdekat'), content.index('Peminjaman Saya'))
 
-    def test_dashboard_mahasiswa_menampilkan_ringkasan_barang_bermasalah_paling_atas(self):
+    def test_dashboard_mahasiswa_menampilkan_peringatan_barang_bermasalah_paling_atas(self):
         mahasiswa = Pengguna.objects.create(
             nama_pengguna='Reno Pratama',
             nim_nik='2201012',
@@ -457,15 +457,38 @@ class DashboardViewTests(TestCase):
             gender='laki_laki',
             role='mahasiswa',
         )
-        for status in ['dipinjam', 'rusak', 'hilang']:
-            PeminjamanAlat.objects.create(
-                barang=Barang.objects.create(nama=f'Barang {status}', jumlah=1),
-                nama_peminjam='Reno Pratama',
-                nim=mahasiswa.nim_nik,
-                tanggal_pinjam=timezone.localdate(),
-                tanggal_kembali=timezone.localdate(),
-                status=status,
-            )
+        PeminjamanAlat.objects.create(
+            barang=Barang.objects.create(nama='Kamera Rusak', jumlah=1),
+            nama_peminjam='Reno Pratama',
+            nim=mahasiswa.nim_nik,
+            tanggal_pinjam=timezone.localdate(),
+            tanggal_kembali=timezone.localdate(),
+            status='rusak',
+        )
+        PeminjamanAlat.objects.create(
+            barang=Barang.objects.create(nama='Recorder Hilang', jumlah=1),
+            nama_peminjam='Reno Pratama',
+            nim=mahasiswa.nim_nik,
+            tanggal_pinjam=timezone.localdate(),
+            tanggal_kembali=timezone.localdate(),
+            status='hilang',
+        )
+        PeminjamanAlat.objects.create(
+            barang=Barang.objects.create(nama='Tripod Terlambat', jumlah=1),
+            nama_peminjam='Reno Pratama',
+            nim=mahasiswa.nim_nik,
+            tanggal_pinjam=timezone.localdate(),
+            tanggal_kembali=timezone.localdate() - timezone.timedelta(days=1),
+            status='dipinjam',
+        )
+        PeminjamanAlat.objects.create(
+            barang=Barang.objects.create(nama='Laptop Masih Aman', jumlah=1),
+            nama_peminjam='Reno Pratama',
+            nim=mahasiswa.nim_nik,
+            tanggal_pinjam=timezone.localdate(),
+            tanggal_kembali=timezone.localdate(),
+            status='dipinjam',
+        )
         session = self.client.session
         session['pengguna_id'] = mahasiswa.pk
         session.save()
@@ -473,13 +496,16 @@ class DashboardViewTests(TestCase):
         response = self.client.get(reverse('dashboard:home'))
         content = response.content.decode()
 
-        self.assertContains(response, 'Ringkasan Barang Saya')
-        self.assertContains(response, 'Sedang dipinjam')
-        self.assertContains(response, 'Rusak')
-        self.assertContains(response, 'Hilang')
-        self.assertLess(content.index('Ringkasan Barang Saya'), content.index('Pendaftaran Aslab') if 'Pendaftaran Aslab' in content else content.index('Kegiatan Terdekat'))
+        self.assertContains(response, 'Peringatan Peminjaman')
+        self.assertContains(response, 'Kamera Rusak')
+        self.assertContains(response, 'Recorder Hilang')
+        self.assertContains(response, 'Tripod Terlambat')
+        self.assertContains(response, 'Lewat masa pengembalian')
+        warning_items = [item['barang'] for item in response.context['peringatan_peminjaman_saya']]
+        self.assertNotIn('Laptop Masih Aman', warning_items)
+        self.assertLess(content.index('Peringatan Peminjaman'), content.index('Pendaftaran Aslab') if 'Pendaftaran Aslab' in content else content.index('Kegiatan Terdekat'))
 
-    def test_dashboard_mahasiswa_menyembunyikan_ringkasan_barang_jika_kosong(self):
+    def test_dashboard_mahasiswa_menyembunyikan_peringatan_barang_jika_tidak_ada_masalah(self):
         mahasiswa = Pengguna.objects.create(
             nama_pengguna='Nina Putri',
             nim_nik='2201013',
@@ -492,15 +518,23 @@ class DashboardViewTests(TestCase):
             gender='perempuan',
             role='mahasiswa',
         )
+        PeminjamanAlat.objects.create(
+            barang=Barang.objects.create(nama='Barang Aman', jumlah=1),
+            nama_peminjam='Nina Putri',
+            nim=mahasiswa.nim_nik,
+            tanggal_pinjam=timezone.localdate(),
+            tanggal_kembali=timezone.localdate(),
+            status='dipinjam',
+        )
         session = self.client.session
         session['pengguna_id'] = mahasiswa.pk
         session.save()
 
         response = self.client.get(reverse('dashboard:home'))
 
-        self.assertNotContains(response, 'Ringkasan Barang Saya')
+        self.assertNotContains(response, 'Peringatan Peminjaman')
 
-    def test_dashboard_asisten_lab_menampilkan_ringkasan_barang_saya_paling_atas(self):
+    def test_dashboard_asisten_lab_menampilkan_peringatan_barang_paling_atas(self):
         asisten = Pengguna.objects.create(
             nama_pengguna='Aldi Asisten',
             nim_nik='2202012',
@@ -518,7 +552,7 @@ class DashboardViewTests(TestCase):
             nama_peminjam='Aldi Asisten',
             nim=asisten.nim_nik,
             tanggal_pinjam=timezone.localdate(),
-            tanggal_kembali=timezone.localdate(),
+            tanggal_kembali=timezone.localdate() - timezone.timedelta(days=2),
             status='dipinjam',
         )
         session = self.client.session
@@ -528,9 +562,10 @@ class DashboardViewTests(TestCase):
         response = self.client.get(reverse('dashboard:home'))
         content = response.content.decode()
 
-        self.assertContains(response, 'Ringkasan Barang Saya')
+        self.assertContains(response, 'Peringatan Peminjaman')
+        self.assertContains(response, 'Kamera Aslab')
         self.assertContains(response, 'Honor Bulan Ini')
-        self.assertLess(content.index('Ringkasan Barang Saya'), content.index('Honor Bulan Ini'))
+        self.assertLess(content.index('Peringatan Peminjaman'), content.index('Honor Bulan Ini'))
 
     def test_dashboard_mahasiswa_menampilkan_qr_pendaftaran_asleb_saat_dibuka(self):
         mahasiswa = Pengguna.objects.create(

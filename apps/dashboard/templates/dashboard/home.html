@@ -37,22 +37,32 @@
         </div>
         {% endcomment %}
 
-        {% if has_ringkasan_barang_saya %}
-        <section class="surface-card min-w-0 overflow-hidden p-5 md:p-6">
-            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                    <p class="text-xs font-black uppercase tracking-[0.22em] text-brand-700">Status Barang</p>
-                    <h3 class="mt-2 text-2xl font-bold tracking-tight text-slate-900">Ringkasan Barang Saya</h3>
+        {% if has_peringatan_peminjaman_saya %}
+        <section class="surface-card min-w-0 overflow-hidden border-amber-200 bg-amber-50/80 p-5 md:p-6">
+            <div class="flex flex-wrap items-start justify-between gap-4">
+                <div class="flex min-w-0 gap-4">
+                    <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
+                        <i data-lucide="triangle-alert" class="h-6 w-6"></i>
+                    </span>
+                    <div class="min-w-0">
+                        <p class="text-xs font-black uppercase tracking-[0.22em] text-amber-700">Perlu Perhatian</p>
+                        <h3 class="mt-2 text-2xl font-bold tracking-tight text-slate-900">Peringatan Peminjaman</h3>
+                        <p class="mt-2 text-sm leading-6 text-slate-600">Ada barang peminjaman yang rusak, hilang, atau sudah melewati tanggal pengembalian.</p>
+                    </div>
                 </div>
-                <a href="{% url 'peminjaman:peminjaman_list' %}?milik_saya=1" class="btn-secondary">Lihat detail</a>
+                <a href="{% url 'peminjaman:peminjaman_list' %}?milik_saya=1" class="btn-secondary bg-white">Lihat semua</a>
             </div>
-            <div class="grid gap-3 sm:grid-cols-3">
-                {% for item in ringkasan_barang_saya %}
-                <article class="rounded-2xl border border-slate-200 bg-white p-4">
-                    <p class="text-sm font-bold text-slate-500">{{ item.label }}</p>
-                    <div class="{{ item.value_text }} mt-2 text-3xl font-black tracking-tight">{{ item.value }}</div>
-                    <p class="mt-1 text-xs font-semibold leading-5 text-slate-400">{{ item.note }}</p>
-                </article>
+            <div class="mt-5 grid gap-3">
+                {% for item in peringatan_peminjaman_saya %}
+                <a href="{{ item.url }}" class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-100 bg-white px-4 py-3 transition hover:border-amber-200 hover:shadow-sm">
+                    <div class="min-w-0">
+                        <p class="truncate text-sm font-black text-slate-900">{{ item.barang }}</p>
+                        <p class="mt-1 text-xs font-semibold text-slate-500">Tanggal kembali: {{ item.tanggal_kembali|date:"d M Y" }}</p>
+                    </div>
+                    <span class="{% if item.tone == 'rose' %}bg-rose-100 text-rose-700{% elif item.tone == 'orange' %}bg-orange-100 text-orange-700{% else %}bg-amber-100 text-amber-700{% endif %} rounded-full px-3 py-1 text-xs font-black">
+                        {{ item.label }}
+                    </span>
+                </a>
                 {% endfor %}
             </div>
         </section>
