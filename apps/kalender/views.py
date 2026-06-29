@@ -283,6 +283,12 @@ class NotifikasiListView(ListView):
             return []
 
         status_meta = {
+            'ditolak': {
+                'badge': 'Ditolak',
+                'icon': 'x-circle',
+                'icon_class': 'bg-rose-50 text-rose-700',
+                'description': 'Pengajuan peminjaman Anda belum dapat disetujui oleh pengelola laboratorium.',
+            },
             'dipinjam': {
                 'badge': 'Dipinjam',
                 'icon': 'check-circle-2',

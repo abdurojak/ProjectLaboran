@@ -48,7 +48,7 @@ def send_peminjaman_request_notifications(peminjaman):
     )
 
 
-def send_peminjaman_approved_notification(peminjaman):
+def send_peminjaman_status_notification(peminjaman):
     recipient = (
         Pengguna.objects.filter(nim_nik=peminjaman.nim)
         .exclude(email='')
@@ -59,8 +59,20 @@ def send_peminjaman_approved_notification(peminjaman):
         return 0
 
     action_url = build_public_url('peminjaman:peminjaman_detail', pk=peminjaman.pk)
+    status_messages = {
+        'dipinjam': ('Peminjaman Alat Disetujui', 'Peminjaman disetujui', 'Pengajuan peminjaman alat Anda telah disetujui.'),
+        'ditolak': ('Peminjaman Alat Ditolak', 'Peminjaman ditolak', 'Pengajuan peminjaman alat Anda belum dapat disetujui.'),
+        'dikembalikan': ('Peminjaman Alat Dikembalikan', 'Peminjaman selesai', 'Barang telah dicatat kembali ke laboratorium.'),
+        'hilang': ('Status Peminjaman: Hilang', 'Barang ditandai hilang', 'Barang pada peminjaman Anda ditandai hilang dan perlu ditindaklanjuti.'),
+        'rusak': ('Status Peminjaman: Rusak', 'Barang ditandai rusak', 'Barang pada peminjaman Anda ditandai rusak dan perlu ditindaklanjuti.'),
+        'digantikan': ('Status Peminjaman: Digantikan', 'Penggantian barang tercatat', 'Penggantian barang pada peminjaman Anda telah dicatat.'),
+    }
+    subject, title, intro = status_messages.get(
+        peminjaman.status,
+        ('Status Peminjaman Alat Diperbarui', 'Status peminjaman diperbarui', 'Status peminjaman alat Anda telah diperbarui.'),
+    )
     text_body = (
-        f'Pengajuan peminjaman {peminjaman.barang.nama} sudah disetujui.\n'
+        f'Status peminjaman {peminjaman.barang.nama} diperbarui.\n'
         f'Kode: {peminjaman.kode_pinjam}\n'
         f'Status: {peminjaman.get_status_display()}\n'
         f'Tanggal pinjam: {peminjaman.tanggal_pinjam:%d-%m-%Y}\n'
@@ -68,12 +80,12 @@ def send_peminjaman_approved_notification(peminjaman):
         f'Buka sistem: {action_url}'
     )
     return send_branded_email(
-        subject='Peminjaman Alat Disetujui',
+        subject=subject,
         recipients=[recipient],
         text_body=text_body,
-        title='Peminjaman disetujui',
+        title=title,
         greeting=f'Halo {peminjaman.nama_peminjam},',
-        intro='Pengajuan peminjaman alat Anda telah disetujui oleh pengelola laboratorium.',
+        intro=intro,
         details=[
             {'label': 'Kode', 'value': peminjaman.kode_pinjam},
             {'label': 'Barang', 'value': peminjaman.barang.nama},
@@ -85,3 +97,7 @@ def send_peminjaman_approved_notification(peminjaman):
         action_label='Lihat Peminjaman',
         fail_silently=True,
     )
+
+
+def send_peminjaman_approved_notification(peminjaman):
+    return send_peminjaman_status_notification(peminjaman)

@@ -15,10 +15,10 @@
         {{ form.non_field_errors }}
         {{ form.barang }}
         {{ form.selected_barang_ids }}
-        {% if current_pengguna and current_pengguna.role == 'mahasiswa' %}
+        {% if current_pengguna and current_pengguna.role == 'mahasiswa' or current_pengguna.role == 'asisten_lab' %}
         {{ form.status }}
         <div class="rounded-3xl border border-amber-100 bg-amber-50 p-4 text-sm font-semibold leading-7 text-amber-800">
-            Pengajuan mahasiswa otomatis masuk dengan status Diajukan dan menunggu persetujuan admin laboratorium.
+            Pengajuan Anda otomatis masuk dengan status Diajukan dan menunggu persetujuan admin atau laboran.
         </div>
         {% endif %}
         <div>
@@ -106,34 +106,17 @@
                         <th>Foto</th>
                     </tr>
                 </thead>
-                <tbody>
-                    {% for barang in detail_barang_list %}
-                    <tr data-barang-picker-row data-search="{{ barang.kode_barang }} {{ barang.nama }} {{ barang.inventaris.nama }} {{ barang.lokasi.nama_lokasi }} {{ barang.get_kondisi_display }} {{ barang.status_pinjam }}">
-                        <td>
-                            <input type="checkbox" class="h-4 w-4 rounded border-slate-300 text-brand-700 focus:ring-brand-100" data-barang-picker-choice data-barang-id="{{ barang.pk }}" data-barang-label="{{ barang.kode_barang }} - {{ barang.nama }}"{% if barang.kondisi == 'rusak_berat' or barang.sedang_dipinjam %} disabled data-barang-disabled="true"{% endif %}>
-                        </td>
-                        <td class="font-semibold text-slate-900">{{ barang.kode_barang }}</td>
-                        <td>{{ barang.nama }}</td>
-                        <td>{{ barang.lokasi.nama_lokasi|default:"-" }}</td>
-                        <td class="{% if barang.kondisi == 'baik' %}font-semibold text-emerald-700{% elif barang.kondisi == 'rusak_ringan' %}font-semibold text-amber-700{% else %}font-semibold text-rose-700{% endif %}">{{ barang.get_kondisi_display }}</td>
-                        <td>
-                            <span class="{% if barang.sedang_dipinjam %}bg-amber-100 text-amber-700{% else %}bg-emerald-100 text-emerald-700{% endif %} inline-flex rounded-full px-3 py-1 text-xs font-bold">
-                                {{ barang.status_pinjam }}
-                            </span>
-                        </td>
-                        <td>
-                            <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-brand-700 transition hover:border-brand-200 hover:bg-brand-50" data-barang-photo-preview data-barang-photo-title="{{ barang.kode_barang }} - {{ barang.nama }}" data-barang-photo-url="{% if barang.foto %}{{ barang.foto.url }}{% elif barang.inventaris and barang.inventaris.foto %}{{ barang.inventaris.foto.url }}{% endif %}" aria-label="Lihat foto {{ barang.kode_barang }} - {{ barang.nama }}">
-                                <i data-lucide="eye" class="h-4 w-4"></i>
-                            </button>
-                        </td>
-                    </tr>
-                    {% empty %}
+                <tbody data-barang-picker-body>
                     <tr>
-                        <td colspan="7" class="py-12 text-center text-slate-500">Belum ada detail barang.</td>
+                        <td colspan="7" class="py-12 text-center text-slate-500">Memuat detail barang...</td>
                     </tr>
-                    {% endfor %}
                 </tbody>
             </table>
+        </div>
+        <div class="flex items-center justify-between gap-3 border-t border-slate-200 px-5 py-3">
+            <button type="button" class="btn-secondary" data-barang-page-prev disabled>Sebelumnya</button>
+            <span class="text-sm font-semibold text-slate-500" data-barang-page-label>Halaman 1</span>
+            <button type="button" class="btn-secondary" data-barang-page-next disabled>Berikutnya</button>
         </div>
         <div class="flex flex-wrap justify-end gap-3 border-t border-slate-200 p-5">
             <button type="button" class="btn-secondary" data-barang-picker-close>
@@ -179,19 +162,96 @@
         const selectedInput = document.getElementById('id_selected_barang_ids');
         const selectedList = document.querySelector('[data-selected-barang-list]');
         const emptyState = document.querySelector('[data-selected-barang-empty]');
-        const rows = Array.from(document.querySelectorAll('[data-barang-picker-row]'));
-        const choices = Array.from(document.querySelectorAll('[data-barang-picker-choice]'));
+        const optionsUrl = "{% url 'peminjaman:barang_options' %}";
+        const pickerBody = document.querySelector('[data-barang-picker-body]');
+        const pagePrevious = document.querySelector('[data-barang-page-prev]');
+        const pageNext = document.querySelector('[data-barang-page-next]');
+        const pageLabel = document.querySelector('[data-barang-page-label]');
         const doneButton = document.querySelector('[data-barang-picker-done]');
         const photoModal = document.querySelector('[data-barang-photo-modal]');
         const photoTitle = document.querySelector('[data-barang-photo-heading]');
         const photoImage = document.querySelector('[data-barang-photo-image]');
         const photoEmpty = document.querySelector('[data-barang-photo-empty]');
         const photoCloseButton = document.querySelector('[data-barang-photo-close]');
+        let currentPage = 1;
+        let searchTimer = null;
+
+        function appendCell(row, text, className) {
+            const cell = document.createElement('td');
+            cell.textContent = text;
+            if (className) {
+                cell.className = className;
+            }
+            row.appendChild(cell);
+            return cell;
+        }
+
+        function renderOptions(data) {
+            pickerBody.replaceChildren();
+            if (!data.results.length) {
+                const row = document.createElement('tr');
+                const cell = appendCell(row, 'Barang tidak ditemukan.', 'py-12 text-center text-slate-500');
+                cell.colSpan = 7;
+                pickerBody.appendChild(row);
+            }
+
+            data.results.forEach(function (barang) {
+                const row = document.createElement('tr');
+                const choiceCell = appendCell(row, '');
+                const choice = document.createElement('input');
+                choice.type = 'checkbox';
+                choice.className = 'h-4 w-4 rounded border-slate-300 text-brand-700 focus:ring-brand-100';
+                choice.dataset.barangPickerChoice = '';
+                choice.dataset.barangId = String(barang.id);
+                choice.dataset.barangLabel = barang.kode + ' - ' + barang.nama;
+                choice.disabled = barang.disabled;
+                choiceCell.appendChild(choice);
+                appendCell(row, barang.kode, 'font-semibold text-slate-900');
+                appendCell(row, barang.nama);
+                appendCell(row, barang.lokasi);
+                const kondisiClass = barang.kondisi_key === 'baik' ? 'font-semibold text-emerald-700' : (barang.kondisi_key === 'rusak_ringan' ? 'font-semibold text-amber-700' : 'font-semibold text-rose-700');
+                appendCell(row, barang.kondisi, kondisiClass);
+                const statusCell = appendCell(row, '');
+                const statusBadge = document.createElement('span');
+                statusBadge.className = (barang.disabled ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700') + ' inline-flex rounded-full px-3 py-1 text-xs font-bold';
+                statusBadge.textContent = barang.status;
+                statusCell.appendChild(statusBadge);
+                const photoCell = appendCell(row, '');
+                const photoButton = document.createElement('button');
+                photoButton.type = 'button';
+                photoButton.className = 'inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-brand-700';
+                photoButton.dataset.barangPhotoPreview = '';
+                photoButton.dataset.barangPhotoTitle = barang.kode + ' - ' + barang.nama;
+                photoButton.dataset.barangPhotoUrl = barang.photo_url;
+                photoButton.setAttribute('aria-label', 'Lihat foto ' + barang.kode + ' - ' + barang.nama);
+                const icon = document.createElement('i');
+                icon.dataset.lucide = 'eye';
+                icon.className = 'h-4 w-4';
+                photoButton.appendChild(icon);
+                photoCell.appendChild(photoButton);
+                pickerBody.appendChild(row);
+            });
+
+            currentPage = data.page;
+            pagePrevious.disabled = !data.has_previous;
+            pageNext.disabled = !data.has_next;
+            pageLabel.textContent = 'Halaman ' + data.page + ' dari ' + Math.max(data.num_pages, 1);
+            syncSelectedInputs();
+            lucide.createIcons();
+        }
+
+        function loadOptions(page) {
+            const params = new URLSearchParams({q: searchInput.value.trim(), page: String(page || 1)});
+            fetch(optionsUrl + '?' + params.toString(), {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+                .then(function (response) { return response.json(); })
+                .then(renderOptions);
+        }
 
         function openModal() {
             modal.classList.remove('hidden');
             modal.classList.add('flex');
             searchInput.focus();
+            loadOptions(1);
         }
 
         function closeModal() {
@@ -231,10 +291,11 @@
             photoModal.classList.remove('flex');
         }
 
-        document.querySelectorAll('[data-barang-photo-preview]').forEach(function (button) {
-            button.addEventListener('click', function () {
+        pickerBody.addEventListener('click', function (event) {
+            const button = event.target.closest('[data-barang-photo-preview]');
+            if (button) {
                 openPhotoModal(button.dataset.barangPhotoTitle, button.dataset.barangPhotoUrl);
-            });
+            }
         });
 
         photoCloseButton.addEventListener('click', closePhotoModal);
@@ -245,11 +306,11 @@
         });
 
         searchInput.addEventListener('input', function () {
-            const keyword = searchInput.value.trim().toLowerCase();
-            rows.forEach(function (row) {
-                row.classList.toggle('hidden', !row.dataset.search.toLowerCase().includes(keyword));
-            });
+            window.clearTimeout(searchTimer);
+            searchTimer = window.setTimeout(function () { loadOptions(1); }, 250);
         });
+        pagePrevious.addEventListener('click', function () { loadOptions(currentPage - 1); });
+        pageNext.addEventListener('click', function () { loadOptions(currentPage + 1); });
 
         function syncSelectedInputs() {
             const badges = Array.from(selectedList.querySelectorAll('[data-selected-barang-badge]'));
@@ -260,7 +321,7 @@
             selectedInput.value = selectedIds.join(',');
             hiddenInput.value = selectedIds[0] || '';
             emptyState.classList.toggle('hidden', selectedIds.length > 0);
-            choices.forEach(function (choice) {
+            document.querySelectorAll('[data-barang-picker-choice]').forEach(function (choice) {
                 choice.checked = selectedIds.includes(choice.dataset.barangId);
             });
         }
@@ -271,14 +332,27 @@
             badge.dataset.selectedBarangBadge = '';
             badge.dataset.selectedBarangId = id;
             badge.dataset.selectedBarangLabel = label;
-            badge.innerHTML = '<span></span><button type="button" class="text-brand-700 hover:text-brand-900" data-selected-barang-remove aria-label="Hapus ' + label + '"><i data-lucide="x" class="h-3.5 w-3.5"></i></button>';
-            badge.querySelector('span').textContent = label;
+            const badgeLabel = document.createElement('span');
+            badgeLabel.textContent = label;
+
+            const removeButton = document.createElement('button');
+            removeButton.type = 'button';
+            removeButton.className = 'text-brand-700 hover:text-brand-900';
+            removeButton.dataset.selectedBarangRemove = '';
+            removeButton.setAttribute('aria-label', 'Hapus ' + label);
+
+            const icon = document.createElement('i');
+            icon.dataset.lucide = 'x';
+            icon.className = 'h-3.5 w-3.5';
+            removeButton.appendChild(icon);
+            badge.appendChild(badgeLabel);
+            badge.appendChild(removeButton);
             return badge;
         }
 
         doneButton.addEventListener('click', function () {
             selectedList.innerHTML = '';
-            choices.filter(function (choice) {
+            Array.from(document.querySelectorAll('[data-barang-picker-choice]')).filter(function (choice) {
                 return choice.checked && !choice.disabled;
             }).forEach(function (choice) {
                 selectedList.appendChild(createBadge(choice.dataset.barangId, choice.dataset.barangLabel));

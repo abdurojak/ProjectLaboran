@@ -42,11 +42,11 @@
         </div>
 
         <div class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
-            {% if current_pengguna and current_pengguna.role == 'mahasiswa' %}
-            <label for="id_milik_saya" class="mb-0 inline-flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 sm:w-auto">
-                <input id="id_milik_saya" name="milik_saya" value="1" type="checkbox" class="h-4 w-4 rounded border-slate-300 p-0 text-brand-700 focus:ring-brand-100"{% if filter_milik_saya %} checked{% endif %}>
-                <span>Peminjaman saya</span>
-            </label>
+            {% if is_borrower %}
+            <div class="inline-flex w-full items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm font-semibold text-brand-800 sm:w-auto">
+                <i data-lucide="shield-check" class="h-4 w-4"></i>
+                <span>Menampilkan riwayat peminjaman Anda</span>
+            </div>
             {% endif %}
             <div class="flex w-full flex-wrap gap-3 sm:w-auto">
                 <button type="submit" class="btn-primary flex-1 gap-2 bg-amber-500 shadow-amber-500/20 hover:bg-amber-600 sm:flex-none">
@@ -94,6 +94,7 @@
                             <span class="
                                 {% if peminjaman.status == 'dipinjam' %}bg-amber-100 text-amber-700
                                 {% elif peminjaman.status == 'dikembalikan' %}bg-emerald-100 text-emerald-700
+                                {% elif peminjaman.status == 'ditolak' %}bg-rose-100 text-rose-700
                                 {% elif peminjaman.status == 'hilang' %}bg-rose-100 text-rose-700
                                 {% elif peminjaman.status == 'rusak' %}bg-orange-100 text-orange-700
                                 {% elif peminjaman.status == 'digantikan' %}bg-brand-100 text-brand-800
@@ -108,11 +109,13 @@
                                     <i data-lucide="eye" class="h-4 w-4"></i>
                                     <span>Detail</span>
                                 </a>
-                                {% if peminjaman.can_current_pengguna_change %}
+                                {% if peminjaman.can_current_pengguna_edit %}
                                 <a class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700" href="{% url 'peminjaman:peminjaman_update' peminjaman.pk %}">
                                     <i data-lucide="pencil" class="h-4 w-4"></i>
                                     <span>Edit</span>
                                 </a>
+                                {% endif %}
+                                {% if peminjaman.can_current_pengguna_delete %}
                                 <form method="post" action="{% url 'peminjaman:peminjaman_delete' peminjaman.pk %}" data-confirm-message="Yakin ingin menghapus peminjaman {{ peminjaman.nama_peminjam }}?" class="inline">
                                     {% csrf_token %}
                                     <button type="submit" class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700">
@@ -133,6 +136,20 @@
             </table>
         </div>
     </div>
+
+    {% if is_paginated %}
+    <nav class="flex flex-wrap items-center justify-between gap-3" aria-label="Navigasi halaman peminjaman">
+        <p class="text-sm font-semibold text-slate-500">Halaman {{ page_obj.number }} dari {{ paginator.num_pages }}</p>
+        <div class="flex gap-2">
+            {% if page_obj.has_previous %}
+            <a class="btn-secondary" href="?page={{ page_obj.previous_page_number }}&barang={{ filter_barang|urlencode }}&tanggal_mulai={{ filter_tanggal_mulai|urlencode }}&tanggal_selesai={{ filter_tanggal_selesai|urlencode }}&status={{ filter_status|urlencode }}">Sebelumnya</a>
+            {% endif %}
+            {% if page_obj.has_next %}
+            <a class="btn-secondary" href="?page={{ page_obj.next_page_number }}&barang={{ filter_barang|urlencode }}&tanggal_mulai={{ filter_tanggal_mulai|urlencode }}&tanggal_selesai={{ filter_tanggal_selesai|urlencode }}&status={{ filter_status|urlencode }}">Berikutnya</a>
+            {% endif %}
+        </div>
+    </nav>
+    {% endif %}
 </section>
 {% endblock %}
 

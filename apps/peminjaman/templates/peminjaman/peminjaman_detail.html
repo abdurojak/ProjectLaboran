@@ -11,17 +11,21 @@
             <p class="mt-2 text-sm text-slate-500">Detail lengkap transaksi peminjaman alat laboratorium.</p>
         </div>
         <div class="flex flex-wrap gap-3">
+            {% if can_edit %}
             <a class="btn-primary bg-amber-500 hover:bg-amber-600 shadow-amber-500/20" href="{% url 'peminjaman:peminjaman_update' peminjaman.pk %}">
                 <i data-lucide="pencil" class="h-4 w-4"></i>
                 <span>Edit</span>
             </a>
+            {% endif %}
+            {% if can_delete %}
             <form method="post" action="{% url 'peminjaman:peminjaman_delete' peminjaman.pk %}" data-confirm-message="Yakin ingin menghapus peminjaman {{ peminjaman.nama_peminjam }}?" class="inline">
                                     {% csrf_token %}
                                     <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-2xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-rose-700">
                                         <i data-lucide="trash-2" class="h-4 w-4"></i>
                                         <span>Hapus</span>
                                     </button>
-                                </form>
+                                 </form>
+            {% endif %}
             <a class="btn-secondary" href="{% url 'peminjaman:peminjaman_list' %}">
                 <i data-lucide="arrow-left" class="h-4 w-4"></i>
                 <span>Kembali</span>

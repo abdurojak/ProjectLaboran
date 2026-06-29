@@ -12,7 +12,7 @@ from apps.inventaris.models import ACTIVE_PEMINJAMAN_STATUSES, Barang, Inventari
 from apps.jadwal.models import JadwalPraktikum
 from apps.kalender.models import KegiatanKalender
 from apps.peminjaman.models import PeminjamanAlat
-from apps.peminjaman.notifications import send_peminjaman_approved_notification
+from apps.peminjaman.notifications import send_peminjaman_status_notification
 from apps.pendaftaran_asleb.models import PendaftaranAsleb, PengaturanPendaftaranAsleb
 from apps.pendaftaran_asleb.services import is_registration_open
 from apps.pendaftaran_asleb.utils import get_public_registration_url
@@ -410,6 +410,10 @@ class DashboardView(TemplateView):
 
 @require_POST
 def accept_peminjaman(request, pk):
+    if not _is_admin_or_laboran(request):
+        messages.warning(request, 'Anda tidak memiliki akses untuk memproses peminjaman.')
+        return redirect('dashboard:home')
+
     with transaction.atomic():
         peminjaman = get_object_or_404(
             PeminjamanAlat.objects.select_for_update().select_related('barang'),
@@ -427,7 +431,7 @@ def accept_peminjaman(request, pk):
 
         peminjaman.status = 'dipinjam'
         peminjaman.save(update_fields=['status', 'diperbarui_pada'])
-        send_peminjaman_approved_notification(peminjaman)
+        send_peminjaman_status_notification(peminjaman)
         messages.success(request, 'Pengajuan peminjaman diterima.')
 
     return redirect('dashboard:home')
@@ -435,8 +439,15 @@ def accept_peminjaman(request, pk):
 
 @require_POST
 def reject_peminjaman(request, pk):
+    if not _is_admin_or_laboran(request):
+        messages.warning(request, 'Anda tidak memiliki akses untuk memproses peminjaman.')
+        return redirect('dashboard:home')
+
     peminjaman = get_object_or_404(PeminjamanAlat, pk=pk, status='diajukan')
-    peminjaman.delete()
+    peminjaman.status = 'ditolak'
+    peminjaman.save(update_fields=['status', 'diperbarui_pada'])
+    send_peminjaman_status_notification(peminjaman)
+    messages.success(request, 'Pengajuan peminjaman ditolak dan tetap disimpan dalam riwayat.')
     return redirect('dashboard:home')
 
 
@@ -482,9 +493,15 @@ def reject_jadwal(request, pk):
 
 
 def _mark_borrowed_status(request, pk, status):
-    peminjaman = get_object_or_404(PeminjamanAlat, pk=pk, status='dipinjam')
-    peminjaman.status = status
-    peminjaman.save(update_fields=['status', 'diperbarui_pada'])
+    if not _is_admin_or_laboran(request):
+        messages.warning(request, 'Anda tidak memiliki akses untuk mengubah status peminjaman.')
+        return redirect('dashboard:home')
+
+    with transaction.atomic():
+        peminjaman = get_object_or_404(PeminjamanAlat.objects.select_for_update(), pk=pk, status='dipinjam')
+        peminjaman.status = status
+        peminjaman.save(update_fields=['status', 'diperbarui_pada'])
+        send_peminjaman_status_notification(peminjaman)
     return redirect('dashboard:home')
 
 
@@ -505,7 +522,17 @@ def mark_peminjaman_broken(request, pk):
 
 @require_POST
 def mark_peminjaman_replaced(request, pk):
-    peminjaman = get_object_or_404(PeminjamanAlat, pk=pk, status__in=['hilang', 'rusak'])
-    peminjaman.status = 'digantikan'
-    peminjaman.save(update_fields=['status', 'diperbarui_pada'])
+    if not _is_admin_or_laboran(request):
+        messages.warning(request, 'Anda tidak memiliki akses untuk mengubah status peminjaman.')
+        return redirect('dashboard:home')
+
+    with transaction.atomic():
+        peminjaman = get_object_or_404(
+            PeminjamanAlat.objects.select_for_update(),
+            pk=pk,
+            status__in=['hilang', 'rusak'],
+        )
+        peminjaman.status = 'digantikan'
+        peminjaman.save(update_fields=['status', 'diperbarui_pada'])
+        send_peminjaman_status_notification(peminjaman)
     return redirect('dashboard:home')
