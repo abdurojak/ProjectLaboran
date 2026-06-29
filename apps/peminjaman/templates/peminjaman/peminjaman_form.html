@@ -22,6 +22,14 @@
         </div>
         {% endif %}
         <div>
+            {{ form.paket.label_tag }}
+            {{ form.paket }}
+            <p class="mt-2 text-xs text-slate-500">Opsional. Jika paket dipilih, sistem otomatis memilih detail barang sesuai isi paket dan stok tersedia.</p>
+            {% for error in form.paket.errors %}
+            <p class="mt-2 text-sm font-semibold text-rose-600">{{ error }}</p>
+            {% endfor %}
+        </div>
+        <div>
             <label>Detail Barang</label>
             <div class="flex flex-col gap-3">
                 <div class="min-h-[48px] rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
@@ -51,7 +59,7 @@
         </div>
 
         {% for field in form %}
-            {% if field.name != 'barang' and field.name != 'selected_barang_ids' and not field.is_hidden %}
+            {% if field.name != 'barang' and field.name != 'selected_barang_ids' and field.name != 'paket' and not field.is_hidden %}
             <div>
                 {{ field.label_tag }}
                 {{ field }}

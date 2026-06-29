@@ -173,3 +173,42 @@ class Barang(models.Model):
         match = re.search(r'(\d+)$', latest_code)
         next_number = int(match.group(1)) + 1 if match else cls.objects.count() + 1
         return f'{prefix}-{next_number:04d}'
+
+
+class PaketBarang(models.Model):
+    kode_paket = models.CharField(max_length=12, unique=True, editable=False, blank=True)
+    nama = models.CharField(max_length=150)
+    keterangan = models.TextField(blank=True)
+    aktif = models.BooleanField(default=True)
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+    diperbarui_pada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['nama']
+        verbose_name = 'Paket Barang'
+        verbose_name_plural = 'Paket Barang'
+
+    def __str__(self):
+        return f'{self.kode_paket} - {self.nama}'
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        kode_paket = f'PKT-{self.id:04d}'
+        if self.kode_paket != kode_paket:
+            self.kode_paket = kode_paket
+            super().save(update_fields=['kode_paket'])
+
+
+class PaketBarangItem(models.Model):
+    paket = models.ForeignKey(PaketBarang, on_delete=models.CASCADE, related_name='items')
+    inventaris = models.ForeignKey(InventarisBarang, on_delete=models.CASCADE, related_name='paket_items')
+    jumlah = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        ordering = ['inventaris__nama']
+        unique_together = ('paket', 'inventaris')
+        verbose_name = 'Item Paket Barang'
+        verbose_name_plural = 'Item Paket Barang'
+
+    def __str__(self):
+        return f'{self.paket.nama} - {self.inventaris.nama} ({self.jumlah})'

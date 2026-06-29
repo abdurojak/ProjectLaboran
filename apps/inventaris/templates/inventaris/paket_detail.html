@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Detail Paket{% endblock %}
+
+{% block content %}
+<section class="space-y-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <p class="text-sm font-bold uppercase tracking-[0.2em] text-brand-700">Paket Barang</p>
+            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">{{ paket.nama }}</h2>
+            <p class="mt-2 text-sm text-slate-500">{{ paket.kode_paket }}</p>
+        </div>
+        <div class="flex flex-wrap gap-3">
+            <a class="btn-secondary" href="{% url 'inventaris:paket_list' %}">Kembali</a>
+            <a class="btn-primary" href="{% url 'inventaris:paket_update' paket.pk %}">Edit Paket</a>
+        </div>
+    </div>
+
+    <article class="surface-card grid gap-5 p-6 md:grid-cols-2">
+        <div class="rounded-2xl bg-slate-50 p-5">
+            <div class="text-sm font-semibold text-slate-500">Status</div>
+            <div class="mt-2 text-xl font-black text-slate-900">{% if paket.aktif %}Aktif{% else %}Nonaktif{% endif %}</div>
+        </div>
+        <div class="rounded-2xl bg-slate-50 p-5">
+            <div class="text-sm font-semibold text-slate-500">Keterangan</div>
+            <div class="mt-2 text-sm leading-7 text-slate-700">{{ paket.keterangan|default:"-" }}</div>
+        </div>
+    </article>
+
+    <div class="surface-card overflow-hidden">
+        <div class="border-b border-slate-200 p-5">
+            <h3 class="text-xl font-bold text-slate-900">Isi Paket</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table>
+                <thead class="bg-slate-50">
+                    <tr>
+                        <th>Barang</th>
+                        <th>Jumlah Paket</th>
+                        <th>Stok Tersedia</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in paket.items.all %}
+                    <tr>
+                        <td class="font-bold text-slate-900">{{ item.inventaris.nama }}</td>
+                        <td>{{ item.jumlah }}</td>
+                        <td>{{ item.inventaris.stok_tersedia }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="3" class="py-10 text-center text-slate-500">Belum ada item paket.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+{% endblock %}

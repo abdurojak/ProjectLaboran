@@ -4,7 +4,7 @@ from django.core import mail
 from django.test import TestCase
 from django.urls import reverse
 
-from apps.inventaris.models import Barang, InventarisBarang, Lokasi
+from apps.inventaris.models import Barang, InventarisBarang, Lokasi, PaketBarang, PaketBarangItem
 from apps.pengguna.models import Pengguna
 from .models import PeminjamanAlat
 
@@ -431,6 +431,62 @@ class PeminjamanMahasiswaTests(TestCase):
         self.assertEqual(peminjaman.no_hp, self.mahasiswa.no_hp)
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn('Pengajuan Peminjaman Alat Baru', mail.outbox[0].subject)
+
+    def test_mahasiswa_bisa_meminjam_paket_dan_membuat_peminjaman_per_item(self):
+        inventaris_kamera = InventarisBarang.objects.create(nama='Kamera Paket', jumlah=2)
+        inventaris_tripod = InventarisBarang.objects.create(nama='Tripod Paket', jumlah=1)
+        kamera_1 = Barang.objects.create(inventaris=inventaris_kamera, nama='Kamera Paket', jumlah=2, lokasi=self.lokasi)
+        kamera_2 = Barang.objects.create(inventaris=inventaris_kamera, nama='Kamera Paket', jumlah=2, lokasi=self.lokasi)
+        tripod = Barang.objects.create(inventaris=inventaris_tripod, nama='Tripod Paket', jumlah=1, lokasi=self.lokasi)
+        paket = PaketBarang.objects.create(nama='Paket Dokumentasi')
+        PaketBarangItem.objects.create(paket=paket, inventaris=inventaris_kamera, jumlah=2)
+        PaketBarangItem.objects.create(paket=paket, inventaris=inventaris_tripod, jumlah=1)
+
+        response = self.client.post(
+            reverse('peminjaman:peminjaman_create'),
+            {
+                'paket': str(paket.pk),
+                'tanggal_pinjam': '2026-06-21',
+                'tanggal_kembali': '2026-06-22',
+                'status': 'dipinjam',
+                'catatan': 'Pinjam paket',
+            },
+        )
+
+        self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
+        peminjaman_list = PeminjamanAlat.objects.filter(paket=paket)
+        self.assertEqual(peminjaman_list.count(), 3)
+        self.assertEqual({item.barang_id for item in peminjaman_list}, {kamera_1.pk, kamera_2.pk, tripod.pk})
+        self.assertTrue(peminjaman_list.filter(status='diajukan').count(), 3)
+
+    def test_peminjaman_paket_ditolak_jika_stok_item_tidak_cukup(self):
+        inventaris_kamera = InventarisBarang.objects.create(nama='Kamera Terbatas', jumlah=1)
+        kamera = Barang.objects.create(inventaris=inventaris_kamera, nama='Kamera Terbatas', jumlah=1, lokasi=self.lokasi)
+        PeminjamanAlat.objects.create(
+            barang=kamera,
+            nama_peminjam='User Lama',
+            nim='2201999',
+            tanggal_pinjam=date(2026, 6, 20),
+            tanggal_kembali=date(2026, 6, 21),
+            status='dipinjam',
+        )
+        paket = PaketBarang.objects.create(nama='Paket Tidak Cukup')
+        PaketBarangItem.objects.create(paket=paket, inventaris=inventaris_kamera, jumlah=1)
+
+        response = self.client.post(
+            reverse('peminjaman:peminjaman_create'),
+            {
+                'paket': str(paket.pk),
+                'tanggal_pinjam': '2026-06-21',
+                'tanggal_kembali': '2026-06-22',
+                'status': 'dipinjam',
+                'catatan': '',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Stok paket tidak mencukupi')
+        self.assertEqual(PeminjamanAlat.objects.filter(paket=paket).count(), 0)
 
     def test_form_mahasiswa_tidak_menampilkan_input_identitas(self):
         response = self.client.get(reverse('peminjaman:peminjaman_create'))

@@ -11,7 +11,7 @@ from django.views.decorators.http import require_GET
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
 from apps.core.views import PostOnlyDeleteMixin
-from apps.inventaris.models import ACTIVE_PEMINJAMAN_STATUSES, Barang
+from apps.inventaris.models import ACTIVE_PEMINJAMAN_STATUSES, Barang, PaketBarang
 from .forms import PeminjamanAlatForm
 from .models import PeminjamanAlat
 from .notifications import send_peminjaman_request_notifications
@@ -118,7 +118,7 @@ class PeminjamanAlatListView(ListView):
     paginate_by = 25
 
     def get_queryset(self):
-        queryset = super().get_queryset().select_related('barang')
+        queryset = super().get_queryset().select_related('barang', 'paket')
         barang = self.request.GET.get('barang', '').strip()
         tanggal_mulai = self.request.GET.get('tanggal_mulai', '').strip()
         tanggal_selesai = self.request.GET.get('tanggal_selesai', '').strip()
@@ -179,7 +179,7 @@ class PeminjamanAlatDetailView(DetailView):
     context_object_name = 'peminjaman'
 
     def get_queryset(self):
-        return super().get_queryset().select_related('barang', 'barang__inventaris', 'barang__lokasi')
+        return super().get_queryset().select_related('barang', 'barang__inventaris', 'barang__lokasi', 'paket')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -221,25 +221,32 @@ class PeminjamanAlatCreateView(CreateView):
             for item in form.cleaned_data.get('selected_barang_ids', '').split(',')
             if item.strip().isdigit()
         ))
+        paket = form.cleaned_data.get('paket')
         is_borrower = bool(pengguna and pengguna.role in BORROWER_ROLES)
         created_peminjaman = []
 
         with transaction.atomic():
-            barang_list = (
-                Barang.objects.select_for_update()
-                .select_related('inventaris', 'lokasi')
-                .filter(pk__in=selected_ids)
-            )
-            barang_by_id = {str(barang.pk): barang for barang in barang_list}
-            selectable_barang = [
-                barang_by_id[item]
-                for item in selected_ids
-                if (
-                    item in barang_by_id
-                    and barang_by_id[item].kondisi != 'rusak_berat'
-                    and not barang_by_id[item].sedang_dipinjam
+            if paket:
+                selectable_barang = self.get_selectable_barang_for_paket(paket)
+                if selectable_barang is None:
+                    form.add_error('paket', 'Stok paket tidak mencukupi untuk item yang dipilih.')
+                    return self.form_invalid(form)
+            else:
+                barang_list = (
+                    Barang.objects.select_for_update()
+                    .select_related('inventaris', 'lokasi')
+                    .filter(pk__in=selected_ids)
                 )
-            ]
+                barang_by_id = {str(barang.pk): barang for barang in barang_list}
+                selectable_barang = [
+                    barang_by_id[item]
+                    for item in selected_ids
+                    if (
+                        item in barang_by_id
+                        and barang_by_id[item].kondisi != 'rusak_berat'
+                        and not barang_by_id[item].sedang_dipinjam
+                    )
+                ]
 
             if not selectable_barang:
                 form.add_error('barang', 'Pilih minimal satu detail barang yang tersedia dan tidak rusak berat.')
@@ -255,6 +262,7 @@ class PeminjamanAlatCreateView(CreateView):
                     tanggal_kembali=form.cleaned_data['tanggal_kembali'],
                     status='diajukan' if is_borrower else form.cleaned_data['status'],
                     catatan=form.cleaned_data['catatan'],
+                    paket=paket,
                 )
                 created_peminjaman.append(peminjaman)
 
@@ -263,6 +271,32 @@ class PeminjamanAlatCreateView(CreateView):
                 send_peminjaman_request_notifications(peminjaman)
 
         return redirect(self.success_url)
+
+    def get_selectable_barang_for_paket(self, paket):
+        paket = (
+            PaketBarang.objects.select_for_update()
+            .prefetch_related('items__inventaris')
+            .get(pk=paket.pk)
+        )
+        selected_barang = []
+        active_loans = PeminjamanAlat.objects.filter(
+            barang_id=OuterRef('pk'),
+            status__in=ACTIVE_PEMINJAMAN_STATUSES,
+        )
+
+        for item in paket.items.all():
+            available_barang = list(
+                Barang.objects.select_for_update()
+                .select_related('inventaris', 'lokasi')
+                .annotate(is_borrowed=Exists(active_loans))
+                .filter(inventaris=item.inventaris, kondisi__in=['baik', 'rusak_ringan'], is_borrowed=False)
+                .order_by('kode_barang')[:item.jumlah]
+            )
+            if len(available_barang) < item.jumlah:
+                return None
+            selected_barang.extend(available_barang)
+
+        return selected_barang
 
 
 class PeminjamanAlatUpdateView(UpdateView):

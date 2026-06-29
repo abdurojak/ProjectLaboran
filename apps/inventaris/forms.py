@@ -1,6 +1,7 @@
 from django import forms
+from django.forms import inlineformset_factory
 
-from .models import Barang, InventarisBarang, Lokasi
+from .models import Barang, InventarisBarang, Lokasi, PaketBarang, PaketBarangItem
 
 
 class InventarisBarangCreateForm(forms.ModelForm):
@@ -62,3 +63,35 @@ class BarangForm(forms.ModelForm):
         widgets = {
             'keterangan': forms.Textarea(attrs={'rows': 4}),
         }
+
+
+class PaketBarangForm(forms.ModelForm):
+    class Meta:
+        model = PaketBarang
+        fields = ['nama', 'keterangan', 'aktif']
+        widgets = {
+            'keterangan': forms.Textarea(attrs={'rows': 4}),
+        }
+
+
+class PaketBarangItemForm(forms.ModelForm):
+    class Meta:
+        model = PaketBarangItem
+        fields = ['inventaris', 'jumlah']
+
+    def clean_jumlah(self):
+        jumlah = self.cleaned_data['jumlah']
+        if jumlah < 1:
+            raise forms.ValidationError('Jumlah item paket minimal 1.')
+        return jumlah
+
+
+PaketBarangItemFormSet = inlineformset_factory(
+    PaketBarang,
+    PaketBarangItem,
+    form=PaketBarangItemForm,
+    extra=1,
+    can_delete=True,
+    min_num=1,
+    validate_min=True,
+)

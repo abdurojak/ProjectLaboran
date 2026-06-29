@@ -3,7 +3,7 @@ from datetime import date
 from django.core.exceptions import ValidationError
 from django.db import models
 
-from apps.inventaris.models import Barang
+from apps.inventaris.models import Barang, PaketBarang
 
 
 class PeminjamanAlat(models.Model):
@@ -19,6 +19,7 @@ class PeminjamanAlat(models.Model):
 
     kode_pinjam = models.CharField(max_length=15, unique=True, blank=True, editable=False)
     barang = models.ForeignKey(Barang, on_delete=models.PROTECT, related_name='peminjaman')
+    paket = models.ForeignKey(PaketBarang, on_delete=models.SET_NULL, related_name='peminjaman', blank=True, null=True)
     nama_peminjam = models.CharField(max_length=150)
     nim = models.CharField('NIM', max_length=30, blank=True)
     no_hp = models.CharField('No HP', max_length=30, blank=True)

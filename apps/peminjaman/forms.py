@@ -1,6 +1,6 @@
 from django import forms
 
-from apps.inventaris.models import Barang
+from apps.inventaris.models import Barang, PaketBarang
 from .models import PeminjamanAlat
 
 
@@ -9,6 +9,11 @@ BORROWER_ROLES = {'mahasiswa', 'asisten_lab'}
 
 class PeminjamanAlatForm(forms.ModelForm):
     selected_barang_ids = forms.CharField(required=False, widget=forms.HiddenInput())
+    paket = forms.ModelChoiceField(
+        queryset=PaketBarang.objects.none(),
+        required=False,
+        empty_label='Tidak memakai paket',
+    )
 
     class Meta:
         model = PeminjamanAlat
@@ -33,6 +38,7 @@ class PeminjamanAlatForm(forms.ModelForm):
         self.current_pengguna = kwargs.pop('current_pengguna', None)
         super().__init__(*args, **kwargs)
         self.fields['barang'].queryset = Barang.objects.select_related('inventaris', 'lokasi')
+        self.fields['paket'].queryset = PaketBarang.objects.filter(aktif=True).prefetch_related('items__inventaris')
         self.fields['barang'].label = 'Detail Barang'
         self.fields['barang'].required = False
         if self.instance.pk and self.instance.barang_id:
@@ -64,9 +70,10 @@ class PeminjamanAlatForm(forms.ModelForm):
 
         barang = cleaned_data.get('barang')
         selected_barang_ids = cleaned_data.get('selected_barang_ids')
+        paket = cleaned_data.get('paket')
         status = cleaned_data.get('status')
 
-        if not self.instance.pk and not selected_barang_ids:
+        if not self.instance.pk and not selected_barang_ids and not paket:
             self.add_error('barang', 'Pilih minimal satu detail barang.')
             return cleaned_data
 

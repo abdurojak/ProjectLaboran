@@ -4,7 +4,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 
 from apps.peminjaman.models import PeminjamanAlat
 from apps.pengguna.models import Pengguna
-from .models import Barang, InventarisBarang, Lokasi
+from .models import Barang, InventarisBarang, Lokasi, PaketBarang
 
 
 class LokasiModelTests(TestCase):
@@ -139,6 +139,21 @@ class BarangFotoFormTests(TestCase):
 
 class BarangListViewTests(TestCase):
     def setUp(self):
+        self.pengguna = Pengguna.objects.create(
+            nama_pengguna='Lab Admin',
+            nim_nik='ADM-BARANG',
+            email='admin-barang@example.com',
+            password='rahasia123',
+            no_hp='080000000002',
+            alamat='Kampus',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='laboran',
+        )
+        session = self.client.session
+        session['pengguna_id'] = self.pengguna.pk
+        session.save()
         self.lab_pemrograman = Lokasi.objects.create(nama_lokasi='Lab Pemrograman')
         self.lab_ski = Lokasi.objects.create(nama_lokasi='Lab Sistem Keamanan Informasi')
         self.gudang = Lokasi.objects.create(nama_lokasi='Gudang')
@@ -191,6 +206,12 @@ class BarangListViewTests(TestCase):
 
         self.assertContains(response, 'Kelola Lokasi')
         self.assertContains(response, reverse('inventaris:lokasi_list'))
+
+    def test_daftar_barang_memiliki_tombol_kelola_paket(self):
+        response = self.client.get(reverse('inventaris:barang_list'))
+
+        self.assertContains(response, 'Kelola Paket')
+        self.assertContains(response, reverse('inventaris:paket_list'))
 
     def test_detail_inventaris_search_filters_detail_barang(self):
         response = self.client.get(
@@ -414,3 +435,61 @@ class InventarisCrudTests(TestCase):
         response = self.client.get(reverse('inventaris:barang_delete', args=[inventaris.pk]))
 
         self.assertRedirects(response, reverse('inventaris:barang_list'), fetch_redirect_response=False)
+
+
+class PaketBarangTests(TestCase):
+    def setUp(self):
+        self.pengguna = Pengguna.objects.create(
+            nama_pengguna='Lab Admin',
+            nim_nik='ADM-PAKET',
+            email='admin-paket@example.com',
+            password='rahasia123',
+            no_hp='080000000001',
+            alamat='Kampus',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='laboran',
+        )
+        session = self.client.session
+        session['pengguna_id'] = self.pengguna.pk
+        session.save()
+        self.keyboard = InventarisBarang.objects.create(nama='Keyboard', jumlah=3)
+        self.mouse = InventarisBarang.objects.create(nama='Mouse', jumlah=2)
+
+    def test_kode_paket_dibuat_otomatis(self):
+        paket = PaketBarang.objects.create(nama='Paket Lab Dasar')
+
+        self.assertEqual(paket.kode_paket, f'PKT-{paket.id:04d}')
+
+    def test_crud_paket_menyimpan_item_barang_dan_jumlah(self):
+        response = self.client.post(reverse('inventaris:paket_create'), {
+            'nama': 'Paket Lab Dasar',
+            'keterangan': 'Untuk praktikum dasar',
+            'aktif': 'on',
+            'items-TOTAL_FORMS': '2',
+            'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0',
+            'items-MAX_NUM_FORMS': '1000',
+            'items-0-inventaris': self.keyboard.pk,
+            'items-0-jumlah': '2',
+            'items-1-inventaris': self.mouse.pk,
+            'items-1-jumlah': '1',
+        })
+
+        paket = PaketBarang.objects.get(nama='Paket Lab Dasar')
+        self.assertRedirects(response, reverse('inventaris:paket_detail', args=[paket.pk]))
+        self.assertEqual(paket.items.count(), 2)
+        self.assertTrue(paket.items.filter(inventaris=self.keyboard, jumlah=2).exists())
+        self.assertTrue(paket.items.filter(inventaris=self.mouse, jumlah=1).exists())
+
+    def test_daftar_paket_memakai_desain_dan_konfirmasi(self):
+        paket = PaketBarang.objects.create(nama='Paket Kamera')
+
+        response = self.client.get(reverse('inventaris:paket_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Daftar Paket')
+        self.assertContains(response, reverse('inventaris:paket_create'))
+        self.assertContains(response, 'data-confirmation-modal')
+        self.assertContains(response, f'Yakin ingin menghapus paket {paket.nama}?')

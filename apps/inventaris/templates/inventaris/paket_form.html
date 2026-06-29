@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}Form Paket{% endblock %}
+
+{% block content %}
+<section class="mx-auto max-w-5xl space-y-6">
+    <div>
+        <p class="text-sm font-bold uppercase tracking-[0.2em] text-brand-700">Inventaris</p>
+        <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Form Paket Barang</h2>
+        <p class="mt-2 text-sm text-slate-500">Tentukan kombinasi barang dan jumlahnya untuk dipinjam sebagai satu paket.</p>
+    </div>
+
+    <form method="post" class="surface-card space-y-6 p-6 md:p-8">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+        <div class="grid gap-5 md:grid-cols-2">
+            <div>
+                {{ form.nama.label_tag }}
+                {{ form.nama }}
+                {% for error in form.nama.errors %}<p class="mt-2 text-sm font-semibold text-rose-600">{{ error }}</p>{% endfor %}
+            </div>
+            <label class="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                {{ form.aktif }}
+                <span class="font-bold text-slate-700">Paket aktif dan bisa dipilih saat peminjaman</span>
+            </label>
+            <div class="md:col-span-2">
+                {{ form.keterangan.label_tag }}
+                {{ form.keterangan }}
+                {% for error in form.keterangan.errors %}<p class="mt-2 text-sm font-semibold text-rose-600">{{ error }}</p>{% endfor %}
+            </div>
+        </div>
+
+        <div>
+            <div class="mb-3 flex items-center justify-between gap-3">
+                <h3 class="text-xl font-bold text-slate-900">Isi Paket</h3>
+                <button type="button" class="btn-secondary" data-add-paket-item>
+                    <i data-lucide="plus" class="h-4 w-4"></i>
+                    <span>Tambah Item</span>
+                </button>
+            </div>
+            {{ item_formset.management_form }}
+            {% if item_formset.non_form_errors %}
+            <div class="mb-3 rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-700">{{ item_formset.non_form_errors|striptags }}</div>
+            {% endif %}
+            <div class="grid gap-3" data-paket-items>
+                {% for item_form in item_formset %}
+                <div class="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-[minmax(0,1fr)_160px_auto]" data-paket-item-form>
+                    {{ item_form.id }}
+                    <div>
+                        {{ item_form.inventaris.label_tag }}
+                        {{ item_form.inventaris }}
+                        {% for error in item_form.inventaris.errors %}<p class="mt-2 text-sm font-semibold text-rose-600">{{ error }}</p>{% endfor %}
+                    </div>
+                    <div>
+                        {{ item_form.jumlah.label_tag }}
+                        {{ item_form.jumlah }}
+                        {% for error in item_form.jumlah.errors %}<p class="mt-2 text-sm font-semibold text-rose-600">{{ error }}</p>{% endfor %}
+                    </div>
+                    <label class="flex items-center gap-2 self-end text-sm font-bold text-rose-600">
+                        {{ item_form.DELETE }}
+                        <span>Hapus</span>
+                    </label>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="flex flex-wrap gap-3">
+            <button type="submit" class="btn-primary">
+                <i data-lucide="save" class="h-4 w-4"></i>
+                <span>Simpan</span>
+            </button>
+            <a href="{% url 'inventaris:paket_list' %}" class="btn-secondary">Batal</a>
+        </div>
+    </form>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const list = document.querySelector('[data-paket-items]');
+        const addButton = document.querySelector('[data-add-paket-item]');
+        const totalInput = document.getElementById('id_items-TOTAL_FORMS');
+
+        if (!list || !addButton || !totalInput) {
+            return;
+        }
+
+        addButton.addEventListener('click', function () {
+            const forms = list.querySelectorAll('[data-paket-item-form]');
+            const template = forms[forms.length - 1].cloneNode(true);
+            const index = Number.parseInt(totalInput.value, 10);
+            template.querySelectorAll('input, select, textarea, label').forEach(function (node) {
+                ['name', 'id', 'for'].forEach(function (attribute) {
+                    if (node.hasAttribute(attribute)) {
+                        node.setAttribute(attribute, node.getAttribute(attribute).replace(/items-\d+-/g, 'items-' + index + '-'));
+                    }
+                });
+                if (node.matches('input[type="checkbox"]')) {
+                    node.checked = false;
+                } else if (node.matches('input, select, textarea')) {
+                    node.value = '';
+                }
+            });
+            list.appendChild(template);
+            totalInput.value = String(index + 1);
+        });
+    });
+</script>
+{% endblock %}

@@ -7,8 +7,14 @@ from django.views.generic import CreateView, DeleteView, DetailView, ListView, U
 
 from apps.core.views import PostOnlyDeleteMixin
 
-from .forms import BarangForm, InventarisBarangCreateForm, InventarisBarangUpdateForm
-from .models import ACTIVE_PEMINJAMAN_STATUSES, Barang, InventarisBarang, Lokasi
+from .forms import (
+    BarangForm,
+    InventarisBarangCreateForm,
+    InventarisBarangUpdateForm,
+    PaketBarangForm,
+    PaketBarangItemFormSet,
+)
+from .models import ACTIVE_PEMINJAMAN_STATUSES, Barang, InventarisBarang, Lokasi, PaketBarang
 
 
 class BarangListView(ListView):
@@ -41,6 +47,82 @@ class BarangListView(ListView):
         context = super().get_context_data(**kwargs)
         context['search_query'] = self.request.GET.get('q', '').strip()
         return context
+
+
+class PaketBarangListView(ListView):
+    model = PaketBarang
+    template_name = 'inventaris/paket_list.html'
+    context_object_name = 'paket_list'
+
+    def get_queryset(self):
+        queryset = super().get_queryset().prefetch_related('items__inventaris')
+        search = self.request.GET.get('q', '').strip()
+        if search:
+            queryset = queryset.filter(
+                Q(nama__icontains=search)
+                | Q(kode_paket__icontains=search)
+                | Q(keterangan__icontains=search)
+            )
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['search_query'] = self.request.GET.get('q', '').strip()
+        return context
+
+
+class PaketBarangDetailView(DetailView):
+    model = PaketBarang
+    template_name = 'inventaris/paket_detail.html'
+    context_object_name = 'paket'
+
+    def get_queryset(self):
+        return super().get_queryset().prefetch_related('items__inventaris')
+
+
+class PaketBarangFormMixin:
+    model = PaketBarang
+    form_class = PaketBarangForm
+    template_name = 'inventaris/paket_form.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        if self.request.POST:
+            context['item_formset'] = PaketBarangItemFormSet(self.request.POST, instance=self.object)
+        else:
+            context['item_formset'] = PaketBarangItemFormSet(instance=self.object)
+        return context
+
+    def form_valid(self, form):
+        context = self.get_context_data()
+        item_formset = context['item_formset']
+        if not item_formset.is_valid():
+            return self.form_invalid(form)
+
+        with transaction.atomic():
+            self.object = form.save()
+            item_formset.instance = self.object
+            item_formset.save()
+
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse('inventaris:paket_detail', args=[self.object.pk])
+
+
+class PaketBarangCreateView(PaketBarangFormMixin, CreateView):
+    pass
+
+
+class PaketBarangUpdateView(PaketBarangFormMixin, UpdateView):
+    pass
+
+
+class PaketBarangDeleteView(PostOnlyDeleteMixin, DeleteView):
+    model = PaketBarang
+    template_name = 'inventaris/paket_confirm_delete.html'
+    context_object_name = 'paket'
+    success_url = reverse_lazy('inventaris:paket_list')
 
 
 class BarangDetailView(DetailView):

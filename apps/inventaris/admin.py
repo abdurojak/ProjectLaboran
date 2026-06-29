@@ -1,6 +1,11 @@
 from django.contrib import admin
 
-from .models import Barang, InventarisBarang, Lokasi
+from .models import Barang, InventarisBarang, Lokasi, PaketBarang, PaketBarangItem
+
+
+class PaketBarangItemInline(admin.TabularInline):
+    model = PaketBarangItem
+    extra = 1
 
 
 @admin.register(Lokasi)
@@ -23,4 +28,11 @@ class BarangAdmin(admin.ModelAdmin):
     list_filter = ('kondisi', 'inventaris')
     search_fields = ('kode_barang', 'inventaris__kode_inventaris', 'inventaris__nama', 'lokasi__nama_lokasi', 'lokasi__kode_lokasi')
 
-# Register your models here.
+
+@admin.register(PaketBarang)
+class PaketBarangAdmin(admin.ModelAdmin):
+    list_display = ('kode_paket', 'nama', 'aktif')
+    list_filter = ('aktif',)
+    search_fields = ('kode_paket', 'nama')
+    readonly_fields = ('kode_paket',)
+    inlines = [PaketBarangItemInline]
