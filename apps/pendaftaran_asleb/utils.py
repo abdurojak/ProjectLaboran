@@ -1,5 +1,5 @@
-from urllib.parse import urljoin
 import re
+from urllib.parse import urljoin
 
 from django.conf import settings
 from django.urls import reverse
@@ -11,10 +11,10 @@ def get_public_registration_url():
 
 
 GRADE_PATTERN = re.compile(
-    r'(?:nilai|grade|huruf|mutu)\s*[:=\-]?\s*(A|B|C|D|E)\b|\b(A|B|C|D|E)\s*(?:nilai|grade|huruf|mutu)\b',
+    r'(?:nilai|grade|huruf|mutu)\s*[:=\-]?\s*((?:A|B|C|D|E)(?:[+-])?)\b|\b((?:A|B|C|D|E)(?:[+-])?)\s*(?:nilai|grade|huruf|mutu)\b',
     re.IGNORECASE,
 )
-TRANSCRIPT_GRADE_PATTERN = re.compile(r'\b(A|B|C|D|E)\b', re.IGNORECASE)
+TRANSCRIPT_GRADE_PATTERN = re.compile(r'\b((?:A|B|C|D|E)(?:[+-])?)\b', re.IGNORECASE)
 
 PASSING_GRADES = {'A', 'B', 'C'}
 
@@ -67,7 +67,7 @@ def extract_transcript_text(file_obj):
             return ocr_image(file_obj)
 
         if filename.endswith('.pdf'):
-            return extract_pdf_text(file_obj) or ocr_pdf(file_obj)
+            return normalize_transcript_text(extract_pdf_text(file_obj) or ocr_pdf(file_obj))
     finally:
         if current_position is not None:
             try:
@@ -97,28 +97,85 @@ def read_uploaded_text(file_obj):
 
 
 def extract_pdf_text(file_obj):
+    pdf_bytes = get_pdf_bytes(file_obj)
+    if not pdf_bytes:
+        return ''
+
+    if should_prefer_pdfium(pdf_bytes):
+        text = extract_pdf_text_with_pdfium_bytes(pdf_bytes)
+        if text:
+            return text
+
     try:
         from pypdf import PdfReader
     except ImportError:
+        PdfReader = None
+
+    if PdfReader is not None:
+        for pdf_stream in get_pdf_stream_candidates_from_bytes(pdf_bytes):
+            try:
+                reader = PdfReader(pdf_stream, strict=False)
+                text = '\n'.join(page.extract_text() or '' for page in reader.pages)
+                if normalize_transcript_text(text):
+                    return text
+            except Exception:
+                continue
+
+    return extract_pdf_text_with_pdfium_bytes(pdf_bytes)
+
+
+def extract_pdf_text_with_pdfium(file_obj):
+    return extract_pdf_text_with_pdfium_bytes(get_pdf_bytes(file_obj))
+
+
+def extract_pdf_text_with_pdfium_bytes(pdf_bytes):
+    try:
+        import pypdfium2 as pdfium
+    except ImportError:
         return ''
 
-    for pdf_stream in get_pdf_stream_candidates(file_obj):
+    for pdf_stream in get_pdf_stream_candidates_from_bytes(pdf_bytes):
         try:
-            reader = PdfReader(pdf_stream, strict=False)
-            return '\n'.join(page.extract_text() or '' for page in reader.pages)
+            pdf_stream.seek(0)
+            document = pdfium.PdfDocument(pdf_stream.read())
+            page_text = []
+            for page in document:
+                text_page = page.get_textpage()
+                page_text.append(text_page.get_text_range() or '')
+                text_page.close()
+                page.close()
+            text = '\n'.join(page_text)
+            document.close()
+            if normalize_transcript_text(text):
+                return text
         except Exception:
             continue
 
     return ''
 
 
-def get_pdf_stream_candidates(file_obj):
-    from io import BytesIO
-
+def get_pdf_bytes(file_obj):
     try:
         file_obj.seek(0)
-        data = file_obj.read()
+        return file_obj.read()
     except (AttributeError, OSError):
+        return b''
+
+
+def should_prefer_pdfium(pdf_bytes):
+    pdf_start = pdf_bytes.find(b'%PDF')
+    eof_marker = pdf_bytes.rfind(b'%%EOF')
+    return pdf_start > 0 or eof_marker == -1
+
+
+def get_pdf_stream_candidates(file_obj):
+    return get_pdf_stream_candidates_from_bytes(get_pdf_bytes(file_obj))
+
+
+def get_pdf_stream_candidates_from_bytes(data):
+    from io import BytesIO
+
+    if not data:
         return []
 
     candidates = [BytesIO(data)]
@@ -167,7 +224,7 @@ def find_grade(text):
     if not match:
         return None
 
-    return next(value.upper() for value in match.groups() if value)
+    return next(normalize_grade_value(value) for value in match.groups() if value)
 
 
 def is_passing_grade(grade):
@@ -213,9 +270,25 @@ def normalize_spaces(value):
     return re.sub(r'\s+', ' ', str(value)).strip()
 
 
+def normalize_transcript_text(text):
+    if not text:
+        return ''
+
+    cleaned = str(text).replace('\ufeff', ' ').replace('\ufffe', ' ').replace('\x00', ' ')
+    cleaned = cleaned.replace('\r\n', '\n').replace('\r', '\n')
+    cleaned = re.sub(r'[ \t]+', ' ', cleaned)
+    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
+    return cleaned.strip()
+
+
+def normalize_grade_value(value):
+    cleaned = normalize_spaces(value).upper()
+    return cleaned[:1] if cleaned else None
+
+
 def find_last_grade(text):
     matches = TRANSCRIPT_GRADE_PATTERN.findall(text or '')
     if not matches:
         return None
 
-    return matches[-1].upper()
+    return normalize_grade_value(matches[-1])

@@ -1,5 +1,7 @@
 import base64
 from datetime import date
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
 from django.urls import reverse
@@ -14,7 +16,7 @@ from apps.pengguna.models import Pengguna
 from .forms import PendaftaranAslebPublicForm
 from .models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb, PeriodeAsleb
 from .services import get_asleb_experience, sync_expired_asleb_periods
-from .utils import get_public_registration_url
+from .utils import analyze_transcript, extract_grade_from_transcript, get_public_registration_url
 from .views import WIZARD_SESSION_KEY
 
 
@@ -232,6 +234,34 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertFalse(wizard['nim_terverifikasi'])
         self.assertFalse(wizard.get('transkrip_path'))
 
+    def test_transkrip_pdf_rusak_tetap_dibaca_dengan_fallback_pdfium(self):
+        transcript = SimpleUploadedFile(
+            'transkrip.pdf',
+            b'not-a-valid-pdf-stream',
+            content_type='application/pdf',
+        )
+
+        text_page = MagicMock()
+        text_page.get_text_range.return_value = (
+            'NIM: 0642201040\n'
+            'Struktur Data dan Algoritma 3 A\n'
+        )
+        page = MagicMock()
+        page.get_textpage.return_value = text_page
+        document = MagicMock()
+        document.__iter__.return_value = iter([page])
+
+        with patch('pypdf.PdfReader', side_effect=Exception('broken pdf')):
+            with patch.dict('sys.modules', {'pypdfium2': SimpleNamespace(PdfDocument=lambda *_args, **_kwargs: document)}):
+                grade, nim_matches = analyze_transcript(
+                    transcript,
+                    self.matkul,
+                    expected_nim='0642201040',
+                )
+
+        self.assertEqual(grade, 'A')
+        self.assertTrue(nim_matches)
+
     def create_mahasiswa_dengan_cv(self, nim):
         mahasiswa = Pengguna.objects.create(
             nama_pengguna=f'Mahasiswa {nim}',
@@ -356,6 +386,17 @@ class PendaftaranAslebViewTests(TestCase):
         pendaftaran = form.save()
         self.assertEqual(pendaftaran.nilai_transkrip, 'C')
         self.assertEqual(pendaftaran.skor_nilai, 1)
+
+    def test_extract_grade_menormalkan_nilai_plus_minus(self):
+        transcript = SimpleUploadedFile(
+            'transkrip-plus-minus.txt',
+            b'Struktur Data dan Algoritma 3 B+\nMachine Learning 3 C+\n',
+            content_type='text/plain',
+        )
+
+        detected_grade = extract_grade_from_transcript(transcript, self.matkul)
+
+        self.assertEqual(detected_grade, 'B')
 
     def test_public_form_wajib_tanda_tangan(self):
         form = PendaftaranAslebPublicForm(data={

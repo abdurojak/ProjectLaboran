@@ -5,5 +5,6 @@ Pillow==10.4.0
 pytesseract==0.3.13
 pdf2image==1.17.0
 pypdf==5.1.0
+pypdfium2==5.10.1
 opencv-python-headless==4.10.0.84
 reportlab==4.4.5
