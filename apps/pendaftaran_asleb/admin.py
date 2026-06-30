@@ -5,9 +5,9 @@ from .models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsle
 
 @admin.register(MataKuliahAsleb)
 class MataKuliahAslebAdmin(admin.ModelAdmin):
-    list_display = ('kode', 'nama', 'dosen', 'kelas', 'aktif')
+    list_display = ('kode', 'kode_mk', 'nama', 'sks', 'dosen', 'kelas', 'aktif')
     list_filter = ('aktif', 'nama', 'kelas')
-    search_fields = ('kode', 'nama', 'dosen', 'kelas')
+    search_fields = ('kode', 'kode_mk', 'nama', 'dosen', 'kelas')
 
 
 @admin.register(PendaftaranAsleb)

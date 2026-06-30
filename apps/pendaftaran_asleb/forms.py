@@ -248,10 +248,12 @@ class PeriodeAslebForm(forms.ModelForm):
 class MataKuliahAslebForm(forms.ModelForm):
     class Meta:
         model = MataKuliahAsleb
-        fields = ['kode', 'nama', 'dosen', 'kelas', 'aktif']
+        fields = ['kode', 'kode_mk', 'nama', 'sks', 'dosen', 'kelas', 'aktif']
         widgets = {
             'kode': forms.TextInput(attrs={'placeholder': 'Contoh: PW_TIF01_NAMA'}),
+            'kode_mk': forms.TextInput(attrs={'placeholder': 'Contoh: IKS6316'}),
             'nama': forms.TextInput(attrs={'placeholder': 'Nama mata kuliah'}),
+            'sks': forms.NumberInput(attrs={'min': 0, 'placeholder': 'Contoh: 3'}),
             'dosen': forms.TextInput(attrs={'placeholder': 'Nama dosen'}),
             'kelas': forms.TextInput(attrs={'placeholder': 'Contoh: TIF-01'}),
         }

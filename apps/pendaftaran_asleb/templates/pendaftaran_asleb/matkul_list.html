@@ -28,7 +28,9 @@
                 <thead class="bg-slate-50">
                     <tr>
                         <th>Kode</th>
+                        <th>Kode MK</th>
                         <th>Mata Kuliah</th>
+                        <th>SKS</th>
                         <th>Dosen</th>
                         <th>Kelas</th>
                         <th>Status</th>
@@ -39,7 +41,9 @@
                     {% for matkul in matkul_list %}
                     <tr class="hover:bg-slate-50/70">
                         <td class="font-semibold text-slate-600">{{ matkul.kode }}</td>
+                        <td class="font-semibold text-slate-600">{{ matkul.kode_mk|default:"-" }}</td>
                         <td class="font-semibold text-slate-900">{{ matkul.nama }}</td>
+                        <td>{{ matkul.sks|default:"-" }}</td>
                         <td>{{ matkul.dosen }}</td>
                         <td>{{ matkul.kelas }}</td>
                         <td>
@@ -64,7 +68,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="py-12 text-center text-slate-500">Belum ada pilihan matkul.</td>
+                        <td colspan="8" class="py-12 text-center text-slate-500">Belum ada pilihan matkul.</td>
                     </tr>
                     {% endfor %}
                 </tbody>

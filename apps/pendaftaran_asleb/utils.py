@@ -235,8 +235,22 @@ def find_grade_for_course(text, matkul):
     if not text or not matkul:
         return None
 
+    course_codes = get_course_code_candidates(matkul)
     course_names = get_course_name_candidates(matkul)
     normalized_lines = [normalize_spaces(line) for line in text.splitlines() if normalize_spaces(line)]
+
+    if course_codes:
+        for line_number, line in enumerate(normalized_lines):
+            if not line_matches_course_code(line, course_codes):
+                continue
+
+            grade = find_grade(line) or find_last_grade(line)
+            if not grade:
+                window = ' '.join(normalized_lines[line_number:line_number + 3])
+                grade = find_grade(window) or find_last_grade(window)
+
+            if grade:
+                return grade
 
     for line_number, line in enumerate(normalized_lines):
         normalized_line = line.lower()
@@ -252,6 +266,25 @@ def find_grade_for_course(text, matkul):
             return grade
 
     return None
+
+
+def get_course_code_candidates(matkul):
+    raw_candidates = [
+        getattr(matkul, 'kode_mk', ''),
+    ]
+    return [
+        normalize_spaces(candidate).upper()
+        for candidate in raw_candidates
+        if normalize_spaces(candidate)
+    ]
+
+
+def line_matches_course_code(line, course_codes):
+    normalized_line = normalize_spaces(line).upper()
+    return any(
+        re.search(rf'(?<![A-Z0-9]){re.escape(course_code)}(?![A-Z0-9])', normalized_line)
+        for course_code in course_codes
+    )
 
 
 def get_course_name_candidates(matkul):

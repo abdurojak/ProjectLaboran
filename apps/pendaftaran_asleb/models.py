@@ -40,7 +40,9 @@ class MataKuliahAsleb(models.Model):
     ]
 
     kode = models.CharField(max_length=80, unique=True)
+    kode_mk = models.CharField('Kode Mata Kuliah', max_length=20, blank=True, db_index=True)
     nama = models.CharField(max_length=200)
+    sks = models.PositiveSmallIntegerField('SKS', default=0, blank=True)
     dosen = models.CharField(max_length=200)
     kelas = models.CharField(max_length=50)
     aktif = models.BooleanField(default=True)

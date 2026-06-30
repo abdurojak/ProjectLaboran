@@ -398,6 +398,29 @@ class PendaftaranAslebViewTests(TestCase):
 
         self.assertEqual(detected_grade, 'B')
 
+    def test_extract_grade_memakai_kode_mk_transkrip(self):
+        matkul = MataKuliahAsleb.objects.create(
+            kode='KODE_TRANSKRIP_TEST',
+            kode_mk='IKS6404',
+            nama='Nama Lokal Tidak Sama',
+            sks=4,
+            dosen='Dosen Test',
+            kelas='TIF-01',
+        )
+        transcript = SimpleUploadedFile(
+            'transkrip-kode-mk.txt',
+            (
+                b'Pemrograman Berorientasi Objek\n'
+                b'Object Oriented Programming\n'
+                b'IKS6404 4.00 A 4.00 16.00\n'
+            ),
+            content_type='text/plain',
+        )
+
+        detected_grade = extract_grade_from_transcript(transcript, matkul)
+
+        self.assertEqual(detected_grade, 'A')
+
     def test_public_form_wajib_tanda_tangan(self):
         form = PendaftaranAslebPublicForm(data={
             'nama': 'Andi',
