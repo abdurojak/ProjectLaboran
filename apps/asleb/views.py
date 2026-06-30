@@ -10,7 +10,7 @@ from django.urls import reverse_lazy
 from django.utils.text import slugify
 from django.utils import timezone
 from django.views.decorators.http import require_POST
-from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, UpdateView
+from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView
 
 from apps.core.views import PostOnlyDeleteMixin
 from apps.jadwal.models import JadwalPraktikum
@@ -21,11 +21,22 @@ from .forms import (
     AslebForm,
     HonorAslebForm,
     KonfirmasiTransferHonorForm,
+    HasilPraktikumMahasiswaForm,
     ModulPraktikumForm,
+    PesertaPraktikumBulkForm,
     SuratHonorAslebGenerateForm,
     get_asleb_matkul,
 )
-from .models import AbsensiAsleb, Asleb, HonorAsleb, ModulPraktikum, PengaturanAbsensiAsleb, SuratHonorAsleb
+from .models import (
+    AbsensiAsleb,
+    Asleb,
+    HasilPraktikumMahasiswa,
+    HonorAsleb,
+    ModulPraktikum,
+    PengaturanAbsensiAsleb,
+    PesertaPraktikum,
+    SuratHonorAsleb,
+)
 from .surat_honor import generate_surat_honor_pdf, month_year_label
 
 
@@ -500,6 +511,187 @@ class ModulPraktikumDeleteView(ModulManageRequiredMixin, PostOnlyDeleteMixin, De
             return redirect(self.success_url)
         messages.success(self.request, 'Modul praktikum berhasil dihapus.')
         return super().form_valid(form)
+
+
+def get_praktikum_matkul_queryset(pengguna):
+    from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb
+
+    queryset = MataKuliahAsleb.objects.filter(aktif=True)
+    if not pengguna:
+        return queryset.none()
+    if pengguna.role in {'admin', 'laboran'}:
+        return queryset
+    if pengguna.role != 'asisten_lab':
+        return queryset.none()
+
+    matkul_ids = PendaftaranAsleb.objects.filter(
+        nim=pengguna.nim_nik,
+        status__in=['diterima', 'digenerate'],
+    ).values_list('matkul_id', flat=True)
+    if matkul_ids:
+        return queryset.filter(pk__in=matkul_ids)
+
+    asleb = Asleb.objects.filter(nim=pengguna.nim_nik).first()
+    fallback = get_asleb_matkul(asleb) if asleb else None
+    return queryset.filter(pk=fallback.pk) if fallback else queryset.none()
+
+
+class PraktikumMahasiswaAccessMixin:
+    def dispatch(self, request, *args, **kwargs):
+        pengguna = getattr(request, 'current_pengguna', None)
+        if not pengguna or pengguna.role not in {'admin', 'laboran', 'asisten_lab'}:
+            messages.error(request, 'Anda tidak memiliki akses ke nilai dan absensi mahasiswa.')
+            return redirect('dashboard:home')
+        return super().dispatch(request, *args, **kwargs)
+
+
+class PesertaPraktikumManageMixin:
+    def dispatch(self, request, *args, **kwargs):
+        pengguna = getattr(request, 'current_pengguna', None)
+        if not pengguna or pengguna.role not in {'admin', 'laboran'}:
+            messages.error(request, 'Hanya admin dan laboran yang dapat mengelola peserta praktikum.')
+            return redirect('asleb:praktikum_mahasiswa_list')
+        return super().dispatch(request, *args, **kwargs)
+
+
+class PraktikumMahasiswaListView(PraktikumMahasiswaAccessMixin, TemplateView):
+    template_name = 'asleb/praktikum_mahasiswa_list.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        pengguna = self.request.current_pengguna
+        matkul_list = list(
+            get_praktikum_matkul_queryset(pengguna)
+            .prefetch_related('modul_praktikum')
+            .order_by('nama', 'kelas')
+        )
+        for matkul in matkul_list:
+            matkul.jumlah_peserta = matkul.peserta_praktikum.filter(aktif=True).count()
+            matkul.modul_tersedia = list(matkul.modul_praktikum.all())
+
+        selected_id = self.request.GET.get('matkul', '').strip()
+        selected_matkul = next((item for item in matkul_list if str(item.pk) == selected_id), None)
+        if not selected_matkul and len(matkul_list) == 1:
+            selected_matkul = matkul_list[0]
+
+        context.update({
+            'matkul_list': matkul_list,
+            'selected_matkul': selected_matkul,
+            'peserta_list': (
+                selected_matkul.peserta_praktikum.select_related('pengguna').all()
+                if selected_matkul else PesertaPraktikum.objects.none()
+            ),
+            'can_manage_peserta': pengguna.role in {'admin', 'laboran'},
+            'is_asisten_lab': pengguna.role == 'asisten_lab',
+        })
+        return context
+
+
+class PesertaPraktikumBulkCreateView(PesertaPraktikumManageMixin, FormView):
+    form_class = PesertaPraktikumBulkForm
+    template_name = 'asleb/peserta_praktikum_form.html'
+    success_url = reverse_lazy('asleb:praktikum_mahasiswa_list')
+
+    def form_valid(self, form):
+        matkul = form.cleaned_data['matkul']
+        created = 0
+        updated = 0
+        with transaction.atomic():
+            for row in form.cleaned_data['daftar_mahasiswa']:
+                account = Pengguna.objects.filter(nim_nik=row['nim']).first()
+                _, was_created = PesertaPraktikum.objects.update_or_create(
+                    matkul=matkul,
+                    nim=row['nim'],
+                    defaults={
+                        'nama': row['nama'],
+                        'pengguna': account,
+                        'aktif': True,
+                        'dibuat_oleh': self.request.current_pengguna,
+                    },
+                )
+                created += int(was_created)
+                updated += int(not was_created)
+        messages.success(self.request, f'{created} peserta ditambahkan dan {updated} peserta diperbarui.')
+        return redirect(f'{self.success_url}?matkul={matkul.pk}')
+
+
+@require_POST
+def delete_peserta_praktikum(request, pk):
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not pengguna or pengguna.role not in {'admin', 'laboran'}:
+        messages.error(request, 'Hanya admin dan laboran yang dapat menghapus peserta praktikum.')
+        return redirect('asleb:praktikum_mahasiswa_list')
+    peserta = get_object_or_404(PesertaPraktikum.objects.select_related('matkul'), pk=pk)
+    matkul_id = peserta.matkul_id
+    if peserta.hasil_praktikum.exists():
+        peserta.aktif = False
+        peserta.save(update_fields=['aktif', 'diperbarui_pada'])
+        messages.success(request, 'Peserta dinonaktifkan agar riwayat nilai dan absensi tetap tersimpan.')
+    else:
+        peserta.delete()
+        messages.success(request, 'Peserta praktikum berhasil dihapus.')
+    return redirect(f'{reverse_lazy("asleb:praktikum_mahasiswa_list")}?matkul={matkul_id}')
+
+
+class NilaiAbsensiMahasiswaView(PraktikumMahasiswaAccessMixin, TemplateView):
+    template_name = 'asleb/nilai_absensi_mahasiswa.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        self.matkul = get_object_or_404(get_praktikum_matkul_queryset(getattr(request, 'current_pengguna', None)), pk=kwargs['matkul_pk'])
+        self.modul = get_object_or_404(ModulPraktikum, pk=kwargs['modul_pk'], matkul=self.matkul)
+        return super().dispatch(request, *args, **kwargs)
+
+    def build_rows(self, data=None):
+        peserta_list = self.matkul.peserta_praktikum.filter(aktif=True).order_by('nama')
+        existing = {
+            item.peserta_id: item
+            for item in HasilPraktikumMahasiswa.objects.filter(peserta__in=peserta_list, modul=self.modul)
+        }
+        return [
+            {
+                'peserta': peserta,
+                'form': HasilPraktikumMahasiswaForm(
+                    data=data,
+                    instance=existing.get(peserta.pk),
+                    prefix=f'peserta-{peserta.pk}',
+                ),
+            }
+            for peserta in peserta_list
+        ]
+
+    def post(self, request, *args, **kwargs):
+        rows = self.build_rows(request.POST)
+        tanggal = request.POST.get('tanggal_praktikum', '').strip()
+        from django.utils.dateparse import parse_date
+        tanggal_praktikum = parse_date(tanggal)
+        forms_valid = all([row['form'].is_valid() for row in rows])
+        if not tanggal_praktikum:
+            messages.error(request, 'Tanggal praktikum wajib diisi dengan format yang valid.')
+            forms_valid = False
+        if forms_valid:
+            with transaction.atomic():
+                for row in rows:
+                    result = row['form'].save(commit=False)
+                    result.peserta = row['peserta']
+                    result.modul = self.modul
+                    result.tanggal_praktikum = tanggal_praktikum
+                    result.dicatat_oleh = request.current_pengguna
+                    result.full_clean()
+                    result.save()
+            messages.success(request, f'Nilai dan absensi {len(rows)} mahasiswa berhasil disimpan.')
+            return redirect('asleb:praktikum_nilai', matkul_pk=self.matkul.pk, modul_pk=self.modul.pk)
+        return self.render_to_response(self.get_context_data(rows=rows, tanggal_praktikum=tanggal))
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update({
+            'matkul': self.matkul,
+            'modul': self.modul,
+            'rows': kwargs.get('rows') or self.build_rows(),
+            'tanggal_praktikum': kwargs.get('tanggal_praktikum') or timezone.localdate().isoformat(),
+            'is_asisten_lab': self.request.current_pengguna.role == 'asisten_lab',
+        })
+        return context
 
 
 def download_modul_praktikum(request, pk):

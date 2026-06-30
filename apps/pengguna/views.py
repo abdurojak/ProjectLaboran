@@ -6,11 +6,13 @@ from urllib.parse import urlencode, urljoin
 from django.contrib import messages
 from django.contrib.auth.hashers import check_password, make_password
 from django.conf import settings
-from django.shortcuts import redirect
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, UpdateView, View
+from django.views.decorators.http import require_POST
 
 from apps.asleb.models import Asleb
 from apps.core.views import PostOnlyDeleteMixin
@@ -24,12 +26,14 @@ from .forms import (
     LoginPenggunaForm,
     PenggunaForm,
     PenggunaProfileForm,
+    PengalamanPenggunaForm,
     ProdiForm,
     RegisterPenggunaForm,
     ResetPasswordForm,
     VerificationCodeForm,
 )
-from .models import Fakultas, Pengguna, Prodi
+from .cv import build_cv_pdf
+from .models import Fakultas, PengalamanPengguna, Pengguna, Prodi
 
 
 OTP_SESSION_KEY = 'pengguna_otp'
@@ -210,6 +214,11 @@ class PenggunaDetailView(DetailView):
         context['asleb_history'] = PendaftaranAsleb.objects.filter(
             nim=self.object.nim_nik,
         ).select_related('periode', 'matkul').order_by('-periode__tahun', '-periode__semester', 'matkul__nama')
+        riwayat = self.object.pengalaman.all()
+        context['riwayat_sections'] = [
+            (key, label, riwayat.filter(kategori=key))
+            for key, label in PengalamanPengguna.KATEGORI_CHOICES
+        ]
         return context
 
 
@@ -317,7 +326,6 @@ class PenggunaChangePasswordView(View):
 class PenggunaUpdateProfileView(View):
     def post(self, request, pk, *args, **kwargs):
         pengguna = Pengguna.objects.get(pk=pk)
-        nomor_hp_lama = pengguna.no_hp
         form = PenggunaProfileForm(
             request.POST,
             request.FILES,
@@ -326,30 +334,7 @@ class PenggunaUpdateProfileView(View):
         )
 
         if form.is_valid():
-            nomor_hp_baru = form.cleaned_data.get('no_hp', '')
-            nomor_hp_berubah = nomor_hp_baru != nomor_hp_lama
-            pengguna = form.save(commit=False)
-
-            if nomor_hp_berubah:
-                pengguna.no_hp = nomor_hp_lama
-
-            pengguna.save()
-            form.save_m2m()
-
-            if nomor_hp_berubah:
-                send_verification_code(
-                    request,
-                    pengguna,
-                    'email',
-                    'profile_phone',
-                    extra={'new_no_hp': nomor_hp_baru},
-                )
-                messages.success(
-                    request,
-                    'Profil berhasil diperbarui. Masukkan OTP yang dikirim ke email untuk mengaktifkan No HP baru.',
-                )
-                return redirect('pengguna:verify_profile_phone', pk=pengguna.pk)
-
+            form.save()
             messages.success(request, 'Profil pengguna berhasil diperbarui.')
         else:
             for field_errors in form.errors.values():
@@ -357,6 +342,68 @@ class PenggunaUpdateProfileView(View):
                     messages.error(request, error)
 
         return redirect('pengguna:detail', pk=pk)
+
+
+class PengalamanOwnerMixin:
+    def dispatch(self, request, *args, **kwargs):
+        self.profile_user = get_object_or_404(Pengguna, pk=kwargs['user_pk'])
+        current = getattr(request, 'current_pengguna', None)
+        if not current or (current.role != 'admin' and current.pk != self.profile_user.pk):
+            messages.error(request, 'Anda tidak memiliki akses untuk mengubah pengalaman ini.')
+            return redirect('dashboard:home')
+        return super().dispatch(request, *args, **kwargs)
+
+
+class PengalamanCreateView(PengalamanOwnerMixin, CreateView):
+    model = PengalamanPengguna
+    form_class = PengalamanPenggunaForm
+    template_name = 'pengguna/pengalaman_form.html'
+
+    def form_valid(self, form):
+        form.instance.pengguna = self.profile_user
+        messages.success(self.request, 'Pengalaman berhasil ditambahkan.')
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse('pengguna:detail', args=[self.profile_user.pk])
+
+
+class PengalamanUpdateView(PengalamanOwnerMixin, UpdateView):
+    model = PengalamanPengguna
+    form_class = PengalamanPenggunaForm
+    template_name = 'pengguna/pengalaman_form.html'
+    pk_url_kwarg = 'experience_pk'
+
+    def get_queryset(self):
+        return super().get_queryset().filter(pengguna=self.profile_user, otomatis=False)
+
+    def get_success_url(self):
+        messages.success(self.request, 'Pengalaman berhasil diperbarui.')
+        return reverse('pengguna:detail', args=[self.profile_user.pk])
+
+
+@require_POST
+def delete_pengalaman(request, user_pk, experience_pk):
+    profile_user = get_object_or_404(Pengguna, pk=user_pk)
+    current = getattr(request, 'current_pengguna', None)
+    if not current or (current.role != 'admin' and current.pk != profile_user.pk):
+        messages.error(request, 'Anda tidak memiliki akses untuk menghapus pengalaman ini.')
+        return redirect('dashboard:home')
+    pengalaman = get_object_or_404(PengalamanPengguna, pk=experience_pk, pengguna=profile_user, otomatis=False)
+    pengalaman.delete()
+    messages.success(request, 'Pengalaman berhasil dihapus.')
+    return redirect('pengguna:detail', pk=profile_user.pk)
+
+
+def download_cv(request, user_pk):
+    profile_user = get_object_or_404(Pengguna, pk=user_pk)
+    current = getattr(request, 'current_pengguna', None)
+    if not current or (current.role not in {'admin', 'laboran'} and current.pk != profile_user.pk):
+        messages.error(request, 'Anda tidak memiliki akses untuk mengunduh CV ini.')
+        return redirect('dashboard:home')
+    response = HttpResponse(build_cv_pdf(profile_user), content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="cv-{profile_user.nim_nik}.pdf"'
+    return response
 
 
 class PenggunaVerifyProfilePhoneView(FormView):

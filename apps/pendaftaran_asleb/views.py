@@ -15,6 +15,7 @@ from apps.asleb.models import Asleb
 from apps.core.views import PostOnlyDeleteMixin
 from apps.core.emails import send_branded_email
 from apps.pengguna.models import Pengguna
+from apps.pengguna.cv import build_cv_pdf, has_complete_asleb_profile
 
 from .forms import (
     MataKuliahAslebForm,
@@ -183,8 +184,8 @@ class PendaftaranAslebPublicCreateView(View):
 
     def handle_matkul_step(self, request):
         current_pengguna = getattr(request, 'current_pengguna', None) or get_session_pengguna(request)
-        if not current_pengguna or not current_pengguna.cv:
-            messages.warning(request, 'Lengkapi CV pada profil terlebih dahulu sebelum mendaftar sebagai aslab.')
+        if not current_pengguna or not has_complete_asleb_profile(current_pengguna):
+            messages.warning(request, 'Lengkapi data diri, foto, dan minimal satu pengalaman pada profil sebelum mendaftar sebagai aslab.')
             if current_pengguna:
                 return redirect('pengguna:detail', pk=current_pengguna.pk)
             return redirect('pengguna:login')
@@ -229,8 +230,8 @@ class PendaftaranAslebPublicCreateView(View):
             return redirect('pendaftaran_asleb:pendaftaran_public')
 
         current_pengguna = getattr(request, 'current_pengguna', None) or get_session_pengguna(request)
-        if not current_pengguna or not current_pengguna.cv:
-            messages.warning(request, 'CV profil belum tersedia. Lengkapi CV sebelum melanjutkan pendaftaran aslab.')
+        if not current_pengguna or not has_complete_asleb_profile(current_pengguna):
+            messages.warning(request, 'Profil belum lengkap. Lengkapi data diri, foto, dan pengalaman sebelum melanjutkan.')
             if current_pengguna:
                 return redirect('pengguna:detail', pk=current_pengguna.pk)
             return redirect('pengguna:login')
@@ -300,8 +301,8 @@ class PendaftaranAslebPublicCreateView(View):
             return redirect('pendaftaran_asleb:pendaftaran_public')
 
         current_pengguna = getattr(request, 'current_pengguna', None) or get_session_pengguna(request)
-        if not current_pengguna or not current_pengguna.cv:
-            messages.warning(request, 'CV profil belum tersedia. Lengkapi CV sebelum melanjutkan pendaftaran aslab.')
+        if not current_pengguna or not has_complete_asleb_profile(current_pengguna):
+            messages.warning(request, 'Profil belum lengkap. Lengkapi data diri, foto, dan pengalaman sebelum melanjutkan.')
             if current_pengguna:
                 return redirect('pengguna:detail', pk=current_pengguna.pk)
             return redirect('pengguna:login')
@@ -321,8 +322,7 @@ class PendaftaranAslebPublicCreateView(View):
         signature_file = decode_signature_data(form.cleaned_data.get('signature_data'))
         with default_storage.open(wizard['transkrip_path'], 'rb') as transkrip_file:
             transkrip_content = ContentFile(transkrip_file.read(), name=wizard.get('transkrip_name') or 'transkrip.pdf')
-        with current_pengguna.cv.open('rb') as profile_cv:
-            cv_content = ContentFile(profile_cv.read(), name=current_pengguna.cv.name.rsplit('/', 1)[-1])
+        cv_content = ContentFile(build_cv_pdf(current_pengguna), name=f'cv-{current_pengguna.nim_nik}.pdf')
 
         pendaftaran = PendaftaranAsleb(
             nama=form.cleaned_data['nama'],
@@ -512,11 +512,11 @@ def notify_pendaftaran_dibuka():
             text_body=text_body,
             title='Pendaftaran aslab dibuka',
             greeting='Halo Mahasiswa,',
-            intro='Pendaftaran asisten laboratorium LabHub sudah dibuka. Siapkan CV dan transkrip sebelum memilih mata kuliah.',
+            intro='Pendaftaran asisten laboratorium LabHub sudah dibuka. Lengkapi profil dan pengalaman, lalu siapkan transkrip sebelum memilih mata kuliah.',
             details=[
                 {'label': 'Periode', 'value': current_period.nama},
                 {'label': 'Batas pendaftaran', 'value': f'{current_period.pendaftaran_selesai:%d %b %Y}'},
-                {'label': 'Persyaratan', 'value': 'CV profil, transkrip sesuai NIM, dan nilai minimal C'},
+                {'label': 'Persyaratan', 'value': 'Profil dan pengalaman lengkap, transkrip sesuai NIM, dan nilai minimal C'},
             ],
             action_url=registration_url,
             action_label='Daftar Sebagai Aslab',

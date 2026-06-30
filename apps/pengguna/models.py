@@ -75,6 +75,8 @@ class Pengguna(models.Model):
     theme_mode = models.CharField(max_length=20, choices=THEME_MODE_CHOICES, default='light')
     background_mode = models.CharField(max_length=20, choices=BACKGROUND_MODE_CHOICES, default='default')
     background_image = models.ImageField(upload_to='pengguna/backgrounds/', blank=True, null=True)
+    ringkasan_profesional = models.TextField('Tentang', blank=True)
+    keahlian = models.TextField('Keahlian', blank=True, help_text='Pisahkan setiap keahlian dengan koma.')
     notifikasi_dibaca_pada = models.DateTimeField(blank=True, null=True)
     dibuat_pada = models.DateTimeField(auto_now_add=True)
     diperbarui_pada = models.DateTimeField(auto_now=True)
@@ -107,3 +109,43 @@ class Pengguna(models.Model):
 
     def __str__(self):
         return f'{self.kode_pengguna or "USR"} - {self.nama_pengguna}'
+
+
+class PengalamanPengguna(models.Model):
+    KATEGORI_CHOICES = [
+        ('pengalaman', 'Pengalaman'),
+        ('pendidikan', 'Pendidikan'),
+        ('organisasi', 'Organisasi'),
+        ('proyek', 'Proyek'),
+        ('sertifikasi', 'Lisensi & Sertifikasi'),
+    ]
+
+    pengguna = models.ForeignKey(Pengguna, on_delete=models.CASCADE, related_name='pengalaman')
+    kategori = models.CharField(max_length=20, choices=KATEGORI_CHOICES, default='pengalaman')
+    jabatan = models.CharField(max_length=150)
+    organisasi = models.CharField(max_length=150)
+    bidang_studi = models.CharField(max_length=150, blank=True)
+    lokasi = models.CharField(max_length=150, blank=True)
+    tanggal_mulai = models.DateField()
+    tanggal_selesai = models.DateField(blank=True, null=True)
+    masih_berjalan = models.BooleanField(default=False)
+    deskripsi = models.TextField(blank=True)
+    otomatis = models.BooleanField(default=False, editable=False)
+    source_key = models.CharField(max_length=100, blank=True, unique=True, null=True, editable=False)
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+    diperbarui_pada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-masih_berjalan', '-tanggal_mulai', '-pk']
+        verbose_name = 'Pengalaman Pengguna'
+        verbose_name_plural = 'Pengalaman Pengguna'
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.masih_berjalan:
+            self.tanggal_selesai = None
+        elif self.tanggal_selesai and self.tanggal_selesai < self.tanggal_mulai:
+            raise ValidationError({'tanggal_selesai': 'Tanggal selesai tidak boleh lebih awal dari tanggal mulai.'})
+
+    def __str__(self):
+        return f'{self.jabatan} - {self.organisasi}'

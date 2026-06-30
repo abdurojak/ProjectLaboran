@@ -13,7 +13,7 @@ from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from apps.asleb.models import Asleb
-from apps.pengguna.models import Pengguna
+from apps.pengguna.models import PengalamanPengguna, Pengguna
 
 from .forms import PendaftaranAslebPublicForm
 from .models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb, PeriodeAsleb
@@ -123,7 +123,13 @@ class PendaftaranAslebViewTests(TestCase):
             gender='perempuan',
             role='mahasiswa',
             is_verified=True,
-            cv=SimpleUploadedFile('cv-siti.pdf', b'cv siti', content_type='application/pdf'),
+            foto=SimpleUploadedFile('siti.jpg', b'foto siti', content_type='image/jpeg'),
+        )
+        PengalamanPengguna.objects.create(
+            pengguna=mahasiswa,
+            jabatan='Anggota Himpunan',
+            organisasi='Universitas Trisakti',
+            tanggal_mulai=date(2025, 1, 1),
         )
         pengaturan = PengaturanPendaftaranAsleb.get_solo()
         pengaturan.dibuka = True
@@ -166,7 +172,6 @@ class PendaftaranAslebViewTests(TestCase):
         post_response = self.client.post(reverse('pendaftaran_asleb:pendaftaran_public'), {
             'semester': 4,
             'matkul': self.matkul.pk,
-            'cv': SimpleUploadedFile('cv.pdf', b'cv', content_type='application/pdf'),
             'metode_rekening': 'rekening_bank',
             'rekening': 'BCA 123456789',
             'alasan': 'Ingin membantu praktikum.',
@@ -180,8 +185,9 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertEqual(pendaftaran.email, mahasiswa.email)
         self.assertEqual(pendaftaran.program_studi, mahasiswa.prodi)
         self.assertTrue(pendaftaran.tanda_tangan)
+        self.assertTrue(pendaftaran.cv.name.endswith('.pdf'))
 
-    def test_pilih_matkul_ditolak_jika_cv_profil_belum_ada(self):
+    def test_pilih_matkul_ditolak_jika_profil_belum_lengkap(self):
         mahasiswa = Pengguna.objects.create(
             nama_pengguna='Tanpa CV',
             nim_nik='0642201099',
@@ -290,7 +296,13 @@ class PendaftaranAslebViewTests(TestCase):
             gender='laki_laki',
             role='mahasiswa',
             is_verified=True,
-            cv=SimpleUploadedFile(f'cv-{nim}.pdf', b'cv', content_type='application/pdf'),
+            foto=SimpleUploadedFile(f'foto-{nim}.jpg', b'foto', content_type='image/jpeg'),
+        )
+        PengalamanPengguna.objects.create(
+            pengguna=mahasiswa,
+            jabatan='Anggota Organisasi',
+            organisasi='Universitas Trisakti',
+            tanggal_mulai=date(2025, 1, 1),
         )
         pengaturan = PengaturanPendaftaranAsleb.get_solo()
         pengaturan.dibuka = True

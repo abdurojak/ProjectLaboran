@@ -3,7 +3,7 @@ from datetime import timedelta
 from django.utils import timezone
 
 from apps.asleb.models import Asleb
-from apps.pengguna.models import Pengguna
+from apps.pengguna.models import PengalamanPengguna, Pengguna
 
 from .models import PendaftaranAsleb, PeriodeAsleb
 
@@ -44,8 +44,32 @@ def sync_expired_asleb_periods(value=None):
         periode_aktif__isnull=False,
         periode_aktif__selesai__lt=today,
     )
-    expired_nims = list(expired.values_list('nim', flat=True))
+    expired_rows = list(expired.select_related('periode_aktif'))
+    expired_nims = [item.nim for item in expired_rows]
     expired.update(status='nonaktif')
+
+    users_by_nim = {
+        item.nim_nik: item
+        for item in Pengguna.objects.filter(nim_nik__in=expired_nims)
+    }
+    for asleb in expired_rows:
+        pengguna = users_by_nim.get(asleb.nim)
+        period = asleb.periode_aktif
+        if not pengguna or not period:
+            continue
+        PengalamanPengguna.objects.update_or_create(
+            source_key=f'aslab-period-{asleb.pk}-{period.pk}',
+            defaults={
+                'pengguna': pengguna,
+                'jabatan': 'Asisten Laboratorium',
+                'organisasi': 'Universitas Trisakti - LabHub',
+                'tanggal_mulai': period.mulai,
+                'tanggal_selesai': period.selesai,
+                'masih_berjalan': False,
+                'deskripsi': f'Mendampingi kegiatan praktikum {asleb.matkul or "laboratorium"}.',
+                'otomatis': True,
+            },
+        )
 
     demoted = 0
     for pengguna in Pengguna.objects.filter(role='asisten_lab', nim_nik__in=expired_nims):

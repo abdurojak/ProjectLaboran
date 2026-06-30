@@ -6,7 +6,14 @@ from math import asin, cos, radians, sin, sqrt
 
 from apps.pengguna.models import Pengguna
 
-from .models import AbsensiAsleb, Asleb, HonorAsleb, ModulPraktikum, SuratHonorAsleb
+from .models import (
+    AbsensiAsleb,
+    Asleb,
+    HasilPraktikumMahasiswa,
+    HonorAsleb,
+    ModulPraktikum,
+    SuratHonorAsleb,
+)
 
 
 class AslebForm(forms.ModelForm):
@@ -285,6 +292,60 @@ class ModulPraktikumForm(forms.ModelForm):
             'nomor': forms.NumberInput(attrs={'min': 1}),
             'judul': forms.TextInput(attrs={'placeholder': 'Judul atau materi modul'}),
             'file': forms.FileInput(attrs={'accept': '.pdf,.doc,.docx,.ppt,.pptx,.zip'}),
+        }
+
+
+class PesertaPraktikumBulkForm(forms.Form):
+    matkul = forms.ModelChoiceField(label='Mata kuliah dan kelas', queryset=None)
+    daftar_mahasiswa = forms.CharField(
+        label='Daftar mahasiswa',
+        widget=forms.Textarea(attrs={
+            'rows': 12,
+            'placeholder': '064002000001, Nama Mahasiswa\n064002000002, Nama Mahasiswa Kedua',
+        }),
+        help_text='Satu mahasiswa per baris dengan format NIM, Nama. Bisa memakai koma, titik koma, atau tab.',
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.pendaftaran_asleb.models import MataKuliahAsleb
+        self.fields['matkul'].queryset = MataKuliahAsleb.objects.filter(aktif=True)
+
+    def clean_daftar_mahasiswa(self):
+        rows = []
+        errors = []
+        seen = set()
+        for line_number, raw_line in enumerate(self.cleaned_data['daftar_mahasiswa'].splitlines(), start=1):
+            line = raw_line.strip()
+            if not line:
+                continue
+            normalized = line.replace('\t', ',').replace(';', ',')
+            parts = [part.strip() for part in normalized.split(',', 1)]
+            if len(parts) != 2 or not parts[0] or not parts[1]:
+                errors.append(f'Baris {line_number}: gunakan format NIM, Nama.')
+                continue
+            nim, nama = parts
+            if not nim.isdigit():
+                errors.append(f'Baris {line_number}: NIM hanya boleh berisi angka.')
+                continue
+            if nim in seen:
+                continue
+            seen.add(nim)
+            rows.append({'nim': nim, 'nama': nama})
+        if errors:
+            raise forms.ValidationError(errors)
+        if not rows:
+            raise forms.ValidationError('Masukkan minimal satu mahasiswa.')
+        return rows
+
+
+class HasilPraktikumMahasiswaForm(forms.ModelForm):
+    class Meta:
+        model = HasilPraktikumMahasiswa
+        fields = ['status_absensi', 'nilai', 'catatan']
+        widgets = {
+            'nilai': forms.NumberInput(attrs={'min': 0, 'max': 100, 'step': '0.01', 'placeholder': '0-100'}),
+            'catatan': forms.TextInput(attrs={'placeholder': 'Opsional'}),
         }
 
 

@@ -13,7 +13,7 @@ from django.utils import timezone
 from apps.asleb.models import Asleb
 from apps.kalender.models import KegiatanKalender
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb
-from .models import Fakultas, Pengguna, Prodi
+from .models import Fakultas, PengalamanPengguna, Pengguna, Prodi
 
 
 class PenggunaModelTests(TestCase):
@@ -341,7 +341,7 @@ class PenggunaViewTests(TestCase):
         self.assertEqual(self.pengguna.no_hp, '081234567890')
         self.assertEqual(self.pengguna.role, 'laboran')
 
-    def test_update_profile_no_hp_baru_menunggu_verifikasi_otp(self):
+    def test_update_profile_no_hp_baru_langsung_disimpan_tanpa_otp(self):
         response = self.client.post(
             reverse('pengguna:update_profile', args=[self.pengguna.pk]),
             {
@@ -359,18 +359,9 @@ class PenggunaViewTests(TestCase):
         )
 
         self.pengguna.refresh_from_db()
-        self.assertRedirects(response, reverse('pengguna:verify_profile_phone', args=[self.pengguna.pk]))
+        self.assertRedirects(response, reverse('pengguna:detail', args=[self.pengguna.pk]))
         self.assertEqual(self.pengguna.nama_pengguna, 'Andi Profil Baru')
         self.assertEqual(self.pengguna.email, 'andi.profil@example.com')
-        self.assertEqual(self.pengguna.no_hp, '081234567890')
-        self.assertEqual(self.client.session['pengguna_otp']['purpose'], 'profile_phone')
-        self.assertEqual(self.client.session['pengguna_otp']['new_no_hp'], '089999999999')
-
-        kode = self.client.session['pengguna_otp']['code']
-        response = self.client.post(reverse('pengguna:verify_profile_phone', args=[self.pengguna.pk]), {'kode': kode})
-        self.pengguna.refresh_from_db()
-
-        self.assertRedirects(response, reverse('pengguna:detail', args=[self.pengguna.pk]))
         self.assertEqual(self.pengguna.no_hp, '089999999999')
         self.assertNotIn('pengguna_otp', self.client.session)
 

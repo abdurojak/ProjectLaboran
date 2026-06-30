@@ -66,6 +66,14 @@ SIDEBAR_LINKS = [
         'url_names': {'absensi_list', 'absensi_create', 'absensi_toggle_status'},
     },
     {
+        'title': 'Nilai & Absensi Mahasiswa',
+        'icon': 'clipboard-pen-line',
+        'url': 'asleb:praktikum_mahasiswa_list',
+        'namespace': 'asleb_praktikum',
+        'active_namespace': 'asleb',
+        'url_names': {'praktikum_mahasiswa_list', 'praktikum_peserta_create', 'praktikum_peserta_delete', 'praktikum_nilai'},
+    },
+    {
         'title': 'Data Aslab',
         'icon': 'users',
         'url': 'asleb:asleb_list',

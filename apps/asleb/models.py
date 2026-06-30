@@ -1,4 +1,5 @@
 from django.apps import apps
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
@@ -350,6 +351,92 @@ class AbsensiAsleb(models.Model):
 
     def __str__(self):
         return f'{self.asleb.nama} - Modul {self.modul}'
+
+
+class PesertaPraktikum(models.Model):
+    matkul = models.ForeignKey(
+        'pendaftaran_asleb.MataKuliahAsleb',
+        on_delete=models.PROTECT,
+        related_name='peserta_praktikum',
+    )
+    pengguna = models.ForeignKey(
+        'pengguna.Pengguna',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='kelas_praktikum',
+    )
+    nim = models.CharField('NIM', max_length=40)
+    nama = models.CharField(max_length=150)
+    aktif = models.BooleanField(default=True)
+    dibuat_oleh = models.ForeignKey(
+        'pengguna.Pengguna',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='peserta_praktikum_dibuat',
+    )
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+    diperbarui_pada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['matkul__nama', 'matkul__kelas', 'nama']
+        constraints = [
+            models.UniqueConstraint(fields=['matkul', 'nim'], name='unique_peserta_per_matkul'),
+        ]
+        verbose_name = 'Peserta Praktikum'
+        verbose_name_plural = 'Peserta Praktikum'
+
+    def __str__(self):
+        return f'{self.nim} - {self.nama} ({self.matkul})'
+
+
+class HasilPraktikumMahasiswa(models.Model):
+    STATUS_CHOICES = [
+        ('hadir', 'Hadir'),
+        ('izin', 'Izin'),
+        ('sakit', 'Sakit'),
+        ('alpa', 'Alpa'),
+    ]
+
+    peserta = models.ForeignKey(PesertaPraktikum, on_delete=models.PROTECT, related_name='hasil_praktikum')
+    modul = models.ForeignKey(ModulPraktikum, on_delete=models.PROTECT, related_name='hasil_mahasiswa')
+    tanggal_praktikum = models.DateField(default=timezone.localdate)
+    status_absensi = models.CharField(max_length=12, choices=STATUS_CHOICES, default='hadir')
+    nilai = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    catatan = models.CharField(max_length=250, blank=True)
+    dicatat_oleh = models.ForeignKey(
+        'pengguna.Pengguna',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='hasil_praktikum_dicatat',
+    )
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+    diperbarui_pada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['modul__nomor', 'peserta__nama']
+        constraints = [
+            models.UniqueConstraint(fields=['peserta', 'modul'], name='unique_hasil_peserta_per_modul'),
+        ]
+        verbose_name = 'Nilai dan Absensi Mahasiswa'
+        verbose_name_plural = 'Nilai dan Absensi Mahasiswa'
+
+    def clean(self):
+        super().clean()
+        if self.peserta_id and self.modul_id and self.peserta.matkul_id != self.modul.matkul_id:
+            from django.core.exceptions import ValidationError
+            raise ValidationError({'modul': 'Modul harus berasal dari mata kuliah peserta.'})
+
+    def __str__(self):
+        return f'{self.peserta.nama} - {self.modul} - {self.get_status_absensi_display()}'
 
 
 class PengingatAbsensiAsleb(models.Model):

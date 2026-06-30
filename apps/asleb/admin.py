@@ -5,6 +5,8 @@ from .models import (
     Asleb,
     HonorAsleb,
     ModulPraktikum,
+    HasilPraktikumMahasiswa,
+    PesertaPraktikum,
     PengaturanAbsensiAsleb,
     PengingatAbsensiAsleb,
     SuratHonorAsleb,
@@ -46,6 +48,20 @@ class ModulPraktikumAdmin(admin.ModelAdmin):
     list_display = ('nomor', 'judul', 'matkul', 'diunggah_oleh', 'diperbarui_pada')
     list_filter = ('matkul',)
     search_fields = ('judul', 'matkul__nama', 'matkul__kode')
+
+
+@admin.register(PesertaPraktikum)
+class PesertaPraktikumAdmin(admin.ModelAdmin):
+    list_display = ('nim', 'nama', 'matkul', 'aktif', 'pengguna')
+    list_filter = ('aktif', 'matkul')
+    search_fields = ('nim', 'nama', 'matkul__nama', 'matkul__kelas')
+
+
+@admin.register(HasilPraktikumMahasiswa)
+class HasilPraktikumMahasiswaAdmin(admin.ModelAdmin):
+    list_display = ('peserta', 'modul', 'tanggal_praktikum', 'status_absensi', 'nilai', 'dicatat_oleh')
+    list_filter = ('status_absensi', 'modul__matkul', 'modul')
+    search_fields = ('peserta__nim', 'peserta__nama', 'modul__judul')
 
 
 @admin.register(PengaturanAbsensiAsleb)

@@ -16,7 +16,12 @@ class PenggunaLoginRequiredMiddleware:
     }
     MAHASISWA_ALLOWED_PENGGUNA_PATHS = {'/pengguna/logout/'}
     ASISTEN_LAB_BLOCKED_NAMESPACES = {'inventaris', 'barang_tertinggal', 'pendaftaran_asleb'}
-    ASISTEN_LAB_ALLOWED_ASLEB_URLS = {'absensi_list', 'absensi_create'}
+    ASISTEN_LAB_ALLOWED_ASLEB_URLS = {
+        'absensi_list',
+        'absensi_create',
+        'praktikum_mahasiswa_list',
+        'praktikum_nilai',
+    }
     ASISTEN_LAB_ALLOWED_KALENDER_URLS = {
         'kegiatan_list',
         'kegiatan_create',
@@ -107,9 +112,12 @@ class PenggunaLoginRequiredMiddleware:
         return resolved.url_name in {
             'detail',
             'update_profile',
-            'verify_profile_phone',
             'change_password',
-        } and resolved.kwargs.get('pk') == pengguna.pk
+            'experience_create',
+            'experience_update',
+            'experience_delete',
+            'cv_download',
+        } and (resolved.kwargs.get('pk') or resolved.kwargs.get('user_pk')) == pengguna.pk
 
     def asisten_lab_can_access_pengguna(self, path, resolved, pengguna):
         if path in self.MAHASISWA_ALLOWED_PENGGUNA_PATHS:
@@ -118,6 +126,9 @@ class PenggunaLoginRequiredMiddleware:
         return resolved.url_name in {
             'detail',
             'update_profile',
-            'verify_profile_phone',
             'change_password',
-        } and resolved.kwargs.get('pk') == pengguna.pk
+            'experience_create',
+            'experience_update',
+            'experience_delete',
+            'cv_download',
+        } and (resolved.kwargs.get('pk') or resolved.kwargs.get('user_pk')) == pengguna.pk

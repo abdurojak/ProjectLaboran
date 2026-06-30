@@ -3,9 +3,7 @@ from django.contrib.auth.hashers import check_password
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.db import OperationalError, ProgrammingError
-from pathlib import Path
-
-from .models import Fakultas, Pengguna, Prodi
+from .models import Fakultas, PengalamanPengguna, Pengguna, Prodi
 from .utils import validate_human_face_photo
 
 
@@ -47,12 +45,16 @@ class PenggunaForm(forms.ModelForm):
             'alamat',
             'fakultas',
             'prodi',
+            'ringkasan_profesional',
+            'keahlian',
             'role',
         ]
         widgets = {
             'foto': forms.FileInput(attrs={'class': 'hidden', 'accept': 'image/*'}),
             'password': forms.PasswordInput(render_value=False),
             'alamat': forms.Textarea(attrs={'rows': 4}),
+            'ringkasan_profesional': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Ceritakan profil, minat, dan tujuan profesional Anda.'}),
+            'keahlian': forms.Textarea(attrs={'rows': 3, 'placeholder': 'Contoh: Python, Django, Basis Data, Public Speaking'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -156,7 +158,6 @@ class PenggunaProfileForm(forms.ModelForm):
         model = Pengguna
         fields = [
             'foto',
-            'cv',
             'nama_pengguna',
             'nim_nik',
             'email',
@@ -169,7 +170,6 @@ class PenggunaProfileForm(forms.ModelForm):
         ]
         widgets = {
             'foto': forms.FileInput(attrs={'class': 'hidden', 'accept': 'image/*'}),
-            'cv': forms.FileInput(attrs={'accept': '.pdf,.doc,.docx'}),
             'no_hp': forms.TextInput(attrs={'inputmode': 'numeric', 'pattern': '[0-9]*', 'placeholder': 'Angka saja'}),
             'alamat': forms.Textarea(attrs={'rows': 4}),
         }
@@ -178,23 +178,14 @@ class PenggunaProfileForm(forms.ModelForm):
         self.current_pengguna = kwargs.pop('current_pengguna', None)
         super().__init__(*args, **kwargs)
         apply_fakultas_prodi_choices(self)
-        if self.current_pengguna and self.current_pengguna.role == 'mahasiswa':
+        if self.current_pengguna and self.current_pengguna.role != 'admin':
             self.fields.pop('role', None)
 
     def clean_foto(self):
         foto = self.cleaned_data.get('foto')
-        validate_human_face_photo(foto)
+        if not (self.current_pengguna and self.current_pengguna.role == 'admin'):
+            validate_human_face_photo(foto)
         return foto
-
-    def clean_cv(self):
-        cv = self.cleaned_data.get('cv')
-        if not cv:
-            return cv
-        if Path(cv.name).suffix.lower() not in {'.pdf', '.doc', '.docx'}:
-            raise forms.ValidationError('CV harus berupa file PDF, DOC, atau DOCX.')
-        if cv.size > 5 * 1024 * 1024:
-            raise forms.ValidationError('Ukuran CV maksimal 5 MB.')
-        return cv
 
     def clean_no_hp(self):
         no_hp = self.cleaned_data.get('no_hp', '').strip()
@@ -205,11 +196,8 @@ class PenggunaProfileForm(forms.ModelForm):
     def save(self, commit=True):
         instance = super().save(commit=False)
         hapus_foto = self.data.get('hapus_foto') == '1'
-        old_cv = None
-        if instance.pk:
-            old_cv = Pengguna.objects.filter(pk=instance.pk).values_list('cv', flat=True).first()
 
-        if self.current_pengguna and self.current_pengguna.role == 'mahasiswa':
+        if self.current_pengguna and self.current_pengguna.role != 'admin':
             instance.role = self.instance.role
 
         if hapus_foto:
@@ -218,11 +206,24 @@ class PenggunaProfileForm(forms.ModelForm):
         if commit:
             instance.save()
             self.save_m2m()
-            new_cv = instance.cv.name if instance.cv else ''
-            if old_cv and old_cv != new_cv:
-                instance._meta.get_field('cv').storage.delete(old_cv)
 
         return instance
+
+
+class PengalamanPenggunaForm(forms.ModelForm):
+    class Meta:
+        model = PengalamanPengguna
+        fields = ['kategori', 'jabatan', 'organisasi', 'bidang_studi', 'lokasi', 'tanggal_mulai', 'tanggal_selesai', 'masih_berjalan', 'deskripsi']
+        labels = {
+            'jabatan': 'Judul, jabatan, atau gelar',
+            'organisasi': 'Perusahaan, sekolah, atau organisasi',
+            'bidang_studi': 'Bidang studi atau bidang kegiatan',
+        }
+        widgets = {
+            'tanggal_mulai': forms.DateInput(attrs={'type': 'date'}),
+            'tanggal_selesai': forms.DateInput(attrs={'type': 'date'}),
+            'deskripsi': forms.Textarea(attrs={'rows': 5, 'placeholder': 'Jelaskan tanggung jawab, proyek, atau pencapaian.'}),
+        }
 
 
 class ChangePasswordForm(forms.Form):

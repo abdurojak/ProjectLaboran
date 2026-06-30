@@ -13,13 +13,16 @@ from .views import (
     PenggunaLoginView,
     PenggunaLogoutView,
     PenggunaRegisterView,
-    PenggunaVerifyProfilePhoneView,
+    PengalamanCreateView,
+    PengalamanUpdateView,
     PenggunaUpdateProfileView,
     PenggunaUpdateView,
     PenggunaVerifyRegisterView,
     ProdiCreateView,
     ProdiUpdateView,
     ResetPasswordView,
+    delete_pengalaman,
+    download_cv,
 )
 
 app_name = 'pengguna'
@@ -41,7 +44,10 @@ urlpatterns = [
     path('<int:pk>/', PenggunaDetailView.as_view(), name='detail'),
     path('<int:pk>/edit/', PenggunaUpdateView.as_view(), name='update'),
     path('<int:pk>/edit-profil/', PenggunaUpdateProfileView.as_view(), name='update_profile'),
-    path('<int:pk>/verifikasi-no-hp/', PenggunaVerifyProfilePhoneView.as_view(), name='verify_profile_phone'),
+    path('<int:user_pk>/pengalaman/tambah/', PengalamanCreateView.as_view(), name='experience_create'),
+    path('<int:user_pk>/pengalaman/<int:experience_pk>/edit/', PengalamanUpdateView.as_view(), name='experience_update'),
+    path('<int:user_pk>/pengalaman/<int:experience_pk>/hapus/', delete_pengalaman, name='experience_delete'),
+    path('<int:user_pk>/cv/download/', download_cv, name='cv_download'),
     path('<int:pk>/ganti-password/', PenggunaChangePasswordView.as_view(), name='change_password'),
     path('<int:pk>/hapus/', PenggunaDeleteView.as_view(), name='delete'),
 ]
