@@ -1,10 +1,12 @@
 import base64
+import shutil
+import tempfile
 from datetime import date, datetime
 from unittest.mock import patch
 
 from django.core import mail
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
@@ -21,6 +23,19 @@ from .surat_honor import LAB_SIGNATURES, build_lab_signature, build_lampiran_pag
 
 
 class AslebViewTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._temp_media_root = tempfile.mkdtemp(prefix='asleb-test-media-')
+        cls._media_override = override_settings(MEDIA_ROOT=cls._temp_media_root)
+        cls._media_override.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._media_override.disable()
+        shutil.rmtree(cls._temp_media_root, ignore_errors=True)
+        super().tearDownClass()
+
     def setUp(self):
         pengguna = Pengguna.objects.create(
             nama_pengguna='Lab Admin',
@@ -390,6 +405,112 @@ class AslebViewTests(TestCase):
 
         self.assertFalse(form.is_valid())
         self.assertIn('radius 150 meter', str(form.non_field_errors()))
+
+    def test_absensi_menerima_mime_video_dengan_codec_dari_browser(self):
+        PendaftaranAsleb.objects.create(
+            nama=self.asleb.nama,
+            nim=self.asleb.nim,
+            no_hp=self.asleb.no_hp,
+            email=self.asleb.email,
+            program_studi=self.asleb.program_studi,
+            semester=self.asleb.semester,
+            matkul=self.matkul,
+            status='digenerate',
+        )
+        modul = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=3,
+            judul='Tree dan Graph',
+            file=SimpleUploadedFile('modul-3.pdf', b'isi modul', content_type='application/pdf'),
+        )
+        form = AbsensiAslebForm(
+            data={
+                'modul_praktikum': modul.pk,
+                'pekerjaan': 'Membantu praktikum',
+                'latitude': '-6.1680678',
+                'longitude': '106.7916257',
+                'gps_accuracy': '10',
+            },
+            files={
+                'bukti_foto': self.make_camera_photo('foto-browser.png'),
+                'bukti_video': SimpleUploadedFile(
+                    'video-browser.webm',
+                    b'video browser',
+                    content_type='video/webm;codecs=vp9,opus',
+                ),
+            },
+            asleb=self.asleb,
+            jadwal=self.create_active_schedule(),
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_absensi_menolak_absensi_kedua_di_hari_yang_sama_meski_jadwal_berubah(self):
+        PendaftaranAsleb.objects.create(
+            nama=self.asleb.nama,
+            nim=self.asleb.nim,
+            no_hp=self.asleb.no_hp,
+            email=self.asleb.email,
+            program_studi=self.asleb.program_studi,
+            semester=self.asleb.semester,
+            matkul=self.matkul,
+            status='digenerate',
+        )
+        modul_pertama = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=4,
+            judul='Sorting',
+            file=SimpleUploadedFile('modul-4.pdf', b'isi modul 4', content_type='application/pdf'),
+        )
+        modul_kedua = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=5,
+            judul='Searching',
+            file=SimpleUploadedFile('modul-5.pdf', b'isi modul 5', content_type='application/pdf'),
+        )
+        jadwal_awal = self.create_active_schedule()
+        AbsensiAsleb.objects.create(
+            asleb=self.asleb,
+            jadwal=jadwal_awal,
+            modul_praktikum=modul_pertama,
+            tanggal_praktikum=timezone.localdate(),
+            modul=modul_pertama.nomor,
+            materi_praktikum=modul_pertama.judul,
+            file_modul=modul_pertama.file,
+            bukti_foto=self.make_camera_photo('foto-awal.png'),
+            bukti_video=SimpleUploadedFile('video-awal.mp4', b'video awal', content_type='video/mp4'),
+            latitude='-6.1680678',
+            longitude='106.7916257',
+            jarak_lokasi_meter=10,
+        )
+        jadwal_diubah = JadwalPraktikum.objects.create(
+            mata_kuliah=str(self.matkul),
+            kelas=self.matkul.kelas,
+            ruangan=jadwal_awal.ruangan,
+            pengampu=self.matkul.dosen,
+            hari='senin',
+            waktu_mulai='13:00',
+            waktu_selesai='15:00',
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+        form = AbsensiAslebForm(
+            data={
+                'modul_praktikum': modul_kedua.pk,
+                'pekerjaan': 'Membantu praktikum sesi kedua',
+                'latitude': '-6.1680678',
+                'longitude': '106.7916257',
+                'gps_accuracy': '10',
+            },
+            files={
+                'bukti_foto': self.make_camera_photo('foto-kedua.png'),
+                'bukti_video': SimpleUploadedFile('video-kedua.mp4', b'video kedua', content_type='video/mp4'),
+            },
+            asleb=self.asleb,
+            jadwal=jadwal_diubah,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('sudah melakukan absensi', str(form.non_field_errors()))
 
     def test_pengingat_email_maksimal_tiga_kali(self):
         PendaftaranAsleb.objects.create(

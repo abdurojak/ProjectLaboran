@@ -251,7 +251,7 @@
                         {% for jadwal in jadwal_hari_ini %}
                         <tr>
                             <td class="font-semibold text-slate-900">{{ jadwal.mata_kuliah }}</td>
-                            <td>{{ jadwal.ruangan.nama }}</td>
+                            <td>{{ jadwal.get_display_ruangan_nama }}</td>
                             <td>{{ jadwal.waktu_mulai|time:"H:i" }}{% if jadwal.waktu_selesai %} - {{ jadwal.waktu_selesai|time:"H:i" }}{% endif %}</td>
                         </tr>
                         {% empty %}
@@ -284,7 +284,7 @@
                             </span>
                             <div class="min-w-0">
                                 <a class="block truncate font-bold text-brand-700 hover:text-brand-800" href="{% url 'jadwal:jadwal_detail' jadwal.pk %}">{{ jadwal.mata_kuliah }}</a>
-                                <p class="mt-1 truncate text-sm font-semibold text-slate-700">{{ jadwal.ruangan.nama }}</p>
+                                <p class="mt-1 truncate text-sm font-semibold text-slate-700">{{ jadwal.get_display_ruangan_nama }}</p>
                                 <p class="mt-1 text-xs text-slate-500">{{ jadwal.get_hari_display }}, {{ jadwal.waktu_mulai|time:"H:i" }}{% if jadwal.waktu_selesai %} - {{ jadwal.waktu_selesai|time:"H:i" }}{% endif %}</p>
                             </div>
                         </div>

@@ -23,7 +23,7 @@
     </div>
     <div class="surface-card grid gap-5 p-6 md:grid-cols-2 md:p-8">
         <div class="rounded-3xl bg-slate-50 p-5 md:col-span-2"><div class="text-sm font-semibold text-slate-500">Matkul</div><div class="mt-2 text-xl font-bold text-slate-900">{{ jadwal.mata_kuliah }}</div></div>
-        <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Ruangan</div><div class="mt-2 text-xl font-bold text-slate-900">{{ jadwal.ruangan.nama }}</div></div>
+        <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Ruangan</div><div class="mt-2 text-xl font-bold text-slate-900">{{ jadwal.get_display_ruangan_nama }}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Hari</div><div class="mt-2 text-xl font-bold text-slate-900">{{ jadwal.get_hari_display }}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Status</div><div class="mt-2 text-xl font-bold text-slate-900">{{ jadwal.get_status_display }}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5 md:col-span-2"><div class="text-sm font-semibold text-slate-500">Waktu</div><div class="mt-2 text-xl font-bold text-slate-900">{{ jadwal.waktu_mulai|time:"H:i" }}{% if jadwal.waktu_selesai %} - {{ jadwal.waktu_selesai|time:"H:i" }}{% endif %}</div></div>

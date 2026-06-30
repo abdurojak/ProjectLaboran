@@ -219,6 +219,36 @@
         </div>
 
         <aside class="min-w-0 space-y-6">
+            <div class="calendar-side-card surface-card p-5 md:p-6">
+                <div class="flex items-start gap-4">
+                    <span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
+                        <i data-lucide="calendar-range" class="h-6 w-6"></i>
+                    </span>
+                    <div>
+                        <h3 class="text-xl font-bold text-slate-900">Jadwal Praktikum Otomatis</h3>
+                        <p class="mt-2 text-sm leading-7 text-slate-500">Jadwal praktikum yang dibuat di modul jadwal otomatis masuk ke kalender kegiatan untuk semua role.</p>
+                    </div>
+                </div>
+                <div class="mt-5 space-y-3">
+                    {% for jadwal in jadwal_praktikum_otomatis %}
+                    <div class="rounded-[22px] border {% if jadwal.status == 'diajukan' %}border-amber-100 bg-amber-50/60{% else %}border-teal-100 bg-teal-50/60{% endif %} p-4">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="font-bold text-slate-900">{{ jadwal.mata_kuliah }} - {{ jadwal.kelas }}</div>
+                            <span class="inline-flex rounded-full px-3 py-1 text-xs font-bold {% if jadwal.status == 'diajukan' %}bg-amber-100 text-amber-700{% else %}bg-emerald-100 text-emerald-700{% endif %}">
+                                {{ jadwal.get_status_display }}
+                            </span>
+                        </div>
+                        <div class="mt-1 text-sm text-slate-600">{{ jadwal.get_hari_display }} · {{ jadwal.waktu_mulai|time:"H:i" }}{% if jadwal.waktu_selesai %} - {{ jadwal.waktu_selesai|time:"H:i" }}{% endif %}</div>
+                        <div class="mt-1 text-sm text-slate-500">{{ jadwal.get_display_ruangan_nama }}</div>
+                    </div>
+                    {% empty %}
+                    <div class="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                        Belum ada jadwal praktikum otomatis yang tercatat.
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
             {% if request.current_pengguna and request.current_pengguna.role == 'asisten_lab' %}
             <div class="calendar-side-card surface-card p-5 md:p-6">
                 <div class="flex items-start gap-4">
@@ -235,7 +265,7 @@
                     <div class="rounded-[22px] border border-teal-100 bg-teal-50/60 p-4">
                         <div class="font-bold text-slate-900">{{ jadwal.mata_kuliah }} - {{ jadwal.kelas }}</div>
                         <div class="mt-1 text-sm text-slate-600">{{ jadwal.get_hari_display }} · {{ jadwal.waktu_mulai|time:"H:i" }}{% if jadwal.waktu_selesai %} - {{ jadwal.waktu_selesai|time:"H:i" }}{% endif %}</div>
-                        <div class="mt-1 text-sm text-slate-500">{{ jadwal.ruangan.nama }}</div>
+                        <div class="mt-1 text-sm text-slate-500">{{ jadwal.get_display_ruangan_nama }}</div>
                     </div>
                     {% empty %}
                     <div class="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">

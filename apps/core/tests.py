@@ -130,6 +130,48 @@ class BantuanTests(TestCase):
         self.assertRedirects(response, f"{reverse('core:bantuan_admin')}?percakapan={conversation.pk}")
         self.assertTrue(conversation.pesan.filter(pengirim='admin', isi__icontains='lengkapi CV').exists())
 
+    def test_admin_settings_tidak_menampilkan_kartu_bantuan(self):
+        admin = Pengguna.objects.create(
+            nama_pengguna='Admin Pengaturan',
+            nim_nik='ADM-SETTINGS',
+            email='admin-settings@example.com',
+            password='rahasia123',
+            no_hp='081234567877',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='admin',
+        )
+        self.login_as(admin)
+
+        response = self.client.get(reverse('core:settings'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, '<h3 class="mt-5 text-lg font-black tracking-tight text-slate-900">Bantuan</h3>', html=False)
+        self.assertContains(response, 'Chat Bantuan Masuk')
+
+    def test_settings_tidak_menampilkan_kartu_pendaftaran_aslab(self):
+        laboran = Pengguna.objects.create(
+            nama_pengguna='Laboran Pengaturan',
+            nim_nik='LAB-SETTINGS',
+            email='laboran-settings@example.com',
+            password='rahasia123',
+            no_hp='081234567876',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='laboran',
+        )
+        self.login_as(laboran)
+
+        response = self.client.get(reverse('core:settings'))
+
+        self.assertEqual(response.status_code, 200)
+        card_titles = [card['title'] for card in response.context['settings_cards']]
+        self.assertNotIn('Pendaftaran Aslab', card_titles)
+
 
 class BantuanWebSocketTests(TransactionTestCase):
     reset_sequences = True

@@ -80,13 +80,6 @@ class SettingsView(TemplateView):
 
         cards = [
             {
-                'title': 'Bantuan',
-                'description': 'Tanyakan penggunaan aplikasi ke bot atau teruskan percakapan ke admin.',
-                'url': 'core:bantuan',
-                'args': [],
-                'icon': 'message-circle-question',
-            },
-            {
                 'title': 'Profil Saya',
                 'description': 'Lihat dan perbarui identitas akun yang sedang digunakan.',
                 'url': 'pengguna:detail',
@@ -101,6 +94,15 @@ class SettingsView(TemplateView):
                 'icon': 'key-round',
             },
         ]
+
+        if pengguna.role != 'admin':
+            cards.insert(0, {
+                'title': 'Bantuan',
+                'description': 'Tanyakan penggunaan aplikasi ke bot atau teruskan percakapan ke admin.',
+                'url': 'core:bantuan',
+                'args': [],
+                'icon': 'message-circle-question',
+            })
 
         if pengguna.role == 'admin':
             cards.extend([
@@ -126,15 +128,6 @@ class SettingsView(TemplateView):
                     'icon': 'users',
                 },
             ])
-
-        if pengguna.role in {'admin', 'laboran'}:
-            cards.append({
-                'title': 'Pendaftaran Aslab',
-                'description': 'Buka/tutup pendaftaran dan kelola data mata kuliah aslab.',
-                'url': 'pendaftaran_asleb:pendaftaran_list',
-                'args': [],
-                'icon': 'user-round-plus',
-            })
 
         for card in cards:
             card['href'] = reverse(card['url'], args=card.get('args', []))

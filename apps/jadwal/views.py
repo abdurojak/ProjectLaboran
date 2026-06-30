@@ -69,7 +69,7 @@ class JadwalPraktikumListView(ListView):
 
     def get_queryset(self):
         queryset = (
-            JadwalPraktikum.objects.select_related('ruangan')
+            JadwalPraktikum.objects.select_related('ruangan', 'ruangan_tambahan')
             .filter(
                 hari=self.get_selected_hari(),
                 status=JadwalPraktikum.STATUS_DITERIMA,
@@ -112,7 +112,7 @@ class JadwalPraktikumListView(ListView):
             return JadwalPraktikum.objects.none()
 
         return (
-            JadwalPraktikum.objects.select_related('ruangan')
+            JadwalPraktikum.objects.select_related('ruangan', 'ruangan_tambahan')
             .filter(
                 mata_kuliah__in=labels,
                 status__in=[JadwalPraktikum.STATUS_DIAJUKAN, JadwalPraktikum.STATUS_DITERIMA],
@@ -144,7 +144,12 @@ class JadwalPraktikumListView(ListView):
 
         for jadwal in jadwal_list:
             start_key = self.get_slot_key(jadwal.waktu_mulai, slot_keys)
-            grid_column = ruangan_columns.get(jadwal.ruangan_id)
+            occupied_columns = [
+                ruangan_columns.get(room_id)
+                for room_id in jadwal.get_occupied_room_ids()
+                if ruangan_columns.get(room_id)
+            ]
+            grid_column = min(occupied_columns) if occupied_columns else None
             if not start_key or not grid_column:
                 continue
 
@@ -157,9 +162,11 @@ class JadwalPraktikumListView(ListView):
 
             span = max(1, int((end_dt - start_dt).total_seconds() // 1800))
             span = min(span, len(slot_keys) - start_index)
+            column_span = max(1, len(occupied_columns))
             blocks.append({
                 'jadwal': jadwal,
                 'grid_column': grid_column,
+                'column_span': column_span,
                 'grid_row': start_index + 1,
                 'span': span,
                 'can_manage': can_manage_jadwal(pengguna, jadwal),

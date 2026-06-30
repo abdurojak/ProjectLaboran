@@ -1,6 +1,7 @@
 from django import forms
 
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb
+from apps.ruangan.models import RuanganLab
 
 from .models import JadwalPraktikum
 
@@ -12,18 +13,33 @@ class JadwalPraktikumForm(forms.ModelForm):
         label='Matkul',
         widget=forms.Select(attrs={'class': 'min-h-12'}),
     )
+    ruangan_tambahan = forms.ModelChoiceField(
+        queryset=RuanganLab.objects.none(),
+        required=False,
+        empty_label='Tidak ada ruangan tambahan',
+        label='Ruangan Tambahan',
+        widget=forms.Select(attrs={'class': 'min-h-12'}),
+        help_text=(
+            'Opsional untuk kelas besar. Saat ini gabungan dua lab hanya berlaku untuk '
+            'Lab Rekayasa Perangkat Lunak dan Lab Sistem Keamanan Informasi.'
+        ),
+    )
 
     def __init__(self, *args, **kwargs):
         self.current_pengguna = kwargs.pop('current_pengguna', None)
         super().__init__(*args, **kwargs)
         self.fields['matkul'].queryset = self.get_matkul_queryset()
         self.fields['matkul'].initial = self.get_initial_matkul()
+        room_queryset = RuanganLab.objects.filter(aktif=True).order_by('nama')
+        self.fields['ruangan'].queryset = room_queryset
+        self.fields['ruangan_tambahan'].queryset = room_queryset
 
     class Meta:
         model = JadwalPraktikum
         fields = [
             'matkul',
             'ruangan',
+            'ruangan_tambahan',
             'hari',
             'waktu_mulai',
             'waktu_selesai',

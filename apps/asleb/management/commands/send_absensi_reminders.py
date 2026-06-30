@@ -81,7 +81,7 @@ class Command(BaseCommand):
             intro='Jadwal praktikum sedang berlangsung dan absensi Anda belum tercatat.',
             details=[
                 {'label': 'Mata kuliah', 'value': schedule.mata_kuliah},
-                {'label': 'Ruangan', 'value': schedule.ruangan.nama},
+                {'label': 'Ruangan', 'value': schedule.get_display_ruangan_nama()},
                 {'label': 'Waktu', 'value': f'{schedule.waktu_mulai:%H:%M} - {schedule.waktu_selesai:%H:%M}'},
                 {'label': 'Pengingat', 'value': f'{next_stage} dari 3'},
             ],

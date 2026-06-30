@@ -195,7 +195,7 @@
                     {% endfor %}
 
                     {% for block in jadwal_blocks %}
-                    <div class="z-10" style="grid-column: {{ block.grid_column }}; grid-row: {{ block.grid_row }} / span {{ block.span }};">
+                    <div class="z-10" style="grid-column: {{ block.grid_column }} / span {{ block.column_span }}; grid-row: {{ block.grid_row }} / span {{ block.span }};">
                         <div class="jadwal-practice-block flex h-full min-h-20 flex-col items-center justify-center border px-3 py-4 text-center font-bold">
                             <a href="{% url 'jadwal:jadwal_detail' block.jadwal.pk %}" class="transition">
                                 <span>{{ block.jadwal.mata_kuliah }}</span>
@@ -242,7 +242,7 @@
                             <a class="font-semibold text-brand-700 hover:text-brand-800" href="{% url 'jadwal:jadwal_detail' jadwal.pk %}">{{ jadwal.mata_kuliah }}</a>
                         </td>
                         <td>{{ jadwal.get_hari_display }}</td>
-                        <td>{{ jadwal.ruangan.nama }}</td>
+                        <td>{{ jadwal.get_display_ruangan_nama }}</td>
                         <td>{{ jadwal.waktu_mulai|time:"H:i" }}{% if jadwal.waktu_selesai %} - {{ jadwal.waktu_selesai|time:"H:i" }}{% endif %}</td>
                         <td>
                             <span class="{% if jadwal.status == 'diajukan' %}bg-amber-100 text-amber-700{% else %}bg-emerald-100 text-emerald-700{% endif %} inline-flex rounded-full px-3 py-1 text-xs font-bold">

@@ -124,6 +124,15 @@ class JadwalViewTests(TestCase):
         self.assertNotContains(response, 'name="kelas"', html=False)
         self.assertNotContains(response, 'name="pengampu"', html=False)
 
+    def test_form_jadwal_menampilkan_ruangan_tambahan_untuk_kelas_besar(self):
+        response = self.client.get(reverse('jadwal:jadwal_create'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="ruangan_tambahan"', html=False)
+        self.assertContains(response, 'Lab Rekayasa Perangkat Lunak')
+        self.assertContains(response, 'Lab Sistem Keamanan Informasi')
+        self.assertContains(response, 'gabungan dua lab hanya berlaku')
+
     def test_form_jadwal_menyimpan_matkul_kelas_dan_pengampu_dari_pilihan_matkul(self):
         response = self.client.post(reverse('jadwal:jadwal_create'), {
             'matkul': self.matkul_lain.pk,
@@ -139,6 +148,59 @@ class JadwalViewTests(TestCase):
         self.assertEqual(jadwal.mata_kuliah, str(self.matkul_lain))
         self.assertEqual(jadwal.kelas, self.matkul_lain.kelas)
         self.assertEqual(jadwal.pengampu, self.matkul_lain.dosen)
+
+    def test_form_jadwal_dapat_menyimpan_ruangan_tambahan_untuk_pasangan_rpl_dan_ski(self):
+        lab_rpl = RuanganLab.objects.get(kode='LAB-RPL')
+        lab_ski = RuanganLab.objects.get(kode='LAB-SKI')
+
+        response = self.client.post(reverse('jadwal:jadwal_create'), {
+            'matkul': self.matkul_lain.pk,
+            'ruangan': lab_rpl.pk,
+            'ruangan_tambahan': lab_ski.pk,
+            'hari': 'selasa',
+            'waktu_mulai': '13:00',
+            'waktu_selesai': '15:00',
+            'catatan': 'Kelas besar pakai dua lab',
+        })
+
+        self.assertRedirects(response, reverse('jadwal:jadwal_list'))
+        jadwal = JadwalPraktikum.objects.get(hari='selasa', mata_kuliah=str(self.matkul_lain))
+        self.assertEqual(jadwal.ruangan_id, lab_rpl.pk)
+        self.assertEqual(jadwal.ruangan_tambahan_id, lab_ski.pk)
+        self.assertEqual(
+            jadwal.get_display_ruangan_nama(),
+            'Lab Rekayasa Perangkat Lunak + Lab Sistem Keamanan Informasi',
+        )
+
+    def test_jadwal_lab_pasangan_dianggap_bentrok_saat_salah_satunya_sudah_dipakai(self):
+        lab_rpl = RuanganLab.objects.get(kode='LAB-RPL')
+        lab_ski = RuanganLab.objects.get(kode='LAB-SKI')
+        JadwalPraktikum.objects.create(
+            mata_kuliah='Praktikum Mobile',
+            kelas='TI 4A',
+            ruangan=lab_rpl,
+            ruangan_tambahan=lab_ski,
+            pengampu='Bu Rina',
+            hari='selasa',
+            waktu_mulai=time(9, 0),
+            waktu_selesai=time(11, 0),
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+        jadwal_bentrok = JadwalPraktikum(
+            mata_kuliah='Praktikum Cloud',
+            kelas='TI 4B',
+            ruangan=lab_ski,
+            pengampu='Pak Dimas',
+            hari='selasa',
+            waktu_mulai=time(10, 0),
+            waktu_selesai=time(12, 0),
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+
+        with self.assertRaises(ValidationError) as error:
+            jadwal_bentrok.full_clean()
+
+        self.assertIn('Salah satu ruangan pada jadwal ini sudah dipakai', str(error.exception))
 
     def test_form_jadwal_menampilkan_error_validasi_berwarna_merah(self):
         response = self.client.post(reverse('jadwal:jadwal_create'), {

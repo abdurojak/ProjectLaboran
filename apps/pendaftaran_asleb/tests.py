@@ -1,9 +1,11 @@
 import base64
+import shutil
+import tempfile
 from datetime import date
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.core import mail
 from django.core.files.base import ContentFile
@@ -21,6 +23,19 @@ from .views import WIZARD_SESSION_KEY
 
 
 class PendaftaranAslebViewTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._temp_media_root = tempfile.mkdtemp(prefix='pendaftaran-asleb-test-media-')
+        cls._media_override = override_settings(MEDIA_ROOT=cls._temp_media_root)
+        cls._media_override.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._media_override.disable()
+        shutil.rmtree(cls._temp_media_root, ignore_errors=True)
+        super().tearDownClass()
+
     def setUp(self):
         pengguna = Pengguna.objects.create(
             nama_pengguna='Lab Admin',

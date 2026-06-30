@@ -257,6 +257,48 @@ class KalenderViewsTests(TestCase):
         self.assertIn('Praktikum Struktur Data dan Algoritma - TIF-01', event_titles)
         self.assertContains(response, 'Struktur Data dan Algoritma - TIF-01')
 
+    def test_jadwal_praktikum_diajukan_aslab_muncul_di_kalender_semua_role(self):
+        ruangan = RuanganLab.objects.create(
+            nama='Lab Kalender Global',
+            kode='LAB-KAL-GLOBAL',
+            kapasitas=24,
+            warna='teal',
+        )
+        JadwalPraktikum.objects.create(
+            mata_kuliah='Pemrograman Web',
+            kelas='TIF-02',
+            ruangan=ruangan,
+            pengampu='Pak Global',
+            hari='rabu',
+            waktu_mulai=time(13, 0),
+            waktu_selesai=time(15, 0),
+            status=JadwalPraktikum.STATUS_DIAJUKAN,
+        )
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Mahasiswa Global',
+            nim_nik='2201099',
+            email='mahasiswa-global@example.com',
+            password='rahasia123',
+            no_hp='081111111113',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='mahasiswa',
+        )
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+
+        response = self.client.get(reverse('kalender:kegiatan_list'))
+
+        event_titles = [event['title'] for event in response.context['calendar_events']]
+        self.assertIn('Praktikum Pemrograman Web - TIF-02', event_titles)
+        self.assertContains(response, 'Jadwal Praktikum Otomatis')
+        self.assertContains(response, 'Pemrograman Web - TIF-02')
+        event = next(item for item in response.context['calendar_events'] if item['title'] == 'Praktikum Pemrograman Web - TIF-02')
+        self.assertEqual(event['backgroundColor'], '#f59e0b')
+
     def test_notifikasi_page_loads(self):
         response = self.client.get(reverse('kalender:notifikasi_list'))
 

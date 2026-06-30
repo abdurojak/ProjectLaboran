@@ -2,11 +2,15 @@ from datetime import time
 
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Q
 
 from apps.ruangan.models import RuanganLab
 
 
 class JadwalPraktikum(models.Model):
+    ALLOWED_COMBINED_ROOM_CODE_SETS = {
+        frozenset({'LAB-RPL', 'LAB-SKI'}),
+    }
     JAM_KERJA_MULAI = time(7, 30)
     JAM_KERJA_SELESAI = time(18, 0)
     STATUS_DIAJUKAN = 'diajukan'
@@ -29,6 +33,13 @@ class JadwalPraktikum(models.Model):
     mata_kuliah = models.CharField('Matkul', max_length=200)
     kelas = models.CharField(max_length=100)
     ruangan = models.ForeignKey(RuanganLab, on_delete=models.PROTECT, related_name='jadwal_praktikum')
+    ruangan_tambahan = models.ForeignKey(
+        RuanganLab,
+        on_delete=models.PROTECT,
+        related_name='jadwal_praktikum_tambahan',
+        blank=True,
+        null=True,
+    )
     pengampu = models.CharField(max_length=150)
     hari = models.CharField(max_length=10, choices=HARI_CHOICES, default='senin')
     waktu_mulai = models.TimeField('Waktu Mulai')
@@ -46,6 +57,36 @@ class JadwalPraktikum(models.Model):
     def get_waktu_selesai_efektif(self):
         return self.waktu_selesai or self.waktu_mulai
 
+    def get_occupied_room_ids(self):
+        room_ids = []
+        if self.ruangan_id:
+            room_ids.append(self.ruangan_id)
+        if self.ruangan_tambahan_id:
+            room_ids.append(self.ruangan_tambahan_id)
+        return room_ids
+
+    def get_display_ruangan_parts(self):
+        parts = []
+        if self.ruangan_id:
+            parts.append(self.ruangan.nama)
+        if self.ruangan_tambahan_id:
+            parts.append(self.ruangan_tambahan.nama)
+        return parts
+
+    def get_display_ruangan_nama(self):
+        parts = self.get_display_ruangan_parts()
+        if not parts:
+            return '-'
+        return ' + '.join(parts)
+
+    def get_display_ruangan_kapasitas(self):
+        capacities = []
+        if self.ruangan_id and self.ruangan.kapasitas is not None:
+            capacities.append(self.ruangan.kapasitas)
+        if self.ruangan_tambahan_id and self.ruangan_tambahan.kapasitas is not None:
+            capacities.append(self.ruangan_tambahan.kapasitas)
+        return sum(capacities) if capacities else None
+
     def clean(self):
         errors = {}
 
@@ -60,6 +101,17 @@ class JadwalPraktikum(models.Model):
         if waktu_selesai_baru and waktu_selesai_baru > self.JAM_KERJA_SELESAI:
             errors['waktu_selesai'] = 'Waktu selesai tidak boleh melewati jam kerja 18:00.'
 
+        if self.ruangan_id and self.ruangan_tambahan_id:
+            if self.ruangan_id == self.ruangan_tambahan_id:
+                errors['ruangan_tambahan'] = 'Ruangan tambahan harus berbeda dari ruangan utama.'
+            else:
+                selected_codes = frozenset({self.ruangan.kode, self.ruangan_tambahan.kode})
+                if selected_codes not in self.ALLOWED_COMBINED_ROOM_CODE_SETS:
+                    errors['ruangan_tambahan'] = (
+                        'Gabungan dua lab saat ini hanya diizinkan untuk '
+                        'Lab Rekayasa Perangkat Lunak dan Lab Sistem Keamanan Informasi.'
+                    )
+
         if errors:
             raise ValidationError(errors)
 
@@ -69,10 +121,12 @@ class JadwalPraktikum(models.Model):
         if not self.hari or not self.ruangan_id or not self.waktu_mulai:
             return
 
+        ruangan_ids = self.get_occupied_room_ids()
         jadwal_di_ruangan = JadwalPraktikum.objects.filter(
             hari=self.hari,
-            ruangan=self.ruangan,
             status=self.STATUS_DITERIMA,
+        ).filter(
+            Q(ruangan_id__in=ruangan_ids) | Q(ruangan_tambahan_id__in=ruangan_ids)
         )
 
         if self.pk:
@@ -83,7 +137,7 @@ class JadwalPraktikum(models.Model):
             if self.waktu_mulai < waktu_selesai_lama and waktu_selesai_baru > jadwal.waktu_mulai:
                 raise ValidationError({
                     'ruangan': (
-                        'Ruangan ini sudah dipakai pada hari dan rentang waktu tersebut. '
+                        'Salah satu ruangan pada jadwal ini sudah dipakai pada hari dan rentang waktu tersebut. '
                         'Silakan pilih waktu atau ruangan lain.'
                     )
                 })

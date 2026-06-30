@@ -1,6 +1,7 @@
 from django import forms
 from django.conf import settings
 from django.utils import timezone
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from math import asin, cos, radians, sin, sqrt
 
 from apps.pengguna.models import Pengguna
@@ -114,9 +115,9 @@ class SuratHonorAslebGenerateForm(forms.Form):
 
 
 class AbsensiAslebForm(forms.ModelForm):
-    latitude = forms.DecimalField(max_digits=10, decimal_places=7, widget=forms.HiddenInput)
-    longitude = forms.DecimalField(max_digits=10, decimal_places=7, widget=forms.HiddenInput)
-    gps_accuracy = forms.FloatField(widget=forms.HiddenInput)
+    latitude = forms.CharField(required=False, widget=forms.HiddenInput)
+    longitude = forms.CharField(required=False, widget=forms.HiddenInput)
+    gps_accuracy = forms.CharField(required=False, widget=forms.HiddenInput)
     modul_praktikum = forms.ModelChoiceField(
         label='Modul Praktikum',
         queryset=ModulPraktikum.objects.none(),
@@ -157,7 +158,7 @@ class AbsensiAslebForm(forms.ModelForm):
 
     def clean_bukti_foto(self):
         photo = self.cleaned_data['bukti_foto']
-        if photo.content_type not in {'image/jpeg', 'image/png'}:
+        if not self._has_allowed_content_type(photo, ['image/jpeg', 'image/png']):
             raise forms.ValidationError('Bukti foto harus diambil dari kamera dalam format gambar.')
         if photo.size > 5 * 1024 * 1024:
             raise forms.ValidationError('Ukuran bukti foto maksimal 5 MB.')
@@ -165,7 +166,7 @@ class AbsensiAslebForm(forms.ModelForm):
 
     def clean_bukti_video(self):
         video = self.cleaned_data['bukti_video']
-        if video.content_type not in {'video/webm', 'video/mp4'}:
+        if not self._has_allowed_content_type(video, ['video/webm', 'video/mp4']):
             raise forms.ValidationError('Bukti video harus direkam langsung dari kamera.')
         if video.size > 20 * 1024 * 1024:
             raise forms.ValidationError('Ukuran bukti video maksimal 20 MB.')
@@ -181,11 +182,28 @@ class AbsensiAslebForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
-        latitude = cleaned_data.get('latitude')
-        longitude = cleaned_data.get('longitude')
-        accuracy = cleaned_data.get('gps_accuracy')
+        attendance_date = timezone.localdate()
+        latitude = self._read_decimal(cleaned_data.get('latitude'))
+        longitude = self._read_decimal(cleaned_data.get('longitude'))
+        accuracy = self._read_float(cleaned_data.get('gps_accuracy'))
+
+        if self.asleb and AbsensiAsleb.objects.filter(
+            asleb=self.asleb,
+            tanggal_praktikum=attendance_date,
+        ).exists():
+            raise forms.ValidationError(
+                'Anda sudah melakukan absensi untuk jadwal praktikum hari ini. '
+                'Perubahan jadwal tidak membuka absensi baru pada tanggal yang sama.'
+            )
+
         if latitude is None or longitude is None or accuracy is None:
             raise forms.ValidationError('Lokasi perangkat wajib diaktifkan untuk melakukan absensi.')
+
+        latitude = latitude.quantize(Decimal('0.0000001'), rounding=ROUND_HALF_UP)
+        longitude = longitude.quantize(Decimal('0.0000001'), rounding=ROUND_HALF_UP)
+        cleaned_data['latitude'] = latitude
+        cleaned_data['longitude'] = longitude
+
         if accuracy > settings.ABSENSI_MAX_GPS_ACCURACY_METERS:
             raise forms.ValidationError('Akurasi lokasi belum cukup baik. Aktifkan GPS dan coba kembali di area terbuka.')
 
@@ -219,6 +237,33 @@ class AbsensiAslebForm(forms.ModelForm):
             instance.save()
 
         return instance
+
+    def _read_decimal(self, raw_value):
+        raw_value = str(raw_value or '').strip()
+        if not raw_value:
+            return None
+
+        try:
+            return Decimal(raw_value)
+        except (InvalidOperation, TypeError, ValueError):
+            return None
+
+    def _read_float(self, raw_value):
+        raw_value = str(raw_value or '').strip()
+        if not raw_value:
+            return None
+
+        try:
+            return float(raw_value)
+        except (TypeError, ValueError):
+            return None
+
+    def _has_allowed_content_type(self, uploaded_file, allowed_types):
+        content_type = (getattr(uploaded_file, 'content_type', '') or '').lower()
+        return any(
+            content_type == allowed_type or content_type.startswith(f'{allowed_type};')
+            for allowed_type in allowed_types
+        )
 
 
 def calculate_distance_meters(latitude, longitude, target_latitude, target_longitude):

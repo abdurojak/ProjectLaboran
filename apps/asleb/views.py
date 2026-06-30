@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib import messages
 from django.core.files.base import ContentFile
 from django.db import transaction
@@ -25,6 +27,9 @@ from .forms import (
 )
 from .models import AbsensiAsleb, Asleb, HonorAsleb, ModulPraktikum, PengaturanAbsensiAsleb, SuratHonorAsleb
 from .surat_honor import generate_surat_honor_pdf, month_year_label
+
+
+logger = logging.getLogger(__name__)
 
 
 class HonorAdminRequiredMixin:
@@ -399,6 +404,38 @@ class AbsensiAslebCreateView(CreateView):
         sync_honor_from_absensi(self.object)
         messages.success(self.request, f'Absensi Modul {self.object.modul} berhasil disimpan.')
         return response
+
+    def form_invalid(self, form):
+        error_messages = []
+        for field_name, errors in form.errors.items():
+            label = 'Form'
+            if field_name != '__all__':
+                label = form.fields.get(field_name).label if form.fields.get(field_name) else field_name
+            for error in errors:
+                error_messages.append(f'{label}: {error}')
+
+        if error_messages:
+            messages.error(self.request, 'Absensi belum bisa disimpan: ' + ' | '.join(error_messages))
+
+        logger.warning(
+            'Absensi form invalid for nim=%s errors=%s post=%s files=%s',
+            getattr(self.asleb, 'nim', ''),
+            form.errors.get_json_data(),
+            {
+                key: value
+                for key, value in self.request.POST.items()
+                if key not in {'csrfmiddlewaretoken'}
+            },
+            {
+                key: {
+                    'name': uploaded_file.name,
+                    'content_type': getattr(uploaded_file, 'content_type', ''),
+                    'size': getattr(uploaded_file, 'size', 0),
+                }
+                for key, uploaded_file in self.request.FILES.items()
+            },
+        )
+        return super().form_invalid(form)
 
 
 def get_active_absensi_schedule(asleb, current_time=None):
