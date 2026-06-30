@@ -7,18 +7,19 @@ from django.urls import reverse_lazy
 from django.shortcuts import redirect
 from django.utils.text import slugify
 from django.utils.dateparse import parse_date
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_POST
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
 from apps.core.views import PostOnlyDeleteMixin
 from apps.inventaris.models import ACTIVE_PEMINJAMAN_STATUSES, Barang, PaketBarang
 from .forms import PeminjamanAlatForm
-from .models import PeminjamanAlat
-from .notifications import send_peminjaman_request_notifications
+from .models import PeminjamanAlat, PeminjamanTransaksi
+from .notifications import send_peminjaman_request_notifications, send_peminjaman_status_notification
 
 
 BORROWER_ROLES = {'mahasiswa', 'asisten_lab'}
 MANAGER_ROLES = {'admin', 'laboran'}
+BULK_STATUS_CHOICES = {'ditolak', 'dipinjam', 'dikembalikan', 'hilang', 'rusak', 'digantikan'}
 
 
 def scope_peminjaman_for_pengguna(queryset, pengguna):
@@ -111,6 +112,42 @@ def barang_options(request):
     })
 
 
+@require_POST
+def bulk_update_status(request):
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not pengguna or pengguna.role not in MANAGER_ROLES:
+        messages.warning(request, 'Anda tidak memiliki akses untuk mengubah status peminjaman.')
+        return redirect('peminjaman:peminjaman_list')
+
+    status = request.POST.get('status', '').strip()
+    transaksi_ids = [
+        value for value in request.POST.getlist('transaksi_ids')
+        if value.isdigit()
+    ]
+    if not transaksi_ids:
+        messages.error(request, 'Pilih minimal satu peminjaman terlebih dahulu.')
+        return redirect('peminjaman:peminjaman_list')
+    if status not in BULK_STATUS_CHOICES:
+        messages.error(request, 'Pilih status peminjaman yang valid.')
+        return redirect('peminjaman:peminjaman_list')
+
+    updated_count = 0
+    with transaction.atomic():
+        detail_list = list(
+            PeminjamanAlat.objects.select_for_update()
+            .select_related('transaksi')
+            .filter(transaksi_id__in=transaksi_ids)
+        )
+        for peminjaman in detail_list:
+            peminjaman.status = status
+            peminjaman.save(update_fields=['status', 'diperbarui_pada'])
+            send_peminjaman_status_notification(peminjaman)
+            updated_count += 1
+
+    messages.success(request, f'{updated_count} detail peminjaman berhasil diperbarui.')
+    return redirect('peminjaman:peminjaman_list')
+
+
 class PeminjamanAlatListView(ListView):
     model = PeminjamanAlat
     template_name = 'peminjaman/peminjaman_list.html'
@@ -143,6 +180,32 @@ class PeminjamanAlatListView(ListView):
         if status:
             queryset = queryset.filter(status=status)
 
+        if pengguna and pengguna.role in MANAGER_ROLES:
+            transaksi_ids = list(
+                queryset.exclude(transaksi__isnull=True)
+                .values_list('transaksi_id', flat=True)
+                .distinct()
+            )
+            transaksi_list = list(
+                PeminjamanTransaksi.objects.filter(pk__in=transaksi_ids)
+                .prefetch_related('detail__barang')
+                .order_by('-tanggal_pinjam', '-dibuat_pada')
+            )
+            for transaksi in transaksi_list:
+                detail_list = list(transaksi.detail.all())
+                transaksi.first_detail = detail_list[0] if detail_list else None
+                transaksi.jumlah_barang = len(detail_list)
+                transaksi.status_set = sorted({detail.status for detail in detail_list})
+                transaksi.status = transaksi.status_set[0] if len(transaksi.status_set) == 1 else 'campuran'
+                transaksi.status_display = (
+                    dict(PeminjamanAlat.STATUS_CHOICES).get(transaksi.status, 'Campuran')
+                )
+                transaksi.can_current_pengguna_edit = False
+                transaksi.can_current_pengguna_delete = (
+                    detail_list and all(detail.status == 'diajukan' for detail in detail_list)
+                )
+            return transaksi_list
+
         peminjaman_list = list(queryset)
         for peminjaman in peminjaman_list:
             peminjaman.can_current_pengguna_edit = (
@@ -166,9 +229,16 @@ class PeminjamanAlatListView(ListView):
         context['filter_tanggal_selesai'] = self.request.GET.get('tanggal_selesai', '').strip()
         context['filter_status'] = self.request.GET.get('status', '').strip()
         context['status_choices'] = PeminjamanAlat.STATUS_CHOICES
+        context['bulk_status_choices'] = [
+            choice for choice in PeminjamanAlat.STATUS_CHOICES
+            if choice[0] in BULK_STATUS_CHOICES
+        ]
         context['current_pengguna'] = getattr(self.request, 'current_pengguna', None)
         context['is_borrower'] = bool(
             context['current_pengguna'] and context['current_pengguna'].role in BORROWER_ROLES
+        )
+        context['is_manager'] = bool(
+            context['current_pengguna'] and context['current_pengguna'].role in MANAGER_ROLES
         )
         return context
 
@@ -184,6 +254,12 @@ class PeminjamanAlatDetailView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         pengguna = getattr(self.request, 'current_pengguna', None)
+        if self.object.transaksi_id:
+            context['detail_transaksi'] = list(
+                self.object.transaksi.detail.select_related('barang', 'barang__inventaris', 'barang__lokasi')
+            )
+        else:
+            context['detail_transaksi'] = [self.object]
         context['can_edit'] = bool(
             pengguna and (
                 pengguna.role in MANAGER_ROLES
@@ -252,16 +328,26 @@ class PeminjamanAlatCreateView(CreateView):
                 form.add_error('barang', 'Pilih minimal satu detail barang yang tersedia dan tidak rusak berat.')
                 return self.form_invalid(form)
 
+            transaksi = PeminjamanTransaksi.objects.create(
+                nama_peminjam=pengguna.nama_pengguna if is_borrower else form.cleaned_data['nama_peminjam'],
+                nim=pengguna.nim_nik if is_borrower else form.cleaned_data['nim'],
+                no_hp=pengguna.no_hp if is_borrower else form.cleaned_data['no_hp'],
+                tanggal_pinjam=form.cleaned_data['tanggal_pinjam'],
+                tanggal_kembali=form.cleaned_data['tanggal_kembali'],
+                catatan=form.cleaned_data['catatan'],
+            )
             for barang in selectable_barang:
                 peminjaman = PeminjamanAlat.objects.create(
+                    transaksi=transaksi,
                     barang=barang,
-                    nama_peminjam=pengguna.nama_pengguna if is_borrower else form.cleaned_data['nama_peminjam'],
-                    nim=pengguna.nim_nik if is_borrower else form.cleaned_data['nim'],
-                    no_hp=pengguna.no_hp if is_borrower else form.cleaned_data['no_hp'],
-                    tanggal_pinjam=form.cleaned_data['tanggal_pinjam'],
-                    tanggal_kembali=form.cleaned_data['tanggal_kembali'],
+                    kode_pinjam=transaksi.kode_pinjam,
+                    nama_peminjam=transaksi.nama_peminjam,
+                    nim=transaksi.nim,
+                    no_hp=transaksi.no_hp,
+                    tanggal_pinjam=transaksi.tanggal_pinjam,
+                    tanggal_kembali=transaksi.tanggal_kembali,
                     status='diajukan' if is_borrower else form.cleaned_data['status'],
-                    catatan=form.cleaned_data['catatan'],
+                    catatan=transaksi.catatan,
                     paket=paket,
                 )
                 created_peminjaman.append(peminjaman)

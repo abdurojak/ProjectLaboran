@@ -73,3 +73,40 @@ class KegiatanKalender(models.Model):
     def __str__(self):
         return self.judul
 
+
+class Notifikasi(models.Model):
+    pengguna = models.ForeignKey(
+        Pengguna,
+        on_delete=models.CASCADE,
+        related_name='notifikasi',
+    )
+    source_key = models.CharField(max_length=160)
+    judul = models.CharField(max_length=220)
+    deskripsi = models.TextField(blank=True)
+    tanggal = models.DateField()
+    waktu_label = models.CharField(max_length=80, blank=True)
+    lokasi = models.CharField(max_length=180, blank=True)
+    url = models.CharField(max_length=240, blank=True)
+    badge = models.CharField(max_length=50, blank=True)
+    icon = models.CharField(max_length=50, default='bell')
+    icon_class = models.CharField(max_length=120, default='bg-slate-100 text-slate-600')
+    source_updated_at = models.DateTimeField()
+    dibaca_pada = models.DateTimeField(blank=True, null=True)
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+    diperbarui_pada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-source_updated_at', '-id']
+        constraints = [
+            models.UniqueConstraint(fields=['pengguna', 'source_key'], name='unique_notifikasi_per_pengguna_source'),
+        ]
+        verbose_name = 'Notifikasi'
+        verbose_name_plural = 'Notifikasi'
+
+    @property
+    def is_read(self):
+        return self.dibaca_pada is not None
+
+    def __str__(self):
+        return self.judul
+

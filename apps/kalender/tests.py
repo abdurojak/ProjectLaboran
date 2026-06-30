@@ -13,7 +13,7 @@ from apps.kalender.context_processors import get_unread_notification_count, get_
 from apps.jadwal.models import JadwalPraktikum
 from apps.ruangan.models import RuanganLab
 
-from .models import KegiatanKalender
+from .models import KegiatanKalender, Notifikasi
 from .utils import get_perayaan_notifications
 
 
@@ -353,6 +353,50 @@ class KalenderViewsTests(TestCase):
         second_response = self.client.get(reverse('kalender:notifikasi_list'))
         self.assertContains(second_response, 'Status peminjaman Kamera: Dipinjam')
 
+    def test_notifikasi_disimpan_di_tabel_dan_diurutkan_terbaru(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Siti Aminah',
+            nim_nik='2201002',
+            email='siti.order@example.com',
+            password='rahasia123',
+            no_hp='081111111111',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='mahasiswa',
+        )
+        barang_lama = Barang.objects.create(nama='Kamera Lama', jumlah=1)
+        barang_baru = Barang.objects.create(nama='Kamera Baru', jumlah=1)
+        PeminjamanAlat.objects.create(
+            barang=barang_lama,
+            nama_peminjam='Siti Aminah',
+            nim=mahasiswa.nim_nik,
+            tanggal_pinjam=date.today(),
+            tanggal_kembali=date.today(),
+            status='dipinjam',
+        )
+        PeminjamanAlat.objects.create(
+            barang=barang_baru,
+            nama_peminjam='Siti Aminah',
+            nim=mahasiswa.nim_nik,
+            tanggal_pinjam=date.today(),
+            tanggal_kembali=date.today(),
+            status='rusak',
+        )
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+
+        response = self.client.get(reverse('kalender:notifikasi_list'))
+
+        self.assertGreaterEqual(Notifikasi.objects.filter(pengguna=mahasiswa).count(), 2)
+        titles = [notifikasi.judul for notifikasi in response.context['notifikasi_list']]
+        self.assertLess(
+            titles.index('Status peminjaman Kamera Baru: Rusak'),
+            titles.index('Status peminjaman Kamera Lama: Dipinjam'),
+        )
+
     def test_notifikasi_admin_menampilkan_pengajuan_peminjaman_baru(self):
         PeminjamanAlat.objects.create(
             barang=self.barang,
@@ -401,6 +445,122 @@ class KalenderViewsTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Status peminjaman Kamera: Dipinjam')
+
+    def test_notifikasi_asisten_lab_menampilkan_jadwal_praktikum_diterima(self):
+        asisten = Pengguna.objects.create(
+            nama_pengguna='Siti Asisten',
+            nim_nik='2202002',
+            email='siti.jadwal@trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081222222223',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='asisten_lab',
+            is_verified=True,
+        )
+        matkul = MataKuliahAsleb.objects.create(
+            kode='PBO_JADWAL_TEST',
+            nama='Pemrograman Berorientasi Objek',
+            dosen='Dosen Test',
+            kelas='TIF-01',
+        )
+        PendaftaranAsleb.objects.create(
+            nama='Siti Asisten',
+            nim=asisten.nim_nik,
+            no_hp=asisten.no_hp,
+            email=asisten.email,
+            program_studi='Informatika',
+            semester=4,
+            matkul=matkul,
+            status='digenerate',
+        )
+        ruangan = RuanganLab.objects.create(kode='LAB-JADWAL-NOTIF', nama='Lab Notifikasi Jadwal')
+        JadwalPraktikum.objects.create(
+            mata_kuliah=str(matkul),
+            kelas=matkul.kelas,
+            ruangan=ruangan,
+            pengampu=matkul.dosen,
+            hari='senin',
+            waktu_mulai=time(9, 0),
+            waktu_selesai=time(10, 30),
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+        session = self.client.session
+        session['pengguna_id'] = asisten.pk
+        session.save()
+
+        self.assertGreaterEqual(get_unread_notification_count(asisten), 1)
+
+        response = self.client.get(reverse('kalender:notifikasi_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Jadwal praktikum Anda diterima')
+        self.assertContains(response, 'Pemrograman Berorientasi Objek')
+        self.assertContains(response, 'Senin, 09:00-10:30')
+        self.assertContains(response, 'Lab Notifikasi Jadwal')
+
+        asisten.refresh_from_db()
+        self.assertEqual(get_unread_notification_count(asisten), 0)
+
+    def test_notifikasi_asisten_lab_menampilkan_jadwal_praktikum_ditolak(self):
+        asisten = Pengguna.objects.create(
+            nama_pengguna='Rani Asisten',
+            nim_nik='2202003',
+            email='rani.jadwal@trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081222222224',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='asisten_lab',
+            is_verified=True,
+        )
+        matkul = MataKuliahAsleb.objects.create(
+            kode='PBO_JADWAL_TOLAK_TEST',
+            nama='Pemrograman Berorientasi Objek',
+            dosen='Dosen Test',
+            kelas='TIF-02',
+        )
+        PendaftaranAsleb.objects.create(
+            nama='Rani Asisten',
+            nim=asisten.nim_nik,
+            no_hp=asisten.no_hp,
+            email=asisten.email,
+            program_studi='Informatika',
+            semester=4,
+            matkul=matkul,
+            status='digenerate',
+        )
+        ruangan = RuanganLab.objects.create(kode='LAB-JADWAL-TOLAK', nama='Lab Jadwal Ditolak')
+        JadwalPraktikum.objects.create(
+            mata_kuliah=str(matkul),
+            kelas=matkul.kelas,
+            ruangan=ruangan,
+            pengampu=matkul.dosen,
+            hari='rabu',
+            waktu_mulai=time(13, 0),
+            waktu_selesai=time(14, 30),
+            status=JadwalPraktikum.STATUS_DITOLAK,
+        )
+        session = self.client.session
+        session['pengguna_id'] = asisten.pk
+        session.save()
+
+        self.assertGreaterEqual(get_unread_notification_count(asisten), 1)
+
+        response = self.client.get(reverse('kalender:notifikasi_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Jadwal praktikum Anda ditolak')
+        self.assertContains(response, 'Pemrograman Berorientasi Objek')
+        self.assertContains(response, 'Rabu, 13:00-14:30')
+        self.assertContains(response, 'Ditolak')
+
+        asisten.refresh_from_db()
+        self.assertEqual(get_unread_notification_count(asisten), 0)
 
     def test_notifikasi_mahasiswa_menampilkan_barang_dipinjam_rusak_dan_hilang(self):
         mahasiswa = Pengguna.objects.create(
@@ -599,6 +759,50 @@ class KalenderViewsTests(TestCase):
 
         mahasiswa.refresh_from_db()
         self.assertEqual(get_unread_notification_count(mahasiswa), 0)
+
+    def test_notifikasi_aslab_menampilkan_pendaftaran_yang_sudah_digenerate(self):
+        aslab = Pengguna.objects.create(
+            nama_pengguna='Dina Maharani',
+            nim_nik='2201008',
+            email='dina-aslab@example.com',
+            password='rahasia123',
+            no_hp='081111111118',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='asisten_lab',
+        )
+        matkul = MataKuliahAsleb.objects.create(
+            kode='SDA_GENERATE_TEST',
+            nama='Struktur Data',
+            dosen='Dosen Test',
+            kelas='TIF-01',
+        )
+        PendaftaranAsleb.objects.create(
+            nama='Dina Maharani',
+            nim='2201008',
+            no_hp='081111111118',
+            email='dina-aslab@example.com',
+            program_studi='Informatika',
+            semester=4,
+            matkul=matkul,
+            status='digenerate',
+        )
+        session = self.client.session
+        session['pengguna_id'] = aslab.pk
+        session.save()
+
+        self.assertGreaterEqual(get_unread_notification_count(aslab), 1)
+
+        response = self.client.get(reverse('kalender:notifikasi_list'))
+
+        self.assertContains(response, 'Pendaftaran aslab Anda masuk Data Aslab')
+        self.assertContains(response, 'Struktur Data')
+        self.assertContains(response, 'Data Aslab')
+
+        aslab.refresh_from_db()
+        self.assertEqual(get_unread_notification_count(aslab), 0)
 
     def test_notifikasi_mahasiswa_ditampilkan_per_20_dengan_tombol_lainnya(self):
         mahasiswa = Pengguna.objects.create(

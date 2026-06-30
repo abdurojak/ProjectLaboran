@@ -6,6 +6,47 @@ from django.db import models
 from apps.inventaris.models import Barang, PaketBarang
 
 
+class PeminjamanTransaksi(models.Model):
+    kode_pinjam = models.CharField(max_length=15, unique=True, blank=True, editable=False)
+    nama_peminjam = models.CharField(max_length=150)
+    nim = models.CharField('NIM', max_length=30, blank=True)
+    no_hp = models.CharField('No HP', max_length=30, blank=True)
+    tanggal_pinjam = models.DateField()
+    tanggal_kembali = models.DateField()
+    catatan = models.TextField(blank=True)
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+    diperbarui_pada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-tanggal_pinjam', '-dibuat_pada']
+        verbose_name = 'Transaksi Peminjaman'
+        verbose_name_plural = 'Transaksi Peminjaman'
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+
+        if not self.kode_pinjam:
+            self.kode_pinjam = self.generate_kode_pinjam()
+            super().save(update_fields=['kode_pinjam'])
+
+    def generate_kode_pinjam(self):
+        tanggal_pinjam = self.tanggal_pinjam
+        if isinstance(tanggal_pinjam, str):
+            tanggal_pinjam = date.fromisoformat(tanggal_pinjam)
+
+        return f'PJM-{tanggal_pinjam:%y%m%d}-{self.id:04d}'
+
+    @property
+    def status_ringkas(self):
+        statuses = list(self.detail.values_list('status', flat=True).distinct())
+        if len(statuses) == 1:
+            return statuses[0]
+        return 'campuran'
+
+    def __str__(self):
+        return f'{self.kode_pinjam or "PJM"} - {self.nama_peminjam}'
+
+
 class PeminjamanAlat(models.Model):
     STATUS_CHOICES = [
         ('diajukan', 'Diajukan'),
@@ -17,7 +58,14 @@ class PeminjamanAlat(models.Model):
         ('digantikan', 'Digantikan'),
     ]
 
-    kode_pinjam = models.CharField(max_length=15, unique=True, blank=True, editable=False)
+    transaksi = models.ForeignKey(
+        PeminjamanTransaksi,
+        on_delete=models.CASCADE,
+        related_name='detail',
+        blank=True,
+        null=True,
+    )
+    kode_pinjam = models.CharField(max_length=15, blank=True, editable=False)
     barang = models.ForeignKey(Barang, on_delete=models.PROTECT, related_name='peminjaman')
     paket = models.ForeignKey(PaketBarang, on_delete=models.SET_NULL, related_name='peminjaman', blank=True, null=True)
     nama_peminjam = models.CharField(max_length=150)
@@ -49,11 +97,20 @@ class PeminjamanAlat(models.Model):
             raise ValidationError({'barang': 'Barang ini sedang dipinjam.'})
 
     def save(self, *args, **kwargs):
+        if not self.transaksi_id:
+            self.transaksi = PeminjamanTransaksi.objects.create(
+                kode_pinjam=self.kode_pinjam,
+                nama_peminjam=self.nama_peminjam,
+                nim=self.nim,
+                no_hp=self.no_hp,
+                tanggal_pinjam=self.tanggal_pinjam,
+                tanggal_kembali=self.tanggal_kembali,
+                catatan=self.catatan,
+            )
+            self.kode_pinjam = self.transaksi.kode_pinjam
+        else:
+            self.kode_pinjam = self.transaksi.kode_pinjam
         super().save(*args, **kwargs)
-
-        if not self.kode_pinjam:
-            self.kode_pinjam = self.generate_kode_pinjam()
-            super().save(update_fields=['kode_pinjam'])
 
     def generate_kode_pinjam(self):
         tanggal_pinjam = self.tanggal_pinjam

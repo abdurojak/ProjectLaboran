@@ -61,11 +61,32 @@
         </div>
     </form>
 
-    <div class="surface-card min-w-0 max-w-full overflow-hidden">
+    {% if is_manager %}
+    <form method="post" action="{% url 'peminjaman:peminjaman_bulk_update' %}" class="surface-card space-y-4 p-5">
+        {% csrf_token %}
+        <div class="flex flex-wrap items-end gap-3">
+            <div class="min-w-[220px] flex-1">
+                <label for="id_bulk_status">Ubah status terpilih</label>
+                <select id="id_bulk_status" name="status">
+                    <option value="">Pilih status</option>
+                    {% for value, label in bulk_status_choices %}
+                    <option value="{{ value }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn-primary gap-2 bg-amber-500 shadow-amber-500/20 hover:bg-amber-600">
+                <i data-lucide="save" class="h-4 w-4"></i>
+                <span>Simpan</span>
+            </button>
+        </div>
+    {% endif %}
+
+    <div class="{% if not is_manager %}surface-card {% endif %}min-w-0 max-w-full overflow-hidden">
         <div class="max-w-full overflow-x-auto overscroll-x-contain">
             <table class="w-full min-w-[920px]">
                 <thead class="bg-slate-50">
                     <tr>
+                        {% if is_manager %}<th class="w-12">Pilih</th>{% endif %}
                         <th>Kode Pinjam</th>
                         <th>Barang</th>
                         <th>Peminjam</th>
@@ -78,12 +99,22 @@
                 <tbody>
                     {% for peminjaman in peminjaman_list %}
                     <tr class="hover:bg-slate-50/70">
+                        {% if is_manager %}
+                        <td>
+                            <input type="checkbox" name="transaksi_ids" value="{{ peminjaman.pk }}" aria-label="Pilih {{ peminjaman.kode_pinjam }}">
+                        </td>
+                        {% endif %}
                         <td class="font-semibold text-slate-600">{{ peminjaman.kode_pinjam }}</td>
                         <td>
+                            {% if is_manager %}
+                            <div class="font-semibold text-slate-900">{{ peminjaman.jumlah_barang }} barang</div>
+                            <div class="text-xs text-slate-500">Dalam transaksi ini</div>
+                            {% else %}
                             <div class="font-semibold text-slate-900">{{ peminjaman.barang.nama }}</div>
                             <div class="text-xs text-slate-500">{{ peminjaman.barang.kode_barang }}</div>
                             {% if peminjaman.paket %}
                             <div class="mt-1 inline-flex rounded-full bg-brand-50 px-2.5 py-1 text-xs font-bold text-brand-800">{{ peminjaman.paket.nama }}</div>
+                            {% endif %}
                             {% endif %}
                         </td>
                         <td>
@@ -103,23 +134,23 @@
                                 {% elif peminjaman.status == 'digantikan' %}bg-brand-100 text-brand-800
                                 {% else %}bg-slate-100 text-slate-700{% endif %}
                                 inline-flex rounded-full px-3 py-1 text-xs font-bold">
-                                {{ peminjaman.get_status_display }}
+                                {% if is_manager %}{{ peminjaman.status_display }}{% else %}{{ peminjaman.get_status_display }}{% endif %}
                             </span>
                         </td>
                         <td>
                             <div class="flex flex-wrap gap-3 text-sm font-semibold">
-                                <a class="inline-flex items-center gap-1 text-brand-700 hover:text-brand-800" href="{% url 'peminjaman:peminjaman_detail' peminjaman.pk %}">
+                                <a class="inline-flex items-center gap-1 text-brand-700 hover:text-brand-800" href="{% if is_manager and peminjaman.first_detail %}{% url 'peminjaman:peminjaman_detail' peminjaman.first_detail.pk %}{% else %}{% url 'peminjaman:peminjaman_detail' peminjaman.pk %}{% endif %}">
                                     <i data-lucide="eye" class="h-4 w-4"></i>
                                     <span>Detail</span>
                                 </a>
-                                {% if peminjaman.can_current_pengguna_edit %}
+                                {% if not is_manager and peminjaman.can_current_pengguna_edit %}
                                 <a class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700" href="{% url 'peminjaman:peminjaman_update' peminjaman.pk %}">
                                     <i data-lucide="pencil" class="h-4 w-4"></i>
                                     <span>Edit</span>
                                 </a>
                                 {% endif %}
                                 {% if peminjaman.can_current_pengguna_delete %}
-                                <form method="post" action="{% url 'peminjaman:peminjaman_delete' peminjaman.pk %}" data-confirm-message="Yakin ingin menghapus peminjaman {{ peminjaman.nama_peminjam }}?" class="inline">
+                                <form method="post" action="{% if is_manager and peminjaman.first_detail %}{% url 'peminjaman:peminjaman_delete' peminjaman.first_detail.pk %}{% else %}{% url 'peminjaman:peminjaman_delete' peminjaman.pk %}{% endif %}" data-confirm-message="Yakin ingin menghapus peminjaman {{ peminjaman.nama_peminjam }}?" class="inline">
                                     {% csrf_token %}
                                     <button type="submit" class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700">
                                         <i data-lucide="trash-2" class="h-4 w-4"></i>
@@ -132,13 +163,16 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="7" class="py-12 text-center text-slate-500">Belum ada data peminjaman alat.</td>
+                        <td colspan="{% if is_manager %}8{% else %}7{% endif %}" class="py-12 text-center text-slate-500">Belum ada data peminjaman alat.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
+    {% if is_manager %}
+    </form>
+    {% endif %}
 
     {% if is_paginated %}
     <nav class="flex flex-wrap items-center justify-between gap-3" aria-label="Navigasi halaman peminjaman">

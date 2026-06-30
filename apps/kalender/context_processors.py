@@ -3,76 +3,59 @@ from datetime import timedelta
 from django.utils import timezone
 from django.urls import reverse
 
-from apps.peminjaman.models import PeminjamanAlat
-from apps.pendaftaran_asleb.models import PendaftaranAsleb, PengaturanPendaftaranAsleb
-
-from .models import KegiatanKalender
+from .models import KegiatanKalender, Notifikasi
+from .notifications import sync_user_notifications
 from .utils import build_manual_notification, get_perayaan_notifications
-
-
-PEMINJAMAN_NOTIFICATION_STATUSES = ['ditolak', 'dipinjam', 'dikembalikan', 'hilang', 'rusak', 'digantikan']
 
 
 def get_unread_peminjaman_notification_count(pengguna):
     if not pengguna:
         return 0
 
-    if pengguna.role in {'admin', 'laboran'}:
-        queryset = PeminjamanAlat.objects.filter(status='diajukan')
-
-        if pengguna.notifikasi_dibaca_pada:
-            queryset = queryset.filter(dibuat_pada__gt=pengguna.notifikasi_dibaca_pada)
-
-        return queryset.count()
-
-    if pengguna.role not in {'mahasiswa', 'asisten_lab'}:
-        return 0
-
-    queryset = PeminjamanAlat.objects.filter(
-        nim=pengguna.nim_nik,
-        status__in=PEMINJAMAN_NOTIFICATION_STATUSES,
-    )
-
-    if pengguna.notifikasi_dibaca_pada:
-        queryset = queryset.filter(diperbarui_pada__gt=pengguna.notifikasi_dibaca_pada)
-
-    return queryset.count()
+    sync_user_notifications(pengguna)
+    return Notifikasi.objects.filter(
+        pengguna=pengguna,
+        dibaca_pada__isnull=True,
+        source_key__startswith='peminjaman',
+    ).count()
 
 
 def get_unread_pendaftaran_asleb_acceptance_count(pengguna):
-    if not pengguna or pengguna.role != 'mahasiswa':
+    if not pengguna:
         return 0
 
-    queryset = PendaftaranAsleb.objects.filter(
-        nim=pengguna.nim_nik,
-        status='diterima',
-    )
+    sync_user_notifications(pengguna)
+    return Notifikasi.objects.filter(
+        pengguna=pengguna,
+        dibaca_pada__isnull=True,
+        source_key__startswith='pendaftaran-aslab',
+    ).count()
 
-    if pengguna.notifikasi_dibaca_pada:
-        queryset = queryset.filter(diperbarui_pada__gt=pengguna.notifikasi_dibaca_pada)
+def get_unread_jadwal_praktikum_acceptance_count(pengguna):
+    if not pengguna:
+        return 0
 
-    return queryset.count()
+    sync_user_notifications(pengguna)
+    return Notifikasi.objects.filter(
+        pengguna=pengguna,
+        dibaca_pada__isnull=True,
+        source_key__startswith='jadwal-praktikum',
+    ).count()
 
 
 def get_unread_notification_count(pengguna):
     if not pengguna:
         return 0
 
-    unread_count = get_unread_peminjaman_notification_count(pengguna)
-
-    if pengguna.role != 'mahasiswa':
-        return unread_count
-
-    unread_count += get_unread_pendaftaran_asleb_acceptance_count(pengguna)
-
-    pengaturan_pendaftaran = PengaturanPendaftaranAsleb.get_solo()
-    if (
-        not pengguna.notifikasi_dibaca_pada
-        or pengaturan_pendaftaran.diperbarui_pada > pengguna.notifikasi_dibaca_pada
-    ):
-        unread_count += 1
-
-    return unread_count
+    sync_user_notifications(pengguna)
+    return Notifikasi.objects.filter(
+        pengguna=pengguna,
+        dibaca_pada__isnull=True,
+    ).exclude(
+        source_key__startswith='kalender:',
+    ).exclude(
+        source_key__startswith='perayaan:',
+    ).count()
 
 
 def kalender_notifikasi(request):

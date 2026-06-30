@@ -207,11 +207,11 @@ class BarangListViewTests(TestCase):
         self.assertContains(response, 'Kelola Lokasi')
         self.assertContains(response, reverse('inventaris:lokasi_list'))
 
-    def test_daftar_barang_memiliki_tombol_kelola_paket(self):
+    def test_daftar_barang_menyembunyikan_tombol_kelola_paket(self):
         response = self.client.get(reverse('inventaris:barang_list'))
 
-        self.assertContains(response, 'Kelola Paket')
-        self.assertContains(response, reverse('inventaris:paket_list'))
+        self.assertNotContains(response, 'Kelola Paket')
+        self.assertNotContains(response, reverse('inventaris:paket_list'))
 
     def test_detail_inventaris_search_filters_detail_barang(self):
         response = self.client.get(

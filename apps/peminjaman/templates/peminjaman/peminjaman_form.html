@@ -21,18 +21,9 @@
             Pengajuan Anda otomatis masuk dengan status Diajukan dan menunggu persetujuan admin atau laboran.
         </div>
         {% endif %}
-        <div>
-            {{ form.paket.label_tag }}
-            <select name="{{ form.paket.html_name }}" id="{{ form.paket.id_for_label }}" data-paket-select>
-                {% for value, label in form.paket.field.choices %}
-                <option value="{{ value }}"{% if form.paket.value|stringformat:"s" == value|stringformat:"s" %} selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-            </select>
-            <p class="mt-2 text-xs text-slate-500">Opsional. Jika paket dipilih, sistem otomatis memilih detail barang sesuai isi paket dan stok tersedia.</p>
-            {% for error in form.paket.errors %}
-            <p class="mt-2 text-sm font-semibold text-rose-600">{{ error }}</p>
-            {% endfor %}
-        </div>
+        {% for error in form.paket.errors %}
+        <p class="rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{{ error }}</p>
+        {% endfor %}
         <div data-barang-manual-section>
             <label>Detail Barang</label>
             <div class="flex flex-col gap-3">
@@ -53,9 +44,6 @@
                     <i data-lucide="search" class="h-4 w-4"></i>
                     <span>Pilih Barang</span>
                 </button>
-                <p class="hidden rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800" data-paket-manual-message>
-                    Kosongkan paket untuk memilih barang manual.
-                </p>
             </div>
             {% for error in form.barang.errors %}
             <p class="mt-2 text-sm font-semibold text-rose-600">{{ error }}</p>
@@ -178,9 +166,6 @@
         const selectedInput = document.getElementById('id_selected_barang_ids');
         const selectedList = document.querySelector('[data-selected-barang-list]');
         const emptyState = document.querySelector('[data-selected-barang-empty]');
-        const paketSelect = document.querySelector('[data-paket-select]');
-        const manualSection = document.querySelector('[data-barang-manual-section]');
-        const paketManualMessage = document.querySelector('[data-paket-manual-message]');
         const optionsUrl = "{% url 'peminjaman:barang_options' %}";
         const pickerBody = document.querySelector('[data-barang-picker-body]');
         const pagePrevious = document.querySelector('[data-barang-page-prev]');
@@ -283,27 +268,6 @@
             renderSelectedBadges();
         }
 
-        function paketIsSelected() {
-            return paketSelect && paketSelect.value;
-        }
-
-        function syncPaketMode() {
-            const hasPaket = paketIsSelected();
-            if (hasPaket) {
-                clearSelectedBarang();
-                closeModal();
-            }
-
-            openButton.disabled = hasPaket;
-            openButton.classList.toggle('opacity-50', hasPaket);
-            openButton.classList.toggle('cursor-not-allowed', hasPaket);
-            manualSection.classList.toggle('opacity-70', hasPaket);
-            paketManualMessage.classList.toggle('hidden', !hasPaket);
-            selectedList.querySelectorAll('[data-selected-barang-remove]').forEach(function (button) {
-                button.disabled = hasPaket;
-            });
-        }
-
         function applyGroupQuantity(group, requestedQuantity) {
             const availableItems = groupItems.get(group) || [];
             const quantity = clampQuantity(requestedQuantity, availableItems.length);
@@ -397,10 +361,6 @@
         }
 
         function openModal() {
-            if (paketIsSelected()) {
-                syncPaketMode();
-                return;
-            }
             modal.classList.remove('hidden');
             modal.classList.add('flex');
             searchInput.focus();
@@ -492,10 +452,6 @@
         });
         pagePrevious.addEventListener('click', function () { loadOptions(currentPage - 1); });
         pageNext.addEventListener('click', function () { loadOptions(currentPage + 1); });
-        if (paketSelect) {
-            paketSelect.addEventListener('change', syncPaketMode);
-        }
-
         doneButton.addEventListener('click', function () {
             renderSelectedBadges();
             closeModal();
@@ -514,7 +470,6 @@
         });
 
         renderSelectedBadges();
-        syncPaketMode();
     });
 </script>
 {% endblock %}

@@ -459,6 +459,78 @@ class PeminjamanMahasiswaTests(TestCase):
         self.assertEqual({item.barang_id for item in peminjaman_list}, {kamera_1.pk, kamera_2.pk, tripod.pk})
         self.assertTrue(peminjaman_list.filter(status='diajukan').count(), 3)
 
+    def test_satu_submit_multi_barang_memakai_satu_kode_pinjam(self):
+        barang_kedua = Barang.objects.create(
+            nama='Kamera Tambahan',
+            kode_barang='CAM-TAMBAHAN',
+            jumlah=1,
+            lokasi=self.lokasi,
+            kondisi='baik',
+        )
+
+        response = self.client.post(reverse('peminjaman:peminjaman_create'), {
+            'selected_barang_ids': f'{self.barang.pk},{barang_kedua.pk}',
+            'tanggal_pinjam': '2026-06-21',
+            'tanggal_kembali': '2026-06-22',
+            'catatan': 'Pinjam dua barang',
+        })
+
+        self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
+        peminjaman_list = list(PeminjamanAlat.objects.filter(nim=self.mahasiswa.nim_nik).order_by('barang__kode_barang'))
+        self.assertEqual(len(peminjaman_list), 2)
+        self.assertEqual(len({peminjaman.kode_pinjam for peminjaman in peminjaman_list}), 1)
+        self.assertEqual(len({peminjaman.transaksi_id for peminjaman in peminjaman_list}), 1)
+
+        admin_session = self.client.session
+        admin = Pengguna.objects.get(nim_nik='ADM-PJM')
+        admin_session['pengguna_id'] = admin.pk
+        admin_session.save()
+        list_response = self.client.get(reverse('peminjaman:peminjaman_list'))
+
+        self.assertContains(list_response, '2 barang')
+        self.assertContains(list_response, 'Dalam transaksi ini')
+
+    def test_admin_bulk_update_status_mengubah_semua_detail_transaksi(self):
+        barang_kedua = Barang.objects.create(
+            nama='Kamera Tambahan',
+            kode_barang='CAM-BULK',
+            jumlah=1,
+            lokasi=self.lokasi,
+            kondisi='baik',
+        )
+        response = self.client.post(reverse('peminjaman:peminjaman_create'), {
+            'selected_barang_ids': f'{self.barang.pk},{barang_kedua.pk}',
+            'tanggal_pinjam': '2026-06-21',
+            'tanggal_kembali': '2026-06-22',
+            'catatan': 'Bulk status',
+        })
+        self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
+        transaksi_id = PeminjamanAlat.objects.filter(nim=self.mahasiswa.nim_nik).first().transaksi_id
+
+        admin_session = self.client.session
+        admin = Pengguna.objects.get(nim_nik='ADM-PJM')
+        admin_session['pengguna_id'] = admin.pk
+        admin_session.save()
+
+        response = self.client.post(reverse('peminjaman:peminjaman_bulk_update'), {
+            'transaksi_ids': [str(transaksi_id)],
+            'status': 'dipinjam',
+        })
+
+        self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
+        self.assertEqual(
+            set(PeminjamanAlat.objects.filter(transaksi_id=transaksi_id).values_list('status', flat=True)),
+            {'dipinjam'},
+        )
+
+    def test_mahasiswa_tidak_bisa_bulk_update_status(self):
+        response = self.client.post(reverse('peminjaman:peminjaman_bulk_update'), {
+            'transaksi_ids': ['1'],
+            'status': 'dipinjam',
+        })
+
+        self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
+
     def test_peminjaman_paket_ditolak_jika_stok_item_tidak_cukup(self):
         inventaris_kamera = InventarisBarang.objects.create(nama='Kamera Terbatas', jumlah=1)
         kamera = Barang.objects.create(inventaris=inventaris_kamera, nama='Kamera Terbatas', jumlah=1, lokasi=self.lokasi)
@@ -496,14 +568,14 @@ class PeminjamanMahasiswaTests(TestCase):
         self.assertNotContains(response, 'type="text" name="nim"')
         self.assertNotContains(response, 'type="text" name="no_hp"')
 
-    def test_form_paket_menjelaskan_barang_manual_dinonaktifkan(self):
+    def test_form_peminjaman_menyembunyikan_pilihan_paket(self):
         response = self.client.get(reverse('peminjaman:peminjaman_create'))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'data-paket-select')
         self.assertContains(response, 'data-barang-manual-section')
-        self.assertContains(response, 'data-paket-manual-message')
-        self.assertContains(response, 'Kosongkan paket untuk memilih barang manual.')
+        self.assertNotContains(response, 'data-paket-select')
+        self.assertNotContains(response, 'data-paket-manual-message')
+        self.assertNotContains(response, 'Tidak memakai paket')
 
     def test_mahasiswa_bisa_edit_atau_hapus_peminjaman_miliknya_yang_masih_diajukan(self):
         peminjaman = PeminjamanAlat.objects.create(
@@ -743,7 +815,7 @@ class PeminjamanMahasiswaTests(TestCase):
 
 
 class PeminjamanAlatModelTests(TestCase):
-    def test_kode_pinjam_dibuat_dari_tanggal_pinjam_dan_id(self):
+    def test_kode_pinjam_dibuat_dari_tanggal_pinjam_dan_id_transaksi(self):
         lokasi = Lokasi.objects.create(nama_lokasi='Gudang A')
         barang = Barang.objects.create(
             nama='Mikroskop',
@@ -760,4 +832,4 @@ class PeminjamanAlatModelTests(TestCase):
             tanggal_kembali=date(2026, 6, 23),
         )
 
-        self.assertEqual(peminjaman.kode_pinjam, f'PJM-260622-{peminjaman.id:04d}')
+        self.assertEqual(peminjaman.kode_pinjam, f'PJM-260622-{peminjaman.transaksi_id:04d}')

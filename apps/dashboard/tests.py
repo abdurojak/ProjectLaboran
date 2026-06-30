@@ -9,7 +9,7 @@ from apps.asleb.models import Asleb, HonorAsleb
 from apps.inventaris.models import Barang
 from apps.jadwal.models import JadwalPraktikum
 from apps.kalender.models import KegiatanKalender
-from apps.peminjaman.models import PeminjamanAlat
+from apps.peminjaman.models import PeminjamanAlat, PeminjamanTransaksi
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb
 from apps.pendaftaran_asleb.utils import get_public_registration_url
 from apps.pengguna.models import Pengguna
@@ -56,6 +56,40 @@ class DashboardViewTests(TestCase):
         self.assertContains(response, 'Budi')
         self.assertContains(response, 'Terima')
         self.assertContains(response, 'Tolak')
+
+    def test_dashboard_mengelompokkan_peminjaman_per_kode_transaksi(self):
+        barang_kedua = Barang.objects.create(nama='Kamera', jumlah=1)
+        transaksi = PeminjamanTransaksi.objects.create(
+            nama_peminjam='Budi',
+            nim='2201002',
+            tanggal_pinjam=timezone.localdate(),
+            tanggal_kembali=timezone.localdate(),
+        )
+        PeminjamanAlat.objects.create(
+            transaksi=transaksi,
+            barang=self.barang,
+            kode_pinjam=transaksi.kode_pinjam,
+            nama_peminjam='Budi',
+            nim='2201002',
+            tanggal_pinjam=timezone.localdate(),
+            tanggal_kembali=timezone.localdate(),
+            status='diajukan',
+        )
+        PeminjamanAlat.objects.create(
+            transaksi=transaksi,
+            barang=barang_kedua,
+            kode_pinjam=transaksi.kode_pinjam,
+            nama_peminjam='Budi',
+            nim='2201002',
+            tanggal_pinjam=timezone.localdate(),
+            tanggal_kembali=timezone.localdate(),
+            status='diajukan',
+        )
+
+        response = self.client.get(reverse('dashboard:home'))
+
+        self.assertEqual(len(response.context['peminjaman_diajukan']), 1)
+        self.assertContains(response, '2 barang dalam transaksi ini')
 
     def test_pending_peminjaman_actions_do_not_use_confirmation(self):
         PeminjamanAlat.objects.create(

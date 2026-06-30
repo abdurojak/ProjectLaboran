@@ -72,6 +72,24 @@ class DashboardView(TemplateView):
     def format_rupiah(self, value):
         return f'Rp {value:,.0f}'.replace(',', '.')
 
+    def get_grouped_peminjaman(self, queryset, limit=6):
+        grouped = []
+        seen_keys = set()
+        for peminjaman in queryset.select_related('barang', 'transaksi').order_by('-tanggal_pinjam', '-dibuat_pada'):
+            key = peminjaman.transaksi_id or peminjaman.kode_pinjam or f'row-{peminjaman.pk}'
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+            if peminjaman.transaksi_id:
+                detail_count = PeminjamanAlat.objects.filter(transaksi_id=peminjaman.transaksi_id).count()
+            else:
+                detail_count = PeminjamanAlat.objects.filter(kode_pinjam=peminjaman.kode_pinjam).count()
+            peminjaman.jumlah_barang_transaksi = detail_count
+            grouped.append(peminjaman)
+            if len(grouped) >= limit:
+                break
+        return grouped
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         pengguna = getattr(self.request, 'current_pengguna', None)
@@ -233,9 +251,9 @@ class DashboardView(TemplateView):
         context['butuh_perhatian'] = barang_qs.exclude(kondisi='baik').count()
         context['barang_terbaru'] = inventaris_qs.order_by('-dibuat_pada')[:5]
         context['peminjaman_terbaru'] = peminjaman_qs[:5]
-        context['peminjaman_diajukan'] = peminjaman_qs.filter(status='diajukan')[:6]
-        context['peminjaman_dipinjam'] = peminjaman_qs.filter(status='dipinjam')[:6]
-        context['peminjaman_perlu_diganti'] = peminjaman_qs.filter(status__in=['hilang', 'rusak'])[:6]
+        context['peminjaman_diajukan'] = self.get_grouped_peminjaman(peminjaman_qs.filter(status='diajukan'))
+        context['peminjaman_dipinjam'] = self.get_grouped_peminjaman(peminjaman_qs.filter(status='dipinjam'))
+        context['peminjaman_perlu_diganti'] = self.get_grouped_peminjaman(peminjaman_qs.filter(status__in=['hilang', 'rusak']))
         context['jadwal_diajukan'] = JadwalPraktikum.objects.select_related('ruangan').filter(
             status=JadwalPraktikum.STATUS_DIAJUKAN,
         ).order_by('hari', 'waktu_mulai')[:8]
@@ -440,22 +458,25 @@ def accept_peminjaman(request, pk):
 
     with transaction.atomic():
         peminjaman = get_object_or_404(
-            PeminjamanAlat.objects.select_for_update().select_related('barang'),
+            PeminjamanAlat.objects.select_for_update().select_related('barang', 'transaksi'),
             pk=pk,
         )
+        group = _get_peminjaman_group_for_update(peminjaman)
 
-        if peminjaman.status != 'diajukan':
+        if any(item.status != 'diajukan' for item in group):
             messages.warning(request, 'Pengajuan ini sudah diproses.')
             return redirect('dashboard:home')
 
-        barang = Barang.objects.select_for_update().get(pk=peminjaman.barang_id)
-        if barang.sedang_dipinjam:
-            messages.error(request, f'{barang.nama} sedang dipinjam.')
-            return redirect('dashboard:home')
+        for item in group:
+            barang = Barang.objects.select_for_update().get(pk=item.barang_id)
+            if barang.sedang_dipinjam:
+                messages.error(request, f'{barang.nama} sedang dipinjam.')
+                return redirect('dashboard:home')
 
-        peminjaman.status = 'dipinjam'
-        peminjaman.save(update_fields=['status', 'diperbarui_pada'])
-        send_peminjaman_status_notification(peminjaman)
+        for item in group:
+            item.status = 'dipinjam'
+            item.save(update_fields=['status', 'diperbarui_pada'])
+            send_peminjaman_status_notification(item)
         messages.success(request, 'Pengajuan peminjaman diterima.')
 
     return redirect('dashboard:home')
@@ -467,10 +488,12 @@ def reject_peminjaman(request, pk):
         messages.warning(request, 'Anda tidak memiliki akses untuk memproses peminjaman.')
         return redirect('dashboard:home')
 
-    peminjaman = get_object_or_404(PeminjamanAlat, pk=pk, status='diajukan')
-    peminjaman.status = 'ditolak'
-    peminjaman.save(update_fields=['status', 'diperbarui_pada'])
-    send_peminjaman_status_notification(peminjaman)
+    with transaction.atomic():
+        peminjaman = get_object_or_404(PeminjamanAlat.objects.select_for_update(), pk=pk, status='diajukan')
+        for item in _get_peminjaman_group_for_update(peminjaman):
+            item.status = 'ditolak'
+            item.save(update_fields=['status', 'diperbarui_pada'])
+            send_peminjaman_status_notification(item)
     messages.success(request, 'Pengajuan peminjaman ditolak dan tetap disimpan dalam riwayat.')
     return redirect('dashboard:home')
 
@@ -523,9 +546,10 @@ def _mark_borrowed_status(request, pk, status):
 
     with transaction.atomic():
         peminjaman = get_object_or_404(PeminjamanAlat.objects.select_for_update(), pk=pk, status='dipinjam')
-        peminjaman.status = status
-        peminjaman.save(update_fields=['status', 'diperbarui_pada'])
-        send_peminjaman_status_notification(peminjaman)
+        for item in _get_peminjaman_group_for_update(peminjaman).filter(status='dipinjam'):
+            item.status = status
+            item.save(update_fields=['status', 'diperbarui_pada'])
+            send_peminjaman_status_notification(item)
     return redirect('dashboard:home')
 
 
@@ -556,7 +580,15 @@ def mark_peminjaman_replaced(request, pk):
             pk=pk,
             status__in=['hilang', 'rusak'],
         )
-        peminjaman.status = 'digantikan'
-        peminjaman.save(update_fields=['status', 'diperbarui_pada'])
-        send_peminjaman_status_notification(peminjaman)
+        for item in _get_peminjaman_group_for_update(peminjaman).filter(status__in=['hilang', 'rusak']):
+            item.status = 'digantikan'
+            item.save(update_fields=['status', 'diperbarui_pada'])
+            send_peminjaman_status_notification(item)
     return redirect('dashboard:home')
+
+
+def _get_peminjaman_group_for_update(peminjaman):
+    queryset = PeminjamanAlat.objects.select_for_update().select_related('barang')
+    if peminjaman.transaksi_id:
+        return queryset.filter(transaksi_id=peminjaman.transaksi_id)
+    return queryset.filter(kode_pinjam=peminjaman.kode_pinjam)

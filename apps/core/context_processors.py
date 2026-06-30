@@ -54,13 +54,6 @@ SIDEBAR_LINKS = [
             'lokasi_delete',
         },
     },
-    {
-        'title': 'Paket',
-        'icon': 'boxes',
-        'url': 'inventaris:paket_list',
-        'namespace': 'inventaris',
-        'url_names': {'paket_list', 'paket_create', 'paket_detail', 'paket_update', 'paket_delete'},
-    },
     {'title': 'Barang Tertinggal', 'icon': 'briefcase', 'url': 'barang_tertinggal:list', 'namespace': 'barang_tertinggal'},
     {'title': 'Peminjaman Alat', 'icon': 'arrow-left-right', 'url': 'peminjaman:peminjaman_list', 'namespace': 'peminjaman'},
     {'title': 'Jadwal Praktikum', 'icon': 'calendar-clock', 'url': 'jadwal:jadwal_list', 'namespace': 'jadwal'},
