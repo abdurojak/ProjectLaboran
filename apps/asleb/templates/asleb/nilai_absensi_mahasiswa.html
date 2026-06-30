@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Nilai & Absensi {{ matkul.nama }}{% endblock %}
+{% block content %}
+<section class="min-w-0 space-y-6">
+    <div class="flex flex-wrap items-start justify-between gap-4"><div><p class="text-sm font-black uppercase tracking-[0.2em] text-brand-700">{{ matkul.kode_mk|default:matkul.kode }} · {{ matkul.kelas }}</p><h2 class="mt-2 text-3xl font-black text-slate-900">Modul {{ modul.nomor }} · {{ modul.judul }}</h2><p class="mt-2 text-sm text-slate-500">Isi absensi dan nilai seluruh mahasiswa dalam satu lembar.</p></div><a class="btn-secondary" href="{% url 'asleb:praktikum_mahasiswa_list' %}">Kembali</a></div>
+    <form method="post" class="surface-card overflow-hidden">{% csrf_token %}
+        <div class="border-b border-slate-200 p-5"><label for="id_tanggal_praktikum">Tanggal praktikum</label><input class="mt-2 max-w-xs" id="id_tanggal_praktikum" name="tanggal_praktikum" type="date" value="{{ tanggal_praktikum }}" required></div>
+        <div class="overflow-x-auto"><table class="min-w-[920px]"><thead><tr><th>NIM</th><th>Nama</th><th>Absensi</th><th>Nilai</th><th>Catatan</th></tr></thead><tbody>
+            {% for row in rows %}<tr><td class="font-bold">{{ row.peserta.nim }}</td><td>{{ row.peserta.nama }}</td><td>{{ row.form.status_absensi }}{{ row.form.status_absensi.errors }}</td><td>{{ row.form.nilai }}{{ row.form.nilai.errors }}</td><td>{{ row.form.catatan }}{{ row.form.catatan.errors }}</td></tr>
+            {% empty %}<tr><td colspan="5" class="py-12 text-center text-slate-500">Belum ada peserta aktif untuk mata kuliah ini.</td></tr>{% endfor %}
+        </tbody></table></div>
+        <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 p-5"><p class="text-sm text-slate-500">Nilai boleh dikosongkan jika belum tersedia.</p><button class="btn-primary gap-2" type="submit"><i data-lucide="save" class="h-4 w-4"></i>Simpan Semua</button></div>
+    </form>
+</section>
+{% endblock %}

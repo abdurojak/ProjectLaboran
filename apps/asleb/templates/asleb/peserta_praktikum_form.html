@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Input Peserta Praktikum{% endblock %}
+{% block content %}
+<section class="mx-auto max-w-3xl space-y-6">
+    <div><p class="text-sm font-black uppercase tracking-[0.2em] text-brand-700">Peserta Praktikum</p><h2 class="mt-2 text-3xl font-black text-slate-900">Input Mahasiswa</h2><p class="mt-2 text-sm text-slate-500">Daftar ini otomatis masuk ke seluruh modul pada mata kuliah yang dipilih.</p></div>
+    <form method="post" class="surface-card space-y-5 p-6 md:p-8">{% csrf_token %}
+        {% for field in form %}<div>{{ field.label_tag }}{{ field }}{% if field.help_text %}<p class="mt-2 text-xs text-slate-500">{{ field.help_text }}</p>{% endif %}{% for error in field.errors %}<p class="mt-2 text-sm font-bold text-rose-600">{{ error }}</p>{% endfor %}</div>{% endfor %}
+        <div class="flex flex-wrap gap-3"><button class="btn-primary gap-2" type="submit"><i data-lucide="save" class="h-4 w-4"></i>Simpan Peserta</button><a class="btn-secondary" href="{% url 'asleb:praktikum_mahasiswa_list' %}">Batal</a></div>
+    </form>
+</section>
+{% endblock %}

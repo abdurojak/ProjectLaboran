@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}Pengalaman Profil{% endblock %}
+{% block content %}
+<section class="mx-auto max-w-3xl space-y-6"><div><p class="text-sm font-black uppercase tracking-[0.2em] text-brand-700">Profil Profesional</p><h2 class="mt-2 text-3xl font-black text-slate-900">{% if object %}Edit{% else %}Tambah{% endif %} Riwayat Profil</h2><p class="mt-2 text-sm text-slate-500">Tambahkan pendidikan, pengalaman, organisasi, proyek, atau sertifikasi seperti pada LinkedIn.</p></div>
+<form method="post" class="surface-card grid gap-5 p-6 md:grid-cols-2 md:p-8">{% csrf_token %}{% for field in form %}<div class="{% if field.name == 'deskripsi' or field.name == 'kategori' %}md:col-span-2{% endif %}">{{ field.label_tag }}{{ field }}{% if field.help_text %}<p class="mt-2 text-xs text-slate-500">{{ field.help_text }}</p>{% endif %}{% for error in field.errors %}<p class="mt-2 text-sm font-bold text-rose-600">{{ error }}</p>{% endfor %}</div>{% endfor %}<div class="flex gap-3 md:col-span-2"><button class="btn-primary" type="submit">Simpan Riwayat</button><a class="btn-secondary" href="{% url 'pengguna:detail' view.profile_user.pk %}">Batal</a></div></form></section>
+{% endblock %}
