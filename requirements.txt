@@ -1,6 +1,7 @@
 Django==4.2.23
 channels==4.2.0
 daphne==4.1.2
+whitenoise==6.8.2
 mysqlclient==2.2.8
 python-dotenv==1.2.2
 Pillow==10.4.0
