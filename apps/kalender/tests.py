@@ -209,7 +209,7 @@ class KalenderViewsTests(TestCase):
         self.assertNotContains(response, 'Agenda Pribadi Pemilik')
         self.assertContains(response, 'Pengumuman Untuk Mahasiswa')
 
-    def test_jadwal_praktikum_asisten_lab_muncul_otomatis_di_kalender(self):
+    def test_jadwal_praktikum_asisten_lab_muncul_di_ringkasan_saya_saja(self):
         asisten = Pengguna.objects.create(
             nama_pengguna='Asisten SDA',
             nim_nik='2202001',
@@ -254,10 +254,11 @@ class KalenderViewsTests(TestCase):
         response = self.client.get(reverse('kalender:kegiatan_list'))
 
         event_titles = [event['title'] for event in response.context['calendar_events']]
-        self.assertIn('Praktikum Struktur Data dan Algoritma - TIF-01', event_titles)
+        self.assertNotIn('Praktikum Struktur Data dan Algoritma - TIF-01', event_titles)
+        self.assertContains(response, 'Jadwal Praktikum Saya')
         self.assertContains(response, 'Struktur Data dan Algoritma - TIF-01')
 
-    def test_jadwal_praktikum_diajukan_aslab_muncul_di_kalender_semua_role(self):
+    def test_jadwal_praktikum_tidak_muncul_sebagai_event_kalender_global(self):
         ruangan = RuanganLab.objects.create(
             nama='Lab Kalender Global',
             kode='LAB-KAL-GLOBAL',
@@ -293,11 +294,9 @@ class KalenderViewsTests(TestCase):
         response = self.client.get(reverse('kalender:kegiatan_list'))
 
         event_titles = [event['title'] for event in response.context['calendar_events']]
-        self.assertIn('Praktikum Pemrograman Web - TIF-02', event_titles)
-        self.assertContains(response, 'Jadwal Praktikum Otomatis')
-        self.assertContains(response, 'Pemrograman Web - TIF-02')
-        event = next(item for item in response.context['calendar_events'] if item['title'] == 'Praktikum Pemrograman Web - TIF-02')
-        self.assertEqual(event['backgroundColor'], '#f59e0b')
+        self.assertNotIn('Praktikum Pemrograman Web - TIF-02', event_titles)
+        self.assertNotContains(response, 'Jadwal Praktikum Otomatis')
+        self.assertNotContains(response, 'Pemrograman Web - TIF-02')
 
     def test_notifikasi_page_loads(self):
         response = self.client.get(reverse('kalender:notifikasi_list'))

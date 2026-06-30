@@ -172,14 +172,50 @@ class PeminjamanViewsTests(TestCase):
                 nama_peminjam=f'Peminjam {index}',
                 tanggal_pinjam=date(2026, 7, 1),
                 tanggal_kembali=date(2026, 7, 2),
-                status='dikembalikan',
+                status='dipinjam',
             )
 
         response = self.client.get(reverse('peminjaman:peminjaman_list'))
 
         self.assertTrue(response.context['is_paginated'])
-        self.assertEqual(len(response.context['peminjaman_list']), 25)
+        self.assertEqual(len(response.context['peminjaman_list']), 10)
         self.assertContains(response, 'Berikutnya')
+
+    def test_list_default_menyembunyikan_status_arsip_dan_semua_menampilkannya(self):
+        PeminjamanAlat.objects.create(
+            barang=self.barang_lain,
+            nama_peminjam='Riwayat Ditolak',
+            tanggal_pinjam=date(2026, 7, 1),
+            tanggal_kembali=date(2026, 7, 2),
+            status='ditolak',
+        )
+        PeminjamanAlat.objects.create(
+            barang=self.barang_tersedia_lain,
+            nama_peminjam='Riwayat Digantikan',
+            tanggal_pinjam=date(2026, 7, 1),
+            tanggal_kembali=date(2026, 7, 2),
+            status='digantikan',
+        )
+        PeminjamanAlat.objects.create(
+            barang=self.barang_rusak,
+            nama_peminjam='Riwayat Dikembalikan',
+            tanggal_pinjam=date(2026, 7, 1),
+            tanggal_kembali=date(2026, 7, 2),
+            status='dikembalikan',
+        )
+
+        default_response = self.client.get(reverse('peminjaman:peminjaman_list'))
+        semua_response = self.client.get(reverse('peminjaman:peminjaman_list'), {'semua': '1'})
+
+        self.assertNotContains(default_response, 'Riwayat Ditolak')
+        self.assertNotContains(default_response, 'Riwayat Digantikan')
+        self.assertNotContains(default_response, 'Riwayat Dikembalikan')
+        self.assertContains(default_response, 'name="semua"')
+        self.assertContains(semua_response, 'Riwayat Ditolak')
+        self.assertContains(semua_response, 'Riwayat Digantikan')
+        self.assertContains(semua_response, 'Riwayat Dikembalikan')
+        self.assertContains(semua_response, 'id="id_semua_filter"')
+        self.assertContains(semua_response, 'checked')
 
     def test_detail_page_menampilkan_foto_barang(self):
         response = self.client.get(reverse('peminjaman:peminjaman_detail', args=[self.peminjaman.pk]))
@@ -247,9 +283,13 @@ class PeminjamanViewsTests(TestCase):
         response = self.client.get(reverse('peminjaman:barang_options'))
         results = {item['kode']: item for item in response.json()['results']}
 
-        self.assertTrue(results[self.barang.kode_barang]['disabled'])
-        self.assertFalse(results[self.barang_rusak.kode_barang]['disabled'])
-        self.assertTrue(results[self.barang_rusak_berat.kode_barang]['disabled'])
+        self.assertEqual(len(results), 1)
+        self.assertFalse(results[self.barang.kode_barang]['disabled'])
+        self.assertEqual(results[self.barang.kode_barang]['group_available_count'], 3)
+        self.assertNotIn(
+            f'{self.barang_rusak_berat.kode_barang} - {self.barang_rusak_berat.nama}',
+            [item['label'] for item in results[self.barang.kode_barang]['group_available_items']],
+        )
 
     def test_endpoint_barang_options_mencari_dan_membatasi_20_item_per_halaman(self):
         for index in range(25):
@@ -267,6 +307,34 @@ class PeminjamanViewsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(payload['results']), 20)
         self.assertTrue(payload['has_next'])
+
+    def test_endpoint_barang_options_mengelompokkan_per_nama_barang(self):
+        Barang.objects.create(
+            nama='Tripod Kamera',
+            kode_barang='TRP-001',
+            jumlah=1,
+            lokasi=self.lokasi,
+            kondisi='baik',
+        )
+        Barang.objects.create(
+            nama='Tripod Kamera',
+            kode_barang='TRP-002',
+            jumlah=1,
+            lokasi=self.lokasi,
+            kondisi='baik',
+        )
+
+        response = self.client.get(reverse('peminjaman:barang_options'), {'q': 'Tripod Kamera'})
+        payload = response.json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(payload['results']), 1)
+        self.assertEqual(payload['results'][0]['nama'], 'Tripod Kamera')
+        self.assertEqual(payload['results'][0]['group_available_count'], 2)
+        self.assertEqual(
+            [item['label'] for item in payload['results'][0]['group_available_items']],
+            ['TRP-001 - Tripod Kamera', 'TRP-002 - Tripod Kamera'],
+        )
 
     def test_kondisi_barang_di_dialog_memakai_warna_teks(self):
         response = self.client.get(reverse('peminjaman:peminjaman_create'))

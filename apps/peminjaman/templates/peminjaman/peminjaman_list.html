@@ -48,6 +48,10 @@
                 <span>Menampilkan riwayat peminjaman Anda</span>
             </div>
             {% endif %}
+            <label for="id_semua_filter" class="inline-flex w-full cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 sm:w-auto">
+                <input id="id_semua_filter" name="semua" value="1" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-amber-500 focus:ring-amber-500"{% if filter_semua %} checked{% endif %}>
+                <span>Semua</span>
+            </label>
             <div class="flex w-full flex-wrap gap-3 sm:w-auto">
                 <button type="submit" class="btn-primary flex-1 gap-2 bg-amber-500 shadow-amber-500/20 hover:bg-amber-600 sm:flex-none">
                     <i data-lucide="filter" class="h-4 w-4"></i>
@@ -179,10 +183,10 @@
         <p class="text-sm font-semibold text-slate-500">Halaman {{ page_obj.number }} dari {{ paginator.num_pages }}</p>
         <div class="flex gap-2">
             {% if page_obj.has_previous %}
-            <a class="btn-secondary" href="?page={{ page_obj.previous_page_number }}&barang={{ filter_barang|urlencode }}&tanggal_mulai={{ filter_tanggal_mulai|urlencode }}&tanggal_selesai={{ filter_tanggal_selesai|urlencode }}&status={{ filter_status|urlencode }}">Sebelumnya</a>
+            <a class="btn-secondary" href="?page={{ page_obj.previous_page_number }}&barang={{ filter_barang|urlencode }}&tanggal_mulai={{ filter_tanggal_mulai|urlencode }}&tanggal_selesai={{ filter_tanggal_selesai|urlencode }}&status={{ filter_status|urlencode }}{% if filter_semua %}&semua=1{% endif %}">Sebelumnya</a>
             {% endif %}
             {% if page_obj.has_next %}
-            <a class="btn-secondary" href="?page={{ page_obj.next_page_number }}&barang={{ filter_barang|urlencode }}&tanggal_mulai={{ filter_tanggal_mulai|urlencode }}&tanggal_selesai={{ filter_tanggal_selesai|urlencode }}&status={{ filter_status|urlencode }}">Berikutnya</a>
+            <a class="btn-secondary" href="?page={{ page_obj.next_page_number }}&barang={{ filter_barang|urlencode }}&tanggal_mulai={{ filter_tanggal_mulai|urlencode }}&tanggal_selesai={{ filter_tanggal_selesai|urlencode }}&status={{ filter_status|urlencode }}{% if filter_semua %}&semua=1{% endif %}">Berikutnya</a>
             {% endif %}
         </div>
     </nav>

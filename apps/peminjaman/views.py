@@ -20,6 +20,7 @@ from .notifications import send_peminjaman_request_notifications, send_peminjama
 BORROWER_ROLES = {'mahasiswa', 'asisten_lab'}
 MANAGER_ROLES = {'admin', 'laboran'}
 BULK_STATUS_CHOICES = {'ditolak', 'dipinjam', 'dikembalikan', 'hilang', 'rusak', 'digantikan'}
+ARCHIVED_STATUS_CHOICES = {'ditolak', 'digantikan', 'dikembalikan'}
 
 
 def scope_peminjaman_for_pengguna(queryset, pengguna):
@@ -52,8 +53,6 @@ def barang_options(request):
             | Q(lokasi__nama_lokasi__icontains=keyword)
         )
 
-    page_obj = Paginator(queryset, 20).get_page(request.GET.get('page', 1))
-    results = []
     group_cache = {}
 
     def get_group_key(barang):
@@ -81,6 +80,18 @@ def barang_options(request):
         ]
         return group_cache[group_key]
 
+    representatives = []
+    seen_groups = set()
+    for barang in queryset:
+        group_key = get_group_key(barang)
+        if group_key in seen_groups:
+            continue
+        seen_groups.add(group_key)
+        representatives.append(barang)
+
+    page_obj = Paginator(representatives, 20).get_page(request.GET.get('page', 1))
+    results = []
+
     for barang in page_obj.object_list:
         photo_url = ''
         if barang.foto:
@@ -88,6 +99,7 @@ def barang_options(request):
         elif barang.inventaris_id and barang.inventaris.foto:
             photo_url = barang.inventaris.foto.url
         group_available_items = get_available_items_for_group(barang)
+        is_selectable = bool(group_available_items)
         results.append({
             'id': barang.pk,
             'kode': barang.kode_barang,
@@ -98,8 +110,8 @@ def barang_options(request):
             'lokasi': barang.lokasi.nama_lokasi if barang.lokasi_id else '-',
             'kondisi': barang.get_kondisi_display(),
             'kondisi_key': barang.kondisi,
-            'status': 'Dipinjam' if barang.is_borrowed else 'Tersedia',
-            'disabled': barang.kondisi == 'rusak_berat' or barang.is_borrowed,
+            'status': f'{len(group_available_items)} tersedia' if is_selectable else 'Tidak tersedia',
+            'disabled': not is_selectable,
             'photo_url': photo_url,
         })
 
@@ -152,7 +164,7 @@ class PeminjamanAlatListView(ListView):
     model = PeminjamanAlat
     template_name = 'peminjaman/peminjaman_list.html'
     context_object_name = 'peminjaman_list'
-    paginate_by = 25
+    paginate_by = 10
 
     def get_queryset(self):
         queryset = super().get_queryset().select_related('barang', 'paket')
@@ -160,6 +172,7 @@ class PeminjamanAlatListView(ListView):
         tanggal_mulai = self.request.GET.get('tanggal_mulai', '').strip()
         tanggal_selesai = self.request.GET.get('tanggal_selesai', '').strip()
         status = self.request.GET.get('status', '').strip()
+        tampilkan_semua = self.request.GET.get('semua') == '1'
         pengguna = getattr(self.request, 'current_pengguna', None)
         queryset = scope_peminjaman_for_pengguna(queryset, pengguna)
 
@@ -179,6 +192,9 @@ class PeminjamanAlatListView(ListView):
 
         if status:
             queryset = queryset.filter(status=status)
+
+        if not tampilkan_semua:
+            queryset = queryset.exclude(status__in=ARCHIVED_STATUS_CHOICES)
 
         if pengguna and pengguna.role in MANAGER_ROLES:
             transaksi_ids = list(
@@ -228,6 +244,7 @@ class PeminjamanAlatListView(ListView):
         context['filter_tanggal_mulai'] = self.request.GET.get('tanggal_mulai', '').strip()
         context['filter_tanggal_selesai'] = self.request.GET.get('tanggal_selesai', '').strip()
         context['filter_status'] = self.request.GET.get('status', '').strip()
+        context['filter_semua'] = self.request.GET.get('semua') == '1'
         context['status_choices'] = PeminjamanAlat.STATUS_CHOICES
         context['bulk_status_choices'] = [
             choice for choice in PeminjamanAlat.STATUS_CHOICES

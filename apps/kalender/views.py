@@ -15,16 +15,6 @@ from .notifications import sync_user_notifications
 from .utils import build_manual_notification, get_perayaan_calendar_events, get_perayaan_notifications
 
 
-DAY_TO_FULLCALENDAR = {
-    'senin': 1,
-    'selasa': 2,
-    'rabu': 3,
-    'kamis': 4,
-    'jumat': 5,
-    'sabtu': 6,
-}
-
-
 def get_visible_kegiatan_queryset(pengguna):
     queryset = KegiatanKalender.objects.select_related('dibuat_oleh')
     if not pengguna or pengguna.role in {'admin', 'laboran'}:
@@ -75,41 +65,6 @@ def get_asisten_lab_jadwal_queryset(pengguna):
     return JadwalPraktikum.objects.select_related('ruangan', 'ruangan_tambahan').filter(query).distinct()
 
 
-def get_global_jadwal_queryset():
-    return JadwalPraktikum.objects.select_related('ruangan', 'ruangan_tambahan').filter(
-        status__in=[JadwalPraktikum.STATUS_DIAJUKAN, JadwalPraktikum.STATUS_DITERIMA]
-    ).order_by('hari', 'waktu_mulai', 'mata_kuliah')
-
-
-def build_jadwal_calendar_events(jadwal_queryset):
-    events = []
-    for jadwal in jadwal_queryset:
-        day_number = DAY_TO_FULLCALENDAR.get(jadwal.hari)
-        if not day_number:
-            continue
-
-        is_pending = jadwal.status == JadwalPraktikum.STATUS_DIAJUKAN
-        end_time = jadwal.waktu_selesai or jadwal.waktu_mulai
-        events.append({
-            'title': f'Praktikum {jadwal.mata_kuliah} - {jadwal.kelas}',
-            'daysOfWeek': [day_number],
-            'startTime': jadwal.waktu_mulai.strftime('%H:%M:%S'),
-            'endTime': end_time.strftime('%H:%M:%S'),
-            'backgroundColor': '#f59e0b' if is_pending else '#0f766e',
-            'borderColor': '#d97706' if is_pending else '#0f766e',
-            'textColor': '#ffffff',
-            'extendedProps': {
-                'lokasi': jadwal.get_display_ruangan_nama() if jadwal.ruangan_id else '-',
-                'notifikasi': (
-                    'Jadwal praktikum otomatis (menunggu persetujuan)'
-                    if is_pending else
-                    'Jadwal praktikum otomatis (disetujui)'
-                ),
-            },
-        })
-    return events
-
-
 class KegiatanKalenderListView(ListView):
     model = KegiatanKalender
     template_name = 'kalender/kegiatan_list.html'
@@ -147,15 +102,12 @@ class KegiatanKalenderListView(ListView):
             )
 
         pengguna = getattr(self.request, 'current_pengguna', None)
-        jadwal_praktikum_otomatis = get_global_jadwal_queryset()
         jadwal_praktikum_saya = get_asisten_lab_jadwal_queryset(pengguna)
-        calendar_events.extend(build_jadwal_calendar_events(jadwal_praktikum_otomatis))
         calendar_events.extend(get_perayaan_calendar_events(timezone.localdate().year))
 
         context['calendar_events'] = calendar_events
         context['upcoming_kegiatan'] = context['kegiatan_list'][:5]
         context['jadwal_praktikum_saya'] = jadwal_praktikum_saya
-        context['jadwal_praktikum_otomatis'] = jadwal_praktikum_otomatis[:5]
         return context
 
 
