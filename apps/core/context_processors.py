@@ -111,14 +111,6 @@ SIDEBAR_LINKS = [
                 'roles': {'admin', 'laboran'},
             },
             {
-                'title': 'Daftar Aslab',
-                'icon': 'send',
-                'url': 'pendaftaran_asleb:pendaftaran_public',
-                'namespace': 'pendaftaran_asleb',
-                'url_names': {'pendaftaran_public', 'pendaftaran_success'},
-                'roles': {'mahasiswa', 'asisten_lab'},
-            },
-            {
                 'title': 'Rekap Honorarium',
                 'icon': 'file-chart-column',
                 'url': 'asleb:honor_list',
@@ -133,37 +125,7 @@ SIDEBAR_LINKS = [
         ],
     },
     {'title': 'Ruangan', 'icon': 'door-open', 'url': 'ruangan:ruangan_list', 'namespace': 'ruangan'},
-    {
-        'title': 'Pengaturan',
-        'icon': 'settings',
-        'namespace': 'pengaturan_group',
-        'children': [
-            {
-                'title': 'Pengguna',
-                'icon': 'user-round',
-                'url': 'pengguna:list',
-                'namespace': 'pengguna',
-                'url_names': {'list', 'create', 'detail', 'update', 'update_profile', 'verify_profile_phone', 'change_password', 'delete'},
-                'roles': {'admin', 'laboran'},
-            },
-            {
-                'title': 'Master Akademik',
-                'icon': 'graduation-cap',
-                'url': 'pengguna:master_akademik',
-                'namespace': 'pengguna',
-                'url_names': {'master_akademik', 'fakultas_create', 'fakultas_update', 'prodi_create', 'prodi_update'},
-                'roles': {'admin'},
-            },
-            {
-                'title': 'Pengaturan Sistem',
-                'icon': 'sliders-horizontal',
-                'url': 'core:settings',
-                'namespace': 'core',
-                'url_names': {'settings'},
-                'roles': {'admin', 'laboran', 'asisten_lab', 'mahasiswa'},
-            },
-        ],
-    },
+    {'title': 'Pengaturan', 'icon': 'settings', 'url': 'core:settings', 'namespace': 'core', 'url_names': {'settings'}},
 ]
 
 MAHASISWA_VISIBLE_NAMESPACES = {'core', 'dashboard', 'kalender', 'peminjaman', 'jadwal', 'ruangan'}

@@ -76,6 +76,8 @@
         const desktopQuery = window.matchMedia('(min-width: 1280px)');
         const brandShell = sidebar.querySelector('[data-sidebar-brand-shell]');
         const toggles = [desktopToggle, mobileToggle];
+        const groupSummaries = sidebar.querySelectorAll('[data-sidebar-group] > summary');
+        let isCollapsed = true;
 
         function setToggleIcon(iconName) {
             toggles.forEach(function (toggle) {
@@ -88,6 +90,7 @@
 
         function setCollapsed(collapsed) {
             const isMedium = mediumQuery.matches;
+            isCollapsed = collapsed;
 
             sidebar.classList.toggle('-translate-x-full', collapsed && !isMedium);
             sidebar.classList.toggle('translate-x-0', !collapsed || isMedium);
@@ -150,6 +153,17 @@
         }
 
         setCollapsed(!desktopQuery.matches);
+
+        groupSummaries.forEach(function (summary) {
+            summary.addEventListener('click', function (event) {
+                if (!isCollapsed) {
+                    return;
+                }
+                event.preventDefault();
+                setCollapsed(false);
+                summary.parentElement.open = true;
+            });
+        });
 
         function handleToggleClick() {
             const isExpanded = mobileToggle.getAttribute('aria-expanded') === 'true';
