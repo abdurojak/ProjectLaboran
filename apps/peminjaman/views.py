@@ -33,11 +33,17 @@ def scope_peminjaman_for_pengguna(queryset, pengguna):
     return queryset.none()
 
 
-def _get_peminjaman_group_for_update(peminjaman):
-    queryset = PeminjamanAlat.objects.select_for_update()
+def _get_peminjaman_group(peminjaman, for_update=False):
+    queryset = PeminjamanAlat.objects.all()
+    if for_update:
+        queryset = queryset.select_for_update()
     if peminjaman.transaksi_id:
         return queryset.filter(transaksi_id=peminjaman.transaksi_id)
     return queryset.filter(pk=peminjaman.pk)
+
+
+def _get_peminjaman_group_for_update(peminjaman):
+    return _get_peminjaman_group(peminjaman, for_update=True)
 
 
 @require_GET
@@ -471,9 +477,60 @@ class PeminjamanAlatUpdateView(UpdateView):
         return self.object.nim == pengguna.nim_nik and self.object.status == 'diajukan'
 
     def form_valid(self, form):
-        response = super().form_valid(form)
-        self.sync_group_metadata()
-        return response
+        with transaction.atomic():
+            selected_barang = self.get_selected_barang_for_update(form)
+            if selected_barang is None:
+                return self.form_invalid(form)
+            self.object = form.save()
+            self.sync_group_metadata()
+            self.sync_group_details(selected_barang)
+        return redirect(self.success_url)
+
+    def get_selected_barang_ids(self, form):
+        selected_ids = list(dict.fromkeys(
+            item.strip()
+            for item in form.cleaned_data.get('selected_barang_ids', '').split(',')
+            if item.strip().isdigit()
+        ))
+        if selected_ids:
+            return selected_ids
+        barang = form.cleaned_data.get('barang')
+        return [str(barang.pk)] if barang else []
+
+    def get_selected_barang_for_update(self, form):
+        selected_ids = self.get_selected_barang_ids(form)
+        if not selected_ids:
+            form.add_error('barang', 'Pilih minimal satu detail barang.')
+            return None
+
+        current_barang_ids = set(
+            _get_peminjaman_group(self.object).values_list('barang_id', flat=True)
+        )
+        active_loans = PeminjamanAlat.objects.filter(
+            barang_id=OuterRef('pk'),
+            status__in=ACTIVE_PEMINJAMAN_STATUSES,
+        ).exclude(barang_id__in=current_barang_ids)
+        barang_queryset = (
+            Barang.objects.select_for_update()
+            .select_related('inventaris', 'lokasi')
+            .annotate(is_borrowed=Exists(active_loans))
+            .filter(pk__in=selected_ids)
+        )
+        barang_by_id = {str(barang.pk): barang for barang in barang_queryset}
+        selected_barang = []
+        for selected_id in selected_ids:
+            barang = barang_by_id.get(selected_id)
+            if not barang:
+                continue
+            if barang.kondisi == 'rusak_berat' or barang.is_borrowed:
+                form.add_error('barang', f'{barang.kode_barang} tidak tersedia untuk dipinjam.')
+                return None
+            selected_barang.append(barang)
+
+        if len(selected_barang) != len(selected_ids):
+            form.add_error('barang', 'Sebagian detail barang yang dipilih tidak ditemukan.')
+            return None
+        return selected_barang
 
     def sync_group_metadata(self):
         common_fields = {
@@ -484,20 +541,65 @@ class PeminjamanAlatUpdateView(UpdateView):
             'tanggal_kembali': self.object.tanggal_kembali,
             'catatan': self.object.catatan,
         }
-        with transaction.atomic():
-            group = _get_peminjaman_group_for_update(self.object)
-            group.update(**common_fields)
-            if self.object.transaksi_id:
-                PeminjamanTransaksi.objects.filter(pk=self.object.transaksi_id).update(**common_fields)
+        group = _get_peminjaman_group_for_update(self.object)
+        group.update(**common_fields)
+        if self.object.transaksi_id:
+            PeminjamanTransaksi.objects.filter(pk=self.object.transaksi_id).update(**common_fields)
+
+    def sync_group_details(self, selected_barang):
+        group = list(_get_peminjaman_group_for_update(self.object).order_by('pk'))
+        if not group:
+            return
+
+        selected_barang_ids = {barang.pk for barang in selected_barang}
+        by_barang_id = {peminjaman.barang_id: peminjaman for peminjaman in group}
+        common_fields = {
+            'kode_pinjam': self.object.kode_pinjam,
+            'nama_peminjam': self.object.nama_peminjam,
+            'nim': self.object.nim,
+            'no_hp': self.object.no_hp,
+            'tanggal_pinjam': self.object.tanggal_pinjam,
+            'tanggal_kembali': self.object.tanggal_kembali,
+            'status': self.object.status,
+            'catatan': self.object.catatan,
+            'paket': self.object.paket,
+            'transaksi': self.object.transaksi,
+        }
+
+        PeminjamanAlat.objects.filter(pk__in=[
+            peminjaman.pk for peminjaman in group
+            if peminjaman.barang_id not in selected_barang_ids
+        ]).delete()
+
+        for barang in selected_barang:
+            peminjaman = by_barang_id.get(barang.pk)
+            if peminjaman:
+                for field, value in common_fields.items():
+                    setattr(peminjaman, field, value)
+                peminjaman.barang = barang
+                peminjaman.save()
+                continue
+
+            PeminjamanAlat.objects.create(
+                barang=barang,
+                **common_fields,
+            )
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs['current_pengguna'] = getattr(self.request, 'current_pengguna', None)
+        kwargs['current_group_barang_ids'] = list(
+            _get_peminjaman_group(self.object).values_list('barang_id', flat=True)
+        )
         return kwargs
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['current_pengguna'] = getattr(self.request, 'current_pengguna', None)
+        context['selected_barang_list'] = [
+            peminjaman.barang
+            for peminjaman in _get_peminjaman_group(self.object).select_related('barang').order_by('barang__kode_barang')
+        ]
         return context
 
 

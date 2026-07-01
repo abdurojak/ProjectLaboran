@@ -19,6 +19,7 @@ from apps.pengguna.models import Pengguna
 from .forms import (
     AbsensiAslebForm,
     AslebForm,
+    ENABLE_CAMERA_LOCATION_CAPTURE,
     HonorAslebForm,
     KonfirmasiTransferHonorForm,
     HasilPraktikumMahasiswaForm,
@@ -408,6 +409,11 @@ class AbsensiAslebCreateView(CreateView):
         kwargs['asleb'] = self.asleb
         kwargs['jadwal'] = self.jadwal
         return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['enable_camera_location_capture'] = ENABLE_CAMERA_LOCATION_CAPTURE
+        return context
 
     def form_valid(self, form):
         form.instance.asleb = self.asleb

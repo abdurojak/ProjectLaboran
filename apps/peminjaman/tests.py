@@ -660,6 +660,13 @@ class PeminjamanMahasiswaTests(TestCase):
             lokasi=self.lokasi,
             kondisi='baik',
         )
+        barang_pengganti = Barang.objects.create(
+            nama='Kamera Pengganti',
+            kode_barang='CAM-EDIT-NEW',
+            jumlah=1,
+            lokasi=self.lokasi,
+            kondisi='baik',
+        )
         response = self.client.post(reverse('peminjaman:peminjaman_create'), {
             'selected_barang_ids': f'{self.barang.pk},{barang_kedua.pk}',
             'tanggal_pinjam': '2026-06-21',
@@ -675,8 +682,17 @@ class PeminjamanMahasiswaTests(TestCase):
         admin_session['pengguna_id'] = admin.pk
         admin_session.save()
 
+        edit_page = self.client.get(reverse('peminjaman:peminjaman_update', args=[peminjaman.pk]))
+        self.assertContains(edit_page, self.barang.kode_barang)
+        self.assertContains(edit_page, barang_kedua.kode_barang)
+        self.assertContains(edit_page, f'data-selected-barang-id="{self.barang.pk}"')
+        self.assertContains(edit_page, f'data-selected-barang-id="{barang_kedua.pk}"')
+        self.assertContains(edit_page, 'value="2026-06-21"')
+        self.assertContains(edit_page, 'value="2026-06-22"')
+
         response = self.client.post(reverse('peminjaman:peminjaman_update', args=[peminjaman.pk]), {
-            'barang': str(peminjaman.barang_id),
+            'barang': str(self.barang.pk),
+            'selected_barang_ids': f'{self.barang.pk},{barang_pengganti.pk}',
             'nama_peminjam': 'Nama Baru',
             'nim': 'NIM-BARU',
             'no_hp': '089999999999',
@@ -691,6 +707,8 @@ class PeminjamanMahasiswaTests(TestCase):
         self.assertEqual(set(detail_list.values_list('nama_peminjam', flat=True)), {'Nama Baru'})
         self.assertEqual(set(detail_list.values_list('nim', flat=True)), {'NIM-BARU'})
         self.assertEqual(set(detail_list.values_list('catatan', flat=True)), {'Sesudah edit'})
+        self.assertEqual(set(detail_list.values_list('barang_id', flat=True)), {self.barang.pk, barang_pengganti.pk})
+        self.assertFalse(detail_list.filter(barang=barang_kedua).exists())
         self.assertEqual(detail_list.first().transaksi.nama_peminjam, 'Nama Baru')
 
     def test_admin_hapus_peminjaman_di_tabel_menghapus_semua_detail_transaksi(self):

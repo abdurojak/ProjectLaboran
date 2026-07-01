@@ -29,20 +29,21 @@ class PeminjamanAlatForm(forms.ModelForm):
         ]
         widgets = {
             'barang': forms.HiddenInput(),
-            'tanggal_pinjam': forms.DateInput(attrs={'type': 'date'}),
-            'tanggal_kembali': forms.DateInput(attrs={'type': 'date'}),
+            'tanggal_pinjam': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
+            'tanggal_kembali': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
             'catatan': forms.Textarea(attrs={'rows': 4}),
         }
 
     def __init__(self, *args, **kwargs):
         self.current_pengguna = kwargs.pop('current_pengguna', None)
+        self.current_group_barang_ids = set(kwargs.pop('current_group_barang_ids', []))
         super().__init__(*args, **kwargs)
         self.fields['barang'].queryset = Barang.objects.select_related('inventaris', 'lokasi')
         self.fields['paket'].queryset = PaketBarang.objects.filter(aktif=True).prefetch_related('items__inventaris')
         self.fields['barang'].label = 'Detail Barang'
         self.fields['barang'].required = False
         if self.instance.pk and self.instance.barang_id:
-            self.fields['barang'].required = True
+            self.fields['barang'].required = False
         if self.current_pengguna and self.current_pengguna.role in BORROWER_ROLES:
             self.fields['nama_peminjam'].initial = self.current_pengguna.nama_pengguna
             self.fields['nim'].initial = self.current_pengguna.nim_nik
@@ -79,7 +80,7 @@ class PeminjamanAlatForm(forms.ModelForm):
             self.add_error('barang', 'Pilih minimal satu detail barang.')
             return cleaned_data
 
-        if self.instance.pk and not barang:
+        if self.instance.pk and not barang and not selected_barang_ids:
             self.add_error('barang', 'Pilih detail barang.')
             return cleaned_data
 
@@ -87,10 +88,10 @@ class PeminjamanAlatForm(forms.ModelForm):
             return cleaned_data
 
         sedang_dipinjam = barang.sedang_dipinjam
-        if self.instance.pk and self.instance.barang_id == barang.pk:
+        if self.instance.pk and barang.pk in self.current_group_barang_ids:
             sedang_dipinjam = barang.peminjaman.exclude(pk=self.instance.pk).filter(
                 status__in=['dipinjam', 'hilang', 'rusak'],
-            ).exists()
+            ).exclude(barang_id__in=self.current_group_barang_ids).exists()
 
         if status in ['diajukan', 'dipinjam'] and sedang_dipinjam:
             self.add_error('barang', 'Detail barang ini sedang dipinjam.')

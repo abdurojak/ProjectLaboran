@@ -29,16 +29,16 @@
             <div class="flex flex-col gap-3">
                 <div class="min-h-[48px] rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
                     <div class="flex flex-wrap gap-2" data-selected-barang-list>
-                        {% if form.instance.barang_id %}
-                        <span class="inline-flex items-center gap-2 rounded-full bg-brand-50 px-3 py-1.5 text-xs font-bold text-brand-800 ring-1 ring-brand-100" data-selected-barang-badge data-selected-barang-id="{{ form.instance.barang.pk }}" data-selected-barang-label="{{ form.instance.barang.kode_barang }} - {{ form.instance.barang.nama }}">
-                            <span>{{ form.instance.barang.kode_barang }} - {{ form.instance.barang.nama }}</span>
-                            <button type="button" class="text-brand-700 hover:text-brand-900" data-selected-barang-remove aria-label="Hapus {{ form.instance.barang.kode_barang }} - {{ form.instance.barang.nama }}">
+                        {% for selected_barang in selected_barang_list %}
+                        <span class="inline-flex items-center gap-2 rounded-full bg-brand-50 px-3 py-1.5 text-xs font-bold text-brand-800 ring-1 ring-brand-100" data-selected-barang-badge data-selected-barang-id="{{ selected_barang.pk }}" data-selected-barang-label="{{ selected_barang.kode_barang }} - {{ selected_barang.nama }}">
+                            <span>{{ selected_barang.kode_barang }} - {{ selected_barang.nama }}</span>
+                            <button type="button" class="text-brand-700 hover:text-brand-900" data-selected-barang-remove aria-label="Hapus {{ selected_barang.kode_barang }} - {{ selected_barang.nama }}">
                                 <i data-lucide="x" class="h-3.5 w-3.5"></i>
                             </button>
                         </span>
-                        {% endif %}
+                        {% endfor %}
                     </div>
-                    <p class="{% if form.instance.barang_id %}hidden {% endif %}px-1 py-1 text-sm text-slate-400" data-selected-barang-empty>Belum ada detail barang dipilih.</p>
+                    <p class="{% if selected_barang_list %}hidden {% endif %}px-1 py-1 text-sm text-slate-400" data-selected-barang-empty>Belum ada detail barang dipilih.</p>
                 </div>
                 <button type="button" class="btn-secondary shrink-0 gap-2" data-barang-picker-open>
                     <i data-lucide="search" class="h-4 w-4"></i>

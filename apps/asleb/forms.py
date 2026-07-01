@@ -16,6 +16,9 @@ from .models import (
 )
 
 
+ENABLE_CAMERA_LOCATION_CAPTURE = False
+
+
 class AslebForm(forms.ModelForm):
     class Meta:
         model = Asleb
@@ -161,10 +164,13 @@ class AbsensiAslebForm(forms.ModelForm):
         if matkul:
             queryset = ModulPraktikum.objects.filter(matkul=matkul).exclude(pk__in=used_modules)
         self.fields['modul_praktikum'].queryset = queryset
-        self.fields['bukti_foto'].required = True
+        self.fields['bukti_foto'].required = ENABLE_CAMERA_LOCATION_CAPTURE
+        self.fields['bukti_video'].required = ENABLE_CAMERA_LOCATION_CAPTURE
 
     def clean_bukti_foto(self):
         photo = self.cleaned_data['bukti_foto']
+        if not photo and not ENABLE_CAMERA_LOCATION_CAPTURE:
+            return photo
         if not self._has_allowed_content_type(photo, ['image/jpeg', 'image/png']):
             raise forms.ValidationError('Bukti foto harus diambil dari kamera dalam format gambar.')
         if photo.size > 5 * 1024 * 1024:
@@ -173,6 +179,8 @@ class AbsensiAslebForm(forms.ModelForm):
 
     def clean_bukti_video(self):
         video = self.cleaned_data['bukti_video']
+        if not video and not ENABLE_CAMERA_LOCATION_CAPTURE:
+            return video
         if not self._has_allowed_content_type(video, ['video/webm', 'video/mp4']):
             raise forms.ValidationError('Bukti video harus direkam langsung dari kamera.')
         if video.size > 20 * 1024 * 1024:
@@ -202,6 +210,12 @@ class AbsensiAslebForm(forms.ModelForm):
                 'Anda sudah melakukan absensi untuk jadwal praktikum hari ini. '
                 'Perubahan jadwal tidak membuka absensi baru pada tanggal yang sama.'
             )
+
+        if not ENABLE_CAMERA_LOCATION_CAPTURE:
+            cleaned_data['latitude'] = None
+            cleaned_data['longitude'] = None
+            cleaned_data['distance_meters'] = None
+            return cleaned_data
 
         if latitude is None or longitude is None or accuracy is None:
             raise forms.ValidationError('Lokasi perangkat wajib diaktifkan untuk melakukan absensi.')
@@ -236,9 +250,9 @@ class AbsensiAslebForm(forms.ModelForm):
         instance.modul = modul.nomor
         instance.materi_praktikum = modul.judul
         instance.file_modul.name = modul.file.name
-        instance.latitude = self.cleaned_data['latitude']
-        instance.longitude = self.cleaned_data['longitude']
-        instance.jarak_lokasi_meter = self.cleaned_data['distance_meters']
+        instance.latitude = self.cleaned_data.get('latitude')
+        instance.longitude = self.cleaned_data.get('longitude')
+        instance.jarak_lokasi_meter = self.cleaned_data.get('distance_meters')
 
         if commit:
             instance.save()

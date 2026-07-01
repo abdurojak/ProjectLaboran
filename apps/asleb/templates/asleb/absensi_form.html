@@ -52,6 +52,7 @@
         </div>
         {% endif %}
         {% endfor %}
+        {% if enable_camera_location_capture %}
         <div class="rounded-2xl border border-slate-200 bg-slate-50 p-5 md:col-span-2" data-camera-capture>
             <div class="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -89,6 +90,7 @@
                 </button>
             </div>
         </div>
+        {% endif %}
         <div class="rounded-3xl bg-cyan-50 p-5 text-sm leading-7 text-cyan-900 md:col-span-2">
             Setiap absensi menambah total pertemuan pada rekap honorarium. Satu aslab hanya dapat mengisi satu kali untuk setiap modul yang disediakan laboran.
         </div>
@@ -107,6 +109,7 @@
 {% endblock %}
 
 {% block extra_script %}
+{% if enable_camera_location_capture %}
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const form = document.querySelector('[data-location-form]');
@@ -318,4 +321,5 @@
         });
     });
 </script>
+{% endif %}
 {% endblock %}

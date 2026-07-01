@@ -2,6 +2,7 @@ import base64
 import shutil
 import tempfile
 from datetime import date, datetime
+from unittest import skipUnless
 from unittest.mock import patch
 
 from django.core import mail
@@ -17,7 +18,7 @@ from apps.pengguna.models import Pengguna
 from apps.jadwal.models import JadwalPraktikum
 from apps.ruangan.models import RuanganLab
 
-from .forms import AbsensiAslebForm
+from .forms import AbsensiAslebForm, ENABLE_CAMERA_LOCATION_CAPTURE
 from .models import AbsensiAsleb, Asleb, HonorAsleb, ModulPraktikum, PengaturanAbsensiAsleb
 from .surat_honor import LAB_SIGNATURES, build_lab_signature, build_lampiran_page, build_styles
 
@@ -374,6 +375,7 @@ class AslebViewTests(TestCase):
         self.assertFalse(second_form.is_valid())
         self.assertIn('modul_praktikum', second_form.errors)
 
+    @skipUnless(ENABLE_CAMERA_LOCATION_CAPTURE, 'Validasi radius lokasi sedang dinonaktifkan sementara.')
     def test_absensi_ditolak_jika_di_luar_radius_kampus(self):
         PendaftaranAsleb.objects.create(
             nama=self.asleb.nama,
