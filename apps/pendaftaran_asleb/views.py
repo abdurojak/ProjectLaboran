@@ -86,6 +86,16 @@ class PendaftaranAslebListView(ListView):
         context['periode_form'] = PeriodeAslebForm(instance=current_period)
         context['pendaftaran_dibuka'] = is_registration_open()
         context['pengaturan_pendaftaran'] = PengaturanPendaftaranAsleb.get_solo()
+        context['share_title'] = f'Pendaftaran Asisten Laboratorium - {current_period.nama}'
+        context['share_message'] = (
+            f'PENDAFTARAN ASISTEN LABORATORIUM DIBUKA\n\n'
+            f'LabHub JTIF Universitas Trisakti membuka pendaftaran Asisten Laboratorium '
+            f'untuk periode {current_period.nama}.\n\n'
+            f'Batas pendaftaran: {current_period.pendaftaran_selesai:%d %B %Y}\n'
+            f'Persyaratan: profil lengkap, transkrip sesuai NIM, dan nilai mata kuliah minimal C.\n\n'
+            f'Daftar melalui:\n{context["public_registration_url"]}\n\n'
+            f'Silakan bagikan informasi ini kepada mahasiswa yang berminat.'
+        )
         return context
 
 
