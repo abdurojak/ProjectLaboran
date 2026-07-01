@@ -498,12 +498,22 @@ def reject_peminjaman(request, pk):
         return redirect('dashboard:home')
 
     with transaction.atomic():
-        peminjaman = get_object_or_404(PeminjamanAlat.objects.select_for_update(), pk=pk, status='diajukan')
-        for item in _get_peminjaman_group_for_update(peminjaman):
-            item.status = 'ditolak'
-            item.save(update_fields=['status', 'diperbarui_pada'])
-            send_peminjaman_status_notification(item)
-    messages.success(request, 'Pengajuan peminjaman ditolak dan tetap disimpan dalam riwayat.')
+        peminjaman = get_object_or_404(
+            PeminjamanAlat.objects.select_for_update().select_related('transaksi'),
+            pk=pk,
+            status='diajukan',
+        )
+        group = _get_peminjaman_group_for_update(peminjaman)
+        if any(item.status != 'diajukan' for item in group):
+            messages.warning(request, 'Pengajuan ini sudah diproses.')
+            return redirect('dashboard:home')
+
+        transaksi = peminjaman.transaksi
+        group.delete()
+        if transaksi and not transaksi.detail.exists():
+            transaksi.delete()
+
+    messages.success(request, 'Pengajuan peminjaman ditolak dan dihapus dari daftar.')
     return redirect('dashboard:home')
 
 

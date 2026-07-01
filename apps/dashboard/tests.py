@@ -187,7 +187,7 @@ class DashboardViewTests(TestCase):
         self.assertEqual(barang.stok_tersedia, 0)
         self.assertContains(response, 'Proyektor sedang dipinjam.')
 
-    def test_reject_pending_peminjaman_keeps_history(self):
+    def test_reject_pending_peminjaman_deletes_history(self):
         peminjaman = PeminjamanAlat.objects.create(
             barang=self.barang,
             nama_peminjam='Budi',
@@ -197,10 +197,9 @@ class DashboardViewTests(TestCase):
         )
 
         response = self.client.post(reverse('dashboard:peminjaman_reject', args=[peminjaman.pk]))
-        peminjaman.refresh_from_db()
 
         self.assertRedirects(response, reverse('dashboard:home'))
-        self.assertEqual(peminjaman.status, 'ditolak')
+        self.assertFalse(PeminjamanAlat.objects.filter(pk=peminjaman.pk).exists())
 
     def test_dashboard_shows_pending_jadwal_praktikum(self):
         ruangan = RuanganLab.objects.create(nama='Lab Dashboard', kode='LAB-DASH', kapasitas=24)

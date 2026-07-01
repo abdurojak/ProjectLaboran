@@ -6,7 +6,7 @@ from django.urls import reverse
 
 from apps.inventaris.models import Barang, InventarisBarang, Lokasi, PaketBarang, PaketBarangItem
 from apps.pengguna.models import Pengguna
-from .models import PeminjamanAlat
+from .models import PeminjamanAlat, PeminjamanTransaksi
 
 
 class PeminjamanViewsTests(TestCase):
@@ -85,6 +85,16 @@ class PeminjamanViewsTests(TestCase):
         self.assertContains(response, 'min-w-0 max-w-full space-y-6 overflow-x-hidden')
         self.assertContains(response, 'max-w-full overflow-x-auto overscroll-x-contain')
         self.assertContains(response, 'w-full min-w-[920px]')
+
+    def test_filter_peminjaman_otomatis_responsif_tanpa_tombol_filter(self):
+        response = self.client.get(reverse('peminjaman:peminjaman_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-auto-filter-form')
+        self.assertContains(response, 'grid min-w-0 gap-4 md:grid-cols-2 lg:grid-cols-4')
+        self.assertContains(response, 'Semua status')
+        self.assertContains(response, 'submitFilter()')
+        self.assertNotContains(response, '<span>Filter</span>')
 
     def test_list_page_memakai_modal_konfirmasi_hapus(self):
         self.peminjaman.status = 'diajukan'
@@ -601,6 +611,150 @@ class PeminjamanMahasiswaTests(TestCase):
             {'dipinjam'},
         )
 
+    def test_admin_bisa_mengubah_status_detail_peminjaman_dengan_checkbox(self):
+        barang_kedua = Barang.objects.create(
+            nama='Kamera Tambahan',
+            kode_barang='CAM-DETAIL',
+            jumlah=1,
+            lokasi=self.lokasi,
+            kondisi='baik',
+        )
+        response = self.client.post(reverse('peminjaman:peminjaman_create'), {
+            'selected_barang_ids': f'{self.barang.pk},{barang_kedua.pk}',
+            'tanggal_pinjam': '2026-06-21',
+            'tanggal_kembali': '2026-06-22',
+            'catatan': 'Detail status',
+        })
+        self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
+        peminjaman_satu, peminjaman_dua = PeminjamanAlat.objects.filter(
+            nim=self.mahasiswa.nim_nik,
+        ).order_by('barang__kode_barang')
+
+        admin_session = self.client.session
+        admin = Pengguna.objects.get(nim_nik='ADM-PJM')
+        admin_session['pengguna_id'] = admin.pk
+        admin_session.save()
+
+        detail_response = self.client.get(reverse('peminjaman:peminjaman_detail', args=[peminjaman_satu.pk]))
+        self.assertContains(detail_response, 'name="detail_ids"')
+        self.assertContains(detail_response, 'name="status"')
+        self.assertContains(detail_response, reverse('peminjaman:peminjaman_detail_status_update', args=[peminjaman_satu.pk]))
+        self.assertNotContains(detail_response, '<option value="ditolak">Ditolak</option>', html=True)
+
+        update_response = self.client.post(
+            reverse('peminjaman:peminjaman_detail_status_update', args=[peminjaman_satu.pk]),
+            {'detail_ids': [str(peminjaman_satu.pk)], 'status': 'dipinjam'},
+        )
+        peminjaman_satu.refresh_from_db()
+        peminjaman_dua.refresh_from_db()
+
+        self.assertRedirects(update_response, reverse('peminjaman:peminjaman_detail', args=[peminjaman_satu.pk]))
+        self.assertEqual(peminjaman_satu.status, 'dipinjam')
+        self.assertEqual(peminjaman_dua.status, 'diajukan')
+
+    def test_admin_edit_peminjaman_memperbarui_transaksi_dan_semua_detail(self):
+        barang_kedua = Barang.objects.create(
+            nama='Kamera Tambahan',
+            kode_barang='CAM-EDIT',
+            jumlah=1,
+            lokasi=self.lokasi,
+            kondisi='baik',
+        )
+        response = self.client.post(reverse('peminjaman:peminjaman_create'), {
+            'selected_barang_ids': f'{self.barang.pk},{barang_kedua.pk}',
+            'tanggal_pinjam': '2026-06-21',
+            'tanggal_kembali': '2026-06-22',
+            'catatan': 'Sebelum edit',
+        })
+        self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
+        peminjaman = PeminjamanAlat.objects.filter(nim=self.mahasiswa.nim_nik).first()
+        transaksi_id = peminjaman.transaksi_id
+
+        admin_session = self.client.session
+        admin = Pengguna.objects.get(nim_nik='ADM-PJM')
+        admin_session['pengguna_id'] = admin.pk
+        admin_session.save()
+
+        response = self.client.post(reverse('peminjaman:peminjaman_update', args=[peminjaman.pk]), {
+            'barang': str(peminjaman.barang_id),
+            'nama_peminjam': 'Nama Baru',
+            'nim': 'NIM-BARU',
+            'no_hp': '089999999999',
+            'tanggal_pinjam': '2026-06-23',
+            'tanggal_kembali': '2026-06-24',
+            'status': 'diajukan',
+            'catatan': 'Sesudah edit',
+        })
+
+        self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
+        detail_list = PeminjamanAlat.objects.filter(transaksi_id=transaksi_id)
+        self.assertEqual(set(detail_list.values_list('nama_peminjam', flat=True)), {'Nama Baru'})
+        self.assertEqual(set(detail_list.values_list('nim', flat=True)), {'NIM-BARU'})
+        self.assertEqual(set(detail_list.values_list('catatan', flat=True)), {'Sesudah edit'})
+        self.assertEqual(detail_list.first().transaksi.nama_peminjam, 'Nama Baru')
+
+    def test_admin_hapus_peminjaman_di_tabel_menghapus_semua_detail_transaksi(self):
+        barang_kedua = Barang.objects.create(
+            nama='Kamera Tambahan',
+            kode_barang='CAM-DELETE',
+            jumlah=1,
+            lokasi=self.lokasi,
+            kondisi='baik',
+        )
+        response = self.client.post(reverse('peminjaman:peminjaman_create'), {
+            'selected_barang_ids': f'{self.barang.pk},{barang_kedua.pk}',
+            'tanggal_pinjam': '2026-06-21',
+            'tanggal_kembali': '2026-06-22',
+            'catatan': 'Hapus transaksi',
+        })
+        self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
+        peminjaman = PeminjamanAlat.objects.filter(nim=self.mahasiswa.nim_nik).first()
+        transaksi_id = peminjaman.transaksi_id
+
+        admin_session = self.client.session
+        admin = Pengguna.objects.get(nim_nik='ADM-PJM')
+        admin_session['pengguna_id'] = admin.pk
+        admin_session.save()
+
+        response = self.client.post(reverse('peminjaman:peminjaman_delete', args=[peminjaman.pk]))
+
+        self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
+        self.assertFalse(PeminjamanAlat.objects.filter(transaksi_id=transaksi_id).exists())
+        self.assertFalse(PeminjamanTransaksi.objects.filter(pk=transaksi_id).exists())
+
+    def test_admin_bulk_status_tidak_menampilkan_opsi_ditolak(self):
+        admin_session = self.client.session
+        admin = Pengguna.objects.get(nim_nik='ADM-PJM')
+        admin_session['pengguna_id'] = admin.pk
+        admin_session.save()
+
+        response = self.client.get(reverse('peminjaman:peminjaman_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, '<option value="ditolak">Ditolak</option>', html=True)
+
+    def test_admin_melihat_aksi_edit_dan_hapus_pengajuan_di_tabel(self):
+        peminjaman = PeminjamanAlat.objects.create(
+            barang=self.barang,
+            nama_peminjam='Siti Aminah',
+            nim=self.mahasiswa.nim_nik,
+            no_hp=self.mahasiswa.no_hp,
+            tanggal_pinjam=date(2026, 6, 21),
+            tanggal_kembali=date(2026, 6, 22),
+            status='diajukan',
+        )
+        admin_session = self.client.session
+        admin = Pengguna.objects.get(nim_nik='ADM-PJM')
+        admin_session['pengguna_id'] = admin.pk
+        admin_session.save()
+
+        response = self.client.get(reverse('peminjaman:peminjaman_list'))
+
+        self.assertContains(response, reverse('peminjaman:peminjaman_update', args=[peminjaman.pk]))
+        self.assertContains(response, reverse('peminjaman:peminjaman_delete', args=[peminjaman.pk]))
+        self.assertContains(response, '<span>Edit</span>', html=True)
+        self.assertContains(response, '<span>Hapus</span>', html=True)
+
     def test_mahasiswa_tidak_bisa_bulk_update_status(self):
         response = self.client.post(reverse('peminjaman:peminjaman_bulk_update'), {
             'transaksi_ids': ['1'],
@@ -775,6 +929,23 @@ class PeminjamanMahasiswaTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, reverse('peminjaman:peminjaman_update', args=[peminjaman.pk]))
         self.assertNotContains(response, reverse('peminjaman:peminjaman_delete', args=[peminjaman.pk]))
+
+    def test_mahasiswa_tidak_melihat_form_ubah_status_detail_peminjaman(self):
+        peminjaman = PeminjamanAlat.objects.create(
+            barang=self.barang,
+            nama_peminjam=self.mahasiswa.nama_pengguna,
+            nim=self.mahasiswa.nim_nik,
+            no_hp=self.mahasiswa.no_hp,
+            tanggal_pinjam=date(2026, 6, 21),
+            tanggal_kembali=date(2026, 6, 22),
+            status='dipinjam',
+        )
+
+        response = self.client.get(reverse('peminjaman:peminjaman_detail', args=[peminjaman.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, reverse('peminjaman:peminjaman_detail_status_update', args=[peminjaman.pk]))
+        self.assertNotContains(response, 'name="status"')
 
     def test_mahasiswa_tidak_bisa_memproses_status_peminjaman(self):
         endpoints = [

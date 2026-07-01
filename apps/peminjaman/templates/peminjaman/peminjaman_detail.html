@@ -91,10 +91,30 @@
             <h3 class="text-xl font-bold text-slate-900">Detail Barang Dipinjam</h3>
             <p class="mt-1 text-sm text-slate-500">Semua barang yang tergabung dalam kode peminjaman ini.</p>
         </div>
+        {% if is_manager %}
+        <form method="post" action="{% url 'peminjaman:peminjaman_detail_status_update' peminjaman.pk %}" class="border-b border-slate-100 px-6 py-4">
+            {% csrf_token %}
+            <div class="flex flex-wrap items-end gap-3">
+                <div class="min-w-[220px] flex-1">
+                    <label for="id_detail_status">Ubah status detail terpilih</label>
+                    <select id="id_detail_status" name="status">
+                        <option value="">Pilih status</option>
+                        {% for value, label in detail_status_choices %}
+                        <option value="{{ value }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn-primary gap-2 bg-amber-500 shadow-amber-500/20 hover:bg-amber-600">
+                    <i data-lucide="save" class="h-4 w-4"></i>
+                    <span>Simpan</span>
+                </button>
+            </div>
+        {% endif %}
         <div class="overflow-x-auto">
             <table class="w-full min-w-[760px]">
                 <thead class="bg-slate-50">
                     <tr>
+                        {% if is_manager %}<th class="w-12">Pilih</th>{% endif %}
                         <th>Barang</th>
                         <th>Kode Barang</th>
                         <th>Lokasi</th>
@@ -104,6 +124,11 @@
                 <tbody>
                     {% for detail in detail_transaksi %}
                     <tr>
+                        {% if is_manager %}
+                        <td>
+                            <input type="checkbox" name="detail_ids" value="{{ detail.pk }}" aria-label="Pilih {{ detail.barang.kode_barang }}">
+                        </td>
+                        {% endif %}
                         <td class="font-semibold text-slate-900">{{ detail.barang.nama }}</td>
                         <td>{{ detail.barang.kode_barang }}</td>
                         <td>{% if detail.barang.lokasi %}{{ detail.barang.lokasi.nama_lokasi }}{% else %}-{% endif %}</td>
@@ -113,6 +138,9 @@
                 </tbody>
             </table>
         </div>
+        {% if is_manager %}
+        </form>
+        {% endif %}
     </div>
 </section>
 {% endblock %}

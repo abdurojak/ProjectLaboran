@@ -61,7 +61,6 @@ def send_peminjaman_status_notification(peminjaman):
     action_url = build_public_url('peminjaman:peminjaman_detail', pk=peminjaman.pk)
     status_messages = {
         'dipinjam': ('Peminjaman Alat Disetujui', 'Peminjaman disetujui', 'Pengajuan peminjaman alat Anda telah disetujui.'),
-        'ditolak': ('Peminjaman Alat Ditolak', 'Peminjaman ditolak', 'Pengajuan peminjaman alat Anda belum dapat disetujui.'),
         'dikembalikan': ('Peminjaman Alat Dikembalikan', 'Peminjaman selesai', 'Barang telah dicatat kembali ke laboratorium.'),
         'hilang': ('Status Peminjaman: Hilang', 'Barang ditandai hilang', 'Barang pada peminjaman Anda ditandai hilang dan perlu ditindaklanjuti.'),
         'rusak': ('Status Peminjaman: Rusak', 'Barang ditandai rusak', 'Barang pada peminjaman Anda ditandai rusak dan perlu ditindaklanjuti.'),

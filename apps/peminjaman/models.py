@@ -50,7 +50,6 @@ class PeminjamanTransaksi(models.Model):
 class PeminjamanAlat(models.Model):
     STATUS_CHOICES = [
         ('diajukan', 'Diajukan'),
-        ('ditolak', 'Ditolak'),
         ('dipinjam', 'Dipinjam'),
         ('dikembalikan', 'Dikembalikan'),
         ('hilang', 'Hilang'),

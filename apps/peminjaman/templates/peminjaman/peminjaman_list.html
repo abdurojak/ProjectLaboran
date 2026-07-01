@@ -16,8 +16,8 @@
         </a>
     </div>
 
-    <form method="get" class="surface-card min-w-0 max-w-full p-5">
-        <div class="grid min-w-0 gap-4 lg:grid-cols-[minmax(220px,1.3fr)_minmax(160px,0.8fr)_minmax(160px,0.8fr)_minmax(180px,0.9fr)]">
+    <form method="get" class="surface-card min-w-0 max-w-full p-5" data-auto-filter-form>
+        <div class="grid min-w-0 gap-4 md:grid-cols-2 lg:grid-cols-4">
             <div>
                 <label for="id_barang_filter">Nama barang</label>
                 <input id="id_barang_filter" name="barang" type="text" value="{{ filter_barang }}" placeholder="Cari nama atau kode barang" autocomplete="off">
@@ -39,6 +39,13 @@
                     {% endfor %}
                 </select>
             </div>
+            <div>
+                <label for="id_semua_filter">Cakupan status</label>
+                <label class="inline-flex min-h-[48px] w-full cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700">
+                    <input id="id_semua_filter" name="semua" value="1" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-amber-500 focus:ring-amber-500"{% if filter_semua %} checked{% endif %}>
+                    <span>Semua status</span>
+                </label>
+            </div>
         </div>
 
         <div class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
@@ -48,15 +55,7 @@
                 <span>Menampilkan riwayat peminjaman Anda</span>
             </div>
             {% endif %}
-            <label for="id_semua_filter" class="inline-flex w-full cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 sm:w-auto">
-                <input id="id_semua_filter" name="semua" value="1" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-amber-500 focus:ring-amber-500"{% if filter_semua %} checked{% endif %}>
-                <span>Semua</span>
-            </label>
-            <div class="flex w-full flex-wrap gap-3 sm:w-auto">
-                <button type="submit" class="btn-primary flex-1 gap-2 bg-amber-500 shadow-amber-500/20 hover:bg-amber-600 sm:flex-none">
-                    <i data-lucide="filter" class="h-4 w-4"></i>
-                    <span>Filter</span>
-                </button>
+            <div class="flex w-full flex-wrap justify-end gap-3 sm:w-auto">
                 <a class="btn-secondary flex-1 gap-2 sm:flex-none" href="{% url 'peminjaman:peminjaman_list' %}">
                     <i data-lucide="rotate-ccw" class="h-4 w-4"></i>
                     <span>Reset</span>
@@ -66,7 +65,7 @@
     </form>
 
     {% if is_manager %}
-    <form method="post" action="{% url 'peminjaman:peminjaman_bulk_update' %}" class="surface-card space-y-4 p-5">
+    <form id="peminjaman-bulk-status-form" method="post" action="{% url 'peminjaman:peminjaman_bulk_update' %}" class="surface-card space-y-4 p-5">
         {% csrf_token %}
         <div class="flex flex-wrap items-end gap-3">
             <div class="min-w-[220px] flex-1">
@@ -83,6 +82,7 @@
                 <span>Simpan</span>
             </button>
         </div>
+    </form>
     {% endif %}
 
     <div class="{% if not is_manager %}surface-card {% endif %}min-w-0 max-w-full overflow-hidden">
@@ -105,7 +105,7 @@
                     <tr class="hover:bg-slate-50/70">
                         {% if is_manager %}
                         <td>
-                            <input type="checkbox" name="transaksi_ids" value="{{ peminjaman.pk }}" aria-label="Pilih {{ peminjaman.kode_pinjam }}">
+                            <input type="checkbox" name="transaksi_ids" value="{{ peminjaman.pk }}" form="peminjaman-bulk-status-form" aria-label="Pilih {{ peminjaman.kode_pinjam }}">
                         </td>
                         {% endif %}
                         <td class="font-semibold text-slate-600">{{ peminjaman.kode_pinjam }}</td>
@@ -132,7 +132,6 @@
                             <span class="
                                 {% if peminjaman.status == 'dipinjam' %}bg-amber-100 text-amber-700
                                 {% elif peminjaman.status == 'dikembalikan' %}bg-emerald-100 text-emerald-700
-                                {% elif peminjaman.status == 'ditolak' %}bg-rose-100 text-rose-700
                                 {% elif peminjaman.status == 'hilang' %}bg-rose-100 text-rose-700
                                 {% elif peminjaman.status == 'rusak' %}bg-orange-100 text-orange-700
                                 {% elif peminjaman.status == 'digantikan' %}bg-brand-100 text-brand-800
@@ -147,8 +146,8 @@
                                     <i data-lucide="eye" class="h-4 w-4"></i>
                                     <span>Detail</span>
                                 </a>
-                                {% if not is_manager and peminjaman.can_current_pengguna_edit %}
-                                <a class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700" href="{% url 'peminjaman:peminjaman_update' peminjaman.pk %}">
+                                {% if peminjaman.can_current_pengguna_edit %}
+                                <a class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700" href="{% if is_manager and peminjaman.first_detail %}{% url 'peminjaman:peminjaman_update' peminjaman.first_detail.pk %}{% else %}{% url 'peminjaman:peminjaman_update' peminjaman.pk %}{% endif %}">
                                     <i data-lucide="pencil" class="h-4 w-4"></i>
                                     <span>Edit</span>
                                 </a>
@@ -174,9 +173,6 @@
             </table>
         </div>
     </div>
-    {% if is_manager %}
-    </form>
-    {% endif %}
 
     {% if is_paginated %}
     <nav class="flex flex-wrap items-center justify-between gap-3" aria-label="Navigasi halaman peminjaman">
@@ -196,4 +192,25 @@
 
 {% block extra_script %}
 {% include "components/confirmation_modal.html" with title="Konfirmasi Hapus Peminjaman" confirm_label="Lanjutkan" confirm_icon="arrow-right" %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.querySelector('[data-auto-filter-form]');
+        if (!form) {
+            return;
+        }
+
+        let filterTimer = null;
+        function submitFilter() {
+            window.clearTimeout(filterTimer);
+            filterTimer = window.setTimeout(function () {
+                form.requestSubmit();
+            }, 350);
+        }
+
+        form.querySelectorAll('input, select').forEach(function (field) {
+            const eventName = field.type === 'text' ? 'input' : 'change';
+            field.addEventListener(eventName, submitFilter);
+        });
+    });
+</script>
 {% endblock %}

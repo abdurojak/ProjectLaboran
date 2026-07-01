@@ -4,7 +4,7 @@ from django.db import transaction
 from django.db.models import Exists, OuterRef, Q
 from django.http import JsonResponse
 from django.urls import reverse_lazy
-from django.shortcuts import redirect
+from django.shortcuts import get_object_or_404, redirect
 from django.utils.text import slugify
 from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_GET, require_POST
@@ -19,7 +19,7 @@ from .notifications import send_peminjaman_request_notifications, send_peminjama
 
 BORROWER_ROLES = {'mahasiswa', 'asisten_lab'}
 MANAGER_ROLES = {'admin', 'laboran'}
-BULK_STATUS_CHOICES = {'ditolak', 'dipinjam', 'dikembalikan', 'hilang', 'rusak', 'digantikan'}
+BULK_STATUS_CHOICES = {'dipinjam', 'dikembalikan', 'hilang', 'rusak', 'digantikan'}
 ARCHIVED_STATUS_CHOICES = {'ditolak', 'digantikan', 'dikembalikan'}
 
 
@@ -31,6 +31,13 @@ def scope_peminjaman_for_pengguna(queryset, pengguna):
     if pengguna.role in BORROWER_ROLES:
         return queryset.filter(nim=pengguna.nim_nik)
     return queryset.none()
+
+
+def _get_peminjaman_group_for_update(peminjaman):
+    queryset = PeminjamanAlat.objects.select_for_update()
+    if peminjaman.transaksi_id:
+        return queryset.filter(transaksi_id=peminjaman.transaksi_id)
+    return queryset.filter(pk=peminjaman.pk)
 
 
 @require_GET
@@ -160,6 +167,39 @@ def bulk_update_status(request):
     return redirect('peminjaman:peminjaman_list')
 
 
+@require_POST
+def update_detail_status(request, pk):
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not pengguna or pengguna.role not in MANAGER_ROLES:
+        messages.warning(request, 'Anda tidak memiliki akses untuk mengubah status peminjaman.')
+        return redirect('peminjaman:peminjaman_list')
+
+    status = request.POST.get('status', '').strip()
+    detail_ids = [
+        value for value in request.POST.getlist('detail_ids')
+        if value.isdigit()
+    ]
+    if not detail_ids:
+        messages.error(request, 'Pilih minimal satu detail barang terlebih dahulu.')
+        return redirect('peminjaman:peminjaman_detail', pk=pk)
+    if status not in BULK_STATUS_CHOICES:
+        messages.error(request, 'Pilih status peminjaman yang valid.')
+        return redirect('peminjaman:peminjaman_detail', pk=pk)
+
+    updated_count = 0
+    with transaction.atomic():
+        anchor = get_object_or_404(PeminjamanAlat.objects.select_for_update(), pk=pk)
+        detail_queryset = _get_peminjaman_group_for_update(anchor).filter(pk__in=detail_ids)
+        for peminjaman in detail_queryset:
+            peminjaman.status = status
+            peminjaman.save(update_fields=['status', 'diperbarui_pada'])
+            send_peminjaman_status_notification(peminjaman)
+            updated_count += 1
+
+    messages.success(request, f'{updated_count} detail peminjaman berhasil diperbarui.')
+    return redirect('peminjaman:peminjaman_detail', pk=pk)
+
+
 class PeminjamanAlatListView(ListView):
     model = PeminjamanAlat
     template_name = 'peminjaman/peminjaman_list.html'
@@ -216,7 +256,9 @@ class PeminjamanAlatListView(ListView):
                 transaksi.status_display = (
                     dict(PeminjamanAlat.STATUS_CHOICES).get(transaksi.status, 'Campuran')
                 )
-                transaksi.can_current_pengguna_edit = False
+                transaksi.can_current_pengguna_edit = (
+                    detail_list and all(detail.status == 'diajukan' for detail in detail_list)
+                )
                 transaksi.can_current_pengguna_delete = (
                     detail_list and all(detail.status == 'diajukan' for detail in detail_list)
                 )
@@ -245,7 +287,10 @@ class PeminjamanAlatListView(ListView):
         context['filter_tanggal_selesai'] = self.request.GET.get('tanggal_selesai', '').strip()
         context['filter_status'] = self.request.GET.get('status', '').strip()
         context['filter_semua'] = self.request.GET.get('semua') == '1'
-        context['status_choices'] = PeminjamanAlat.STATUS_CHOICES
+        context['status_choices'] = [
+            choice for choice in PeminjamanAlat.STATUS_CHOICES
+            if choice[0] != 'ditolak'
+        ]
         context['bulk_status_choices'] = [
             choice for choice in PeminjamanAlat.STATUS_CHOICES
             if choice[0] in BULK_STATUS_CHOICES
@@ -288,6 +333,11 @@ class PeminjamanAlatDetailView(DetailView):
             and self.object.status == 'diajukan'
             and (pengguna.role in MANAGER_ROLES or self.object.nim == pengguna.nim_nik)
         )
+        context['is_manager'] = bool(pengguna and pengguna.role in MANAGER_ROLES)
+        context['detail_status_choices'] = [
+            choice for choice in PeminjamanAlat.STATUS_CHOICES
+            if choice[0] in BULK_STATUS_CHOICES
+        ]
         return context
 
 
@@ -420,6 +470,26 @@ class PeminjamanAlatUpdateView(UpdateView):
     def mahasiswa_can_change(self, pengguna):
         return self.object.nim == pengguna.nim_nik and self.object.status == 'diajukan'
 
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        self.sync_group_metadata()
+        return response
+
+    def sync_group_metadata(self):
+        common_fields = {
+            'nama_peminjam': self.object.nama_peminjam,
+            'nim': self.object.nim,
+            'no_hp': self.object.no_hp,
+            'tanggal_pinjam': self.object.tanggal_pinjam,
+            'tanggal_kembali': self.object.tanggal_kembali,
+            'catatan': self.object.catatan,
+        }
+        with transaction.atomic():
+            group = _get_peminjaman_group_for_update(self.object)
+            group.update(**common_fields)
+            if self.object.transaksi_id:
+                PeminjamanTransaksi.objects.filter(pk=self.object.transaksi_id).update(**common_fields)
+
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs['current_pengguna'] = getattr(self.request, 'current_pengguna', None)
@@ -451,4 +521,12 @@ class PeminjamanAlatDeleteView(PostOnlyDeleteMixin, DeleteView):
 
     def mahasiswa_can_change(self, pengguna):
         return self.object.nim == pengguna.nim_nik and self.object.status == 'diajukan'
+
+    def form_valid(self, form):
+        transaksi = self.object.transaksi
+        with transaction.atomic():
+            _get_peminjaman_group_for_update(self.object).delete()
+            if transaksi and not transaksi.detail.exists():
+                transaksi.delete()
+        return redirect(self.success_url)
 
