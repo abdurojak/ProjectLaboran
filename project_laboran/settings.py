@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'apps.pendaftaran_asleb',
     'apps.pengguna',
     'apps.ruangan',
+    'apps.surat',
 ]
 
 WHITENOISE_INSTALLED = find_spec('whitenoise') is not None
