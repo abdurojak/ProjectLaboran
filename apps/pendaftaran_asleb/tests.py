@@ -54,7 +54,14 @@ class PendaftaranAslebViewTests(TestCase):
         session['pengguna_id'] = pengguna.pk
         session.save()
 
-        self.matkul = MataKuliahAsleb.objects.get(kode='SDA_TIF01_ABDUL')
+        self.matkul, _ = MataKuliahAsleb.objects.get_or_create(
+            kode='SDA_TIF01_ABDUL',
+            defaults={
+                'nama': 'Struktur Data dan Algoritma',
+                'dosen': 'Abdul Rois',
+                'kelas': 'TIF-01',
+            },
+        )
         self.pendaftaran = PendaftaranAsleb.objects.create(
             nama='Rizki Pratama',
             nim='2401001',
@@ -75,6 +82,10 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertContains(response, 'Status: Ditutup')
         self.assertContains(response, 'Buka Pendaftaran')
         self.assertContains(response, get_public_registration_url())
+        self.assertContains(response, 'Bagikan Pendaftaran')
+        self.assertContains(response, 'WhatsApp')
+        self.assertContains(response, 'Telegram')
+        self.assertContains(response, 'Salin Pesan')
 
     def test_toggle_pendaftaran_membuka_dan_menutup_form(self):
         Pengguna.objects.create(
@@ -581,6 +592,12 @@ def make_signature_data():
 
 
 class PeriodeAslebTests(TestCase):
+    def setUp(self):
+        MataKuliahAsleb.objects.get_or_create(
+            kode='PERIODE_TEST',
+            defaults={'nama': 'Matkul Periode', 'dosen': 'Dosen Test', 'kelas': 'TIF-01'},
+        )
+
     def test_periode_otomatis_dibagi_dua_dalam_setahun(self):
         first = PeriodeAsleb.get_for_date(date(2026, 3, 10))
         second = PeriodeAsleb.get_for_date(date(2026, 9, 10))
