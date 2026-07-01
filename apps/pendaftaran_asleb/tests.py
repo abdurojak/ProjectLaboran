@@ -37,6 +37,7 @@ class PendaftaranAslebViewTests(TestCase):
         super().tearDownClass()
 
     def setUp(self):
+        PengaturanPendaftaranAsleb.objects.update_or_create(pk=1, defaults={'dibuka': False})
         pengguna = Pengguna.objects.create(
             nama_pengguna='Lab Admin',
             nim_nik='ADM-PENDAFTARAN',
