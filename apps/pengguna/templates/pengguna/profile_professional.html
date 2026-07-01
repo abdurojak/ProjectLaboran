@@ -1,7 +1,7 @@
 <section class="mx-auto max-w-5xl space-y-5">
     <article class="surface-card overflow-hidden">
         <div class="relative h-40 overflow-hidden bg-gradient-to-br from-brand-950 via-brand-800 to-cyan-600 md:h-52">
-            {% if pengguna.background_image %}<img src="{{ pengguna.background_image.url }}" alt="Cover {{ pengguna.nama_pengguna }}" class="h-full w-full object-cover">{% else %}<div class="absolute inset-0 opacity-25" style="background-image:radial-gradient(circle at 20% 20%,white 0 2px,transparent 3px),radial-gradient(circle at 80% 40%,white 0 1px,transparent 2px);background-size:42px 42px,28px 28px"></div><div class="absolute -bottom-20 right-10 h-52 w-52 rounded-full bg-cyan-300/20 blur-2xl"></div>{% endif %}
+            {% if pengguna.cover_image %}<img src="{{ pengguna.cover_image.url }}" alt="Cover {{ pengguna.nama_pengguna }}" class="h-full w-full object-cover">{% else %}<div class="absolute inset-0 opacity-25" style="background-image:radial-gradient(circle at 20% 20%,white 0 2px,transparent 3px),radial-gradient(circle at 80% 40%,white 0 1px,transparent 2px);background-size:42px 42px,28px 28px"></div><div class="absolute -bottom-20 right-10 h-52 w-52 rounded-full bg-cyan-300/20 blur-2xl"></div>{% endif %}
             <button type="button" data-profile-modal-open class="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-slate-950/30 text-white backdrop-blur transition hover:bg-slate-950/50" title="Edit profil"><i data-lucide="pencil" class="h-4 w-4"></i></button>
         </div>
 
