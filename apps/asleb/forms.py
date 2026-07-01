@@ -147,7 +147,7 @@ class AbsensiAslebForm(forms.ModelForm):
         ]
         widgets = {
             'pekerjaan': forms.Textarea(attrs={'rows': 4}),
-            'bukti_foto': forms.FileInput(attrs={'class': 'hidden', 'accept': 'image/jpeg'}),
+            'bukti_foto': forms.FileInput(attrs={'class': 'hidden', 'accept': 'image/jpeg,image/png'}),
             'bukti_video': forms.FileInput(attrs={'class': 'hidden', 'accept': 'video/webm,video/mp4'}),
         }
 
@@ -164,13 +164,16 @@ class AbsensiAslebForm(forms.ModelForm):
         if matkul:
             queryset = ModulPraktikum.objects.filter(matkul=matkul).exclude(pk__in=used_modules)
         self.fields['modul_praktikum'].queryset = queryset
-        self.fields['bukti_foto'].required = ENABLE_CAMERA_LOCATION_CAPTURE
-        self.fields['bukti_video'].required = ENABLE_CAMERA_LOCATION_CAPTURE
+        self.fields['bukti_foto'].required = True
+        self.fields['bukti_video'].required = True
+        if not ENABLE_CAMERA_LOCATION_CAPTURE:
+            self.fields['bukti_foto'].label = 'Upload Bukti Foto'
+            self.fields['bukti_foto'].help_text = 'Upload foto bukti praktikum.'
+            self.fields['bukti_video'].label = 'Upload Bukti Video'
+            self.fields['bukti_video'].help_text = 'Upload video bukti praktikum.'
 
     def clean_bukti_foto(self):
         photo = self.cleaned_data['bukti_foto']
-        if not photo and not ENABLE_CAMERA_LOCATION_CAPTURE:
-            return photo
         if not self._has_allowed_content_type(photo, ['image/jpeg', 'image/png']):
             raise forms.ValidationError('Bukti foto harus diambil dari kamera dalam format gambar.')
         if photo.size > 5 * 1024 * 1024:
@@ -179,8 +182,6 @@ class AbsensiAslebForm(forms.ModelForm):
 
     def clean_bukti_video(self):
         video = self.cleaned_data['bukti_video']
-        if not video and not ENABLE_CAMERA_LOCATION_CAPTURE:
-            return video
         if not self._has_allowed_content_type(video, ['video/webm', 'video/mp4']):
             raise forms.ValidationError('Bukti video harus direkam langsung dari kamera.')
         if video.size > 20 * 1024 * 1024:

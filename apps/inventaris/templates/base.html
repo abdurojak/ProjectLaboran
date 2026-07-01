@@ -125,6 +125,17 @@
             --field-bg: #ffffff;
             --field-text: #334155;
             --sidebar-bg: rgba(255, 255, 255, 0.98);
+            --sidebar-text: #334155;
+            --sidebar-muted: #64748b;
+            --sidebar-icon-bg: #f1f5f9;
+            --sidebar-icon-text: #0f766e;
+            --sidebar-hover-bg: rgba(32, 164, 171, 0.10);
+            --sidebar-hover-text: #0f172a;
+            --sidebar-active-bg: rgba(20, 184, 166, 0.16);
+            --sidebar-active-border: rgba(20, 184, 166, 0.36);
+            --sidebar-active-text: #0f766e;
+            --sidebar-active-icon-bg: rgba(20, 184, 166, 0.18);
+            --sidebar-active-icon-text: #0f766e;
             --shadow-soft-theme: none;
             --hover-bg: rgba(32, 164, 171, 0.10);
             --hover-border: rgba(32, 164, 171, 0.38);
@@ -146,6 +157,17 @@
             --field-bg: rgba(15, 23, 42, 0.92);
             --field-text: #e2e8f0;
             --sidebar-bg: rgba(15, 23, 42, 0.96);
+            --sidebar-text: #cbd5e1;
+            --sidebar-muted: #94a3b8;
+            --sidebar-icon-bg: rgba(30, 41, 59, 0.82);
+            --sidebar-icon-text: #67e8f9;
+            --sidebar-hover-bg: rgba(45, 212, 191, 0.12);
+            --sidebar-hover-text: #f8fafc;
+            --sidebar-active-bg: rgba(20, 184, 166, 0.22);
+            --sidebar-active-border: rgba(94, 234, 212, 0.42);
+            --sidebar-active-text: #ccfbf1;
+            --sidebar-active-icon-bg: rgba(20, 184, 166, 0.24);
+            --sidebar-active-icon-text: #99f6e4;
             --shadow-soft-theme: none;
             --hover-bg: rgba(45, 212, 191, 0.12);
             --hover-border: rgba(45, 212, 191, 0.36);
@@ -309,6 +331,40 @@
             color: var(--text-main) !important;
         }
 
+        #dashboard-sidebar [data-sidebar-link],
+        #dashboard-sidebar [data-sidebar-summary] {
+            color: var(--sidebar-text) !important;
+            border: 1px solid transparent;
+        }
+
+        #dashboard-sidebar [data-sidebar-link][data-active="true"],
+        #dashboard-sidebar [data-sidebar-summary][data-active="true"],
+        #dashboard-sidebar [data-sidebar-child][data-active="true"] {
+            background-color: var(--sidebar-active-bg) !important;
+            border-color: var(--sidebar-active-border) !important;
+            color: var(--sidebar-active-text) !important;
+        }
+
+        #dashboard-sidebar [data-sidebar-child] {
+            color: var(--sidebar-muted) !important;
+            border: 1px solid transparent;
+        }
+
+        #dashboard-sidebar [data-sidebar-icon] {
+            background-color: var(--sidebar-icon-bg) !important;
+            color: var(--sidebar-icon-text) !important;
+        }
+
+        #dashboard-sidebar [data-active="true"] [data-sidebar-icon] {
+            background-color: var(--sidebar-active-icon-bg) !important;
+            color: var(--sidebar-active-icon-text) !important;
+        }
+
+        #dashboard-sidebar [data-sidebar-profile] {
+            background: linear-gradient(180deg, var(--surface-bg), var(--surface-muted)) !important;
+            border-color: var(--border-color) !important;
+        }
+
         html[data-theme="dark"] table,
         html[data-theme="dark"] tbody,
         html[data-theme="dark"] thead {
@@ -359,21 +415,23 @@
             }
 
             #dashboard-sidebar a:hover,
+            #dashboard-sidebar summary:hover,
             [data-profile-menu] a:hover,
             [data-profile-menu] button:hover {
                 transform: translateX(3px);
-                border-color: var(--hover-border) !important;
-                background-color: var(--hover-bg) !important;
-                color: var(--text-main) !important;
+                border-color: var(--sidebar-active-border) !important;
+                background-color: var(--sidebar-hover-bg) !important;
+                color: var(--sidebar-hover-text) !important;
             }
 
-            #dashboard-sidebar a:hover span:first-child,
+            #dashboard-sidebar a:hover [data-sidebar-icon],
+            #dashboard-sidebar summary:hover [data-sidebar-icon],
             [data-profile-menu] a:hover i,
             [data-profile-menu] button:hover i {
                 transform: scale(1.06);
             }
 
-            #dashboard-sidebar a span:first-child,
+            #dashboard-sidebar [data-sidebar-icon],
             [data-profile-menu] i {
                 transition: transform 180ms ease;
             }

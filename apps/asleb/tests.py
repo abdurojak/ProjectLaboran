@@ -120,16 +120,57 @@ class AslebViewTests(TestCase):
             'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
         )
         return SimpleUploadedFile(name, image, content_type='image/png')
-        fixed_now = timezone.make_aware(datetime(2026, 6, 29, 10, 0))
-        self.create_active_schedule()
 
-        with patch('apps.asleb.views.timezone.localtime', return_value=fixed_now):
-            response = self.client.get(reverse('asleb:absensi_create'))
+    def test_form_absensi_menyediakan_upload_bukti_foto_dan_video_manual(self):
+        PendaftaranAsleb.objects.create(
+            nama=self.asleb.nama,
+            nim=self.asleb.nim,
+            no_hp=self.asleb.no_hp,
+            email=self.asleb.email,
+            program_studi=self.asleb.program_studi,
+            semester=self.asleb.semester,
+            matkul=self.matkul,
+            status='digenerate',
+        )
+        ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=7,
+            judul='Graph',
+            file=SimpleUploadedFile('modul-7.pdf', b'isi modul', content_type='application/pdf'),
+        )
+
+        form = AbsensiAslebForm(asleb=self.asleb, jadwal=self.create_active_schedule())
+
+        self.assertEqual(form.fields['bukti_foto'].label, 'Upload Bukti Foto')
+        self.assertTrue(form.fields['bukti_foto'].required)
+        self.assertIn('image/jpeg,image/png', form.fields['bukti_foto'].widget.attrs.get('accept', ''))
+        self.assertEqual(form.fields['bukti_video'].label, 'Upload Bukti Video')
+        self.assertTrue(form.fields['bukti_video'].required)
+        self.assertIn('video/webm,video/mp4', form.fields['bukti_video'].widget.attrs.get('accept', ''))
+
+    def test_daftar_absensi_aman_jika_bukti_video_kosong(self):
+        modul = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=8,
+            judul='Hashing',
+            file=SimpleUploadedFile('modul-8.pdf', b'isi modul', content_type='application/pdf'),
+        )
+        AbsensiAsleb.objects.create(
+            asleb=self.asleb,
+            jadwal=self.create_active_schedule(),
+            modul_praktikum=modul,
+            tanggal_praktikum=date(2026, 6, 24),
+            modul=8,
+            materi_praktikum='Hashing',
+            pekerjaan='Absensi lama tanpa video',
+            file_modul=SimpleUploadedFile('modul-lama.pdf', b'isi modul', content_type='application/pdf'),
+        )
+
+        response = self.client.get(reverse('asleb:absensi_list'))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'mx-auto min-w-0 max-w-4xl')
-        self.assertContains(response, 'min-w-0 max-w-full overflow-hidden')
-        self.assertContains(response, 'w-full justify-center sm:w-auto')
+        self.assertContains(response, 'Hashing')
+        self.assertContains(response, '<span class="text-slate-400">-</span>', html=True)
 
     def test_asisten_lab_tidak_dapat_menambah_modul(self):
         aslab_user = Pengguna.objects.create(

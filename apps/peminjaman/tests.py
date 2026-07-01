@@ -691,8 +691,8 @@ class PeminjamanMahasiswaTests(TestCase):
         self.assertContains(edit_page, 'value="2026-06-22"')
 
         response = self.client.post(reverse('peminjaman:peminjaman_update', args=[peminjaman.pk]), {
-            'barang': str(self.barang.pk),
-            'selected_barang_ids': f'{self.barang.pk},{barang_pengganti.pk}',
+            'barang': str(barang_kedua.pk),
+            'selected_barang_ids': f'{barang_kedua.pk},{barang_pengganti.pk}',
             'nama_peminjam': 'Nama Baru',
             'nim': 'NIM-BARU',
             'no_hp': '089999999999',
@@ -704,12 +704,17 @@ class PeminjamanMahasiswaTests(TestCase):
 
         self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
         detail_list = PeminjamanAlat.objects.filter(transaksi_id=transaksi_id)
+        self.assertEqual(detail_list.count(), 2)
         self.assertEqual(set(detail_list.values_list('nama_peminjam', flat=True)), {'Nama Baru'})
         self.assertEqual(set(detail_list.values_list('nim', flat=True)), {'NIM-BARU'})
         self.assertEqual(set(detail_list.values_list('catatan', flat=True)), {'Sesudah edit'})
-        self.assertEqual(set(detail_list.values_list('barang_id', flat=True)), {self.barang.pk, barang_pengganti.pk})
-        self.assertFalse(detail_list.filter(barang=barang_kedua).exists())
+        self.assertEqual(set(detail_list.values_list('barang_id', flat=True)), {barang_kedua.pk, barang_pengganti.pk})
+        self.assertFalse(detail_list.filter(barang=self.barang).exists())
         self.assertEqual(detail_list.first().transaksi.nama_peminjam, 'Nama Baru')
+
+        list_response = self.client.get(reverse('peminjaman:peminjaman_list'))
+        self.assertContains(list_response, '2 barang')
+        self.assertNotContains(list_response, '3 barang')
 
     def test_admin_hapus_peminjaman_di_tabel_menghapus_semua_detail_transaksi(self):
         barang_kedua = Barang.objects.create(
@@ -739,6 +744,32 @@ class PeminjamanMahasiswaTests(TestCase):
         self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
         self.assertFalse(PeminjamanAlat.objects.filter(transaksi_id=transaksi_id).exists())
         self.assertFalse(PeminjamanTransaksi.objects.filter(pk=transaksi_id).exists())
+
+    def test_mahasiswa_hapus_satu_detail_tidak_menghapus_semua_detail_transaksi(self):
+        barang_kedua = Barang.objects.create(
+            nama='Kamera Tambahan',
+            kode_barang='CAM-DELETE-ONE',
+            jumlah=1,
+            lokasi=self.lokasi,
+            kondisi='baik',
+        )
+        response = self.client.post(reverse('peminjaman:peminjaman_create'), {
+            'selected_barang_ids': f'{self.barang.pk},{barang_kedua.pk}',
+            'tanggal_pinjam': '2026-06-21',
+            'tanggal_kembali': '2026-06-22',
+            'catatan': 'Hapus satu detail',
+        })
+        self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
+        peminjaman = PeminjamanAlat.objects.filter(nim=self.mahasiswa.nim_nik).order_by('barang__kode_barang').first()
+        transaksi_id = peminjaman.transaksi_id
+
+        response = self.client.post(reverse('peminjaman:peminjaman_delete', args=[peminjaman.pk]))
+
+        self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
+        detail_list = PeminjamanAlat.objects.filter(transaksi_id=transaksi_id)
+        self.assertEqual(detail_list.count(), 1)
+        self.assertFalse(detail_list.filter(pk=peminjaman.pk).exists())
+        self.assertTrue(PeminjamanTransaksi.objects.filter(pk=transaksi_id).exists())
 
     def test_admin_bulk_status_tidak_menampilkan_opsi_ditolak(self):
         admin_session = self.client.session
