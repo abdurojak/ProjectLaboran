@@ -177,8 +177,14 @@
         const photoImage = document.querySelector('[data-barang-photo-image]');
         const photoEmpty = document.querySelector('[data-barang-photo-empty]');
         const photoCloseButton = document.querySelector('[data-barang-photo-close]');
+        [modal, photoModal].forEach(function (dialog) {
+            if (dialog && dialog.parentElement !== document.body) {
+                document.body.appendChild(dialog);
+            }
+        });
         let currentPage = 1;
         let searchTimer = null;
+        let modalSelectionSnapshot = new Map();
         const selectedItems = new Map();
         const groupItems = new Map();
 
@@ -200,6 +206,8 @@
             const cell = appendCell(row, '');
             const input = document.createElement('input');
             input.type = 'number';
+            input.inputMode = 'numeric';
+            input.pattern = '[0-9]*';
             input.min = '1';
             input.max = String(Math.max(barang.group_available_count || 1, 1));
             input.value = '1';
@@ -219,13 +227,27 @@
             return Math.min(parsed, Math.max(max, 1));
         }
 
+        function hasSelectedItemInGroup(group) {
+            const availableItems = groupItems.get(group) || [];
+            return availableItems.some(function (item) {
+                return selectedItems.has(String(item.id));
+            });
+        }
+
+        function clearGroupSelection(group) {
+            const availableItems = groupItems.get(group) || [];
+            availableItems.forEach(function (item) {
+                selectedItems.delete(String(item.id));
+            });
+        }
+
         function syncSelectedInputs() {
             selectedInput.value = Array.from(selectedItems.keys()).join(',');
             hiddenInput.value = Array.from(selectedItems.keys())[0] || '';
             emptyState.classList.toggle('hidden', selectedItems.size > 0);
 
             document.querySelectorAll('[data-barang-picker-choice]').forEach(function (choice) {
-                choice.checked = selectedItems.has(choice.dataset.barangId);
+                choice.checked = hasSelectedItemInGroup(choice.dataset.barangGroup);
             });
             updateVisibleQuantityFields();
         }
@@ -263,6 +285,18 @@
             lucide.createIcons();
         }
 
+        function takeModalSelectionSnapshot() {
+            modalSelectionSnapshot = new Map(selectedItems);
+        }
+
+        function restoreModalSelectionSnapshot() {
+            selectedItems.clear();
+            modalSelectionSnapshot.forEach(function (label, id) {
+                selectedItems.set(id, label);
+            });
+            renderSelectedBadges();
+        }
+
         function clearSelectedBarang() {
             selectedItems.clear();
             renderSelectedBadges();
@@ -278,6 +312,14 @@
                 selectedItems.set(String(item.id), item.label);
             });
             renderSelectedBadges();
+        }
+
+        function commitQuantityInput(input) {
+            const group = input.dataset.barangGroup;
+            const max = (groupItems.get(group) || []).length || 1;
+            const quantity = clampQuantity(input.value, max);
+            input.value = String(quantity);
+            applyGroupQuantity(group, quantity);
         }
 
         function updateVisibleQuantityFields() {
@@ -361,24 +403,30 @@
         }
 
         function openModal() {
+            takeModalSelectionSnapshot();
             modal.classList.remove('hidden');
             modal.classList.add('flex');
             searchInput.focus();
             loadOptions(1);
         }
 
-        function closeModal() {
+        function closeModal(options) {
+            if (!options || options.restore !== false) {
+                restoreModalSelectionSnapshot();
+            }
             modal.classList.add('hidden');
             modal.classList.remove('flex');
         }
 
         openButton.addEventListener('click', openModal);
         closeButtons.forEach(function (button) {
-            button.addEventListener('click', closeModal);
+            button.addEventListener('click', function () {
+                closeModal({restore: true});
+            });
         });
         modal.addEventListener('click', function (event) {
             if (event.target === modal) {
-                closeModal();
+                closeModal({restore: true});
             }
         });
 
@@ -421,22 +469,27 @@
             if (choice.checked) {
                 applyGroupQuantity(group, 1);
             } else {
-                selectedItems.delete(choice.dataset.barangId);
+                clearGroupSelection(group);
                 renderSelectedBadges();
             }
         });
 
-        pickerBody.addEventListener('input', function (event) {
+        pickerBody.addEventListener('change', function (event) {
             const input = event.target.closest('[data-barang-quantity]');
             if (!input) {
                 return;
             }
 
-            const group = input.dataset.barangGroup;
-            const max = (groupItems.get(group) || []).length || 1;
-            const quantity = clampQuantity(input.value, max);
-            input.value = String(quantity);
-            applyGroupQuantity(group, quantity);
+            commitQuantityInput(input);
+        });
+
+        pickerBody.addEventListener('focusout', function (event) {
+            const input = event.target.closest('[data-barang-quantity]');
+            if (!input) {
+                return;
+            }
+
+            commitQuantityInput(input);
         });
 
         photoCloseButton.addEventListener('click', closePhotoModal);
@@ -454,7 +507,7 @@
         pageNext.addEventListener('click', function () { loadOptions(currentPage + 1); });
         doneButton.addEventListener('click', function () {
             renderSelectedBadges();
-            closeModal();
+            closeModal({restore: false});
         });
 
         selectedList.addEventListener('click', function (event) {
