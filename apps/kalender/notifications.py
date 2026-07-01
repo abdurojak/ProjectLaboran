@@ -210,7 +210,7 @@ def build_pendaftaran_aslab_notifications(pengguna):
     if pengguna.role not in {'mahasiswa', 'asisten_lab'}:
         return payloads
 
-    statuses = ['diterima']
+    statuses = ['diterima', 'ditolak']
     if pengguna.role == 'asisten_lab':
         statuses.append('digenerate')
 
@@ -225,11 +225,19 @@ def build_pendaftaran_aslab_notifications(pengguna):
             description = f'Selamat, data aslab untuk {pendaftaran.matkul} sudah dibuat. Akun Anda dapat mengakses fitur aslab sesuai hak akses yang berlaku.'
             badge = 'Data Aslab'
             icon = 'id-card'
+            icon_class = 'bg-emerald-50 text-emerald-700'
+        elif pendaftaran.status == 'ditolak':
+            title = 'Pendaftaran aslab Anda ditolak'
+            description = f'Pengajuan asisten laboratorium untuk {pendaftaran.matkul} belum dapat diterima pada periode ini.'
+            badge = 'Ditolak'
+            icon = 'badge-x'
+            icon_class = 'bg-rose-50 text-rose-700'
         else:
             title = 'Pendaftaran aslab Anda diterima'
             description = f'Selamat, pengajuan asisten laboratorium untuk {pendaftaran.matkul} sudah diterima. Silakan menunggu arahan berikutnya dari laboratorium.'
             badge = 'Diterima'
             icon = 'badge-check'
+            icon_class = 'bg-emerald-50 text-emerald-700'
         payloads.append({
             'source_key': f'pendaftaran-aslab:{pendaftaran.pk}:{pendaftaran.status}',
             'judul': title,
@@ -240,7 +248,7 @@ def build_pendaftaran_aslab_notifications(pengguna):
             'url': '',
             'badge': badge,
             'icon': icon,
-            'icon_class': 'bg-emerald-50 text-emerald-700',
+            'icon_class': icon_class,
             'source_updated_at': pendaftaran.diperbarui_pada,
         })
     return payloads

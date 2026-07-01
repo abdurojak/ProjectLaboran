@@ -3,6 +3,8 @@
 {% block title %}Detail Pengguna{% endblock %}
 
 {% block content %}
+{% include "pengguna/profile_professional.html" %}
+{% if False %}
 <section class="mx-auto max-w-4xl space-y-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -148,9 +150,10 @@
         </div>
     </section>
 </section>
+{% endif %}
 
-<div data-profile-modal class="fixed inset-0 z-[70] hidden items-center justify-center bg-slate-950/50 px-4 py-6 backdrop-blur-sm">
-    <div class="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-[28px] border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-950/20">
+<div data-profile-modal class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-950/55 p-3 backdrop-blur-sm md:p-6">
+    <div class="max-h-[94vh] w-full max-w-4xl overflow-y-auto rounded-[28px] border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-950/20 md:p-6">
         <div class="flex items-start justify-between gap-4">
             <div>
                 <p class="text-xs font-extrabold uppercase tracking-[0.18em] text-brand-700">Profil Pengguna</p>
@@ -166,10 +169,12 @@
             {% csrf_token %}
             <input type="hidden" id="id_profile_hapus_foto" name="hapus_foto" value="0">
             {% for field in profile_form %}
-            <div class="{% if field.name == 'foto' or field.name == 'nama_pengguna' or field.name == 'alamat' or field.name == 'ringkasan_profesional' or field.name == 'keahlian' %}md:col-span-2{% endif %}">
+            <div class="{% if field.name == 'foto' or field.name == 'background_image' or field.name == 'nama_pengguna' or field.name == 'alamat' or field.name == 'ringkasan_profesional' or field.name == 'keahlian' %}md:col-span-2{% endif %}">
                 {{ field.label_tag }}
                 {% if field.name == 'foto' %}
                 {% include "components/file_upload.html" with field=field current_file=pengguna.foto button_label="Pilih Foto" title="Upload foto pengguna" empty_label="Belum ada foto dipilih" delete_label="Foto akan dihapus saat disimpan" preview_label="Preview foto" preview_alt="Preview foto pengguna" delete_input_id="id_profile_hapus_foto" delete_button_label="Hapus Foto" %}
+                {% elif field.name == 'background_image' %}
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p class="mb-3 text-sm text-slate-500">Foto sampul bebas berupa suasana laboratorium, gedung, ilustrasi, atau gambar lainnya.</p>{{ field }}{% if pengguna.background_image %}<img src="{{ pengguna.background_image.url }}" alt="Foto sampul saat ini" class="mt-3 h-28 w-full rounded-xl object-cover">{% endif %}</div>
                 {% else %}
                 {{ field }}
                 {% endif %}
@@ -192,7 +197,7 @@
     </div>
 </div>
 
-<div data-password-modal class="fixed inset-0 z-[70] hidden items-center justify-center bg-slate-950/50 px-4 py-6 backdrop-blur-sm">
+<div data-password-modal class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-950/55 px-4 py-6 backdrop-blur-sm">
     <div class="w-full max-w-lg rounded-[28px] border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-950/20">
         <div class="flex items-start justify-between gap-4">
             <div>
@@ -231,11 +236,25 @@
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const profileModal = document.querySelector('[data-profile-modal]');
-        const profileOpenButton = document.querySelector('[data-profile-modal-open]');
+        const profileOpenButtons = document.querySelectorAll('[data-profile-modal-open]');
         const profileCloseButtons = document.querySelectorAll('[data-profile-modal-close]');
         const modal = document.querySelector('[data-password-modal]');
-        const openButton = document.querySelector('[data-password-modal-open]');
+        const openButtons = document.querySelectorAll('[data-password-modal-open]');
         const closeButtons = document.querySelectorAll('[data-password-modal-close]');
+
+        // Move dialogs outside the scrollable main container so they always sit above the navbar.
+        if (profileModal) {
+            document.body.appendChild(profileModal);
+        }
+        if (modal) {
+            document.body.appendChild(modal);
+        }
+
+        function updateBodyLock() {
+            const dialogOpen = (profileModal && !profileModal.classList.contains('hidden')) ||
+                (modal && !modal.classList.contains('hidden'));
+            document.body.classList.toggle('overflow-hidden', Boolean(dialogOpen));
+        }
 
         function setProfileOpen(isOpen) {
             if (!profileModal) {
@@ -243,6 +262,7 @@
             }
             profileModal.classList.toggle('hidden', !isOpen);
             profileModal.classList.toggle('flex', isOpen);
+            updateBodyLock();
         }
 
         function setOpen(isOpen) {
@@ -251,13 +271,14 @@
             }
             modal.classList.toggle('hidden', !isOpen);
             modal.classList.toggle('flex', isOpen);
+            updateBodyLock();
         }
 
-        if (profileOpenButton) {
-            profileOpenButton.addEventListener('click', function () {
+        profileOpenButtons.forEach(function (button) {
+            button.addEventListener('click', function () {
                 setProfileOpen(true);
             });
-        }
+        });
 
         profileCloseButtons.forEach(function (button) {
             button.addEventListener('click', function () {
@@ -273,11 +294,11 @@
             });
         }
 
-        if (openButton) {
-            openButton.addEventListener('click', function () {
+        openButtons.forEach(function (button) {
+            button.addEventListener('click', function () {
                 setOpen(true);
             });
-        }
+        });
 
         closeButtons.forEach(function (button) {
             button.addEventListener('click', function () {

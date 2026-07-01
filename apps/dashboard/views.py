@@ -11,6 +11,7 @@ from django.views.generic import TemplateView
 from apps.asleb.models import Asleb, HonorAsleb
 from apps.inventaris.models import ACTIVE_PEMINJAMAN_STATUSES, Barang, InventarisBarang
 from apps.jadwal.models import JadwalPraktikum
+from apps.jadwal.notifications import send_jadwal_status_notification
 from apps.kalender.models import KegiatanKalender
 from apps.peminjaman.models import PeminjamanAlat
 from apps.peminjaman.notifications import send_peminjaman_status_notification
@@ -105,6 +106,7 @@ class DashboardView(TemplateView):
         is_asisten_lab = bool(pengguna and pengguna.role == 'asisten_lab')
         context['is_mahasiswa_dashboard'] = is_mahasiswa or is_asisten_lab
         context['is_asisten_lab_dashboard'] = is_asisten_lab
+        context['is_manager_dashboard'] = bool(pengguna and pengguna.role in {'admin', 'laboran'})
 
         if context['is_mahasiswa_dashboard']:
             pengaturan_pendaftaran = PengaturanPendaftaranAsleb.get_solo()
@@ -149,7 +151,7 @@ class DashboardView(TemplateView):
                 hari=hari_ini,
                 status=JadwalPraktikum.STATUS_DITERIMA,
             )[:6] if hari_ini else jadwal_qs.none()
-            context['pendaftaran_asleb_dibuka'] = (is_mahasiswa or is_asisten_lab) and is_registration_open()
+            context['pendaftaran_asleb_dibuka'] = is_mahasiswa and is_registration_open()
             context['kegiatan_kalender_mahasiswa'] = kegiatan_qs.filter(tanggal__gte=context['today'])[:6]
             context['public_registration_url'] = get_public_registration_url()
             stats_cards = [
@@ -268,18 +270,25 @@ class DashboardView(TemplateView):
                 'tone': 'teal',
             },
             {
-                'label': 'Peminjaman Aktif',
-                'value': peminjaman_aktif.count(),
-                'note': 'Transaksi yang belum ditandai selesai',
+                'label': 'Menunggu Peminjaman',
+                'value': peminjaman_qs.filter(status='diajukan').count(),
+                'note': 'Pengajuan yang perlu diproses',
                 'icon': 'arrow-left-right',
                 'tone': 'orange',
             },
             {
-                'label': 'Honorarium Bulan Ini',
-                'value': 0,
-                'note': 'Menunggu modul rekap honorarium aslab',
-                'icon': 'file-chart-column',
-                'tone': 'purple',
+                'label': 'Menunggu Jadwal',
+                'value': context['jadwal_diajukan'].count(),
+                'note': 'Jadwal yang perlu ditinjau',
+                'icon': 'calendar-clock',
+                'tone': 'blue',
+            },
+            {
+                'label': 'Calon Aslab',
+                'value': pendaftaran_asleb_qs.filter(status='diajukan').count(),
+                'note': 'Pendaftar yang perlu diseleksi',
+                'icon': 'user-round-check',
+                'tone': 'green',
             },
         ])
         context['menu_modules'] = self._decorate_items([
@@ -522,6 +531,7 @@ def accept_jadwal(request, pk):
         return redirect('dashboard:home')
 
     jadwal.save(update_fields=['status', 'diperbarui_pada'])
+    send_jadwal_status_notification(jadwal)
     messages.success(request, 'Pengajuan jadwal praktikum diterima.')
     return redirect('dashboard:home')
 
@@ -535,6 +545,7 @@ def reject_jadwal(request, pk):
     jadwal = get_object_or_404(JadwalPraktikum, pk=pk, status=JadwalPraktikum.STATUS_DIAJUKAN)
     jadwal.status = JadwalPraktikum.STATUS_DITOLAK
     jadwal.save(update_fields=['status', 'diperbarui_pada'])
+    send_jadwal_status_notification(jadwal)
     messages.success(request, 'Pengajuan jadwal praktikum ditolak.')
     return redirect('dashboard:home')
 

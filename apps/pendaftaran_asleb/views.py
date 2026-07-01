@@ -407,6 +407,7 @@ def accept_pendaftaran(request, pk):
     pendaftaran.status = 'diterima'
     pendaftaran.save(update_fields=['status', 'diperbarui_pada'])
     promote_pengguna_to_asisten_lab(pendaftaran)
+    send_pendaftaran_status_email(pendaftaran)
     messages.success(request, 'Pendaftaran aslab ditandai diterima.')
     return redirect('pendaftaran_asleb:pendaftaran_list')
 
@@ -416,6 +417,7 @@ def reject_pendaftaran(request, pk):
     pendaftaran = get_object_or_404(PendaftaranAsleb, pk=pk)
     pendaftaran.status = 'ditolak'
     pendaftaran.save(update_fields=['status', 'diperbarui_pada'])
+    send_pendaftaran_status_email(pendaftaran)
     messages.warning(request, 'Pendaftaran aslab ditandai ditolak.')
     return redirect('pendaftaran_asleb:pendaftaran_list')
 
@@ -431,6 +433,7 @@ def generate_asleb(request, pk):
     create_or_update_asleb_from_pendaftaran(pendaftaran)
     pendaftaran.status = 'digenerate'
     pendaftaran.save(update_fields=['status', 'diperbarui_pada'])
+    send_pendaftaran_status_email(pendaftaran)
     messages.success(request, 'Pendaftaran berhasil digenerate ke Data Aslab.')
     return redirect('asleb:asleb_list')
 
@@ -446,6 +449,7 @@ def generate_all_accepted_asleb(request):
         create_or_update_asleb_from_pendaftaran(pendaftaran)
         pendaftaran.status = 'digenerate'
         pendaftaran.save(update_fields=['status', 'diperbarui_pada'])
+        send_pendaftaran_status_email(pendaftaran)
         generated_count += 1
 
     if generated_count:
@@ -488,7 +492,7 @@ def get_session_pengguna(request):
 def notify_pendaftaran_dibuka():
     recipients = list(
         Pengguna.objects.filter(
-            role__in=['mahasiswa', 'asisten_lab'],
+            role='mahasiswa',
             is_verified=True,
         ).exclude(email='').values_list('email', flat=True).distinct()
     )
@@ -526,6 +530,54 @@ def notify_pendaftaran_dibuka():
         sent_count += sent
 
     return sent_count
+
+
+def send_pendaftaran_status_email(pendaftaran):
+    status_meta = {
+        'diterima': (
+            'Pendaftaran Aslab Diterima',
+            'Selamat, pendaftaran Anda diterima',
+            'Pengajuan Anda telah lolos seleksi dan akan diproses menjadi data Asisten Laboratorium.',
+            'Diterima',
+        ),
+        'ditolak': (
+            'Pendaftaran Aslab Ditolak',
+            'Pendaftaran Anda belum diterima',
+            'Pengajuan Anda belum dapat diterima pada periode ini. Anda tetap dapat mencoba kembali pada periode berikutnya.',
+            'Ditolak',
+        ),
+        'digenerate': (
+            'Akun Asisten Laboratorium Aktif',
+            'Data Aslab Anda sudah aktif',
+            'Data Anda telah masuk ke Data Aslab dan akses Asisten Laboratorium sudah tersedia.',
+            'Aktif',
+        ),
+    }
+    meta = status_meta.get(pendaftaran.status)
+    if not meta or not pendaftaran.email:
+        return 0
+    subject, title, intro, highlight = meta
+    portal_url = settings.PUBLIC_ACCESS_BASE_URL.rstrip('/') + '/'
+    return send_branded_email(
+        subject=subject,
+        recipients=[pendaftaran.email],
+        text_body=(
+            f'{intro}\n\nMata kuliah: {pendaftaran.matkul}\n'
+            f'Status: {pendaftaran.get_status_display()}\n\nBuka LabHub: {portal_url}'
+        ),
+        title=title,
+        greeting=f'Halo {pendaftaran.nama},',
+        intro=intro,
+        details=[
+            {'label': 'Mata kuliah', 'value': str(pendaftaran.matkul)},
+            {'label': 'Periode', 'value': pendaftaran.periode.nama if pendaftaran.periode else '-'},
+            {'label': 'Status', 'value': pendaftaran.get_status_display()},
+        ],
+        action_url=portal_url,
+        action_label='Buka LabHub',
+        highlight=highlight,
+        fail_silently=True,
+    )
 
 
 def create_or_update_asleb_from_pendaftaran(pendaftaran):

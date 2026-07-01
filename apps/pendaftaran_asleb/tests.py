@@ -512,6 +512,19 @@ class PendaftaranAslebViewTests(TestCase):
         self.pendaftaran.refresh_from_db()
         self.assertEqual(self.pendaftaran.status, 'diterima')
         self.assertFalse(Asleb.objects.filter(nim='2401001').exists())
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('Pendaftaran Aslab Diterima', mail.outbox[0].subject)
+
+    def test_tolak_pendaftaran_mengirim_email_status(self):
+        response = self.client.post(
+            reverse('pendaftaran_asleb:pendaftaran_reject', args=[self.pendaftaran.pk])
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.pendaftaran.refresh_from_db()
+        self.assertEqual(self.pendaftaran.status, 'ditolak')
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('Pendaftaran Aslab Ditolak', mail.outbox[0].subject)
 
     def test_terima_pendaftaran_mengubah_role_mahasiswa_jadi_asisten_lab(self):
         pengguna = Pengguna.objects.create(

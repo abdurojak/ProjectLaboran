@@ -192,6 +192,16 @@ class NotifikasiListView(ListView):
         context = super().get_context_data(**kwargs)
         context['notifikasi_list'] = list(context['notifikasi_list'])
         context['page_obj'].object_list = context['notifikasi_list']
+        pengguna = getattr(self.request, 'current_pengguna', None)
+        all_notifications = Notifikasi.objects.filter(pengguna=pengguna)
+        context['notification_total'] = all_notifications.count()
+        context['notification_unread'] = all_notifications.filter(dibaca_pada__isnull=True).count()
+        context['notification_status_count'] = all_notifications.filter(
+            source_key__startswith='peminjaman',
+        ).count() + all_notifications.filter(source_key__startswith='pendaftaran-aslab:').count()
+        context['notification_agenda_count'] = all_notifications.filter(
+            source_key__startswith='kalender:',
+        ).count() + all_notifications.filter(source_key__startswith='jadwal-praktikum:').count()
         self.mark_notifications_as_read()
         return context
 

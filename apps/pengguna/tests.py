@@ -276,6 +276,8 @@ class PenggunaViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Edit Profil')
         self.assertContains(response, 'Ganti Password')
+        self.assertContains(response, 'name="background_image"')
+        self.assertContains(response, 'Foto sampul bebas')
         self.assertNotContains(response, 'Konfirmasi Hapus Pengguna')
         self.assertNotContains(response, f'href="{reverse("pengguna:delete", args=[self.pengguna.pk])}"')
 

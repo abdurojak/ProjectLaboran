@@ -33,29 +33,39 @@ SIDEBAR_LINKS = [
     {'title': 'Dashboard', 'icon': 'layout-grid', 'url': 'dashboard:home', 'namespace': 'dashboard'},
     {'title': 'Kalender', 'icon': 'calendar-days', 'url': 'kalender:kegiatan_list', 'namespace': 'kalender'},
     {
-        'title': 'Inventaris',
-        'icon': 'package',
-        'url': 'inventaris:barang_list',
-        'namespace': 'inventaris',
-        'url_names': {
-            'barang_list',
-            'barang_create',
-            'inventaris_detail',
-            'detail_barang_create',
-            'detail_barang_update',
-            'detail_barang_delete',
-            'barang_detail',
-            'barang_update',
-            'barang_delete',
-            'lokasi_list',
-            'lokasi_create',
-            'lokasi_detail',
-            'lokasi_update',
-            'lokasi_delete',
-        },
+        'title': 'Barang & Peminjaman',
+        'icon': 'boxes',
+        'namespace': 'barang_peminjaman',
+        'children': [
+            {
+                'title': 'Inventaris',
+                'icon': 'package',
+                'url': 'inventaris:barang_list',
+                'namespace': 'inventaris',
+                'url_names': {
+                    'barang_list', 'barang_create', 'inventaris_detail', 'detail_barang_create',
+                    'detail_barang_update', 'detail_barang_delete', 'barang_detail', 'barang_update',
+                    'barang_delete', 'lokasi_list', 'lokasi_create', 'lokasi_detail',
+                    'lokasi_update', 'lokasi_delete',
+                },
+                'roles': {'admin', 'laboran'},
+            },
+            {
+                'title': 'Barang Tertinggal',
+                'icon': 'briefcase',
+                'url': 'barang_tertinggal:list',
+                'namespace': 'barang_tertinggal',
+                'roles': {'admin', 'laboran'},
+            },
+            {
+                'title': 'Peminjaman Alat',
+                'icon': 'arrow-left-right',
+                'url': 'peminjaman:peminjaman_list',
+                'namespace': 'peminjaman',
+                'roles': {'admin', 'laboran', 'asisten_lab', 'mahasiswa'},
+            },
+        ],
     },
-    {'title': 'Barang Tertinggal', 'icon': 'briefcase', 'url': 'barang_tertinggal:list', 'namespace': 'barang_tertinggal'},
-    {'title': 'Peminjaman Alat', 'icon': 'arrow-left-right', 'url': 'peminjaman:peminjaman_list', 'namespace': 'peminjaman'},
     {'title': 'Jadwal Praktikum', 'icon': 'calendar-clock', 'url': 'jadwal:jadwal_list', 'namespace': 'jadwal'},
     {
         'title': 'Asisten Laboratorium',
@@ -122,22 +132,38 @@ SIDEBAR_LINKS = [
             },
         ],
     },
-    {
-        'title': 'Pengguna',
-        'icon': 'user-round',
-        'url': 'pengguna:list',
-        'namespace': 'pengguna',
-        'url_names': {'list', 'create', 'detail', 'update', 'update_profile', 'verify_profile_phone', 'change_password', 'delete'},
-    },
-    {
-        'title': 'Master Akademik',
-        'icon': 'graduation-cap',
-        'url': 'pengguna:master_akademik',
-        'namespace': 'pengguna',
-        'url_names': {'master_akademik', 'fakultas_create', 'fakultas_update', 'prodi_create', 'prodi_update'},
-    },
     {'title': 'Ruangan', 'icon': 'door-open', 'url': 'ruangan:ruangan_list', 'namespace': 'ruangan'},
-    {'title': 'Pengaturan', 'icon': 'settings', 'url': 'core:settings', 'namespace': 'core'},
+    {
+        'title': 'Pengaturan',
+        'icon': 'settings',
+        'namespace': 'pengaturan_group',
+        'children': [
+            {
+                'title': 'Pengguna',
+                'icon': 'user-round',
+                'url': 'pengguna:list',
+                'namespace': 'pengguna',
+                'url_names': {'list', 'create', 'detail', 'update', 'update_profile', 'verify_profile_phone', 'change_password', 'delete'},
+                'roles': {'admin', 'laboran'},
+            },
+            {
+                'title': 'Master Akademik',
+                'icon': 'graduation-cap',
+                'url': 'pengguna:master_akademik',
+                'namespace': 'pengguna',
+                'url_names': {'master_akademik', 'fakultas_create', 'fakultas_update', 'prodi_create', 'prodi_update'},
+                'roles': {'admin'},
+            },
+            {
+                'title': 'Pengaturan Sistem',
+                'icon': 'sliders-horizontal',
+                'url': 'core:settings',
+                'namespace': 'core',
+                'url_names': {'settings'},
+                'roles': {'admin', 'laboran', 'asisten_lab', 'mahasiswa'},
+            },
+        ],
+    },
 ]
 
 MAHASISWA_VISIBLE_NAMESPACES = {'core', 'dashboard', 'kalender', 'peminjaman', 'jadwal', 'ruangan'}
@@ -178,6 +204,9 @@ def dashboard_sidebar(request):
             item['expanded'] = item['active']
             item.update(TONES['teal'] if item['active'] else TONES['gray'])
             links.append(item)
+            continue
+
+        if role and role not in link.get('roles', {role}):
             continue
 
         if current_pengguna and current_pengguna.role == 'mahasiswa' and link['namespace'] not in MAHASISWA_VISIBLE_NAMESPACES:

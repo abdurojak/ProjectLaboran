@@ -1,0 +1,57 @@
+<section class="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,.65fr)]">
+    <div class="surface-card min-w-0 overflow-hidden p-5 md:p-6">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+                <p class="text-xs font-black uppercase tracking-[0.2em] text-brand-700">Perlu Diproses</p>
+                <h3 class="mt-2 text-xl font-black text-slate-900">Antrean Operasional</h3>
+            </div>
+            <a href="{% url 'peminjaman:peminjaman_list' %}" class="btn-secondary">Lihat semua</a>
+        </div>
+
+        <div class="mt-5 grid gap-3">
+            <h4 class="text-sm font-black text-slate-800">Peminjaman Alat Diajukan</h4>
+            {% for peminjaman in peminjaman_diajukan|slice:":3" %}
+            <article class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <div class="min-w-0">
+                    <a href="{% url 'peminjaman:peminjaman_detail' peminjaman.pk %}" class="block truncate font-bold text-slate-900 hover:text-brand-700">{{ peminjaman.barang.nama }}</a>
+                    <p class="mt-1 text-xs text-slate-500">{{ peminjaman.nama_peminjam }} · {{ peminjaman.tanggal_pinjam|date:"d M Y" }}</p>
+                    {% if peminjaman.jumlah_barang_transaksi > 1 %}<p class="mt-1 text-xs font-semibold text-slate-500">{{ peminjaman.jumlah_barang_transaksi }} barang dalam transaksi ini</p>{% endif %}
+                </div>
+                <div class="flex gap-2">
+                    <form method="post" action="{% url 'dashboard:peminjaman_accept' peminjaman.pk %}">{% csrf_token %}<button class="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white" type="submit">Terima</button></form>
+                    <form method="post" action="{% url 'dashboard:peminjaman_reject' peminjaman.pk %}">{% csrf_token %}<button class="rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-700" type="submit">Tolak</button></form>
+                </div>
+            </article>
+            {% empty %}
+            <div class="rounded-2xl border border-dashed border-slate-200 px-4 py-7 text-center text-sm text-slate-500">Tidak ada pengajuan peminjaman.</div>
+            {% endfor %}
+
+            <h4 class="mt-2 text-sm font-black text-slate-800">Pengajuan Jadwal Praktikum</h4>
+            {% for jadwal in jadwal_diajukan|slice:":3" %}
+            <article class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-blue-100 bg-blue-50/50 px-4 py-3">
+                <div class="min-w-0">
+                    <a href="{% url 'jadwal:jadwal_detail' jadwal.pk %}" class="block truncate font-bold text-slate-900 hover:text-brand-700">{{ jadwal.mata_kuliah }}</a>
+                    <p class="mt-1 text-xs text-slate-500">{{ jadwal.get_hari_display }}, {{ jadwal.waktu_mulai|time:"H:i" }} · {{ jadwal.get_display_ruangan_nama }}</p>
+                </div>
+                <div class="flex gap-2">
+                    <form method="post" action="{% url 'dashboard:jadwal_accept' jadwal.pk %}">{% csrf_token %}<button class="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white" type="submit">Terima</button></form>
+                    <form method="post" action="{% url 'dashboard:jadwal_reject' jadwal.pk %}">{% csrf_token %}<button class="rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-700" type="submit">Tolak</button></form>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+    </div>
+
+    <aside class="surface-card p-5 md:p-6">
+        <p class="text-xs font-black uppercase tracking-[0.2em] text-brand-700">Akses Utama</p>
+        <h3 class="mt-2 text-xl font-black text-slate-900">Buka Menu</h3>
+        <div class="mt-5 grid gap-2">
+            <a href="{% url 'inventaris:barang_list' %}" class="flex items-center gap-3 rounded-2xl px-3 py-3 font-bold text-slate-700 transition hover:bg-slate-50"><i data-lucide="package" class="h-5 w-5 text-cyan-700"></i>Inventaris</a>
+            <a href="{% url 'peminjaman:peminjaman_list' %}" class="flex items-center gap-3 rounded-2xl px-3 py-3 font-bold text-slate-700 transition hover:bg-slate-50"><i data-lucide="arrow-left-right" class="h-5 w-5 text-amber-600"></i>Peminjaman Alat</a>
+            <a href="{% url 'jadwal:jadwal_list' %}" class="flex items-center gap-3 rounded-2xl px-3 py-3 font-bold text-slate-700 transition hover:bg-slate-50"><i data-lucide="calendar-clock" class="h-5 w-5 text-blue-700"></i>Jadwal Praktikum</a>
+            <a href="{% url 'asleb:asleb_list' %}" class="flex items-center gap-3 rounded-2xl px-3 py-3 font-bold text-slate-700 transition hover:bg-slate-50"><i data-lucide="users-round" class="h-5 w-5 text-emerald-700"></i>Asisten Laboratorium</a>
+            <a href="{% url 'pendaftaran_asleb:pendaftaran_list' %}" class="flex items-center gap-3 rounded-2xl px-3 py-3 font-bold text-slate-700 transition hover:bg-slate-50"><i data-lucide="user-round-plus" class="h-5 w-5 text-cyan-700"></i>Pendaftaran Aslab</a>
+            <a href="{% url 'kalender:kegiatan_list' %}" class="flex items-center gap-3 rounded-2xl px-3 py-3 font-bold text-slate-700 transition hover:bg-slate-50"><i data-lucide="calendar-days" class="h-5 w-5 text-violet-700"></i>Kalender</a>
+        </div>
+    </aside>
+</section>

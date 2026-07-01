@@ -1,0 +1,63 @@
+<section class="mx-auto max-w-5xl space-y-5">
+    <article class="surface-card overflow-hidden">
+        <div class="relative h-40 overflow-hidden bg-gradient-to-br from-brand-950 via-brand-800 to-cyan-600 md:h-52">
+            {% if pengguna.background_image %}<img src="{{ pengguna.background_image.url }}" alt="Cover {{ pengguna.nama_pengguna }}" class="h-full w-full object-cover">{% else %}<div class="absolute inset-0 opacity-25" style="background-image:radial-gradient(circle at 20% 20%,white 0 2px,transparent 3px),radial-gradient(circle at 80% 40%,white 0 1px,transparent 2px);background-size:42px 42px,28px 28px"></div><div class="absolute -bottom-20 right-10 h-52 w-52 rounded-full bg-cyan-300/20 blur-2xl"></div>{% endif %}
+            <button type="button" data-profile-modal-open class="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-slate-950/30 text-white backdrop-blur transition hover:bg-slate-950/50" title="Edit profil"><i data-lucide="pencil" class="h-4 w-4"></i></button>
+        </div>
+
+        <div class="relative px-5 pb-6 md:px-8 md:pb-8">
+            <div class="-mt-16 flex flex-wrap items-end justify-between gap-4 md:-mt-20">
+                <div class="relative h-32 w-32 shrink-0 rounded-full border-4 border-white bg-white shadow-xl md:h-40 md:w-40">
+                    {% if pengguna.foto %}<img src="{{ pengguna.foto.url }}" alt="{{ pengguna.nama_pengguna }}" class="h-full w-full rounded-full object-cover">{% else %}<div class="flex h-full w-full items-center justify-center rounded-full bg-slate-100 text-slate-400"><i data-lucide="user-round" class="h-12 w-12"></i></div>{% endif %}
+                    <button type="button" data-profile-modal-open class="absolute bottom-1 right-1 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-brand-700 text-white shadow" title="Ganti foto"><i data-lucide="camera" class="h-4 w-4"></i></button>
+                </div>
+                <div class="mb-1 flex flex-wrap gap-2">
+                    <a class="btn-primary gap-2" href="{% url 'pengguna:cv_download' pengguna.pk %}"><i data-lucide="download" class="h-4 w-4"></i>Download CV</a>
+                    <button type="button" data-profile-modal-open class="btn-secondary gap-2"><i data-lucide="pencil" class="h-4 w-4"></i>Edit Profil</button>
+                    <button type="button" data-password-modal-open class="btn-secondary gap-2"><i data-lucide="key-round" class="h-4 w-4"></i>Password</button>
+                </div>
+            </div>
+
+            <div class="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
+                <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-2"><h1 class="text-3xl font-black tracking-tight text-slate-950">{{ pengguna.nama_pengguna }}</h1><span class="rounded-full bg-brand-50 px-3 py-1 text-xs font-black text-brand-700">{{ pengguna.get_role_display }}</span></div>
+                    <p class="mt-2 text-base font-semibold text-slate-700">{{ pengguna.prodi }} · {{ pengguna.fakultas }}</p>
+                    <p class="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-slate-500"><span>{{ pengguna.alamat|truncatechars:90 }}</span><span>·</span><a href="mailto:{{ pengguna.email }}" class="font-bold text-brand-700 hover:underline">Info kontak</a></p>
+                    <div class="mt-4 flex flex-wrap gap-2 text-xs font-bold"><span class="rounded-full bg-slate-100 px-3 py-1.5 text-slate-600">NIM/NIK {{ pengguna.nim_nik }}</span><span class="rounded-full bg-slate-100 px-3 py-1.5 text-slate-600">{{ pengguna.kode_pengguna }}</span>{% if pengguna.role == 'asisten_lab' and asleb_profile %}<span class="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-700">Status Aslab: {{ asleb_profile.level_otomatis_display }}</span><span class="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-700">{{ asleb_profile.jumlah_periode_asleb }} periode sebagai aslab.</span>{% endif %}</div>
+                </div>
+                <div class="grid content-start gap-3 text-sm">
+                    <div class="flex items-center gap-3"><span class="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50 text-brand-700"><i data-lucide="graduation-cap" class="h-4 w-4"></i></span><div><p class="text-xs text-slate-400">Program studi</p><p class="font-bold text-slate-700">{{ pengguna.prodi }}</p></div></div>
+                    <div class="flex items-center gap-3"><span class="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-700"><i data-lucide="building-2" class="h-4 w-4"></i></span><div><p class="text-xs text-slate-400">Institusi</p><p class="font-bold text-slate-700">Universitas Trisakti</p></div></div>
+                </div>
+            </div>
+        </div>
+    </article>
+
+    <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div class="space-y-5">
+            <article class="surface-card p-6">
+                <div class="flex items-start justify-between gap-3"><div><p class="text-xs font-black uppercase tracking-[0.18em] text-brand-700">Tentang</p><h2 class="mt-2 text-xl font-black text-slate-900">Profil Singkat</h2></div><button type="button" data-profile-modal-open class="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"><i data-lucide="pencil" class="h-4 w-4"></i></button></div>
+                <p class="mt-4 whitespace-pre-line text-sm leading-7 text-slate-600">{{ pengguna.ringkasan_profesional|default:"Belum ada ringkasan profesional. Tambahkan cerita singkat tentang diri, minat, dan tujuan Anda." }}</p>
+                <div class="mt-5 rounded-2xl border border-slate-200 p-4"><div class="flex items-center gap-2 text-sm font-black text-slate-800"><i data-lucide="gem" class="h-4 w-4 text-brand-700"></i>Keahlian Utama</div><p class="mt-2 text-sm leading-6 text-slate-600">{{ pengguna.keahlian|default:"Belum ada keahlian yang dicantumkan." }}</p></div>
+            </article>
+
+            <article class="surface-card overflow-hidden">
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-6 py-5"><div><p class="text-xs font-black uppercase tracking-[0.18em] text-brand-700">Perjalanan</p><h2 class="mt-2 text-xl font-black text-slate-900">Pendidikan & Pengalaman</h2></div><a class="btn-primary gap-2" href="{% url 'pengguna:experience_create' pengguna.pk %}"><i data-lucide="plus" class="h-4 w-4"></i>Tambah Bagian</a></div>
+                <div class="divide-y divide-slate-100">
+                    {% for section_key, section_label, section_items in riwayat_sections %}{% for item in section_items %}
+                    <div class="flex gap-4 px-6 py-5"><span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl {% if section_key == 'pendidikan' %}bg-blue-50 text-blue-700{% elif section_key == 'organisasi' %}bg-emerald-50 text-emerald-700{% elif section_key == 'sertifikasi' %}bg-amber-50 text-amber-700{% else %}bg-brand-50 text-brand-700{% endif %}"><i data-lucide="{% if section_key == 'pendidikan' %}graduation-cap{% elif section_key == 'organisasi' %}users{% elif section_key == 'sertifikasi' %}award{% elif section_key == 'proyek' %}folder-kanban{% else %}briefcase-business{% endif %}" class="h-5 w-5"></i></span><div class="min-w-0 flex-1"><div class="flex flex-wrap items-start justify-between gap-3"><div><p class="text-xs font-black uppercase tracking-wider text-slate-400">{{ section_label }}</p><h3 class="mt-1 text-lg font-black text-slate-900">{{ item.jabatan }}</h3><p class="mt-1 font-semibold text-slate-700">{{ item.organisasi }}</p></div>{% if not item.otomatis %}<div class="flex gap-2"><a class="rounded-lg p-2 text-amber-600 hover:bg-amber-50" href="{% url 'pengguna:experience_update' pengguna.pk item.pk %}"><i data-lucide="pencil" class="h-4 w-4"></i></a><form method="post" action="{% url 'pengguna:experience_delete' pengguna.pk item.pk %}">{% csrf_token %}<button class="rounded-lg p-2 text-rose-600 hover:bg-rose-50" type="submit"><i data-lucide="trash-2" class="h-4 w-4"></i></button></form></div>{% endif %}</div><p class="mt-2 text-sm text-slate-500">{{ item.tanggal_mulai|date:"M Y" }} - {% if item.masih_berjalan %}Sekarang{% else %}{{ item.tanggal_selesai|date:"M Y"|default:"-" }}{% endif %}{% if item.lokasi %} · {{ item.lokasi }}{% endif %}</p>{% if item.deskripsi %}<p class="mt-3 whitespace-pre-line text-sm leading-6 text-slate-600">{{ item.deskripsi }}</p>{% endif %}</div></div>
+                    {% endfor %}{% empty %}{% endfor %}
+                    {% if not pengguna.pengalaman.exists %}<div class="px-6 py-12 text-center text-sm text-slate-500">Belum ada pendidikan atau pengalaman. Gunakan tombol Tambah Bagian untuk melengkapi profil.</div>{% endif %}
+                </div>
+            </article>
+        </div>
+
+        <aside class="space-y-5">
+            <article class="surface-card p-5"><h2 class="text-lg font-black text-slate-900">Informasi Kontak</h2><div class="mt-4 grid gap-4 text-sm"><div><p class="text-xs font-bold uppercase tracking-wider text-slate-400">Email</p><a href="mailto:{{ pengguna.email }}" class="mt-1 block break-all font-bold text-brand-700">{{ pengguna.email }}</a></div><div><p class="text-xs font-bold uppercase tracking-wider text-slate-400">No. HP</p><p class="mt-1 font-bold text-slate-700">{{ pengguna.no_hp|default:"-" }}</p></div><div><p class="text-xs font-bold uppercase tracking-wider text-slate-400">Gender</p><p class="mt-1 font-bold text-slate-700">{{ pengguna.get_gender_display }}</p></div><div><p class="text-xs font-bold uppercase tracking-wider text-slate-400">Alamat</p><p class="mt-1 leading-6 text-slate-600">{{ pengguna.alamat|default:"-" }}</p></div></div></article>
+
+            {% if asleb_history %}<article class="surface-card p-5"><h2 class="text-lg font-black text-slate-900">Riwayat Aslab</h2><p class="mt-1 text-xs text-slate-500">Arsip periode pendaftaran.</p><div class="mt-4 grid gap-3">{% for item in asleb_history|slice:":4" %}<div class="rounded-2xl border border-slate-200 p-3"><div class="flex items-center justify-between gap-2"><p class="text-sm font-bold text-slate-800">{{ item.periode.nama|default:"Riwayat Lama" }}</p><span class="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-600">{{ item.get_status_display }}</span></div><p class="mt-2 line-clamp-2 text-xs text-slate-500">{{ item.matkul }}</p></div>{% endfor %}</div></article>{% endif %}
+
+            <a href="{% url 'pengguna:list' %}" class="btn-secondary w-full gap-2"><i data-lucide="arrow-left" class="h-4 w-4"></i>Kembali</a>
+        </aside>
+    </div>
+</section>

@@ -341,7 +341,7 @@ class KalenderViewsTests(TestCase):
         response = self.client.get(reverse('kalender:notifikasi_list'))
 
         self.assertContains(response, 'Status peminjaman Kamera: Dipinjam')
-        self.assertContains(response, 'border-brand-200 bg-white ring-1 ring-brand-100')
+        self.assertContains(response, 'bg-brand-50/45')
         self.assertNotContains(response, 'Belum dibaca')
         self.assertContains(response, reverse('peminjaman:peminjaman_detail', args=[peminjaman_saya.pk]))
         self.assertNotContains(response, 'Budi')
@@ -663,14 +663,14 @@ class KalenderViewsTests(TestCase):
 
         self.assertContains(response, 'Pendaftaran aslab sedang dibuka')
         self.assertContains(response, reverse('pendaftaran_asleb:pendaftaran_public'))
-        self.assertContains(response, 'border-brand-200 bg-white ring-1 ring-brand-100')
+        self.assertContains(response, 'bg-brand-50/45')
 
         mahasiswa.refresh_from_db()
         self.assertEqual(get_unread_notification_count(mahasiswa), 0)
 
         second_response = self.client.get(reverse('kalender:notifikasi_list'))
         self.assertContains(second_response, 'Pendaftaran aslab sedang dibuka')
-        self.assertContains(second_response, 'border-slate-200 bg-slate-50/80')
+        self.assertContains(second_response, 'bg-white')
 
     def test_notifikasi_mahasiswa_menampilkan_pendaftaran_aslab_saat_ditutup(self):
         mahasiswa = Pengguna.objects.create(
@@ -699,7 +699,7 @@ class KalenderViewsTests(TestCase):
         self.assertContains(response, 'Pendaftaran aslab sudah ditutup')
         self.assertContains(response, 'Form pendaftaran asisten laboratorium sudah ditutup')
         self.assertContains(response, 'Ditutup')
-        self.assertContains(response, 'border-brand-200 bg-white ring-1 ring-brand-100')
+        self.assertContains(response, 'bg-brand-50/45')
 
         mahasiswa.refresh_from_db()
         self.assertEqual(get_unread_notification_count(mahasiswa), 0)
@@ -758,6 +758,31 @@ class KalenderViewsTests(TestCase):
 
         mahasiswa.refresh_from_db()
         self.assertEqual(get_unread_notification_count(mahasiswa), 0)
+
+    def test_notifikasi_mahasiswa_menampilkan_pendaftaran_aslab_ditolak(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Rani Ditolak', nim_nik='2201017', email='rani@example.com',
+            password='rahasia123', no_hp='081111111127', alamat='Jakarta',
+            fakultas='Teknologi Industri', prodi='Informatika', gender='perempuan', role='mahasiswa',
+        )
+        matkul = MataKuliahAsleb.objects.create(
+            kode='SDA_REJECTED', nama='Struktur Data Lanjut', dosen='Dosen Test', kelas='TIF-02',
+        )
+        PendaftaranAsleb.objects.create(
+            nama=mahasiswa.nama_pengguna, nim=mahasiswa.nim_nik, no_hp=mahasiswa.no_hp,
+            email=mahasiswa.email, program_studi=mahasiswa.prodi, semester=5,
+            matkul=matkul, status='ditolak',
+        )
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+
+        response = self.client.get(reverse('kalender:notifikasi_list'))
+
+        self.assertContains(response, 'Pendaftaran aslab Anda ditolak')
+        self.assertContains(response, 'Struktur Data Lanjut')
+        self.assertContains(response, 'Ditolak')
+        self.assertContains(response, 'bg-rose-50 text-rose-700')
 
     def test_notifikasi_aslab_menampilkan_pendaftaran_yang_sudah_digenerate(self):
         aslab = Pengguna.objects.create(

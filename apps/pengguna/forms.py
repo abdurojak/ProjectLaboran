@@ -36,6 +36,7 @@ class PenggunaForm(forms.ModelForm):
         model = Pengguna
         fields = [
             'foto',
+            'background_image',
             'nama_pengguna',
             'nim_nik',
             'email',
@@ -51,6 +52,7 @@ class PenggunaForm(forms.ModelForm):
         ]
         widgets = {
             'foto': forms.FileInput(attrs={'class': 'hidden', 'accept': 'image/*'}),
+            'background_image': forms.FileInput(attrs={'accept': 'image/*'}),
             'password': forms.PasswordInput(render_value=False),
             'alamat': forms.Textarea(attrs={'rows': 4}),
             'ringkasan_profesional': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Ceritakan profil, minat, dan tujuan profesional Anda.'}),
@@ -158,6 +160,7 @@ class PenggunaProfileForm(forms.ModelForm):
         model = Pengguna
         fields = [
             'foto',
+            'background_image',
             'nama_pengguna',
             'nim_nik',
             'email',
@@ -166,12 +169,17 @@ class PenggunaProfileForm(forms.ModelForm):
             'alamat',
             'fakultas',
             'prodi',
+            'ringkasan_profesional',
+            'keahlian',
             'role',
         ]
         widgets = {
             'foto': forms.FileInput(attrs={'class': 'hidden', 'accept': 'image/*'}),
+            'background_image': forms.FileInput(attrs={'accept': 'image/*'}),
             'no_hp': forms.TextInput(attrs={'inputmode': 'numeric', 'pattern': '[0-9]*', 'placeholder': 'Angka saja'}),
             'alamat': forms.Textarea(attrs={'rows': 4}),
+            'ringkasan_profesional': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Ceritakan profil, minat, dan tujuan profesional Anda.'}),
+            'keahlian': forms.Textarea(attrs={'rows': 3, 'placeholder': 'Contoh: Python, Django, Basis Data, Public Speaking'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -183,8 +191,7 @@ class PenggunaProfileForm(forms.ModelForm):
 
     def clean_foto(self):
         foto = self.cleaned_data.get('foto')
-        if not (self.current_pengguna and self.current_pengguna.role == 'admin'):
-            validate_human_face_photo(foto)
+        validate_human_face_photo(foto)
         return foto
 
     def clean_no_hp(self):

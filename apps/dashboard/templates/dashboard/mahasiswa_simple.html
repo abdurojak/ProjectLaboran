@@ -1,0 +1,32 @@
+{% if pendaftaran_asleb_dibuka %}
+<section class="surface-card overflow-hidden border-2 border-brand-300 bg-gradient-to-r from-brand-100 via-cyan-50 to-white p-5 shadow-lg shadow-brand-100/60 ring-4 ring-brand-50 md:p-6">
+    <div class="flex flex-wrap items-center justify-between gap-4">
+        <div class="flex min-w-0 items-center gap-4">
+            <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-100 text-brand-700"><i data-lucide="user-round-plus" class="h-6 w-6"></i></span>
+            <div><p class="text-xs font-black uppercase tracking-[0.2em] text-brand-700">Pendaftaran Aslab</p><h3 class="mt-1 text-xl font-black text-slate-900">Pendaftaran aslab sedang dibuka</h3><p class="mt-1 text-sm text-slate-500">Siapkan transkrip dan lengkapi profil Anda.</p></div>
+        </div>
+        <div class="flex items-center gap-3"><img src="https://api.qrserver.com/v1/create-qr-code/?size=96x96&data={{ public_registration_url|urlencode }}" alt="QR pendaftaran aslab" class="hidden h-16 w-16 rounded-xl bg-white p-1 sm:block"><a href="{{ public_registration_url }}" class="btn-primary gap-2"><i data-lucide="arrow-right" class="h-4 w-4"></i>Daftar Sekarang</a></div>
+    </div>
+</section>
+{% endif %}
+
+<section class="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(300px,.85fr)]">
+    <div class="surface-card min-w-0 p-5 md:p-6">
+        <div class="flex items-center justify-between gap-3"><div><p class="text-xs font-black uppercase tracking-[0.2em] text-blue-700">Agenda</p><h3 class="mt-2 text-xl font-black text-slate-900">Kegiatan Terdekat</h3></div><a href="{% url 'kalender:kegiatan_list' %}" class="btn-secondary">Kalender</a></div>
+        <div class="mt-5 grid gap-3">
+            {% for kegiatan in kegiatan_kalender_mahasiswa|slice:":4" %}
+            <article class="flex items-center gap-4 rounded-2xl border border-slate-200 px-4 py-3"><div class="w-12 shrink-0 text-center"><div class="text-xl font-black text-blue-700">{{ kegiatan.tanggal|date:"d" }}</div><div class="text-[10px] font-bold uppercase text-slate-500">{{ kegiatan.tanggal|date:"M" }}</div></div><div class="min-w-0"><p class="truncate font-bold text-slate-900">{{ kegiatan.judul }}</p><p class="mt-1 truncate text-xs text-slate-500">{{ kegiatan.waktu_mulai|time:"H:i" }} · {{ kegiatan.lokasi|default:"Lokasi belum diisi" }}</p></div></article>
+            {% empty %}<div class="rounded-2xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">Belum ada kegiatan terdekat.</div>{% endfor %}
+        </div>
+    </div>
+
+    <div class="surface-card min-w-0 p-5 md:p-6">
+        <div class="flex items-center justify-between gap-3"><div><p class="text-xs font-black uppercase tracking-[0.2em] text-amber-700">Peminjaman</p><h3 class="mt-2 text-xl font-black text-slate-900">Peminjaman Saya</h3></div><a href="{% url 'peminjaman:peminjaman_list' %}?milik_saya=1" class="btn-secondary">Lihat Semua</a></div>
+        <div class="mt-5 grid gap-3">
+            {% for peminjaman in peminjaman_saya|slice:":4" %}
+            <a href="{% url 'peminjaman:peminjaman_detail' peminjaman.pk %}" class="rounded-2xl border border-slate-200 px-4 py-3 transition hover:bg-slate-50"><div class="flex items-center justify-between gap-3"><p class="min-w-0 truncate font-bold text-slate-900">{{ peminjaman.barang.nama }}</p><span class="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{{ peminjaman.get_status_display }}</span></div><p class="mt-1 text-xs text-slate-500">{{ peminjaman.tanggal_pinjam|date:"d M" }} - {{ peminjaman.tanggal_kembali|date:"d M Y" }}</p></a>
+            {% empty %}<div class="rounded-2xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">Belum ada peminjaman alat.</div>{% endfor %}
+        </div>
+        <a href="{% url 'peminjaman:peminjaman_create' %}" class="btn-primary mt-4 w-full gap-2"><i data-lucide="plus" class="h-4 w-4"></i>Ajukan Peminjaman</a>
+    </div>
+</section>
