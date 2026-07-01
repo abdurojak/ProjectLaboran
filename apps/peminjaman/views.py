@@ -481,7 +481,7 @@ class PeminjamanAlatUpdateView(UpdateView):
             selected_barang = self.get_selected_barang_for_update(form)
             if selected_barang is None:
                 return self.form_invalid(form)
-            self.object = form.save()
+            self.object = form.save(commit=False)
             self.sync_group_metadata()
             self.sync_group_details(selected_barang)
         return redirect(self.success_url)
@@ -626,8 +626,12 @@ class PeminjamanAlatDeleteView(PostOnlyDeleteMixin, DeleteView):
 
     def form_valid(self, form):
         transaksi = self.object.transaksi
+        pengguna = getattr(self.request, 'current_pengguna', None)
         with transaction.atomic():
-            _get_peminjaman_group_for_update(self.object).delete()
+            if pengguna and pengguna.role in MANAGER_ROLES:
+                _get_peminjaman_group_for_update(self.object).delete()
+            else:
+                PeminjamanAlat.objects.select_for_update().filter(pk=self.object.pk).delete()
             if transaksi and not transaksi.detail.exists():
                 transaksi.delete()
         return redirect(self.success_url)

@@ -40,12 +40,35 @@
         {% endif %}
         {% endfor %}
         {% for field in form %}
-        {% if field.is_hidden or field.name == 'bukti_foto' or field.name == 'bukti_video' %}
+        {% if field.is_hidden or enable_camera_location_capture and field.name == 'bukti_foto' or enable_camera_location_capture and field.name == 'bukti_video' %}
         {{ field }}
+        {% elif field.name == 'bukti_foto' %}
+        <div class="min-w-0 md:col-span-2">
+            {% include "components/file_upload.html" with field=field current_file=None button_label="Pilih Foto" title="Upload bukti foto" empty_label="Belum ada foto dipilih" preview_label="Preview foto" preview_alt="Preview bukti foto absensi" icon="image-plus" %}
+            {% if field.help_text %}
+            <p class="mt-2 text-xs text-slate-500">{{ field.help_text }}</p>
+            {% endif %}
+            {% if field.errors %}
+            <div class="mt-2 text-sm font-semibold text-rose-600">{{ field.errors|striptags }}</div>
+            {% endif %}
+        </div>
+        {% elif field.name == 'bukti_video' %}
+        <div class="min-w-0 md:col-span-2">
+            {% include "components/file_upload.html" with field=field current_file=None button_label="Pilih Video" title="Upload bukti video" empty_label="Belum ada video dipilih" show_preview=False icon="video" %}
+            {% if field.help_text %}
+            <p class="mt-2 text-xs text-slate-500">{{ field.help_text }}</p>
+            {% endif %}
+            {% if field.errors %}
+            <div class="mt-2 text-sm font-semibold text-rose-600">{{ field.errors|striptags }}</div>
+            {% endif %}
+        </div>
         {% else %}
         <div class="{% if field.name == 'pekerjaan' %}md:col-span-2{% endif %} min-w-0">
             {{ field.label_tag }}
             {{ field }}
+            {% if field.help_text %}
+            <p class="mt-2 text-xs text-slate-500">{{ field.help_text }}</p>
+            {% endif %}
             {% if field.errors %}
             <div class="mt-2 text-sm font-semibold text-rose-600">{{ field.errors|striptags }}</div>
             {% endif %}
@@ -109,6 +132,50 @@
 {% endblock %}
 
 {% block extra_script %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('[data-file-upload]').forEach(function (component) {
+            const fileInput = component.querySelector('input[type="file"]');
+            const previewWrapper = component.querySelector('[data-preview-wrapper]');
+            const previewImage = component.querySelector('[data-preview-image]');
+            const fileName = component.querySelector('[data-file-name]');
+            const emptyLabel = component.dataset.emptyLabel || 'Belum ada file dipilih';
+            let previewUrl = null;
+
+            if (!fileInput || !fileName) {
+                return;
+            }
+
+            fileInput.addEventListener('change', function () {
+                const file = fileInput.files && fileInput.files[0];
+
+                if (previewUrl) {
+                    URL.revokeObjectURL(previewUrl);
+                    previewUrl = null;
+                }
+
+                if (!file) {
+                    if (previewImage) {
+                        previewImage.removeAttribute('src');
+                    }
+                    if (previewWrapper) {
+                        previewWrapper.classList.add('hidden');
+                    }
+                    fileName.textContent = emptyLabel;
+                    return;
+                }
+
+                fileName.textContent = file.name;
+
+                if (previewImage && previewWrapper) {
+                    previewUrl = URL.createObjectURL(file);
+                    previewImage.src = previewUrl;
+                    previewWrapper.classList.remove('hidden');
+                }
+            });
+        });
+    });
+</script>
 {% if enable_camera_location_capture %}
 <script>
     document.addEventListener('DOMContentLoaded', function () {

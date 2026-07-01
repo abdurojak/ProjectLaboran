@@ -130,7 +130,7 @@
                         <td>{{ absensi.materi_praktikum|default:"-" }}</td>
                         <td>{% if absensi.modul_praktikum %}<a class="inline-flex whitespace-nowrap font-semibold text-brand-700 hover:text-brand-800" href="{% url 'asleb:modul_download' absensi.modul_praktikum.pk %}">Unduh modul</a>{% else %}<span class="text-slate-400">Modul lama</span>{% endif %}</td>
                         <td>{% if absensi.bukti_foto %}<a class="inline-flex whitespace-nowrap font-semibold text-brand-700 hover:text-brand-800" href="{{ absensi.bukti_foto.url }}" target="_blank" rel="noreferrer">Lihat foto</a>{% else %}<span class="text-slate-400">-</span>{% endif %}</td>
-                        <td><a class="inline-flex whitespace-nowrap font-semibold text-brand-700 hover:text-brand-800" href="{{ absensi.bukti_video.url }}" target="_blank" rel="noreferrer">Lihat video</a></td>
+                        <td>{% if absensi.bukti_video %}<a class="inline-flex whitespace-nowrap font-semibold text-brand-700 hover:text-brand-800" href="{{ absensi.bukti_video.url }}" target="_blank" rel="noreferrer">Lihat video</a>{% else %}<span class="text-slate-400">-</span>{% endif %}</td>
                     </tr>
                     {% empty %}
                     <tr>
