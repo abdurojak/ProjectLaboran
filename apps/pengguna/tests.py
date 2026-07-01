@@ -276,8 +276,8 @@ class PenggunaViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Edit Profil')
         self.assertContains(response, 'Ganti Password')
-        self.assertContains(response, 'name="background_image"')
-        self.assertContains(response, 'Foto sampul bebas')
+        self.assertContains(response, 'name="cover_image"')
+        self.assertContains(response, 'Upload foto sampul profil')
         self.assertNotContains(response, 'Konfirmasi Hapus Pengguna')
         self.assertNotContains(response, f'href="{reverse("pengguna:delete", args=[self.pengguna.pk])}"')
 
@@ -391,6 +391,8 @@ class PenggunaViewTests(TestCase):
 
     @patch('apps.pengguna.forms.validate_human_face_photo')
     def test_update_profile_menolak_foto_tanpa_wajah(self, mock_validate_face):
+        self.pengguna.role = 'laboran'
+        self.pengguna.save(update_fields=['role'])
         mock_validate_face.side_effect = forms.ValidationError('Foto harus menampilkan wajah manusia yang jelas.')
         foto = SimpleUploadedFile('pemandangan.jpg', b'not a face', content_type='image/jpeg')
 
@@ -414,6 +416,17 @@ class PenggunaViewTests(TestCase):
         self.assertRedirects(response, reverse('pengguna:detail', args=[self.pengguna.pk]))
         self.pengguna.refresh_from_db()
         self.assertFalse(self.pengguna.foto)
+
+    @patch('apps.pengguna.forms.validate_human_face_photo')
+    def test_admin_boleh_mengunggah_foto_profil_tanpa_deteksi_wajah(self, mock_validate_face):
+        from .forms import PenggunaProfileForm
+
+        form = PenggunaProfileForm(current_pengguna=self.pengguna)
+        marker = object()
+        form.cleaned_data = {'foto': marker}
+
+        self.assertIs(form.clean_foto(), marker)
+        mock_validate_face.assert_not_called()
 
     def test_mahasiswa_tidak_bisa_mengubah_role_lewat_update_profile(self):
         self.pengguna.role = 'mahasiswa'
