@@ -104,6 +104,15 @@ class SettingsView(TemplateView):
                 'icon': 'message-circle-question',
             })
 
+        if pengguna.role in {'admin', 'laboran'}:
+            cards.append({
+                'title': 'Pengguna',
+                'description': 'Lihat akun dan data pengguna sistem.',
+                'url': 'pengguna:list',
+                'args': [],
+                'icon': 'users',
+            })
+
         if pengguna.role == 'admin':
             cards.extend([
                 {
@@ -119,13 +128,6 @@ class SettingsView(TemplateView):
                     'url': 'pengguna:master_akademik',
                     'args': [],
                     'icon': 'graduation-cap',
-                },
-                {
-                    'title': 'Pengguna',
-                    'description': 'Kelola akun dan role pengguna sistem.',
-                    'url': 'pengguna:list',
-                    'args': [],
-                    'icon': 'users',
                 },
             ])
 

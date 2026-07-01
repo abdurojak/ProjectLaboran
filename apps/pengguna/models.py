@@ -59,6 +59,7 @@ class Pengguna(models.Model):
     ]
 
     foto = models.ImageField(upload_to='pengguna/', blank=True, null=True)
+    cover_image = models.ImageField('Foto sampul', upload_to='pengguna/covers/', blank=True, null=True)
     cv = models.FileField('CV', upload_to='pengguna/cv/', blank=True, null=True)
     kode_pengguna = models.CharField(max_length=10, unique=True, blank=True, editable=False)
     nama_pengguna = models.CharField(max_length=150)

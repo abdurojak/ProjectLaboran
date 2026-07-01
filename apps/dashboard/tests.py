@@ -49,22 +49,21 @@ class DashboardViewTests(TestCase):
             [child['title'] for child in group['children']],
             ['Inventaris', 'Barang Tertinggal', 'Peminjaman Alat'],
         )
-        settings_group = next(link for link in response.context['sidebar_links'] if link['title'] == 'Pengaturan')
-        self.assertEqual([child['title'] for child in settings_group['children']], ['Pengguna', 'Pengaturan Sistem'])
+        settings_link = next(link for link in response.context['sidebar_links'] if link['title'] == 'Pengaturan')
+        self.assertNotIn('children', settings_link)
         self.assertNotContains(response, 'Master Akademik')
 
-    def test_sidebar_admin_menampilkan_master_akademik(self):
+    def test_master_akademik_admin_hanya_muncul_di_halaman_pengaturan(self):
         self.pengguna.role = 'admin'
         self.pengguna.save(update_fields=['role'])
 
         response = self.client.get(reverse('dashboard:home'))
 
-        self.assertContains(response, 'Master Akademik')
-        settings_group = next(link for link in response.context['sidebar_links'] if link['title'] == 'Pengaturan')
-        self.assertEqual(
-            [child['title'] for child in settings_group['children']],
-            ['Pengguna', 'Master Akademik', 'Pengaturan Sistem'],
-        )
+        self.assertNotContains(response, 'Master Akademik')
+        settings_link = next(link for link in response.context['sidebar_links'] if link['title'] == 'Pengaturan')
+        self.assertNotIn('children', settings_link)
+        settings_response = self.client.get(reverse('core:settings'))
+        self.assertContains(settings_response, 'Master Akademik')
 
     def test_dashboard_shows_pending_peminjaman(self):
         PeminjamanAlat.objects.create(
@@ -448,6 +447,7 @@ class DashboardViewTests(TestCase):
 
         response = self.client.get(reverse('dashboard:home'))
 
+        self.assertNotIn('Asisten Laboratorium', [link['title'] for link in response.context['sidebar_links']])
         self.assertContains(response, 'Peminjaman Saya')
         self.assertContains(response, 'Mikroskop')
         self.assertContains(response, 'Jadwal Praktikum')
@@ -688,7 +688,14 @@ class DashboardViewTests(TestCase):
             semester=4,
             tanggal_bergabung=timezone.localdate(),
         )
-        matkul = MataKuliahAsleb.objects.get(kode='SDA_TIF01_ABDUL')
+        matkul, _ = MataKuliahAsleb.objects.get_or_create(
+            kode='SDA_TIF01_ABDUL',
+            defaults={
+                'nama': 'Struktur Data dan Algoritma',
+                'dosen': 'Abdul Rois',
+                'kelas': 'TIF-01',
+            },
+        )
         for index in range(3):
             PendaftaranAsleb.objects.create(
                 nama='Ricardo Dharma Saputra',

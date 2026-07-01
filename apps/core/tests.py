@@ -171,6 +171,23 @@ class BantuanTests(TestCase):
         self.assertEqual(response.status_code, 200)
         card_titles = [card['title'] for card in response.context['settings_cards']]
         self.assertNotIn('Pendaftaran Aslab', card_titles)
+        self.assertIn('Pengguna', card_titles)
+
+    def test_tampilan_disimpan_otomatis_ke_akun_tanpa_tombol_simpan(self):
+        response = self.client.get(reverse('core:settings'))
+        self.assertNotContains(response, 'Simpan Tampilan')
+        self.assertContains(response, 'Tersimpan otomatis')
+
+        response = self.client.post(reverse('core:settings'), {
+            'theme_mode': 'dark',
+            'background_mode': 'lab',
+            'hapus_background': '',
+        })
+
+        self.assertRedirects(response, reverse('core:settings'))
+        self.mahasiswa.refresh_from_db()
+        self.assertEqual(self.mahasiswa.theme_mode, 'dark')
+        self.assertEqual(self.mahasiswa.background_mode, 'lab')
 
 
 class BantuanWebSocketTests(TransactionTestCase):
