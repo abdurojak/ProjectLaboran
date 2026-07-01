@@ -9,7 +9,25 @@
     <div class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-4">
         <nav class="grid gap-2">
             {% for link in sidebar_links %}
-                {% if link.url %}
+                {% if link.children %}
+                <details data-sidebar-group class="group rounded-2xl" {% if link.expanded %}open{% endif %}>
+                    <summary class="{% if link.active %}bg-brand-50 text-brand-800 ring-1 ring-brand-100{% else %}text-slate-700 hover:bg-slate-50{% endif %} flex h-14 cursor-pointer list-none items-center gap-4 rounded-2xl px-3 font-semibold transition [&::-webkit-details-marker]:hidden" title="{{ link.title }}">
+                        <span class="{{ link.icon_bg }} {{ link.icon_text }} flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl">
+                            <i data-lucide="{{ link.icon }}" class="h-5 w-5"></i>
+                        </span>
+                        <span data-sidebar-label class="hidden min-w-0 flex-1 truncate">{{ link.title }}</span>
+                        <i data-sidebar-label data-lucide="chevron-down" class="hidden h-4 w-4 shrink-0 transition group-open:rotate-180"></i>
+                    </summary>
+                    <div data-sidebar-submenu class="ml-5 mt-2 grid gap-1 border-l-2 border-slate-100 pl-3">
+                        {% for child in link.children %}
+                        <a href="{% url child.url %}" class="{% if child.active %}bg-brand-50 font-bold text-brand-800{% else %}text-slate-600 hover:bg-slate-50 hover:text-slate-900{% endif %} flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-sm transition" title="{{ child.title }}">
+                            <i data-lucide="{{ child.icon }}" class="h-4 w-4 shrink-0"></i>
+                            <span data-sidebar-label class="hidden min-w-0 leading-5">{{ child.title }}</span>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </details>
+                {% elif link.url %}
                 <a href="{% url link.url %}" class="{% if link.active %}bg-brand-50 text-brand-800 ring-1 ring-brand-100{% else %}text-slate-700 hover:bg-slate-50{% endif %} flex h-14 items-center gap-4 rounded-2xl px-3 font-semibold transition" title="{{ link.title }}">
                     <span class="{{ link.icon_bg }} {{ link.icon_text }} flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl">
                         <i data-lucide="{{ link.icon }}" class="h-5 w-5"></i>
@@ -50,6 +68,7 @@
         }
 
         const labels = sidebar.querySelectorAll('[data-sidebar-label]');
+        const submenus = sidebar.querySelectorAll('[data-sidebar-submenu]');
         const profile = sidebar.querySelector('[data-sidebar-profile]');
         const shell = sidebar.closest('[data-dashboard-sidebar-shell]');
         const header = document.querySelector('body > header');
@@ -108,6 +127,11 @@
             labels.forEach(function (label) {
                 label.classList.toggle('hidden', collapsed);
                 label.classList.toggle('block', !collapsed);
+            });
+
+            submenus.forEach(function (submenu) {
+                submenu.classList.toggle('hidden', collapsed);
+                submenu.classList.toggle('grid', !collapsed);
             });
 
             if (brandShell) {
