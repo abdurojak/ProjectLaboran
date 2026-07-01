@@ -125,6 +125,7 @@ SIDEBAR_LINKS = [
         ],
     },
     {'title': 'Ruangan', 'icon': 'door-open', 'url': 'ruangan:ruangan_list', 'namespace': 'ruangan'},
+    {'title': 'Surat Laboran', 'icon': 'mails', 'url': 'surat:list', 'namespace': 'surat', 'roles': {'admin', 'laboran'}},
     {'title': 'Pengaturan', 'icon': 'settings', 'url': 'core:settings', 'namespace': 'core', 'url_names': {'settings'}},
 ]
 

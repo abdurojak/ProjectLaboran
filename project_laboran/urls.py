@@ -31,5 +31,6 @@ urlpatterns = [
     path('pengguna/', include('apps.pengguna.urls')),
     path('pengaturan/', include('apps.core.urls')),
     path('ruangan/', include('apps.ruangan.urls')),
+    path('surat/', include('apps.surat.urls')),
     path('admin/', admin.site.urls),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
