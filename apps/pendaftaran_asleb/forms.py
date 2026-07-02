@@ -176,6 +176,10 @@ class PublicTranskripForm(forms.Form):
 class PublicBerkasPendaftaranForm(forms.Form):
     SEMESTER_CHOICES = [(semester, f'Semester {semester}') for semester in range(3, 9)]
     signature_data = forms.CharField(widget=forms.HiddenInput, required=False)
+    pernyataan_data = forms.BooleanField(
+        required=True,
+        error_messages={'required': 'Anda harus menyetujui pernyataan kebenaran data sebelum mengirim pendaftaran.'},
+    )
 
     nama = forms.CharField(max_length=150, widget=forms.TextInput(attrs={'placeholder': 'Nama lengkap calon aslab'}))
     nim = forms.CharField(max_length=30, widget=forms.TextInput(attrs={'placeholder': 'NIM mahasiswa'}))

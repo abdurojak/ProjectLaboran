@@ -15,7 +15,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from apps.asleb.models import Asleb
 from apps.pengguna.models import PengalamanPengguna, Pengguna
 
-from .forms import PendaftaranAslebPublicForm
+from .forms import PendaftaranAslebPublicForm, PublicBerkasPendaftaranForm
 from .models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb, PeriodeAsleb
 from .services import get_asleb_experience, sync_expired_asleb_periods
 from .utils import analyze_transcript, extract_grade_from_transcript, get_public_registration_url
@@ -184,6 +184,7 @@ class PendaftaranAslebViewTests(TestCase):
             'rekening': 'BNI 123456789',
             'alasan': 'Ingin membantu praktikum.',
             'signature_data': make_signature_data(),
+            'pernyataan_data': 'on',
         })
 
         self.assertRedirects(post_response, reverse('pendaftaran_asleb:pendaftaran_success'))
@@ -282,9 +283,31 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertEqual(wizard['step'], 'transkrip')
         self.assertFalse(wizard['nilai_lolos'])
 
-    def test_tidak_bisa_kembali_sebelum_upload_transkrip(self):
+    def test_bisa_kembali_sebelum_upload_transkrip(self):
         mahasiswa = self.create_mahasiswa_dengan_cv('0642201043')
         self.start_transcript_step(mahasiswa)
+
+        response = self.client.post(
+            reverse('pendaftaran_asleb:pendaftaran_public'),
+            {'action': 'back'},
+        )
+
+        self.assertRedirects(response, reverse('pendaftaran_asleb:pendaftaran_public'))
+        self.assertEqual(self.client.session[WIZARD_SESSION_KEY]['step'], 'matkul')
+
+    def test_tahap_berkas_bisa_kembali_tanpa_mengisi_form(self):
+        mahasiswa = self.create_mahasiswa_dengan_cv('0642201044')
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session[WIZARD_SESSION_KEY] = {
+            'step': 'berkas',
+            'matkul_id': self.matkul.pk,
+            'transkrip_path': 'pendaftaran_asleb/transkrip_tmp/contoh.pdf',
+            'nilai_transkrip': 'A',
+            'nilai_lolos': True,
+            'nim_terverifikasi': True,
+        }
+        session.save()
 
         response = self.client.post(
             reverse('pendaftaran_asleb:pendaftaran_public'),
@@ -500,6 +523,21 @@ class PendaftaranAslebViewTests(TestCase):
 
         self.assertFalse(form.is_valid())
         self.assertIn('signature_data', form.errors)
+
+    def test_tahap_berkas_wajib_menyetujui_pernyataan_data(self):
+        mahasiswa = self.create_mahasiswa_dengan_cv('0642201045')
+        form = PublicBerkasPendaftaranForm(
+            data={
+                'semester': 4,
+                'metode_rekening': 'bni',
+                'rekening': '1234567890',
+                'signature_data': make_signature_data(),
+            },
+            current_pengguna=mahasiswa,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('pernyataan_data', form.errors)
 
     def test_pendaftaran_search_filters_data(self):
         response = self.client.get(reverse('pendaftaran_asleb:pendaftaran_list'), {'q': 'SDA'})
