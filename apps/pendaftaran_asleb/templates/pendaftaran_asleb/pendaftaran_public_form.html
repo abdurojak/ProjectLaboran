@@ -94,7 +94,7 @@
                         <i data-lucide="scan-text" class="h-4 w-4"></i>
                         <span>Baca Transkrip</span>
                     </button>
-                    <button type="submit" name="action" value="back" class="btn-secondary disabled:cursor-not-allowed disabled:opacity-45" {% if not transkrip_uploaded %}disabled title="Upload transkrip terlebih dahulu"{% endif %}>
+                    <button type="submit" name="action" value="back" class="btn-secondary">
                         <i data-lucide="arrow-left" class="h-4 w-4"></i>
                         <span>Kembali</span>
                     </button>
@@ -111,6 +111,7 @@
                 {% for field in berkas_form %}
                     {% if field.name == 'signature_data' %}
                         {{ field }}
+                    {% elif field.name == 'pernyataan_data' %}
                     {% elif field.is_hidden %}
                         {{ field }}
                     {% else %}
@@ -154,12 +155,25 @@
                 {% endif %}
             </div>
 
+            <div class="rounded-3xl border border-emerald-200 bg-emerald-50/70 p-5">
+                <label for="{{ berkas_form.pernyataan_data.id_for_label }}" class="flex cursor-pointer items-start gap-4">
+                    <span class="mt-0.5">{{ berkas_form.pernyataan_data }}</span>
+                    <span>
+                        <span class="block font-black text-emerald-950">Pernyataan kebenaran data</span>
+                        <span class="mt-1 block text-sm leading-6 text-emerald-900/75">Saya menyatakan bahwa seluruh data, dokumen, informasi rekening, dan tanda tangan yang saya isi di atas adalah benar, lengkap, serta dapat dipertanggungjawabkan. Saya bersedia menerima konsekuensi apabila di kemudian hari ditemukan informasi yang tidak sesuai.</span>
+                    </span>
+                </label>
+                {% if berkas_form.pernyataan_data.errors %}
+                <div class="mt-3 text-sm font-semibold text-rose-600">{{ berkas_form.pernyataan_data.errors|striptags }}</div>
+                {% endif %}
+            </div>
+
             <div class="flex flex-wrap gap-3">
-                <button type="submit" class="btn-primary bg-teal-700 hover:bg-teal-800 shadow-teal-900/15">
+                <button id="submit-registration" type="submit" class="btn-primary bg-teal-700 hover:bg-teal-800 shadow-teal-900/15 disabled:cursor-not-allowed disabled:opacity-50" disabled>
                     <i data-lucide="send" class="h-4 w-4"></i>
                     <span>Kirim Pendaftaran</span>
                 </button>
-                <button type="submit" name="action" value="back" class="btn-secondary">
+                <button type="submit" name="action" value="back" class="btn-secondary" formnovalidate>
                     <i data-lucide="arrow-left" class="h-4 w-4"></i>
                     <span>Kembali Cek Transkrip</span>
                 </button>
@@ -218,6 +232,8 @@
         const clearButton = document.getElementById('clear-signature');
         const status = document.getElementById('signature-status');
         const signatureInput = document.getElementById('id_signature_data');
+        const confirmationInput = document.getElementById('id_pernyataan_data');
+        const submitButton = document.getElementById('submit-registration');
         const form = canvas ? canvas.closest('form') : null;
 
         if (!canvas || !signatureInput || !form) {
@@ -261,6 +277,7 @@
             status.textContent = 'Tanda tangan sudah dibuat.';
             status.classList.remove('text-slate-500');
             status.classList.add('text-teal-700');
+            updateSubmitState();
         }
 
         function stopDraw() {
@@ -281,7 +298,22 @@
             status.textContent = 'Belum ada tanda tangan.';
             status.classList.add('text-slate-500');
             status.classList.remove('text-teal-700');
+            updateSubmitState();
         });
+
+        function updateSubmitState() {
+            if (!submitButton) {
+                return;
+            }
+            const requiredFieldsComplete = Array.from(form.querySelectorAll('input[required], select[required], textarea[required]'))
+                .filter((field) => field !== confirmationInput)
+                .every((field) => field.type === 'checkbox' ? field.checked : Boolean(field.value.trim()));
+            submitButton.disabled = !(requiredFieldsComplete && hasSignature && confirmationInput && confirmationInput.checked);
+        }
+
+        form.addEventListener('input', updateSubmitState);
+        form.addEventListener('change', updateSubmitState);
+        updateSubmitState();
 
         form.addEventListener('submit', function () {
             signatureInput.value = hasSignature ? canvas.toDataURL('image/png') : '';

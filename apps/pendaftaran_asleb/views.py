@@ -178,9 +178,6 @@ class PendaftaranAslebPublicCreateView(View):
         if wizard.get('step') == 'berkas':
             wizard['step'] = 'transkrip'
         elif wizard.get('step') == 'transkrip':
-            if not wizard.get('transkrip_path'):
-                messages.warning(request, 'Upload dan baca transkrip terlebih dahulu sebelum kembali.')
-                return redirect('pendaftaran_asleb:pendaftaran_public')
             wizard['step'] = 'matkul'
         request.session.modified = True
         return redirect('pendaftaran_asleb:pendaftaran_public')
@@ -364,7 +361,6 @@ class PendaftaranAslebPublicCreateView(View):
             'selected_matkul': matkul,
             'nilai_transkrip': wizard.get('nilai_transkrip'),
             'nilai_lolos': wizard.get('nilai_lolos'),
-            'transkrip_uploaded': bool(wizard.get('transkrip_path')),
             'current_pengguna': current_pengguna,
             'matkul_form': forms.get('matkul_form') or PublicPilihMatkulForm(),
             'transkrip_form': forms.get('transkrip_form') or PublicTranskripForm(),
