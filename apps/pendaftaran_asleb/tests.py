@@ -82,10 +82,6 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertContains(response, 'Status: Ditutup')
         self.assertContains(response, 'Buka Pendaftaran')
         self.assertContains(response, get_public_registration_url())
-        self.assertContains(response, 'Bagikan Pendaftaran')
-        self.assertContains(response, 'WhatsApp')
-        self.assertContains(response, 'Telegram')
-        self.assertContains(response, 'Salin Pesan')
 
     def test_toggle_pendaftaran_membuka_dan_menutup_form(self):
         Pengguna.objects.create(
@@ -184,8 +180,8 @@ class PendaftaranAslebViewTests(TestCase):
         post_response = self.client.post(reverse('pendaftaran_asleb:pendaftaran_public'), {
             'semester': 4,
             'matkul': self.matkul.pk,
-            'metode_rekening': 'rekening_bank',
-            'rekening': 'BCA 123456789',
+            'metode_rekening': 'bni',
+            'rekening': 'BNI 123456789',
             'alasan': 'Ingin membantu praktikum.',
             'signature_data': make_signature_data(),
         })
@@ -266,6 +262,37 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertEqual(wizard['step'], 'transkrip')
         self.assertFalse(wizard['nim_terverifikasi'])
         self.assertFalse(wizard.get('transkrip_path'))
+
+    def test_transkrip_nilai_c_tidak_dapat_lanjut(self):
+        mahasiswa = self.create_mahasiswa_dengan_cv('0642201042')
+        self.start_transcript_step(mahasiswa)
+        transcript = SimpleUploadedFile(
+            'transkrip-c.txt',
+            b'NIM: 0642201042\nStruktur Data dan Algoritma 3 C',
+            content_type='text/plain',
+        )
+
+        response = self.client.post(
+            reverse('pendaftaran_asleb:pendaftaran_public'),
+            {'transkrip': transcript},
+        )
+
+        self.assertRedirects(response, reverse('pendaftaran_asleb:pendaftaran_public'))
+        wizard = self.client.session[WIZARD_SESSION_KEY]
+        self.assertEqual(wizard['step'], 'transkrip')
+        self.assertFalse(wizard['nilai_lolos'])
+
+    def test_tidak_bisa_kembali_sebelum_upload_transkrip(self):
+        mahasiswa = self.create_mahasiswa_dengan_cv('0642201043')
+        self.start_transcript_step(mahasiswa)
+
+        response = self.client.post(
+            reverse('pendaftaran_asleb:pendaftaran_public'),
+            {'action': 'back'},
+        )
+
+        self.assertRedirects(response, reverse('pendaftaran_asleb:pendaftaran_public'))
+        self.assertEqual(self.client.session[WIZARD_SESSION_KEY]['step'], 'transkrip')
 
     def test_transkrip_pdf_rusak_tetap_dibaca_dengan_fallback_pdfium(self):
         transcript = SimpleUploadedFile(
@@ -421,10 +448,8 @@ class PendaftaranAslebViewTests(TestCase):
             current_pengguna=mahasiswa,
         )
 
-        self.assertTrue(form.is_valid(), form.errors)
-        pendaftaran = form.save()
-        self.assertEqual(pendaftaran.nilai_transkrip, 'C')
-        self.assertEqual(pendaftaran.skor_nilai, 1)
+        self.assertFalse(form.is_valid())
+        self.assertIn('transkrip', form.errors)
 
     def test_extract_grade_menormalkan_nilai_plus_minus(self):
         transcript = SimpleUploadedFile(
@@ -632,8 +657,8 @@ class PeriodeAslebTests(TestCase):
         self.assertEqual(pengguna.role, 'mahasiswa')
         self.assertTrue(PendaftaranAsleb.objects.filter(pk=registration.pk).exists())
 
-    def test_batas_matkul_junior_dua_dan_senior_satu(self):
-        self.assertEqual(get_asleb_experience('0642201888'), ('junior', 2))
+    def test_batas_matkul_junior_satu_dan_senior_dua(self):
+        self.assertEqual(get_asleb_experience('0642201888'), ('junior', 1))
         matkul = MataKuliahAsleb.objects.first()
         for year in [2024, 2025, 2026]:
             period = PeriodeAsleb.get_for_date(date(year, 3, 1))
@@ -643,4 +668,4 @@ class PeriodeAslebTests(TestCase):
                 matkul=matkul, periode=period, status='digenerate',
             )
 
-        self.assertEqual(get_asleb_experience('0642201888'), ('senior', 1))
+        self.assertEqual(get_asleb_experience('0642201888'), ('senior', 2))

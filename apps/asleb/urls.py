@@ -24,6 +24,7 @@ from .views import (
     confirm_honor_transfer,
     download_surat_honor,
     download_modul_praktikum,
+    end_asleb_membership,
     delete_peserta_praktikum,
     toggle_absensi_status,
 )
@@ -46,6 +47,7 @@ urlpatterns = [
     path('praktikum-mahasiswa/<int:matkul_pk>/modul/<int:modul_pk>/', NilaiAbsensiMahasiswaView.as_view(), name='praktikum_nilai'),
     path('<int:pk>/', AslebDetailView.as_view(), name='asleb_detail'),
     path('<int:pk>/edit/', AslebUpdateView.as_view(), name='asleb_update'),
+    path('<int:pk>/akhiri-masa-tugas/', end_asleb_membership, name='asleb_end_membership'),
     path('<int:pk>/hapus/', AslebDeleteView.as_view(), name='asleb_delete'),
     path('honorarium/', HonorAslebListView.as_view(), name='honor_list'),
     path('honorarium/surat/', SuratHonorAslebListView.as_view(), name='surat_honor_list'),

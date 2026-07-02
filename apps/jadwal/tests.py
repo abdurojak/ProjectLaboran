@@ -7,8 +7,9 @@ from django.urls import reverse
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb
 from apps.pengguna.models import Pengguna
 from apps.ruangan.models import RuanganLab
+from apps.asleb.models import PesertaPraktikum
 
-from .models import JadwalPraktikum
+from .models import JadwalPraktikum, PermintaanPerubahanJadwal
 
 
 class JadwalViewTests(TestCase):
@@ -28,6 +29,7 @@ class JadwalViewTests(TestCase):
         session = self.client.session
         session['pengguna_id'] = pengguna.pk
         session.save()
+        self.laboran = pengguna
 
         self.ruangan = RuanganLab.objects.create(
             nama='Lab Rekayasa Data',
@@ -35,6 +37,14 @@ class JadwalViewTests(TestCase):
             deskripsi='Lab untuk pengujian jadwal.',
             kapasitas=30,
             warna='violet',
+        )
+        self.lab_rpl, _ = RuanganLab.objects.update_or_create(
+            kode='LAB-RPL',
+            defaults={'nama': 'Lab Rekayasa Perangkat Lunak', 'kapasitas': 20, 'warna': 'teal', 'aktif': True},
+        )
+        self.lab_ski, _ = RuanganLab.objects.update_or_create(
+            kode='LAB-SKI',
+            defaults={'nama': 'Lab Sistem Keamanan Informasi', 'kapasitas': 18, 'warna': 'amber', 'aktif': True},
         )
         self.matkul = MataKuliahAsleb.objects.create(
             kode='TEST_JADWAL_BASIS_DATA',
@@ -130,8 +140,8 @@ class JadwalViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'name="ruangan_tambahan"', html=False)
         self.assertContains(response, 'Lab Rekayasa Perangkat Lunak')
-        self.assertContains(response, 'Lab Sistem Keamanan Informasi')
-        self.assertContains(response, 'gabungan dua lab hanya berlaku')
+        self.assertNotContains(response, '<option value="2">LAB-SKI', html=False)
+        self.assertContains(response, 'hanya Lab Rekayasa Perangkat Lunak')
 
     def test_form_jadwal_menyimpan_matkul_kelas_dan_pengampu_dari_pilihan_matkul(self):
         response = self.client.post(reverse('jadwal:jadwal_create'), {
@@ -149,14 +159,14 @@ class JadwalViewTests(TestCase):
         self.assertEqual(jadwal.kelas, self.matkul_lain.kelas)
         self.assertEqual(jadwal.pengampu, self.matkul_lain.dosen)
 
-    def test_form_jadwal_dapat_menyimpan_ruangan_tambahan_untuk_pasangan_rpl_dan_ski(self):
+    def test_form_jadwal_ruangan_tambahan_hanya_rpl(self):
         lab_rpl = RuanganLab.objects.get(kode='LAB-RPL')
         lab_ski = RuanganLab.objects.get(kode='LAB-SKI')
 
         response = self.client.post(reverse('jadwal:jadwal_create'), {
             'matkul': self.matkul_lain.pk,
-            'ruangan': lab_rpl.pk,
-            'ruangan_tambahan': lab_ski.pk,
+            'ruangan': lab_ski.pk,
+            'ruangan_tambahan': lab_rpl.pk,
             'hari': 'selasa',
             'waktu_mulai': '13:00',
             'waktu_selesai': '15:00',
@@ -165,11 +175,11 @@ class JadwalViewTests(TestCase):
 
         self.assertRedirects(response, reverse('jadwal:jadwal_list'))
         jadwal = JadwalPraktikum.objects.get(hari='selasa', mata_kuliah=str(self.matkul_lain))
-        self.assertEqual(jadwal.ruangan_id, lab_rpl.pk)
-        self.assertEqual(jadwal.ruangan_tambahan_id, lab_ski.pk)
+        self.assertEqual(jadwal.ruangan_id, lab_ski.pk)
+        self.assertEqual(jadwal.ruangan_tambahan_id, lab_rpl.pk)
         self.assertEqual(
             jadwal.get_display_ruangan_nama(),
-            'Lab Rekayasa Perangkat Lunak + Lab Sistem Keamanan Informasi',
+            'Lab Sistem Keamanan Informasi + Lab Rekayasa Perangkat Lunak',
         )
 
     def test_jadwal_lab_pasangan_dianggap_bentrok_saat_salah_satunya_sudah_dipakai(self):
@@ -178,8 +188,8 @@ class JadwalViewTests(TestCase):
         JadwalPraktikum.objects.create(
             mata_kuliah='Praktikum Mobile',
             kelas='TI 4A',
-            ruangan=lab_rpl,
-            ruangan_tambahan=lab_ski,
+            ruangan=lab_ski,
+            ruangan_tambahan=lab_rpl,
             pengampu='Bu Rina',
             hari='selasa',
             waktu_mulai=time(9, 0),
@@ -423,7 +433,7 @@ class JadwalViewTests(TestCase):
         response = self.client.get(reverse('jadwal:jadwal_list'), {'hari': 'kamis'})
 
         self.assertContains(response, reverse('jadwal:jadwal_update', args=[jadwal_milik_aslab.pk]))
-        self.assertContains(response, f'action="{reverse("jadwal:jadwal_delete", args=[jadwal_milik_aslab.pk])}"')
+        self.assertNotContains(response, f'action="{reverse("jadwal:jadwal_delete", args=[jadwal_milik_aslab.pk])}"')
         self.assertNotContains(response, reverse('jadwal:jadwal_update', args=[jadwal_lain.pk]))
         self.assertNotContains(response, f'action="{reverse("jadwal:jadwal_delete", args=[jadwal_lain.pk])}"')
 
@@ -433,6 +443,56 @@ class JadwalViewTests(TestCase):
         self.assertEqual(update_response.status_code, 404)
         self.assertEqual(delete_response.status_code, 404)
         self.assertTrue(JadwalPraktikum.objects.filter(pk=jadwal_lain.pk).exists())
+
+    def test_ruangan_difilter_ke_kapasitas_terkecil_yang_mencukupi_peserta(self):
+        PesertaPraktikum.objects.bulk_create([
+            PesertaPraktikum(matkul=self.matkul_lain, nim=f'064{i:07d}', nama=f'Mahasiswa {i}')
+            for i in range(20)
+        ])
+
+        response = self.client.get(reverse('jadwal:ruangan_tersedia'), {'matkul': self.matkul_lain.pk})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['participant_count'], 20)
+        self.assertTrue(payload['rooms'])
+        self.assertTrue(all(room['capacity'] == 20 for room in payload['rooms']))
+
+    def test_edit_jadwal_aslab_menunggu_persetujuan_laboran(self):
+        aslab = self.login_as_asisten_lab()
+        PendaftaranAsleb.objects.create(
+            nama=aslab.nama_pengguna, nim=aslab.nim_nik, no_hp=aslab.no_hp,
+            email=aslab.email, program_studi=aslab.prodi, semester=5,
+            matkul=self.matkul, status='digenerate',
+        )
+        jadwal = JadwalPraktikum.objects.get(mata_kuliah=str(self.matkul))
+
+        response = self.client.post(reverse('jadwal:jadwal_update', args=[jadwal.pk]), {
+            'matkul': self.matkul.pk,
+            'ruangan': self.ruangan.pk,
+            'hari': 'jumat',
+            'waktu_mulai': '13:00',
+            'waktu_selesai': '14:00',
+            'catatan': 'Usulan jadwal baru',
+        })
+
+        self.assertRedirects(response, reverse('jadwal:jadwal_detail', args=[jadwal.pk]))
+        jadwal.refresh_from_db()
+        self.assertEqual(jadwal.hari, 'kamis')
+        change_request = PermintaanPerubahanJadwal.objects.get(jadwal=jadwal, status='diajukan')
+
+        session = self.client.session
+        session['pengguna_id'] = self.laboran.pk
+        session.save()
+        approve_response = self.client.post(
+            reverse('jadwal:perubahan_proses', args=[change_request.pk, 'setujui'])
+        )
+
+        self.assertRedirects(approve_response, reverse('jadwal:jadwal_detail', args=[jadwal.pk]))
+        jadwal.refresh_from_db()
+        change_request.refresh_from_db()
+        self.assertEqual(jadwal.hari, 'jumat')
+        self.assertEqual(change_request.status, 'diterima')
 
     def test_jadwal_list_hanya_menampilkan_jadwal_diterima_tanpa_badge_status(self):
         JadwalPraktikum.objects.create(

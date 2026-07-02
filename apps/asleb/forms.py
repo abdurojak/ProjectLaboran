@@ -67,7 +67,7 @@ class HonorAslebForm(forms.ModelForm):
             'bulan': forms.DateInput(attrs={'type': 'date'}),
             'tanggal_transfer': forms.DateInput(attrs={'type': 'date'}),
             'bukti_transfer': forms.FileInput(attrs={'accept': 'image/*,.pdf'}),
-            'nomor_transfer': forms.TextInput(attrs={'placeholder': 'Contoh: BCA 123456789 / DANA 0812xxxx'}),
+            'nomor_transfer': forms.TextInput(attrs={'placeholder': 'Nomor rekening atau nomor e-wallet'}),
             'nama_pemilik_transfer': forms.TextInput(attrs={'placeholder': 'Nama sesuai rekening/e-wallet'}),
             'keterangan': forms.Textarea(attrs={'rows': 3}),
         }

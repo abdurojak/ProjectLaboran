@@ -29,6 +29,12 @@
         <div class="rounded-3xl bg-slate-50 p-5 md:col-span-2"><div class="text-sm font-semibold text-slate-500">Waktu</div><div class="mt-2 text-xl font-bold text-slate-900">{{ jadwal.waktu_mulai|time:"H:i" }}{% if jadwal.waktu_selesai %} - {{ jadwal.waktu_selesai|time:"H:i" }}{% endif %}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5 md:col-span-2"><div class="text-sm font-semibold text-slate-500">Catatan</div><div class="mt-2 text-base leading-7 text-slate-700">{{ jadwal.catatan|default:"-" }}</div></div>
     </div>
+    {% if permintaan_terakhir %}
+    <div class="rounded-3xl border {% if permintaan_terakhir.status == 'diajukan' %}border-amber-200 bg-amber-50{% elif permintaan_terakhir.status == 'diterima' %}border-emerald-200 bg-emerald-50{% else %}border-rose-200 bg-rose-50{% endif %} p-5">
+        <div class="flex items-center gap-3"><i data-lucide="calendar-sync" class="h-5 w-5"></i><h3 class="font-black">Permintaan perubahan: {{ permintaan_terakhir.get_status_display }}</h3></div>
+        <p class="mt-2 text-sm leading-6">Usulan {{ permintaan_terakhir.get_hari_display }}, {{ permintaan_terakhir.waktu_mulai|time:'H:i' }}{% if permintaan_terakhir.waktu_selesai %}-{{ permintaan_terakhir.waktu_selesai|time:'H:i' }}{% endif %}, {{ permintaan_terakhir.ruangan.nama }}.</p>
+    </div>
+    {% endif %}
 </section>
 {% endblock %}
 

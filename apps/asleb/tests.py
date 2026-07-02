@@ -19,7 +19,7 @@ from apps.jadwal.models import JadwalPraktikum
 from apps.ruangan.models import RuanganLab
 
 from .forms import AbsensiAslebForm, ENABLE_CAMERA_LOCATION_CAPTURE
-from .models import AbsensiAsleb, Asleb, HonorAsleb, ModulPraktikum, PengaturanAbsensiAsleb
+from .models import AbsensiAsleb, Asleb, HonorAsleb, ModulPraktikum, PengaturanAbsensiAsleb, PesertaPraktikum
 from .surat_honor import LAB_SIGNATURES, build_lab_signature, build_lampiran_page, build_styles
 
 
@@ -50,7 +50,14 @@ class AslebViewTests(TestCase):
             gender='laki_laki',
             role='admin',
         )
-        self.matkul = MataKuliahAsleb.objects.get(kode='SDA_TIF01_ABDUL')
+        self.matkul, _ = MataKuliahAsleb.objects.get_or_create(
+            kode='SDA_TIF01_ABDUL',
+            defaults={
+                'nama': 'Struktur Data dan Algoritma',
+                'dosen': 'Abdul Roohman',
+                'kelas': 'TIF-01',
+            },
+        )
         session = self.client.session
         session['pengguna_id'] = pengguna.pk
         session.save()
@@ -254,6 +261,50 @@ class AslebViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Siti Nurhaliza')
 
+    def test_laboran_dapat_mengeluarkan_asleb_dan_role_kembali_mahasiswa(self):
+        laboran = Pengguna.objects.create(
+            nama_pengguna='Laboran Terminasi', nim_nik='LAB-TERM',
+            email='laboran-term@trisakti.ac.id', password='rahasia123',
+            no_hp='081200000099', alamat='Jakarta', fakultas='Teknologi Industri',
+            prodi='Informatika', gender='laki_laki', role='laboran', is_verified=True,
+        )
+        akun_asleb = Pengguna.objects.create(
+            nama_pengguna=self.asleb.nama, nim_nik=self.asleb.nim,
+            email='asleb-term@std.trisakti.ac.id', password='rahasia123',
+            no_hp=self.asleb.no_hp, alamat='Jakarta', fakultas='Teknologi Industri',
+            prodi='Informatika', gender='perempuan', role='asisten_lab', is_verified=True,
+        )
+        session = self.client.session
+        session['pengguna_id'] = laboran.pk
+        session.save()
+
+        response = self.client.post(reverse('asleb:asleb_end_membership', args=[self.asleb.pk]))
+
+        self.assertRedirects(response, reverse('asleb:asleb_list'))
+        akun_asleb.refresh_from_db()
+        self.asleb.refresh_from_db()
+        self.assertEqual(akun_asleb.role, 'mahasiswa')
+        self.assertEqual(self.asleb.status, 'nonaktif')
+
+    def test_input_peserta_otomatis_mencocokkan_nim_dengan_akun(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Mahasiswa Terhubung', nim_nik='0640020099',
+            email='0640020099@std.trisakti.ac.id', password='rahasia123',
+            no_hp='081200000199', alamat='Jakarta', fakultas='Teknologi Industri',
+            prodi='Informatika', gender='laki_laki', role='mahasiswa', is_verified=True,
+        )
+
+        response = self.client.post(reverse('asleb:praktikum_peserta_create'), {
+            'matkul': self.matkul.pk,
+            'daftar_mahasiswa': '0640020099, Mahasiswa Terhubung\n0640020088, Belum Punya Akun',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        linked = PesertaPraktikum.objects.get(matkul=self.matkul, nim='0640020099')
+        unlinked = PesertaPraktikum.objects.get(matkul=self.matkul, nim='0640020088')
+        self.assertEqual(linked.pengguna, mahasiswa)
+        self.assertIsNone(unlinked.pengguna)
+
     def test_honor_asleb_mengikuti_rumus_excel(self):
         self.create_pendaftaran_history(self.asleb.nim, 3)
 
@@ -272,8 +323,8 @@ class AslebViewTests(TestCase):
         self.assertEqual(honor.level, 'senior')
         self.assertEqual(honor.honor_per_jam, 8000)
         self.assertEqual(honor.jumlah, 480000)
-        self.assertEqual(honor.metode_transfer, 'rekening_bank')
-        self.assertEqual(honor.nomor_transfer, 'BCA 123456789')
+        self.assertEqual(honor.metode_transfer, 'bni')
+        self.assertEqual(honor.nomor_transfer, 'BNI 123456789')
         self.assertEqual(honor.nama_pemilik_transfer, 'Riwayat Asleb 3')
 
     def test_honor_asleb_dua_periode_masih_junior(self):
@@ -292,6 +343,44 @@ class AslebViewTests(TestCase):
         self.assertEqual(honor.level, 'junior')
         self.assertEqual(honor.honor_per_jam, 7000)
         self.assertEqual(honor.jumlah, 147000)
+
+    def test_honor_bank_lain_dipotong_dua_ribu_lima_ratus(self):
+        honor = HonorAsleb.objects.create(
+            asleb=self.asleb,
+            bulan=date(2026, 4, 1),
+            total_pertemuan=3,
+            metode_transfer='bank_lain',
+            nomor_transfer='1234567890',
+        )
+
+        self.assertEqual(honor.biaya_admin, 2500)
+        self.assertEqual(honor.jumlah, 144500)
+
+    def test_honor_ewallet_dipotong_seribu_lima_ratus(self):
+        for metode in ('shopeepay', 'gopay', 'ovo'):
+            honor = HonorAsleb.objects.create(
+                asleb=self.asleb,
+                bulan=date(2026, 5, 1),
+                total_pertemuan=3,
+                metode_transfer=metode,
+                nomor_transfer='081234567890',
+            )
+            self.assertEqual(honor.biaya_admin, 1500)
+            self.assertEqual(honor.jumlah, 145500)
+            honor.delete()
+
+    def test_honor_bni_dan_dana_tanpa_potongan(self):
+        for metode in ('bni', 'dana'):
+            honor = HonorAsleb.objects.create(
+                asleb=self.asleb,
+                bulan=date(2026, 6, 1),
+                total_pertemuan=3,
+                metode_transfer=metode,
+                nomor_transfer='081234567890',
+            )
+            self.assertEqual(honor.biaya_admin, 0)
+            self.assertEqual(honor.jumlah, 147000)
+            honor.delete()
 
     def test_honor_list_page_loads(self):
         self.create_pendaftaran_history(self.asleb.nim, 1)
@@ -312,7 +401,7 @@ class AslebViewTests(TestCase):
         self.assertContains(response, 'Rekap Honorarium Aslab')
         self.assertContains(response, 'Siti Nurhaliza')
         self.assertContains(response, 'Rp 147.000')
-        self.assertContains(response, 'BCA 123456789')
+        self.assertContains(response, 'BNI 123456789')
         active_links = [link['title'] for link in response.context['sidebar_links'] if link['active']]
         self.assertEqual(active_links, ['Asisten Laboratorium'])
         asleb_group = next(link for link in response.context['sidebar_links'] if link['title'] == 'Asisten Laboratorium')
@@ -612,7 +701,7 @@ class AslebViewTests(TestCase):
                 program_studi='Rekayasa Perangkat Lunak',
                 semester=4,
                 matkul=self.matkul,
-                metode_rekening='rekening_bank',
-                rekening='BCA 123456789',
+                metode_rekening='bni',
+                rekening='BNI 123456789',
                 status='digenerate',
             )

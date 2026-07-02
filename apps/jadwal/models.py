@@ -8,9 +8,7 @@ from apps.ruangan.models import RuanganLab
 
 
 class JadwalPraktikum(models.Model):
-    ALLOWED_COMBINED_ROOM_CODE_SETS = {
-        frozenset({'LAB-RPL', 'LAB-SKI'}),
-    }
+    ADDITIONAL_ROOM_CODE = 'LAB-RPL'
     JAM_KERJA_MULAI = time(7, 30)
     JAM_KERJA_SELESAI = time(18, 0)
     STATUS_DIAJUKAN = 'diajukan'
@@ -105,11 +103,9 @@ class JadwalPraktikum(models.Model):
             if self.ruangan_id == self.ruangan_tambahan_id:
                 errors['ruangan_tambahan'] = 'Ruangan tambahan harus berbeda dari ruangan utama.'
             else:
-                selected_codes = frozenset({self.ruangan.kode, self.ruangan_tambahan.kode})
-                if selected_codes not in self.ALLOWED_COMBINED_ROOM_CODE_SETS:
+                if self.ruangan_tambahan.kode != self.ADDITIONAL_ROOM_CODE:
                     errors['ruangan_tambahan'] = (
-                        'Gabungan dua lab saat ini hanya diizinkan untuk '
-                        'Lab Rekayasa Perangkat Lunak dan Lab Sistem Keamanan Informasi.'
+                        'Ruangan tambahan hanya boleh Lab Rekayasa Perangkat Lunak.'
                     )
 
         if errors:
@@ -144,4 +140,46 @@ class JadwalPraktikum(models.Model):
 
     def __str__(self):
         return f'{self.mata_kuliah} - {self.kelas}'
+
+
+class PermintaanPerubahanJadwal(models.Model):
+    STATUS_CHOICES = [
+        ('diajukan', 'Menunggu Persetujuan'),
+        ('diterima', 'Disetujui'),
+        ('ditolak', 'Ditolak'),
+    ]
+
+    jadwal = models.ForeignKey(JadwalPraktikum, on_delete=models.CASCADE, related_name='permintaan_perubahan')
+    matkul = models.ForeignKey('pendaftaran_asleb.MataKuliahAsleb', on_delete=models.PROTECT)
+    ruangan = models.ForeignKey(RuanganLab, on_delete=models.PROTECT, related_name='permintaan_jadwal_utama')
+    ruangan_tambahan = models.ForeignKey(
+        RuanganLab,
+        on_delete=models.PROTECT,
+        related_name='permintaan_jadwal_tambahan',
+        blank=True,
+        null=True,
+    )
+    hari = models.CharField(max_length=10, choices=JadwalPraktikum.HARI_CHOICES)
+    waktu_mulai = models.TimeField()
+    waktu_selesai = models.TimeField(blank=True, null=True)
+    catatan = models.TextField(blank=True)
+    diajukan_oleh = models.ForeignKey(
+        'pengguna.Pengguna', on_delete=models.CASCADE, related_name='permintaan_perubahan_jadwal'
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='diajukan')
+    catatan_laboran = models.TextField(blank=True)
+    diproses_oleh = models.ForeignKey(
+        'pengguna.Pengguna', on_delete=models.SET_NULL, blank=True, null=True,
+        related_name='permintaan_jadwal_diproses',
+    )
+    diproses_pada = models.DateTimeField(blank=True, null=True)
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-dibuat_pada']
+        verbose_name = 'Permintaan Perubahan Jadwal'
+        verbose_name_plural = 'Permintaan Perubahan Jadwal'
+
+    def __str__(self):
+        return f'Perubahan {self.jadwal} oleh {self.diajukan_oleh}'
 
