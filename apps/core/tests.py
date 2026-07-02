@@ -15,6 +15,68 @@ class GlobalBackgroundTests(TestCase):
         self.assertContains(response, 'position: fixed;')
         self.assertContains(response, 'background: transparent !important;')
 
+    def test_sidebar_touch_state_memakai_warna_tema(self):
+        response = self.client.get(reverse('pengguna:login'))
+
+        self.assertContains(response, '-webkit-tap-highlight-color: transparent;')
+        self.assertContains(response, '#dashboard-sidebar a:active')
+        self.assertContains(response, 'tbody tr:active')
+        self.assertContains(response, 'tbody tr:active td')
+        self.assertContains(response, 'background-color: var(--sidebar-hover-bg) !important;')
+        self.assertContains(response, 'background-color: var(--hover-bg) !important;')
+
+    def test_badge_dark_mode_memakai_warna_kontras(self):
+        response = self.client.get(reverse('pengguna:login'))
+
+        self.assertContains(response, 'html[data-theme="dark"] [class~="bg-brand-50"][class*="text-brand-"]')
+        self.assertContains(response, 'html[data-theme="dark"] [class~="bg-amber-50"][class*="text-amber-"]')
+        self.assertNotContains(response, 'html[data-theme="dark"] [class*="bg-slate-50"][class*="text-slate-"]')
+        self.assertContains(response, 'color: #ccfbf1 !important;')
+        self.assertContains(response, 'color: #fde68a !important;')
+
+    def test_teal_brand_text_dark_mode_lebih_terang(self):
+        response = self.client.get(reverse('pengguna:login'))
+
+        self.assertContains(response, 'html[data-theme="dark"] .text-brand-700')
+        self.assertContains(response, 'html[data-theme="dark"] .text-teal-700')
+        self.assertContains(response, 'html[data-theme="dark"] .text-cyan-700')
+        self.assertContains(response, 'color: #5eead4 !important;')
+        self.assertContains(response, 'color: #67e8f9 !important;')
+
+    def test_surface_card_global_memakai_glass_card(self):
+        response = self.client.get(reverse('pengguna:login'))
+
+        self.assertContains(response, '.surface-card,')
+        self.assertContains(response, '.glass-card')
+        self.assertContains(response, 'background: rgba(255, 255, 255, 0.50) !important;')
+        self.assertContains(response, 'html[data-theme="dark"] .surface-card')
+        self.assertContains(response, 'background: rgba(15, 23, 42, 0.34) !important;')
+        self.assertContains(response, '-webkit-backdrop-filter: blur(18px) saturate(1.16);')
+
+    def test_sidebar_dark_mode_border_tidak_terlalu_terang(self):
+        response = self.client.get(reverse('pengguna:login'))
+
+        self.assertContains(response, '--sidebar-active-border: rgba(94, 234, 212, 0.16);')
+        self.assertContains(response, '--border-color: rgba(148, 163, 184, 0.20);')
+        self.assertContains(response, 'html[data-theme="dark"] #dashboard-sidebar [class*="border-"]')
+        self.assertContains(response, 'border-color: rgba(148, 163, 184, 0.10) !important;')
+        self.assertContains(response, 'html[data-theme="dark"] #dashboard-sidebar [class*="ring-"]')
+        self.assertContains(response, '--tw-ring-color: transparent !important;')
+        self.assertContains(response, 'html[data-theme="dark"] #dashboard-sidebar [data-sidebar-submenu]')
+        self.assertContains(response, 'border-color: rgba(148, 163, 184, 0.12) !important;')
+        self.assertContains(response, 'html[data-theme="dark"] #dashboard-sidebar [data-sidebar-profile]')
+        self.assertContains(response, 'border-color: rgba(148, 163, 184, 0.10) !important;')
+
+    def test_scrollbar_dark_mode_global_tidak_terang(self):
+        response = self.client.get(reverse('pengguna:login'))
+
+        self.assertContains(response, 'html[data-theme="dark"] *::-webkit-scrollbar')
+        self.assertContains(response, 'html[data-theme="dark"] *::-webkit-scrollbar-track')
+        self.assertContains(response, 'html[data-theme="dark"] *::-webkit-scrollbar-thumb')
+        self.assertContains(response, 'scrollbar-color: rgba(71, 85, 105, 0.62) rgba(15, 23, 42, 0.24);')
+        self.assertContains(response, 'html[data-theme="dark"] #dashboard-sidebar *::-webkit-scrollbar-thumb')
+        self.assertContains(response, 'background: rgba(51, 65, 85, 0.60);')
+
 from apps.pengguna.models import Pengguna
 
 from project_laboran.asgi import application

@@ -59,6 +59,30 @@ class KalenderViewsTests(TestCase):
         self.assertContains(response, 'Peringatan Tragedi Trisakti')
         self.assertContains(response, 'Dies Natalis Universitas Trisakti')
 
+    def test_kalender_dark_mode_dioptimalkan(self):
+        response = self.client.get(reverse('kalender:kegiatan_list'))
+
+        self.assertContains(response, 'html[data-theme="dark"] .calendar-shell')
+        self.assertContains(response, 'html[data-theme="dark"] .fc .fc-button')
+        self.assertContains(response, 'html[data-theme="dark"] .fc-theme-standard .fc-scrollgrid')
+        self.assertContains(response, 'html[data-theme="dark"] .fc .fc-scrollgrid-section-header > th')
+        self.assertContains(response, 'html[data-theme="dark"] .fc .fc-daygrid-day')
+        self.assertContains(response, 'background: rgba(15, 23, 42, 0.66) !important;')
+        self.assertContains(response, 'html[data-theme="dark"] .fc .fc-popover')
+        self.assertContains(response, 'html[data-theme="dark"] .calendar-scroll::-webkit-scrollbar-thumb')
+        self.assertContains(response, 'border-color: rgba(71, 85, 105, 0.30) !important;')
+
+    def test_form_kegiatan_dark_mode_dioptimalkan(self):
+        response = self.client.get(reverse('kalender:kegiatan_create'))
+
+        self.assertContains(response, 'calendar-form-page')
+        self.assertContains(response, 'html[data-theme="dark"] .calendar-form-page .calendar-form-header')
+        self.assertContains(response, 'html[data-theme="dark"] .kalender-form input[type="date"]')
+        self.assertContains(response, 'html[data-theme="dark"] .kalender-form input[type="date"]::-webkit-calendar-picker-indicator')
+        self.assertContains(response, 'html[data-theme="dark"] .notification-toggle')
+        self.assertContains(response, 'html[data-theme="dark"] .role-panel')
+        self.assertContains(response, 'html[data-theme="dark"] .role-choice:has(input[type="checkbox"]:checked)')
+
     def test_mahasiswa_kalender_hanya_menampilkan_agenda_terdekat(self):
         mahasiswa = Pengguna.objects.create(
             nama_pengguna='Siti Aminah',
@@ -108,12 +132,12 @@ class KalenderViewsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Agenda Terdekat')
         self.assertContains(response, 'Tambah Kegiatan')
-        self.assertContains(response, 'Jadwal Praktikum Saya')
+        self.assertNotContains(response, 'Jadwal Praktikum Saya')
         self.assertNotContains(response, 'Hari Perayaan Otomatis')
         self.assertNotContains(response, 'Peringatan Universitas Trisakti')
         self.assertNotContains(response, 'Keterangan Notifikasi')
 
-    def test_jadwal_mahasiswa_hanya_muncul_untuk_matkul_yang_diambil(self):
+    def test_jadwal_mahasiswa_tidak_muncul_di_menu_kalender(self):
         mahasiswa = Pengguna.objects.create(
             nama_pengguna='Mahasiswa Kalender', nim_nik='0640020009',
             email='0640020009@std.trisakti.ac.id', password='rahasia123',
@@ -139,8 +163,8 @@ class KalenderViewsTests(TestCase):
         response = self.client.get(reverse('kalender:kegiatan_list'))
 
         event_titles = [event['title'] for event in response.context['calendar_events']]
-        self.assertIn(f'Praktikum {matkul}', event_titles)
-        self.assertContains(response, str(matkul))
+        self.assertNotIn(f'Praktikum {matkul}', event_titles)
+        self.assertNotContains(response, str(matkul))
 
     def test_admin_bisa_share_kegiatan_ke_role_tertentu(self):
         response = self.client.post(reverse('kalender:kegiatan_create'), {
@@ -238,7 +262,7 @@ class KalenderViewsTests(TestCase):
         self.assertNotContains(response, 'Agenda Pribadi Pemilik')
         self.assertContains(response, 'Pengumuman Untuk Mahasiswa')
 
-    def test_jadwal_praktikum_asisten_lab_muncul_di_ringkasan_saya_saja(self):
+    def test_jadwal_praktikum_asisten_lab_tidak_muncul_di_menu_kalender(self):
         asisten = Pengguna.objects.create(
             nama_pengguna='Asisten SDA',
             nim_nik='2202001',
@@ -284,8 +308,8 @@ class KalenderViewsTests(TestCase):
 
         event_titles = [event['title'] for event in response.context['calendar_events']]
         self.assertNotIn('Praktikum Struktur Data dan Algoritma - TIF-01', event_titles)
-        self.assertContains(response, 'Jadwal Praktikum Saya')
-        self.assertContains(response, 'Struktur Data dan Algoritma - TIF-01')
+        self.assertNotContains(response, 'Jadwal Praktikum Saya')
+        self.assertNotContains(response, 'Struktur Data dan Algoritma - TIF-01')
 
     def test_jadwal_praktikum_tidak_muncul_sebagai_event_kalender_global(self):
         ruangan = RuanganLab.objects.create(

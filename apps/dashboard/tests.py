@@ -40,6 +40,20 @@ class DashboardViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'LabHub')
+        self.assertContains(response, 'dashboard-page')
+        self.assertContains(response, 'dashboard-table-card')
+        self.assertContains(response, 'dashboard-table-scroll')
+        self.assertContains(response, '.dashboard-page .surface-card')
+        self.assertContains(response, 'html[data-theme="dark"] .dashboard-page .surface-card')
+        self.assertContains(response, '.dashboard-page .dashboard-table-card .dashboard-table-scroll')
+        self.assertContains(response, 'background: rgba(15, 23, 42, 0.24) !important;')
+        self.assertContains(response, 'background: rgba(255, 255, 255, 0.50) !important;')
+        self.assertContains(response, 'background: rgba(15, 23, 42, 0.30) !important;')
+        self.assertContains(response, 'background-color: rgba(15, 23, 42, 0.40) !important;')
+        self.assertContains(response, 'backdrop-filter: blur(18px) saturate(1.18);')
+        self.assertContains(response, '-webkit-backdrop-filter: blur(18px) saturate(1.18);')
+        self.assertContains(response, 'border-color: rgba(71, 85, 105, 0.40) !important;')
+        self.assertContains(response, 'scrollbar-color: rgba(71, 85, 105, 0.76) rgba(15, 23, 42, 0.58);')
 
     def test_sidebar_laboran_mengelompokkan_menu_barang(self):
         response = self.client.get(reverse('dashboard:home'))
@@ -768,6 +782,9 @@ class DashboardViewTests(TestCase):
         self.assertContains(response, 'Honor Bulan Ini')
         self.assertContains(response, 'Rp 0')
         self.assertContains(response, 'Riwayat Honor Saya')
+        self.assertContains(response, 'Jadwal Praktikum')
+        self.assertContains(response, 'dashboard-glass-item')
+        self.assertContains(response, '.dashboard-page .dashboard-glass-item')
         self.assertContains(response, 'Dibayar')
 
     def test_dashboard_asisten_lab_tidak_menampilkan_pendaftaran_saat_dibuka(self):

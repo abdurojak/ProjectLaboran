@@ -118,29 +118,10 @@ class KegiatanKalenderListView(ListView):
                 }
             )
 
-        pengguna = getattr(self.request, 'current_pengguna', None)
-        jadwal_praktikum_saya = get_asisten_lab_jadwal_queryset(pengguna)
-        day_numbers = {'senin': 1, 'selasa': 2, 'rabu': 3, 'kamis': 4, 'jumat': 5, 'sabtu': 6}
-        for jadwal in jadwal_praktikum_saya:
-            calendar_events.append({
-                'title': f'Praktikum {jadwal.mata_kuliah}',
-                'daysOfWeek': [day_numbers[jadwal.hari]],
-                'startTime': jadwal.waktu_mulai.isoformat(),
-                'endTime': (jadwal.waktu_selesai or jadwal.waktu_mulai).isoformat(),
-                'url': reverse_lazy('jadwal:jadwal_detail', kwargs={'pk': jadwal.pk}),
-                'backgroundColor': '#0f766e',
-                'borderColor': '#0f766e',
-                'textColor': '#ffffff',
-                'extendedProps': {
-                    'lokasi': jadwal.get_display_ruangan_nama(),
-                    'notifikasi': 'Jadwal praktikum otomatis',
-                },
-            })
         calendar_events.extend(get_perayaan_calendar_events(timezone.localdate().year))
 
         context['calendar_events'] = calendar_events
         context['upcoming_kegiatan'] = context['kegiatan_list'][:5]
-        context['jadwal_praktikum_saya'] = jadwal_praktikum_saya
         return context
 
 
