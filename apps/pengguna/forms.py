@@ -326,6 +326,7 @@ class RegisterPenggunaForm(forms.ModelForm):
             'email',
             'password',
             'password_confirmation',
+            'no_hp',
             'gender',
             'foto',
             'alamat',
@@ -352,6 +353,12 @@ class RegisterPenggunaForm(forms.ModelForm):
                 'placeholder': 'Minimal 10 digit',
                 'title': 'NIM harus berisi minimal 10 digit angka',
             }),
+            'no_hp': forms.TextInput(attrs={
+                'autocomplete': 'tel',
+                'inputmode': 'numeric',
+                'pattern': '[0-9]*',
+                'placeholder': 'Angka saja',
+            }),
             'alamat': forms.Textarea(attrs={'rows': 4}),
         }
 
@@ -375,6 +382,12 @@ class RegisterPenggunaForm(forms.ModelForm):
             raise forms.ValidationError('Email sudah terdaftar. Gunakan email Trisakti lain atau login.')
         return email
 
+    def clean_no_hp(self):
+        no_hp = self.cleaned_data.get('no_hp', '').strip()
+        if no_hp and not no_hp.isdigit():
+            raise forms.ValidationError('No HP hanya boleh berisi angka.')
+        return no_hp
+
     def clean_foto(self):
         foto = self.cleaned_data.get('foto')
         validate_human_face_photo(foto)
@@ -395,7 +408,6 @@ class RegisterPenggunaForm(forms.ModelForm):
         instance = super().save(commit=False)
         instance.role = 'mahasiswa'
         instance.is_verified = False
-        instance.no_hp = ''
 
         if commit:
             instance.save()
