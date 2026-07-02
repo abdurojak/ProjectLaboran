@@ -2,16 +2,86 @@
 
 {% block title %}Pusat Notifikasi{% endblock %}
 
+{% block extra_head %}
+<style>
+    .notification-page .notification-hero {
+        border: 1px solid rgba(255, 255, 255, 0.14);
+    }
+
+    html[data-theme="dark"] .notification-page .notification-hero {
+        background:
+            linear-gradient(135deg, rgba(1, 87, 90, 0.92), transparent 100%),
+            linear-gradient(195deg, rgba(1, 87, 90, 0.92), transparent 100%),
+            linear-gradient(255deg, rgba(37, 99, 235, 0.60), transparent 70%),
+            rgba(15, 23, 42, 0.48) !important;
+        border-color: rgba(94, 234, 212, 0.16);
+        box-shadow: none !important;
+    }
+
+    html[data-theme="dark"] .notification-page .notification-hero-action {
+        background: rgba(255, 255, 255, 0.08) !important;
+        border-color: rgba(255, 255, 255, 0.16) !important;
+        color: #ecfeff !important;
+    }
+
+    html[data-theme="dark"] .notification-page .notification-inbox-header {
+        background: rgba(15, 23, 42, 0.24);
+        border-color: rgba(71, 85, 105, 0.30) !important;
+    }
+
+    html[data-theme="dark"] .notification-page .notification-count-badge {
+        background: rgba(51, 65, 85, 0.56) !important;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        color: #cbd5e1 !important;
+    }
+
+    html[data-theme="dark"] .notification-page .notification-list {
+        divide-color: rgba(71, 85, 105, 0.28);
+    }
+
+    html[data-theme="dark"] .notification-page .notification-item {
+        background: rgba(15, 23, 42, 0.24) !important;
+        border-color: rgba(71, 85, 105, 0.24) !important;
+    }
+
+    html[data-theme="dark"] .notification-page .notification-item[data-unread="true"] {
+        background:
+            linear-gradient(90deg, rgba(20, 184, 166, 0.16), rgba(15, 23, 42, 0.24) 42%) !important;
+    }
+
+    html[data-theme="dark"] .notification-page .notification-item:hover {
+        background: rgba(30, 41, 59, 0.42) !important;
+    }
+
+    html[data-theme="dark"] .notification-page .notification-title {
+        color: #f8fafc !important;
+    }
+
+    html[data-theme="dark"] .notification-page .notification-meta {
+        color: #94a3b8 !important;
+    }
+
+    html[data-theme="dark"] .notification-page .notification-empty {
+        background: rgba(15, 23, 42, 0.22);
+    }
+
+    html[data-theme="dark"] .notification-page .notification-empty-icon {
+        background: rgba(51, 65, 85, 0.54) !important;
+        color: #94a3b8 !important;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<section class="mx-auto max-w-6xl space-y-6">
-    <header class="overflow-hidden rounded-[32px] bg-gradient-to-br from-brand-900 via-brand-800 to-cyan-700 p-6 text-white shadow-xl shadow-brand-900/15 md:p-8">
+<section class="notification-page mx-auto max-w-6xl space-y-6">
+    <header class="notification-hero overflow-hidden rounded-[32px] bg-gradient-to-br from-brand-900 via-brand-800 to-cyan-700 p-6 text-white shadow-xl shadow-brand-900/15 md:p-8">
         <div class="flex flex-wrap items-end justify-between gap-6">
             <div class="max-w-2xl">
                 <div class="flex items-center gap-3"><span class="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15"><i data-lucide="bell-ring" class="h-5 w-5"></i></span><p class="text-xs font-black uppercase tracking-[0.24em] text-cyan-100">Pusat Notifikasi</p></div>
                 <h2 class="mt-5 text-3xl font-black tracking-tight md:text-4xl">Semua pembaruan penting, satu tempat.</h2>
                 <p class="mt-3 text-sm leading-7 text-white/75">Pantau status peminjaman, seleksi Aslab, jadwal praktikum, dan agenda laboratorium.</p>
             </div>
-            <a class="inline-flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-bold transition hover:bg-white/20" href="{% url 'kalender:kegiatan_list' %}"><i data-lucide="calendar-days" class="h-4 w-4"></i>Buka Kalender</a>
+            <a class="notification-hero-action inline-flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-bold transition hover:bg-white/20" href="{% url 'kalender:kegiatan_list' %}"><i data-lucide="calendar-days" class="h-4 w-4"></i>Buka Kalender</a>
         </div>
     </header>
 
@@ -22,24 +92,24 @@
     </div>
 
     <div class="surface-card overflow-hidden">
-        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4 md:px-6"><div><h3 class="text-xl font-black text-slate-900">Kotak Masuk</h3><p class="mt-1 text-sm text-slate-500">Notifikasi terbaru ditampilkan paling atas.</p></div><span class="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600">Agenda {{ notification_agenda_count }}</span></div>
-        <div class="divide-y divide-slate-100">
+        <div class="notification-inbox-header flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4 md:px-6"><div><h3 class="text-xl font-black text-slate-900">Kotak Masuk</h3><p class="mt-1 text-sm text-slate-500">Notifikasi terbaru ditampilkan paling atas.</p></div><span class="notification-count-badge rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600">Agenda {{ notification_agenda_count }}</span></div>
+        <div class="notification-list divide-y divide-slate-100">
             {% for kegiatan in notifikasi_list %}
-            <article class="relative {% if kegiatan.is_read == False %}bg-brand-50/45{% else %}bg-white{% endif %} px-5 py-5 transition hover:bg-slate-50 md:px-6">
+            <article data-unread="{% if kegiatan.is_read == False %}true{% else %}false{% endif %}" class="notification-item relative {% if kegiatan.is_read == False %}bg-brand-50/45{% else %}bg-white{% endif %} px-5 py-5 transition hover:bg-slate-50 md:px-6">
                 {% if kegiatan.is_read == False %}<span class="absolute left-0 top-0 h-full w-1 bg-brand-500"></span>{% endif %}
                 <div class="flex items-start gap-4">
                     <span class="{{ kegiatan.icon_class }} flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl"><i data-lucide="{{ kegiatan.icon }}" class="h-5 w-5"></i></span>
                     <div class="min-w-0 flex-1">
                         <div class="flex flex-wrap items-start justify-between gap-3">
-                            <div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><h4 class="font-black {% if kegiatan.is_read == False %}text-slate-900{% else %}text-slate-700{% endif %}">{{ kegiatan.judul }}</h4>{% if kegiatan.is_read == False %}<span class="h-2 w-2 rounded-full bg-brand-500" aria-label="Notifikasi baru"></span>{% endif %}</div><p class="mt-2 text-sm leading-6 text-slate-500">{{ kegiatan.deskripsi }}</p></div>
+                            <div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><h4 class="notification-title font-black {% if kegiatan.is_read == False %}text-slate-900{% else %}text-slate-700{% endif %}">{{ kegiatan.judul }}</h4>{% if kegiatan.is_read == False %}<span class="h-2 w-2 rounded-full bg-brand-500" aria-label="Notifikasi baru"></span>{% endif %}</div><p class="mt-2 text-sm leading-6 text-slate-500">{{ kegiatan.deskripsi }}</p></div>
                             <span class="shrink-0 rounded-full {{ kegiatan.icon_class }} px-3 py-1 text-xs font-black">{{ kegiatan.badge|default:"Info" }}</span>
                         </div>
-                        <div class="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-semibold text-slate-400"><span class="inline-flex items-center gap-1.5"><i data-lucide="calendar" class="h-3.5 w-3.5"></i>{{ kegiatan.tanggal|date:"d M Y" }}</span>{% if kegiatan.waktu_label %}<span class="inline-flex items-center gap-1.5"><i data-lucide="clock-3" class="h-3.5 w-3.5"></i>{{ kegiatan.waktu_label }}</span>{% endif %}{% if kegiatan.lokasi %}<span class="inline-flex items-center gap-1.5"><i data-lucide="map-pin" class="h-3.5 w-3.5"></i>{{ kegiatan.lokasi }}</span>{% endif %}{% if kegiatan.url %}<a class="ml-auto inline-flex items-center gap-1.5 font-black text-brand-700 hover:text-brand-900" href="{{ kegiatan.url }}">Lihat detail<i data-lucide="arrow-up-right" class="h-3.5 w-3.5"></i></a>{% endif %}</div>
+                        <div class="notification-meta mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-semibold text-slate-400"><span class="inline-flex items-center gap-1.5"><i data-lucide="calendar" class="h-3.5 w-3.5"></i>{{ kegiatan.tanggal|date:"d M Y" }}</span>{% if kegiatan.waktu_label %}<span class="inline-flex items-center gap-1.5"><i data-lucide="clock-3" class="h-3.5 w-3.5"></i>{{ kegiatan.waktu_label }}</span>{% endif %}{% if kegiatan.lokasi %}<span class="inline-flex items-center gap-1.5"><i data-lucide="map-pin" class="h-3.5 w-3.5"></i>{{ kegiatan.lokasi }}</span>{% endif %}{% if kegiatan.url %}<a class="ml-auto inline-flex items-center gap-1.5 font-black text-brand-700 hover:text-brand-900" href="{{ kegiatan.url }}">Lihat detail<i data-lucide="arrow-up-right" class="h-3.5 w-3.5"></i></a>{% endif %}</div>
                     </div>
                 </div>
             </article>
             {% empty %}
-            <div class="px-6 py-16 text-center"><span class="mx-auto flex h-16 w-16 items-center justify-center rounded-[24px] bg-slate-100 text-slate-400"><i data-lucide="bell-off" class="h-7 w-7"></i></span><h3 class="mt-4 text-lg font-black text-slate-800">Belum ada notifikasi terbaru.</h3><p class="mt-2 text-sm text-slate-500">Pembaruan status dan agenda akan muncul di sini.</p></div>
+            <div class="notification-empty px-6 py-16 text-center"><span class="notification-empty-icon mx-auto flex h-16 w-16 items-center justify-center rounded-[24px] bg-slate-100 text-slate-400"><i data-lucide="bell-off" class="h-7 w-7"></i></span><h3 class="mt-4 text-lg font-black text-slate-800">Belum ada notifikasi terbaru.</h3><p class="mt-2 text-sm text-slate-500">Pembaruan status dan agenda akan muncul di sini.</p></div>
             {% endfor %}
         </div>
     </div>
