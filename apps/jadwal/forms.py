@@ -1,6 +1,6 @@
 from django import forms
 
-from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb
+from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, RiwayatAsleb
 from apps.ruangan.models import RuanganLab
 
 from .models import JadwalPraktikum
@@ -34,9 +34,9 @@ class JadwalPraktikumForm(forms.ModelForm):
         self.fields['ruangan'].queryset = room_queryset
         self.fields['ruangan_tambahan'].queryset = RuanganLab.objects.filter(
             aktif=True,
-            kode=JadwalPraktikum.ADDITIONAL_ROOM_CODE,
+            kode__in=['LAB-RPL', 'LAB-SKI'],
         )
-        self.fields['ruangan_tambahan'].help_text = 'Opsional. Ruangan tambahan hanya Lab Rekayasa Perangkat Lunak.'
+        self.fields['ruangan_tambahan'].help_text = 'Hanya untuk pasangan Lab RPL dan Lab SKI. Lab lain tidak dapat memakai ruang tambahan.'
         selected_matkul = self.get_selected_matkul()
         self.participant_count = selected_matkul.peserta_praktikum.filter(aktif=True).count() if selected_matkul else 0
 
@@ -60,10 +60,14 @@ class JadwalPraktikumForm(forms.ModelForm):
     def get_matkul_queryset(self):
         queryset = MataKuliahAsleb.objects.filter(aktif=True)
         if self.current_pengguna and self.current_pengguna.role == 'asisten_lab':
-            return queryset.filter(
-                pendaftaran__nim=self.current_pengguna.nim_nik,
-                pendaftaran__status__in=['diterima', 'digenerate'],
-            ).distinct()
+            registration_ids = PendaftaranAsleb.objects.filter(
+                nim=self.current_pengguna.nim_nik,
+                status__in=['diterima', 'digenerate'],
+            ).values_list('matkul_id', flat=True)
+            history_ids = RiwayatAsleb.objects.filter(
+                nim=self.current_pengguna.nim_nik,
+            ).values_list('matkul_id', flat=True)
+            return queryset.filter(pk__in=set(registration_ids) | set(history_ids)).distinct()
         return queryset
 
     def get_initial_matkul(self):
@@ -76,7 +80,7 @@ class JadwalPraktikumForm(forms.ModelForm):
         return None
 
     def get_selected_matkul(self):
-        matkul_id = self.data.get('matkul') if self.is_bound else self.initial.get('matkul')
+        matkul_id = self.data.get('matkul') if self.is_bound else (self.initial.get('matkul') or self.fields['matkul'].initial)
         if not matkul_id:
             matkul_id = self.get_initial_matkul()
         try:
@@ -88,31 +92,32 @@ class JadwalPraktikumForm(forms.ModelForm):
         queryset = RuanganLab.objects.filter(aktif=True).order_by('kapasitas', 'nama')
         matkul = self.get_selected_matkul()
         if not matkul:
+            if self.current_pengguna and self.current_pengguna.role == 'asisten_lab':
+                return queryset.none()
             return queryset
 
         participant_count = matkul.peserta_praktikum.filter(aktif=True).count()
         if not participant_count:
+            if self.current_pengguna and self.current_pengguna.role == 'asisten_lab':
+                return queryset.none()
             return queryset
-
-        capacities = list(
-            queryset.filter(kapasitas__gte=participant_count)
-            .values_list('kapasitas', flat=True)
-            .distinct()
-        )
-        if not capacities:
-            return queryset.none()
-        return queryset.filter(kapasitas=min(capacities))
+        return queryset.filter(kapasitas__gte=participant_count)
 
     def clean(self):
         cleaned_data = super().clean()
         matkul = cleaned_data.get('matkul')
         ruangan = cleaned_data.get('ruangan')
         tambahan = cleaned_data.get('ruangan_tambahan')
+        participant_count = matkul.peserta_praktikum.filter(aktif=True).count() if matkul else 0
+        if matkul and self.current_pengguna and self.current_pengguna.role == 'asisten_lab' and not participant_count:
+            self.add_error('ruangan', 'Laboran harus menginput mahasiswa mata kuliah ini sebelum Asisten Lab memilih laboratorium.')
         if matkul and ruangan:
-            participant_count = matkul.peserta_praktikum.filter(aktif=True).count()
-            total_capacity = (ruangan.kapasitas or 0) + ((tambahan.kapasitas or 0) if tambahan else 0)
-            if participant_count and total_capacity < participant_count:
-                self.add_error('ruangan', f'Kapasitas ruangan hanya {total_capacity}, sedangkan peserta aktif berjumlah {participant_count}.')
+            if participant_count and (ruangan.kapasitas or 0) < participant_count:
+                self.add_error('ruangan', f'Kapasitas lab hanya {ruangan.kapasitas or 0}, sedangkan peserta aktif berjumlah {participant_count}.')
+        if tambahan and ruangan:
+            selected_codes = frozenset({ruangan.kode, tambahan.kode})
+            if selected_codes not in JadwalPraktikum.ALLOWED_COMBINED_ROOM_CODE_SETS:
+                self.add_error('ruangan_tambahan', 'Ruang tambahan hanya berlaku untuk pasangan Lab RPL dan Lab SKI.')
         return cleaned_data
 
     def save(self, commit=True):

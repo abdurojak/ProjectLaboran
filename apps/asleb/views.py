@@ -15,6 +15,8 @@ from django.views.generic import CreateView, DeleteView, DetailView, FormView, L
 from apps.core.views import PostOnlyDeleteMixin
 from apps.jadwal.models import JadwalPraktikum
 from apps.pengguna.models import Pengguna
+from apps.pendaftaran_asleb.forms import PengaturanBiayaTransferForm
+from apps.pendaftaran_asleb.models import PengaturanBiayaTransfer
 
 from .forms import (
     AbsensiAslebForm,
@@ -190,7 +192,25 @@ class HonorAslebListView(ListView):
         context['is_admin'] = bool(pengguna and pengguna.role == 'admin')
         context['is_laboran'] = bool(pengguna and pengguna.role == 'laboran')
         context['formula_note'] = 'Total Honor = min(7 x Total Pertemuan, 60) x Honor/Jam. Level otomatis: periode aslab ke-1 dan ke-2 Junior Rp7.000, mulai ke-3 Senior Rp8.000.'
+        context['biaya_transfer_form'] = PengaturanBiayaTransferForm(instance=PengaturanBiayaTransfer.get_solo())
         return context
+
+
+@require_POST
+def update_transfer_fees(request):
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not pengguna or pengguna.role not in {'admin', 'laboran'}:
+        messages.error(request, 'Hanya admin dan laboran yang dapat mengubah biaya transfer.')
+        return redirect('asleb:honor_list')
+    form = PengaturanBiayaTransferForm(request.POST, instance=PengaturanBiayaTransfer.get_solo())
+    if form.is_valid():
+        form.save()
+        for honor in HonorAsleb.objects.exclude(status='dibayar'):
+            honor.save()
+        messages.success(request, 'Biaya admin transfer berhasil diperbarui.')
+    else:
+        messages.error(request, 'Biaya admin tidak valid. Gunakan angka nol atau lebih besar.')
+    return redirect('asleb:honor_list')
 
 
 class HonorAslebCreateView(HonorAdminRequiredMixin, CreateView):
@@ -541,7 +561,7 @@ class ModulPraktikumDeleteView(ModulManageRequiredMixin, PostOnlyDeleteMixin, De
 
 
 def get_praktikum_matkul_queryset(pengguna):
-    from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb
+    from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, RiwayatAsleb
 
     queryset = MataKuliahAsleb.objects.filter(aktif=True)
     if not pengguna:
@@ -555,8 +575,10 @@ def get_praktikum_matkul_queryset(pengguna):
         nim=pengguna.nim_nik,
         status__in=['diterima', 'digenerate'],
     ).values_list('matkul_id', flat=True)
-    if matkul_ids:
-        return queryset.filter(pk__in=matkul_ids)
+    history_ids = RiwayatAsleb.objects.filter(nim=pengguna.nim_nik).values_list('matkul_id', flat=True)
+    combined_ids = set(matkul_ids) | set(history_ids)
+    if combined_ids:
+        return queryset.filter(pk__in=combined_ids)
 
     asleb = Asleb.objects.filter(nim=pengguna.nim_nik).first()
     fallback = get_asleb_matkul(asleb) if asleb else None

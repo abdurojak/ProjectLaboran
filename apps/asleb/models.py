@@ -41,11 +41,14 @@ class Asleb(models.Model):
     @property
     def jumlah_periode_asleb(self):
         PendaftaranAsleb = apps.get_model('pendaftaran_asleb', 'PendaftaranAsleb')
-        periode_count = PendaftaranAsleb.objects.filter(
+        RiwayatAsleb = apps.get_model('pendaftaran_asleb', 'RiwayatAsleb')
+        period_ids = set(PendaftaranAsleb.objects.filter(
             nim=self.nim,
             status__in=['diterima', 'digenerate'],
             periode__isnull=False,
-        ).values('periode_id').distinct().count()
+        ).values_list('periode_id', flat=True))
+        period_ids.update(RiwayatAsleb.objects.filter(nim=self.nim).values_list('periode_id', flat=True))
+        periode_count = len(period_ids)
         legacy_count = PendaftaranAsleb.objects.filter(
             nim=self.nim,
             status__in=['diterima', 'digenerate'],
@@ -143,17 +146,24 @@ class HonorAsleb(models.Model):
 
     @property
     def biaya_admin_transfer(self):
-        return {
-            'bank_lain': 2500,
-            'rekening_bank': 2500,
-            'shopeepay': 1500,
-            'gopay': 1500,
-            'ovo': 1500,
-        }.get(self.metode_transfer, 0)
+        PengaturanBiayaTransfer = apps.get_model('pendaftaran_asleb', 'PengaturanBiayaTransfer')
+        return PengaturanBiayaTransfer.get_solo().get_fee(self.metode_transfer)
 
     @property
     def jumlah_rupiah(self):
         return f'Rp {self.jumlah:,.0f}'.replace(',', '.')
+
+    @property
+    def honor_sebelum_potongan(self):
+        return self.jumlah + self.biaya_admin
+
+    @property
+    def honor_sebelum_potongan_rupiah(self):
+        return f'Rp {self.honor_sebelum_potongan:,.0f}'.replace(',', '.')
+
+    @property
+    def biaya_admin_rupiah(self):
+        return f'Rp {self.biaya_admin:,.0f}'.replace(',', '.')
 
     @property
     def honor_per_jam_rupiah(self):
@@ -207,6 +217,9 @@ class HonorAsleb(models.Model):
         ).exclude(rekening='').order_by('-pk').first()
 
         if not registration:
+            RiwayatAsleb = apps.get_model('pendaftaran_asleb', 'RiwayatAsleb')
+            registration = RiwayatAsleb.objects.filter(nim=self.asleb.nim).exclude(rekening='').order_by('-pk').first()
+        if not registration:
             return
 
         if not self.nomor_transfer:
@@ -214,7 +227,7 @@ class HonorAsleb(models.Model):
             self.nomor_transfer = registration.rekening
 
         if not self.nama_pemilik_transfer:
-            self.nama_pemilik_transfer = registration.nama
+            self.nama_pemilik_transfer = registration.nama_pemilik_rekening or registration.nama
 
 
 def default_surat_honor_expires_at():

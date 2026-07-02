@@ -58,6 +58,10 @@ class AslebViewTests(TestCase):
                 'kelas': 'TIF-01',
             },
         )
+        self.test_room, _ = RuanganLab.objects.get_or_create(
+            kode='LAB-ASLEB-TEST',
+            defaults={'nama': 'Lab Asleb Test', 'kapasitas': 30, 'warna': 'teal', 'aktif': True},
+        )
         session = self.client.session
         session['pengguna_id'] = pengguna.pk
         session.save()
@@ -324,7 +328,7 @@ class AslebViewTests(TestCase):
         self.assertEqual(honor.honor_per_jam, 8000)
         self.assertEqual(honor.jumlah, 480000)
         self.assertEqual(honor.metode_transfer, 'bni')
-        self.assertEqual(honor.nomor_transfer, 'BNI 123456789')
+        self.assertEqual(honor.nomor_transfer, '123456789')
         self.assertEqual(honor.nama_pemilik_transfer, 'Riwayat Asleb 3')
 
     def test_honor_asleb_dua_periode_masih_junior(self):
@@ -382,6 +386,25 @@ class AslebViewTests(TestCase):
             self.assertEqual(honor.jumlah, 147000)
             honor.delete()
 
+    def test_biaya_admin_dapat_diubah_dan_menghitung_ulang_honor_belum_dibayar(self):
+        honor = HonorAsleb.objects.create(
+            asleb=self.asleb, bulan=date(2026, 6, 1), total_pertemuan=3,
+            metode_transfer='bank_lain', nomor_transfer='BCA 123456789', status='diproses',
+        )
+        response = self.client.post(reverse('asleb:honor_transfer_fees'), {
+            'biaya_bni': 0,
+            'biaya_bank_lain': 3000,
+            'biaya_dana': 0,
+            'biaya_shopeepay': 2000,
+            'biaya_gopay': 2000,
+            'biaya_ovo': 2000,
+        })
+
+        self.assertRedirects(response, reverse('asleb:honor_list'))
+        honor.refresh_from_db()
+        self.assertEqual(honor.biaya_admin, 3000)
+        self.assertEqual(honor.jumlah, 144000)
+
     def test_honor_list_page_loads(self):
         self.create_pendaftaran_history(self.asleb.nim, 1)
 
@@ -401,7 +424,7 @@ class AslebViewTests(TestCase):
         self.assertContains(response, 'Rekap Honorarium Aslab')
         self.assertContains(response, 'Siti Nurhaliza')
         self.assertContains(response, 'Rp 147.000')
-        self.assertContains(response, 'BNI 123456789')
+        self.assertContains(response, '123456789')
         active_links = [link['title'] for link in response.context['sidebar_links'] if link['active']]
         self.assertEqual(active_links, ['Asisten Laboratorium'])
         asleb_group = next(link for link in response.context['sidebar_links'] if link['title'] == 'Asisten Laboratorium')
@@ -679,11 +702,10 @@ class AslebViewTests(TestCase):
         self.assertIn('3/3', mail.outbox[2].subject)
 
     def create_active_schedule(self):
-        room = RuanganLab.objects.filter(aktif=True).first()
         return JadwalPraktikum.objects.create(
             mata_kuliah=str(self.matkul),
             kelas=self.matkul.kelas,
-            ruangan=room,
+            ruangan=self.test_room,
             pengampu=self.matkul.dosen,
             hari='senin',
             waktu_mulai='09:00',
@@ -702,6 +724,6 @@ class AslebViewTests(TestCase):
                 semester=4,
                 matkul=self.matkul,
                 metode_rekening='bni',
-                rekening='BNI 123456789',
+                rekening='123456789',
                 status='digenerate',
             )

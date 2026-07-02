@@ -1,11 +1,12 @@
 from datetime import timedelta
 
 from django.utils import timezone
+from django.db import transaction
 
 from apps.asleb.models import Asleb
 from apps.pengguna.models import PengalamanPengguna, Pengguna
 
-from .models import PendaftaranAsleb, PeriodeAsleb
+from .models import PendaftaranAsleb, PeriodeAsleb, RiwayatAsleb
 
 
 def get_current_period(value=None):
@@ -46,7 +47,19 @@ def sync_expired_asleb_periods(value=None):
     )
     expired_rows = list(expired.select_related('periode_aktif'))
     expired_nims = [item.nim for item in expired_rows]
+    affected_matkul = [item.matkul for item in expired_rows if item.matkul]
     expired.update(status='nonaktif')
+
+    if affected_matkul:
+        from apps.jadwal.models import JadwalPraktikum, PermintaanPerubahanJadwal
+        JadwalPraktikum.objects.filter(
+            mata_kuliah__in=affected_matkul,
+            status=JadwalPraktikum.STATUS_DIAJUKAN,
+        ).update(status=JadwalPraktikum.STATUS_DITOLAK)
+        PermintaanPerubahanJadwal.objects.filter(
+            diajukan_oleh__nim_nik__in=expired_nims,
+            status='diajukan',
+        ).update(status='ditolak', diproses_pada=timezone.now())
 
     users_by_nim = {
         item.nim_nik: item
@@ -86,12 +99,31 @@ def sync_expired_asleb_periods(value=None):
     return len(expired_nims), demoted
 
 
+@transaction.atomic
+def end_asleb_period(period, ended_by, value=None):
+    today = value or timezone.localdate()
+    period.selesai = today - timedelta(days=1)
+    if period.pendaftaran_selesai >= today:
+        period.pendaftaran_selesai = today - timedelta(days=1)
+    if period.pendaftaran_mulai > period.pendaftaran_selesai:
+        period.pendaftaran_mulai = period.pendaftaran_selesai
+    period.diakhiri_pada = timezone.now()
+    period.diakhiri_oleh = ended_by
+    period.save(update_fields=[
+        'selesai', 'pendaftaran_mulai', 'pendaftaran_selesai',
+        'diakhiri_pada', 'diakhiri_oleh', 'diperbarui_pada',
+    ])
+    return sync_expired_asleb_periods(today)
+
+
 def get_asleb_experience(nim):
-    period_count = PendaftaranAsleb.objects.filter(
+    period_ids = set(PendaftaranAsleb.objects.filter(
         nim=nim,
         status__in=['diterima', 'digenerate'],
         periode__isnull=False,
-    ).values('periode_id').distinct().count()
+    ).values_list('periode_id', flat=True))
+    period_ids.update(RiwayatAsleb.objects.filter(nim=nim).values_list('periode_id', flat=True))
+    period_count = len(period_ids)
     if not period_count:
         period_count = PendaftaranAsleb.objects.filter(
             nim=nim,

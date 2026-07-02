@@ -96,6 +96,14 @@ class PeriodeAsleb(models.Model):
     selesai = models.DateField()
     pendaftaran_mulai = models.DateField()
     pendaftaran_selesai = models.DateField()
+    diakhiri_pada = models.DateTimeField(blank=True, null=True)
+    diakhiri_oleh = models.ForeignKey(
+        'pengguna.Pengguna',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='periode_asleb_diakhiri',
+    )
     dibuat_pada = models.DateTimeField(auto_now_add=True)
     diperbarui_pada = models.DateTimeField(auto_now=True)
 
@@ -188,6 +196,7 @@ class PendaftaranAsleb(models.Model):
         default='bni',
     )
     rekening = models.CharField(max_length=150, blank=True)
+    nama_pemilik_rekening = models.CharField('Atas Nama', max_length=150, blank=True)
     nilai_transkrip = models.CharField(
         max_length=20,
         choices=NILAI_CHOICES,
@@ -218,10 +227,68 @@ class PendaftaranAsleb(models.Model):
 
     @property
     def biaya_admin_transfer(self):
+        return PengaturanBiayaTransfer.get_solo().get_fee(self.metode_rekening)
+
+
+class RiwayatAsleb(models.Model):
+    nim = models.CharField('NIM', max_length=30, db_index=True)
+    nama = models.CharField(max_length=150)
+    email = models.EmailField(blank=True)
+    periode = models.ForeignKey(PeriodeAsleb, on_delete=models.PROTECT, related_name='riwayat_asleb')
+    matkul = models.ForeignKey(MataKuliahAsleb, on_delete=models.PROTECT, related_name='riwayat_asleb')
+    metode_rekening = models.CharField(max_length=30, choices=PendaftaranAsleb.METODE_REKENING_CHOICES)
+    rekening = models.CharField(max_length=150, blank=True)
+    nama_pemilik_rekening = models.CharField(max_length=150, blank=True)
+    source_pendaftaran_id = models.PositiveBigIntegerField()
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-periode__tahun', '-periode__semester', 'nama']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['nim', 'periode', 'matkul'],
+                name='unique_riwayat_asleb_periode_matkul',
+            ),
+            models.UniqueConstraint(
+                fields=['source_pendaftaran_id'],
+                name='unique_source_pendaftaran_riwayat_asleb',
+            ),
+        ]
+        verbose_name = 'Riwayat Aslab'
+        verbose_name_plural = 'Riwayat Aslab'
+
+    def __str__(self):
+        return f'{self.nama} - {self.matkul} - {self.periode}'
+
+
+class PengaturanBiayaTransfer(models.Model):
+    biaya_bni = models.PositiveIntegerField('Biaya BNI', default=0)
+    biaya_bank_lain = models.PositiveIntegerField('Biaya Bank Lain', default=2500)
+    biaya_dana = models.PositiveIntegerField('Biaya DANA', default=0)
+    biaya_shopeepay = models.PositiveIntegerField('Biaya ShopeePay', default=1500)
+    biaya_gopay = models.PositiveIntegerField('Biaya GoPay', default=1500)
+    biaya_ovo = models.PositiveIntegerField('Biaya OVO', default=1500)
+    diperbarui_pada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Pengaturan Biaya Transfer'
+        verbose_name_plural = 'Pengaturan Biaya Transfer'
+
+    @classmethod
+    def get_solo(cls):
+        setting, _ = cls.objects.get_or_create(pk=1)
+        return setting
+
+    def get_fee(self, method):
         return {
-            'bank_lain': 2500,
-            'rekening_bank': 2500,
-            'shopeepay': 1500,
-            'gopay': 1500,
-            'ovo': 1500,
-        }.get(self.metode_rekening, 0)
+            'bni': self.biaya_bni,
+            'bank_lain': self.biaya_bank_lain,
+            'rekening_bank': self.biaya_bank_lain,
+            'dana': self.biaya_dana,
+            'shopeepay': self.biaya_shopeepay,
+            'gopay': self.biaya_gopay,
+            'ovo': self.biaya_ovo,
+        }.get(method, 0)
+
+    def __str__(self):
+        return 'Pengaturan Biaya Transfer Honor'

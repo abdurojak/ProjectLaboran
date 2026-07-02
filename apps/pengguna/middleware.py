@@ -66,10 +66,9 @@ class PenggunaLoginRequiredMiddleware:
                     return self.get_response(request)
                 return redirect(f'{login_url}?next={path}')
 
-            if pengguna.role == 'asisten_lab':
-                from apps.pendaftaran_asleb.services import sync_expired_asleb_periods
-                sync_expired_asleb_periods()
-                pengguna.refresh_from_db(fields=['role'])
+            from apps.pendaftaran_asleb.services import sync_expired_asleb_periods
+            sync_expired_asleb_periods()
+            pengguna.refresh_from_db(fields=['role'])
 
             request.current_pengguna = pengguna
 
@@ -82,7 +81,11 @@ class PenggunaLoginRequiredMiddleware:
             if pengguna.role == 'mahasiswa' and not self.mahasiswa_can_access(namespace, path, resolved, pengguna):
                 return redirect('dashboard:home')
 
-            if pengguna.role == 'asisten_lab' and namespace in self.ASISTEN_LAB_BLOCKED_NAMESPACES:
+            if (
+                pengguna.role == 'asisten_lab'
+                and namespace in self.ASISTEN_LAB_BLOCKED_NAMESPACES
+                and resolved.url_name != 'rekening_update'
+            ):
                 return redirect('dashboard:home')
 
             if pengguna.role == 'asisten_lab' and namespace == 'asleb':
@@ -100,6 +103,9 @@ class PenggunaLoginRequiredMiddleware:
         return self.get_response(request)
 
     def mahasiswa_can_access(self, namespace, path, resolved, pengguna):
+        if namespace == 'pendaftaran_asleb':
+            return resolved.url_name == 'rekening_update'
+
         if namespace == 'kalender':
             return resolved.url_name in self.MAHASISWA_ALLOWED_KALENDER_URLS
 

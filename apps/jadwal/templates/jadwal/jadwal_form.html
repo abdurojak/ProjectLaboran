@@ -34,7 +34,7 @@
             {% endfor %}
         </div>
         <div id="capacity-note" class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-800">
-            {% if form.participant_count %}Pilihan lab disesuaikan otomatis untuk {{ form.participant_count }} peserta aktif.{% else %}Pilih mata kuliah agar sistem menyesuaikan kapasitas lab dengan jumlah peserta.{% endif %}
+            {% if form.participant_count %}Pilihan lab hanya menampilkan kapasitas {{ form.participant_count }} mahasiswa atau lebih.{% elif request.current_pengguna.role == 'asisten_lab' %}Laboran belum menginput mahasiswa. Pilihan lab belum dapat digunakan.{% else %}Pilih mata kuliah agar sistem menyesuaikan kapasitas lab dengan jumlah peserta.{% endif %}
         </div>
         {% if request.current_pengguna.role == 'asisten_lab' and object %}
         <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
@@ -57,6 +57,7 @@
 <script>
     const matkulInput = document.getElementById('id_matkul');
     const roomInput = document.getElementById('id_ruangan');
+    const additionalRoomInput = document.getElementById('id_ruangan_tambahan');
     const capacityNote = document.getElementById('capacity-note');
     const roomsUrl = "{% url 'jadwal:ruangan_tersedia' %}";
 
@@ -65,12 +66,23 @@
             const response = await fetch(`${roomsUrl}?matkul=${encodeURIComponent(matkulInput.value)}`);
             const data = await response.json();
             roomInput.replaceChildren(new Option('Pilih ruangan', ''));
-            data.rooms.forEach((room) => roomInput.add(new Option(`${room.label} · kapasitas ${room.capacity}`, room.id)));
+            data.rooms.forEach((room) => roomInput.add(new Option(`${room.label} - kapasitas ${room.capacity}`, room.id)));
             capacityNote.textContent = data.participant_count
-                ? `${data.participant_count} peserta aktif · ditampilkan lab berkapasitas paling efisien yang mencukupi.`
-                : 'Belum ada peserta aktif pada mata kuliah ini; semua lab aktif dapat dipilih setelah data peserta tersedia.';
+                ? `${data.participant_count} peserta aktif - hanya lab berkapasitas ${data.participant_count} atau lebih yang ditampilkan.`
+                : 'Belum ada peserta aktif. Asisten Lab belum dapat memilih laboratorium sebelum data diinput laboran.';
+            updateAdditionalRoomState();
         });
     }
+
+    function updateAdditionalRoomState() {
+        if (!roomInput || !additionalRoomInput) return;
+        const selectedText = roomInput.options[roomInput.selectedIndex]?.text || '';
+        const eligible = selectedText.includes('LAB-RPL') || selectedText.includes('LAB-SKI');
+        additionalRoomInput.disabled = !eligible;
+        if (!eligible) additionalRoomInput.value = '';
+    }
+    roomInput?.addEventListener('change', updateAdditionalRoomState);
+    updateAdditionalRoomState();
 
     document.querySelectorAll('input[type="time"][min][max]').forEach((input) => {
         const label = input.name === 'waktu_mulai' ? 'Waktu mulai' : 'Waktu selesai';

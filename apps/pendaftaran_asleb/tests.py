@@ -7,16 +7,19 @@ from unittest.mock import MagicMock, patch
 
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from django.core import mail
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from apps.asleb.models import Asleb
+from apps.jadwal.models import JadwalPraktikum
 from apps.pengguna.models import PengalamanPengguna, Pengguna
+from apps.ruangan.models import RuanganLab
 
-from .forms import PendaftaranAslebPublicForm, PublicBerkasPendaftaranForm
-from .models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb, PeriodeAsleb
+from .forms import PendaftaranAslebPublicForm, PublicBerkasPendaftaranForm, RekeningPendaftaranForm
+from .models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb, PeriodeAsleb, RiwayatAsleb
 from .services import get_asleb_experience, sync_expired_asleb_periods
 from .utils import analyze_transcript, extract_grade_from_transcript, get_public_registration_url
 from .views import WIZARD_SESSION_KEY
@@ -53,6 +56,7 @@ class PendaftaranAslebViewTests(TestCase):
         session = self.client.session
         session['pengguna_id'] = pengguna.pk
         session.save()
+        self.admin = pengguna
 
         self.matkul, _ = MataKuliahAsleb.objects.get_or_create(
             kode='SDA_TIF01_ABDUL',
@@ -181,7 +185,8 @@ class PendaftaranAslebViewTests(TestCase):
             'semester': 4,
             'matkul': self.matkul.pk,
             'metode_rekening': 'bni',
-            'rekening': 'BNI 123456789',
+            'rekening': '123456789',
+            'nama_pemilik_rekening': 'Mahasiswa Pendaftar',
             'alasan': 'Ingin membantu praktikum.',
             'signature_data': make_signature_data(),
             'pernyataan_data': 'on',
@@ -539,6 +544,109 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('pernyataan_data', form.errors)
 
+    def test_rekening_bni_hanya_angka_dan_bank_lain_menerima_nama_bank(self):
+        bni_form = RekeningPendaftaranForm(data={
+            'metode_rekening': 'bni', 'rekening': 'BNI 12345', 'nama_pemilik_rekening': 'Rizki Pratama',
+        }, instance=self.pendaftaran)
+        bank_lain_form = RekeningPendaftaranForm(data={
+            'metode_rekening': 'bank_lain', 'rekening': 'BCA 12345', 'nama_pemilik_rekening': 'Rizki Pratama',
+        }, instance=self.pendaftaran)
+
+        self.assertFalse(bni_form.is_valid())
+        self.assertIn('rekening', bni_form.errors)
+        self.assertTrue(bank_lain_form.is_valid(), bank_lain_form.errors)
+
+    def test_mahasiswa_dapat_edit_metode_rekening_milik_sendiri(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Rizki Pratama', nim_nik=self.pendaftaran.nim,
+            email='rizki@std.trisakti.ac.id', password='rahasia123', no_hp='081234567891',
+            alamat='Jakarta', fakultas='Teknologi Industri', prodi='Informatika',
+            gender='laki_laki', role='mahasiswa', is_verified=True,
+        )
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+
+        response = self.client.post(reverse('pendaftaran_asleb:rekening_update', args=[self.pendaftaran.pk]), {
+            'metode_rekening': 'bank_lain',
+            'rekening': 'Mandiri 99887766',
+            'nama_pemilik_rekening': 'Rizki Pratama',
+        })
+
+        self.assertRedirects(response, reverse('pendaftaran_asleb:pendaftaran_success'))
+        self.pendaftaran.refresh_from_db()
+        self.assertEqual(self.pendaftaran.metode_rekening, 'bank_lain')
+        self.assertEqual(self.pendaftaran.nama_pemilik_rekening, 'Rizki Pratama')
+
+    def test_super_admin_wajib_password_benar_untuk_mengakhiri_periode(self):
+        period = PeriodeAsleb.get_for_date(timezone.localdate())
+
+        response = self.client.post(reverse('pendaftaran_asleb:periode_end', args=[period.pk]), {
+            'password': 'password-salah',
+            'konfirmasi': 'on',
+        })
+
+        self.assertRedirects(response, reverse('pendaftaran_asleb:pendaftaran_list'))
+        period.refresh_from_db()
+        self.assertIsNone(period.diakhiri_pada)
+
+    def test_super_admin_dapat_mengakhiri_periode_dan_menonaktifkan_asleb(self):
+        period = PeriodeAsleb.get_for_date(timezone.localdate())
+        akun_asleb = Pengguna.objects.create(
+            nama_pengguna='Aslab Akhir Periode', nim_nik='0640020999',
+            email='0640020999@std.trisakti.ac.id', password='rahasia123', no_hp='081299999999',
+            alamat='Jakarta', fakultas='Teknologi Industri', prodi='Informatika',
+            gender='laki_laki', role='asisten_lab', is_verified=True,
+        )
+        asleb = Asleb.objects.create(
+            nama=akun_asleb.nama_pengguna, nim=akun_asleb.nim_nik, no_hp=akun_asleb.no_hp,
+            email=akun_asleb.email, program_studi=akun_asleb.prodi, semester=5,
+            matkul=str(self.matkul), periode_aktif=period, tanggal_bergabung=period.mulai,
+        )
+        room, _ = RuanganLab.objects.get_or_create(
+            kode='LAB-PERIODE-TEST', defaults={'nama': 'Lab Periode Test', 'kapasitas': 30}
+        )
+        jadwal = JadwalPraktikum.objects.create(
+            mata_kuliah=str(self.matkul), kelas=self.matkul.kelas, ruangan=room,
+            pengampu=self.matkul.dosen, hari='senin', waktu_mulai='09:00',
+            waktu_selesai='11:00', status=JadwalPraktikum.STATUS_DIAJUKAN,
+        )
+
+        response = self.client.post(reverse('pendaftaran_asleb:periode_end', args=[period.pk]), {
+            'password': 'rahasia123',
+            'konfirmasi': 'on',
+        })
+
+        self.assertRedirects(response, reverse('pendaftaran_asleb:pendaftaran_list'))
+        period.refresh_from_db()
+        akun_asleb.refresh_from_db()
+        asleb.refresh_from_db()
+        jadwal.refresh_from_db()
+        self.assertEqual(period.diakhiri_oleh, self.admin)
+        self.assertIsNotNone(period.diakhiri_pada)
+        self.assertEqual(akun_asleb.role, 'mahasiswa')
+        self.assertEqual(asleb.status, 'nonaktif')
+        self.assertEqual(jadwal.status, JadwalPraktikum.STATUS_DITOLAK)
+
+    def test_laboran_tidak_dapat_mengakhiri_periode(self):
+        period = PeriodeAsleb.get_for_date(timezone.localdate())
+        laboran = Pengguna.objects.create(
+            nama_pengguna='Laboran Biasa', nim_nik='LAB-PERIODE',
+            email='laboran-periode@trisakti.ac.id', password='rahasia123', no_hp='081288888888',
+            alamat='Jakarta', fakultas='Teknologi Industri', prodi='Informatika',
+            gender='laki_laki', role='laboran', is_verified=True,
+        )
+        session = self.client.session
+        session['pengguna_id'] = laboran.pk
+        session.save()
+
+        self.client.post(reverse('pendaftaran_asleb:periode_end', args=[period.pk]), {
+            'password': 'rahasia123', 'konfirmasi': 'on',
+        })
+
+        period.refresh_from_db()
+        self.assertIsNone(period.diakhiri_pada)
+
     def test_pendaftaran_search_filters_data(self):
         response = self.client.get(reverse('pendaftaran_asleb:pendaftaran_list'), {'q': 'SDA'})
 
@@ -643,11 +751,76 @@ class PendaftaranAslebViewTests(TestCase):
         response = self.client.post(reverse('pendaftaran_asleb:pendaftaran_generate_all_accepted'))
 
         self.assertEqual(response.status_code, 302)
-        self.pendaftaran.refresh_from_db()
         pengguna.refresh_from_db()
-        self.assertEqual(self.pendaftaran.status, 'digenerate')
+        self.assertFalse(PendaftaranAsleb.objects.filter(pk=self.pendaftaran.pk).exists())
         self.assertEqual(pengguna.role, 'asisten_lab')
         self.assertTrue(Asleb.objects.filter(nim='2401001', nama='Rizki Pratama').exists())
+        self.assertTrue(RiwayatAsleb.objects.filter(
+            nim='2401001',
+            matkul=self.matkul,
+            source_pendaftaran_id=self.pendaftaran.pk,
+        ).exists())
+
+    def test_generate_membersihkan_diterima_dan_ditolak_tanpa_memindahkan_yang_ditolak(self):
+        self.pendaftaran.status = 'diterima'
+        self.pendaftaran.save(update_fields=['status'])
+        rejected = PendaftaranAsleb.objects.create(
+            nama='Calon Ditolak', nim='2401002', no_hp='081234567892',
+            email='ditolak@std.trisakti.ac.id', program_studi='Informatika', semester=4,
+            matkul=self.matkul, status='ditolak',
+        )
+
+        response = self.client.post(reverse('pendaftaran_asleb:pendaftaran_generate_all_accepted'))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(PendaftaranAsleb.objects.filter(pk__in=[self.pendaftaran.pk, rejected.pk]).exists())
+        self.assertTrue(Asleb.objects.filter(nim=self.pendaftaran.nim).exists())
+        self.assertFalse(Asleb.objects.filter(nim=rejected.nim).exists())
+        self.assertFalse(RiwayatAsleb.objects.filter(nim=rejected.nim).exists())
+
+    def test_generate_tidak_membuat_asleb_duplikat(self):
+        self.pendaftaran.status = 'diterima'
+        self.pendaftaran.save(update_fields=['status'])
+        Asleb.objects.create(
+            nama='Nama Lama', nim=self.pendaftaran.nim, no_hp='080000000000',
+            email='lama@example.com', program_studi='Informatika', semester=3,
+            matkul='Matkul Lama', tanggal_bergabung=timezone.localdate(),
+        )
+
+        self.client.post(reverse('pendaftaran_asleb:pendaftaran_generate_all_accepted'))
+
+        self.assertEqual(Asleb.objects.filter(nim=self.pendaftaran.nim).count(), 1)
+        self.assertEqual(Asleb.objects.get(nim=self.pendaftaran.nim).nama, self.pendaftaran.nama)
+
+    def test_generate_dibatalkan_jika_masih_ada_status_diajukan(self):
+        self.pendaftaran.status = 'diterima'
+        self.pendaftaran.save(update_fields=['status'])
+        pending = PendaftaranAsleb.objects.create(
+            nama='Masih Diseleksi', nim='2401003', no_hp='081234567893',
+            email='seleksi@std.trisakti.ac.id', program_studi='Informatika', semester=4,
+            matkul=self.matkul, status='diajukan',
+        )
+
+        self.client.post(reverse('pendaftaran_asleb:pendaftaran_generate_all_accepted'))
+
+        self.assertEqual(PendaftaranAsleb.objects.filter(pk__in=[self.pendaftaran.pk, pending.pk]).count(), 2)
+        self.assertFalse(Asleb.objects.filter(nim=self.pendaftaran.nim).exists())
+        self.assertFalse(RiwayatAsleb.objects.filter(nim=self.pendaftaran.nim).exists())
+
+    def test_generate_rollback_jika_pembuatan_data_asleb_gagal(self):
+        self.pendaftaran.status = 'diterima'
+        self.pendaftaran.save(update_fields=['status'])
+
+        with patch(
+            'apps.pendaftaran_asleb.views.create_or_update_asleb_from_pendaftaran',
+            side_effect=RuntimeError('simulasi kegagalan'),
+        ):
+            with self.assertRaises(RuntimeError):
+                self.client.post(reverse('pendaftaran_asleb:pendaftaran_generate_all_accepted'))
+
+        self.assertTrue(PendaftaranAsleb.objects.filter(pk=self.pendaftaran.pk).exists())
+        self.assertFalse(Asleb.objects.filter(nim=self.pendaftaran.nim).exists())
+        self.assertFalse(RiwayatAsleb.objects.filter(nim=self.pendaftaran.nim).exists())
 
 
 def make_signature_data():

@@ -8,7 +8,7 @@ from apps.ruangan.models import RuanganLab
 
 
 class JadwalPraktikum(models.Model):
-    ADDITIONAL_ROOM_CODE = 'LAB-RPL'
+    ALLOWED_COMBINED_ROOM_CODE_SETS = {frozenset({'LAB-RPL', 'LAB-SKI'})}
     JAM_KERJA_MULAI = time(7, 30)
     JAM_KERJA_SELESAI = time(18, 0)
     STATUS_DIAJUKAN = 'diajukan'
@@ -103,9 +103,11 @@ class JadwalPraktikum(models.Model):
             if self.ruangan_id == self.ruangan_tambahan_id:
                 errors['ruangan_tambahan'] = 'Ruangan tambahan harus berbeda dari ruangan utama.'
             else:
-                if self.ruangan_tambahan.kode != self.ADDITIONAL_ROOM_CODE:
+                selected_codes = frozenset({self.ruangan.kode, self.ruangan_tambahan.kode})
+                if selected_codes not in self.ALLOWED_COMBINED_ROOM_CODE_SETS:
                     errors['ruangan_tambahan'] = (
-                        'Ruangan tambahan hanya boleh Lab Rekayasa Perangkat Lunak.'
+                        'Ruang tambahan hanya boleh digunakan untuk pasangan Lab Rekayasa '
+                        'Perangkat Lunak dan Lab Sistem Keamanan Informasi.'
                     )
 
         if errors:

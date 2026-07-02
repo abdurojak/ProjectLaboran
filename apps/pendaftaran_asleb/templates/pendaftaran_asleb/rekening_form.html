@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Edit Metode Pembayaran{% endblock %}
+{% block content %}
+<section class="mx-auto max-w-2xl space-y-6">
+    <div><p class="text-sm font-black uppercase tracking-[0.2em] text-teal-700">Honor Aslab</p><h2 class="mt-2 text-3xl font-black text-slate-900">Edit Metode Pembayaran</h2><p class="mt-2 text-sm text-slate-500">Perubahan akan digunakan untuk pencairan honor berikutnya.</p></div>
+    <form method="post" class="surface-card space-y-5 p-6 md:p-8" data-payment-form>{% csrf_token %}
+        {% for field in form %}<div>{{ field.label_tag }}{{ field }}{% for error in field.errors %}<p class="mt-2 text-sm font-semibold text-rose-600">{{ error }}</p>{% endfor %}</div>{% endfor %}
+        <p data-account-help class="rounded-2xl bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-800"></p>
+        <div class="flex gap-3"><button class="btn-primary" type="submit"><i data-lucide="save" class="h-4 w-4"></i>Simpan</button><a class="btn-secondary" href="{% url 'pendaftaran_asleb:pendaftaran_success' %}">Batal</a></div>
+    </form>
+</section>
+{% endblock %}
+{% block extra_script %}{% include "pendaftaran_asleb/partials/payment_account_script.html" %}{% endblock %}

@@ -1,0 +1,22 @@
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const method = document.getElementById('id_metode_rekening');
+    const account = document.getElementById('id_rekening');
+    const help = document.querySelector('[data-account-help]');
+    if (!method || !account) return;
+    function updateAccountField() {
+        const bankOther = method.value === 'bank_lain';
+        const bni = method.value === 'bni';
+        account.inputMode = bankOther ? 'text' : 'numeric';
+        account.placeholder = bankOther ? 'Contoh: BCA 1234567890' : (bni ? 'Masukkan nomor rekening BNI' : 'Masukkan nomor e-wallet');
+        if (help) help.textContent = bankOther
+            ? 'Tuliskan nama bank dan nomor rekening.'
+            : (bni ? 'Rekening BNI hanya menerima angka.' : 'Nomor e-wallet hanya menerima angka.');
+    }
+    method.addEventListener('change', updateAccountField);
+    account.addEventListener('input', function () {
+        if (method.value !== 'bank_lain') account.value = account.value.replace(/\D/g, '');
+    });
+    updateAccountField();
+});
+</script>

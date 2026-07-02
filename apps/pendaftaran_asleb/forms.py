@@ -5,7 +5,7 @@ import uuid
 from django import forms
 from django.core.files.base import ContentFile
 
-from .models import MataKuliahAsleb, PendaftaranAsleb, PeriodeAsleb
+from .models import MataKuliahAsleb, PendaftaranAsleb, PengaturanBiayaTransfer, PeriodeAsleb
 from .utils import extract_grade_from_transcript, is_passing_grade
 
 
@@ -32,6 +32,7 @@ class PendaftaranAslebForm(forms.ModelForm):
             'tanda_tangan',
             'metode_rekening',
             'rekening',
+            'nama_pemilik_rekening',
             'nilai_transkrip',
             'alasan',
             'status',
@@ -43,7 +44,8 @@ class PendaftaranAslebForm(forms.ModelForm):
             'program_studi': forms.TextInput(attrs={'placeholder': 'Contoh: Rekayasa Perangkat Lunak'}),
             'matkul': forms.Select(attrs={'class': 'min-h-12'}),
             'tanda_tangan': forms.FileInput(attrs={'accept': 'image/*'}),
-            'rekening': forms.TextInput(attrs={'placeholder': 'Contoh: BCA 123456789 / DANA 0812xxxx / OVO 0812xxxx'}),
+            'rekening': forms.TextInput(attrs={'placeholder': 'Nomor rekening atau e-wallet'}),
+            'nama_pemilik_rekening': forms.TextInput(attrs={'placeholder': 'Nama pemilik rekening/e-wallet'}),
             'alasan': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Alasan atau catatan pendaftaran'}),
         }
 
@@ -55,6 +57,7 @@ class PendaftaranAslebForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
+        validate_payment_account(self, cleaned_data)
         transcript = cleaned_data.get('transkrip') or getattr(self.instance, 'transkrip', None)
         detected_grade = extract_grade_from_transcript(transcript, cleaned_data.get('matkul'))
 
@@ -189,6 +192,11 @@ class PublicBerkasPendaftaranForm(forms.Form):
     semester = forms.ChoiceField(choices=SEMESTER_CHOICES)
     metode_rekening = forms.ChoiceField(choices=PendaftaranAsleb.METODE_REKENING_CHOICES)
     rekening = forms.CharField(max_length=150, widget=forms.TextInput(attrs={'placeholder': 'Masukkan nomor rekening atau nomor e-wallet'}))
+    nama_pemilik_rekening = forms.CharField(
+        label='Atas Nama',
+        max_length=150,
+        widget=forms.TextInput(attrs={'placeholder': 'Nama pemilik rekening atau e-wallet'}),
+    )
     alasan = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 4, 'placeholder': 'Alasan atau catatan pendaftaran'}))
 
     def __init__(self, *args, **kwargs):
@@ -218,6 +226,7 @@ class PublicBerkasPendaftaranForm(forms.Form):
 
     def clean(self):
         cleaned_data = super().clean()
+        validate_payment_account(self, cleaned_data)
         if self.current_pengguna and self.current_pengguna.role in ['mahasiswa', 'asisten_lab']:
             cleaned_data['nama'] = self.current_pengguna.nama_pengguna
             cleaned_data['nim'] = self.current_pengguna.nim_nik
@@ -225,6 +234,53 @@ class PublicBerkasPendaftaranForm(forms.Form):
             cleaned_data['email'] = self.current_pengguna.email
             cleaned_data['program_studi'] = self.current_pengguna.prodi
         return cleaned_data
+
+
+class RekeningPendaftaranForm(forms.ModelForm):
+    class Meta:
+        model = PendaftaranAsleb
+        fields = ['metode_rekening', 'rekening', 'nama_pemilik_rekening']
+        widgets = {
+            'rekening': forms.TextInput(attrs={'placeholder': 'Nomor rekening atau e-wallet'}),
+            'nama_pemilik_rekening': forms.TextInput(attrs={'placeholder': 'Nama pemilik rekening atau e-wallet'}),
+        }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        validate_payment_account(self, cleaned_data)
+        return cleaned_data
+
+
+class PengaturanBiayaTransferForm(forms.ModelForm):
+    class Meta:
+        model = PengaturanBiayaTransfer
+        fields = [
+            'biaya_bni', 'biaya_bank_lain', 'biaya_dana',
+            'biaya_shopeepay', 'biaya_gopay', 'biaya_ovo',
+        ]
+        widgets = {
+            'biaya_bni': forms.NumberInput(attrs={'min': 0, 'step': 500}),
+            'biaya_bank_lain': forms.NumberInput(attrs={'min': 0, 'step': 500}),
+            'biaya_dana': forms.NumberInput(attrs={'min': 0, 'step': 500}),
+            'biaya_shopeepay': forms.NumberInput(attrs={'min': 0, 'step': 500}),
+            'biaya_gopay': forms.NumberInput(attrs={'min': 0, 'step': 500}),
+            'biaya_ovo': forms.NumberInput(attrs={'min': 0, 'step': 500}),
+        }
+
+
+def validate_payment_account(form, cleaned_data):
+    method = cleaned_data.get('metode_rekening')
+    account = (cleaned_data.get('rekening') or '').strip()
+    owner = (cleaned_data.get('nama_pemilik_rekening') or '').strip()
+    if method == 'bni' and account and not account.isdigit():
+        form.add_error('rekening', 'Nomor rekening BNI hanya boleh berisi angka.')
+    elif method == 'bank_lain' and account:
+        if not any(char.isalpha() for char in account) or not any(char.isdigit() for char in account):
+            form.add_error('rekening', 'Tulis nama bank dan nomor rekening, contoh: BCA 1234567890.')
+    elif method in {'dana', 'shopeepay', 'gopay', 'ovo'} and account and not account.isdigit():
+        form.add_error('rekening', 'Nomor e-wallet hanya boleh berisi angka.')
+    if 'nama_pemilik_rekening' in form.fields and not owner:
+        form.add_error('nama_pemilik_rekening', 'Nama pemilik rekening atau e-wallet wajib diisi.')
 
 
 class PeriodeAslebForm(forms.ModelForm):
@@ -247,6 +303,20 @@ class PeriodeAslebForm(forms.ModelForm):
         if end and (end < self.instance.mulai or end > self.instance.selesai):
             self.add_error('pendaftaran_selesai', 'Tanggal tutup harus berada dalam periode aslab.')
         return cleaned_data
+
+
+class AkhiriPeriodeAslebForm(forms.Form):
+    password = forms.CharField(
+        label='Verifikasi Password Super Admin',
+        widget=forms.PasswordInput(attrs={
+            'placeholder': 'Masukkan password akun Anda',
+            'autocomplete': 'current-password',
+        }),
+    )
+    konfirmasi = forms.BooleanField(
+        required=True,
+        label='Saya memahami seluruh Asisten Lab pada periode ini akan dikembalikan menjadi Mahasiswa.',
+    )
 
 
 class MataKuliahAslebForm(forms.ModelForm):

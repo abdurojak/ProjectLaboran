@@ -140,8 +140,8 @@ class JadwalViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'name="ruangan_tambahan"', html=False)
         self.assertContains(response, 'Lab Rekayasa Perangkat Lunak')
-        self.assertNotContains(response, '<option value="2">LAB-SKI', html=False)
-        self.assertContains(response, 'hanya Lab Rekayasa Perangkat Lunak')
+        self.assertContains(response, 'Lab Sistem Keamanan Informasi')
+        self.assertContains(response, 'Hanya untuk pasangan Lab RPL dan Lab SKI')
 
     def test_form_jadwal_menyimpan_matkul_kelas_dan_pengampu_dari_pilihan_matkul(self):
         response = self.client.post(reverse('jadwal:jadwal_create'), {
@@ -159,7 +159,7 @@ class JadwalViewTests(TestCase):
         self.assertEqual(jadwal.kelas, self.matkul_lain.kelas)
         self.assertEqual(jadwal.pengampu, self.matkul_lain.dosen)
 
-    def test_form_jadwal_ruangan_tambahan_hanya_rpl(self):
+    def test_form_jadwal_ruangan_tambahan_hanya_pasangan_rpl_ski(self):
         lab_rpl = RuanganLab.objects.get(kode='LAB-RPL')
         lab_ski = RuanganLab.objects.get(kode='LAB-SKI')
 
@@ -444,7 +444,7 @@ class JadwalViewTests(TestCase):
         self.assertEqual(delete_response.status_code, 404)
         self.assertTrue(JadwalPraktikum.objects.filter(pk=jadwal_lain.pk).exists())
 
-    def test_ruangan_difilter_ke_kapasitas_terkecil_yang_mencukupi_peserta(self):
+    def test_ruangan_difilter_ke_semua_kapasitas_yang_mencukupi_peserta(self):
         PesertaPraktikum.objects.bulk_create([
             PesertaPraktikum(matkul=self.matkul_lain, nim=f'064{i:07d}', nama=f'Mahasiswa {i}')
             for i in range(20)
@@ -456,7 +456,36 @@ class JadwalViewTests(TestCase):
         payload = response.json()
         self.assertEqual(payload['participant_count'], 20)
         self.assertTrue(payload['rooms'])
-        self.assertTrue(all(room['capacity'] == 20 for room in payload['rooms']))
+        self.assertTrue(all(room['capacity'] >= 20 for room in payload['rooms']))
+        self.assertTrue(any(room['capacity'] > 20 for room in payload['rooms']))
+
+    def test_aslab_tidak_dapat_memilih_lab_sebelum_peserta_diinput_laboran(self):
+        aslab = self.login_as_asisten_lab()
+        PendaftaranAsleb.objects.create(
+            nama=aslab.nama_pengguna, nim=aslab.nim_nik, no_hp=aslab.no_hp,
+            email=aslab.email, program_studi=aslab.prodi, semester=5,
+            matkul=self.matkul_lain, status='digenerate',
+        )
+
+        response = self.client.get(reverse('jadwal:jadwal_create'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context['form'].fields['ruangan'].queryset.exists())
+        self.assertContains(response, 'Laboran belum menginput mahasiswa')
+
+    def test_lab_lain_ditolak_jika_memilih_ruang_tambahan(self):
+        response = self.client.post(reverse('jadwal:jadwal_create'), {
+            'matkul': self.matkul_lain.pk,
+            'ruangan': self.ruangan.pk,
+            'ruangan_tambahan': self.lab_rpl.pk,
+            'hari': 'selasa',
+            'waktu_mulai': '13:00',
+            'waktu_selesai': '15:00',
+            'catatan': '',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Ruang tambahan hanya berlaku untuk pasangan Lab RPL dan Lab SKI')
 
     def test_edit_jadwal_aslab_menunggu_persetujuan_laboran(self):
         aslab = self.login_as_asisten_lab()
@@ -465,6 +494,7 @@ class JadwalViewTests(TestCase):
             email=aslab.email, program_studi=aslab.prodi, semester=5,
             matkul=self.matkul, status='digenerate',
         )
+        PesertaPraktikum.objects.create(matkul=self.matkul, nim='0640099999', nama='Peserta Jadwal')
         jadwal = JadwalPraktikum.objects.get(mata_kuliah=str(self.matkul))
 
         response = self.client.post(reverse('jadwal:jadwal_update', args=[jadwal.pk]), {

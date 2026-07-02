@@ -39,7 +39,7 @@
                 {% if not pendaftaran.cv and not pendaftaran.transkrip and not pendaftaran.tanda_tangan %}<span class="text-sm text-slate-500">Belum ada berkas.</span>{% endif %}
             </div>
         </div>
-        <div class="rounded-3xl bg-slate-50 p-5 md:col-span-2"><div class="text-sm font-semibold text-slate-500">Rekening</div><div class="mt-2 text-xl font-bold text-slate-900">{{ pendaftaran.get_metode_rekening_display }} - {{ pendaftaran.rekening|default:"-" }}</div></div>
+        <div class="rounded-3xl bg-slate-50 p-5 md:col-span-2"><div class="text-sm font-semibold text-slate-500">Rekening</div><div class="mt-2 text-xl font-bold text-slate-900">{{ pendaftaran.get_metode_rekening_display }} - {{ pendaftaran.rekening|default:"-" }}</div><div class="mt-1 text-sm font-semibold text-slate-500">a.n. {{ pendaftaran.nama_pemilik_rekening|default:pendaftaran.nama }}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5 md:col-span-2"><div class="text-sm font-semibold text-slate-500">Alasan</div><div class="mt-2 text-base leading-7 text-slate-700">{{ pendaftaran.alasan|default:"-" }}</div></div>
     </div>
 </section>

@@ -8,7 +8,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
-from apps.asleb.models import Asleb, HonorAsleb
+from apps.asleb.models import AbsensiAsleb, Asleb, HonorAsleb
 from apps.inventaris.models import ACTIVE_PEMINJAMAN_STATUSES, Barang, InventarisBarang
 from apps.jadwal.models import JadwalPraktikum
 from apps.jadwal.notifications import send_jadwal_status_notification
@@ -141,6 +141,14 @@ class DashboardView(TemplateView):
             riwayat_honor_saya = HonorAsleb.objects.filter(
                 asleb__nim=pengguna.nim_nik,
             ).select_related('asleb')[:6]
+            for honor in riwayat_honor_saya:
+                honor.bukti_pendukung_list = list(
+                    AbsensiAsleb.objects.filter(
+                        asleb=honor.asleb,
+                        tanggal_praktikum__year=honor.bulan.year,
+                        tanggal_praktikum__month=honor.bulan.month,
+                    ).order_by('-tanggal_praktikum')[:3]
+                )
             context['today'] = timezone.localdate()
             hari_ini = self.WEEKDAY_TO_HARI.get(context['today'].weekday())
             context['peminjaman_saya'] = peminjaman_saya[:6]

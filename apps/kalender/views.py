@@ -8,7 +8,7 @@ from django.views.generic import CreateView, DeleteView, DetailView, ListView, U
 from apps.asleb.models import Asleb, PesertaPraktikum
 from apps.core.views import PostOnlyDeleteMixin
 from apps.jadwal.models import JadwalPraktikum
-from apps.pendaftaran_asleb.models import PendaftaranAsleb
+from apps.pendaftaran_asleb.models import PendaftaranAsleb, RiwayatAsleb
 
 from .forms import KegiatanKalenderForm
 from .models import KegiatanKalender, Notifikasi
@@ -58,6 +58,9 @@ def get_asisten_lab_jadwal_queryset(pengguna):
                 status__in=['diterima', 'digenerate'],
             ).select_related('matkul')
         ]
+        matkul_list.extend(
+            item.matkul for item in RiwayatAsleb.objects.filter(nim=pengguna.nim_nik).select_related('matkul')
+        )
     else:
         matkul_list = [
             item.matkul

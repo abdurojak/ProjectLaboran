@@ -10,7 +10,7 @@ from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
 from apps.core.views import PostOnlyDeleteMixin
-from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb
+from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, RiwayatAsleb
 from apps.ruangan.models import RuanganLab
 
 from .forms import JadwalPraktikumForm
@@ -29,7 +29,12 @@ def get_aslab_matkul_labels(pengguna):
         'matkul__dosen',
         'matkul__kelas',
     )
-    return [f'{nama} - {dosen} - {kelas}' for nama, dosen, kelas in matkul_values]
+    labels = [f'{nama} - {dosen} - {kelas}' for nama, dosen, kelas in matkul_values]
+    history_values = RiwayatAsleb.objects.filter(nim=pengguna.nim_nik).values_list(
+        'matkul__nama', 'matkul__dosen', 'matkul__kelas'
+    )
+    labels.extend(f'{nama} - {dosen} - {kelas}' for nama, dosen, kelas in history_values)
+    return list(dict.fromkeys(labels))
 
 
 def can_manage_jadwal(pengguna, jadwal):
@@ -337,9 +342,11 @@ def available_rooms(request):
 
     participant_count = matkul.peserta_praktikum.filter(aktif=True).count()
     rooms = RuanganLab.objects.filter(aktif=True, kapasitas__isnull=False).order_by('kapasitas', 'nama')
-    if participant_count:
-        capacities = list(rooms.filter(kapasitas__gte=participant_count).values_list('kapasitas', flat=True).distinct())
-        rooms = rooms.filter(kapasitas=min(capacities)) if capacities else rooms.none()
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not participant_count and pengguna and pengguna.role == 'asisten_lab':
+        rooms = rooms.none()
+    elif participant_count:
+        rooms = rooms.filter(kapasitas__gte=participant_count)
     return JsonResponse({
         'participant_count': participant_count,
         'rooms': [{'id': room.pk, 'label': str(room), 'capacity': room.kapasitas} for room in rooms],
