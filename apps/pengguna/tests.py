@@ -676,6 +676,7 @@ class PenggunaAuthTests(TestCase):
                 'email': 'siti@std.trisakti.ac.id',
                 'password': 'passwordku123',
                 'password_confirmation': 'passwordku123',
+                'no_hp': '081234567891',
                 'alamat': 'Jakarta',
                 'fakultas': 'Teknologi Industri',
                 'prodi': 'Informatika',
@@ -689,7 +690,7 @@ class PenggunaAuthTests(TestCase):
         self.assertEqual(pengguna.nama_pengguna, 'Siti Aminah')
         self.assertTrue(check_password('passwordku123', pengguna.password))
         self.assertEqual(pengguna.role, 'mahasiswa')
-        self.assertEqual(pengguna.no_hp, '')
+        self.assertEqual(pengguna.no_hp, '081234567891')
         self.assertFalse(pengguna.is_verified)
         self.assertNotIn('pengguna_id', self.client.session)
         kode = self.client.session['pengguna_otp']['code']
@@ -711,6 +712,7 @@ class PenggunaAuthTests(TestCase):
                 'email': 'link@std.trisakti.ac.id',
                 'password': 'passwordku123',
                 'password_confirmation': 'passwordku123',
+                'no_hp': '081234567892',
                 'alamat': 'Jakarta',
                 'fakultas': 'Teknologi Industri',
                 'prodi': 'Informatika',
@@ -741,6 +743,7 @@ class PenggunaAuthTests(TestCase):
                 'email': 'dina@trisakti.ac.id',
                 'password': 'passwordku123',
                 'password_confirmation': 'passwordku123',
+                'no_hp': '081234567893',
                 'alamat': 'Jakarta',
                 'fakultas': 'Teknologi Industri',
                 'prodi': 'Informatika',
@@ -761,6 +764,7 @@ class PenggunaAuthTests(TestCase):
                 'email': 'lemah@std.trisakti.ac.id',
                 'password': '123',
                 'password_confirmation': '123',
+                'no_hp': '081234567894',
                 'alamat': 'Jakarta',
                 'fakultas': 'Teknologi Industri',
                 'prodi': 'Informatika',
@@ -780,6 +784,7 @@ class PenggunaAuthTests(TestCase):
                 'email': 'siti@gmail.com',
                 'password': 'passwordku123',
                 'password_confirmation': 'passwordku123',
+                'no_hp': '081234567895',
                 'alamat': 'Jakarta',
                 'fakultas': 'Teknologi Industri',
                 'prodi': 'Informatika',
@@ -813,6 +818,7 @@ class PenggunaAuthTests(TestCase):
                 'email': 'SAMA@std.trisakti.ac.id',
                 'password': 'passwordku123',
                 'password_confirmation': 'passwordku123',
+                'no_hp': '081234567896',
                 'alamat': 'Jakarta',
                 'fakultas': 'Teknologi Industri',
                 'prodi': 'Informatika',
@@ -833,6 +839,7 @@ class PenggunaAuthTests(TestCase):
                 'email': 'siti@std.trisakti.ac.id',
                 'password': 'passwordku123',
                 'password_confirmation': 'passwordku123',
+                'no_hp': '081234567897',
                 'alamat': 'Jakarta',
                 'fakultas': 'Teknologi Industri',
                 'prodi': 'Informatika',
@@ -843,6 +850,27 @@ class PenggunaAuthTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'NIM hanya boleh berisi angka.')
 
+    def test_register_menolak_no_hp_berhuruf(self):
+        response = self.client.post(
+            reverse('pengguna:register'),
+            {
+                'nama_pengguna': 'No HP Huruf',
+                'nim_nik': '0642201011',
+                'email': 'nohphuruf@std.trisakti.ac.id',
+                'password': 'passwordku123',
+                'password_confirmation': 'passwordku123',
+                'no_hp': '08ABC',
+                'alamat': 'Jakarta',
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Informatika',
+                'gender': 'laki_laki',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Pengguna.objects.filter(email='nohphuruf@std.trisakti.ac.id').exists())
+        self.assertContains(response, 'No HP hanya boleh berisi angka.')
+
     def test_register_menolak_nim_kurang_dari_10_digit(self):
         response = self.client.post(
             reverse('pengguna:register'),
@@ -852,6 +880,7 @@ class PenggunaAuthTests(TestCase):
                 'email': 'nimpendek@std.trisakti.ac.id',
                 'password': 'passwordku123',
                 'password_confirmation': 'passwordku123',
+                'no_hp': '081234567898',
                 'alamat': 'Jakarta',
                 'fakultas': 'Teknologi Industri',
                 'prodi': 'Informatika',
