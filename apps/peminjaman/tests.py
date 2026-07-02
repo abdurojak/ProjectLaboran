@@ -86,6 +86,11 @@ class PeminjamanViewsTests(TestCase):
         self.assertContains(response, 'max-w-full overflow-x-auto overscroll-x-contain')
         self.assertContains(response, 'w-full min-w-[920px]')
 
+    def test_list_page_hover_tabel_ditangani_dark_mode_global(self):
+        response = self.client.get(reverse('peminjaman:peminjaman_list'))
+
+        self.assertContains(response, 'hover:bg-slate-50/70')
+
     def test_filter_peminjaman_otomatis_responsif_tanpa_tombol_filter(self):
         response = self.client.get(reverse('peminjaman:peminjaman_list'))
 
