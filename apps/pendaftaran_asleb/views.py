@@ -1,7 +1,9 @@
 from django.contrib import messages
+from django.contrib.auth.hashers import check_password
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
@@ -11,7 +13,7 @@ from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView, View
 import uuid
 
-from apps.asleb.models import Asleb
+from apps.asleb.models import Asleb, HonorAsleb
 from apps.core.views import PostOnlyDeleteMixin
 from apps.core.emails import send_branded_email
 from apps.pengguna.models import Pengguna
@@ -19,15 +21,17 @@ from apps.pengguna.cv import build_cv_pdf, has_complete_asleb_profile
 
 from .forms import (
     MataKuliahAslebForm,
+    AkhiriPeriodeAslebForm,
     PendaftaranAslebForm,
     PendaftaranAslebPublicForm,
     PublicBerkasPendaftaranForm,
     PeriodeAslebForm,
     PublicPilihMatkulForm,
     PublicTranskripForm,
+    RekeningPendaftaranForm,
     decode_signature_data,
 )
-from .models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb, PeriodeAsleb
+from .models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb, PeriodeAsleb, RiwayatAsleb
 from .services import (
     close_current_registration,
     get_asleb_experience,
@@ -35,6 +39,7 @@ from .services import (
     get_period_registration_count,
     is_registration_open,
     open_current_registration,
+    end_asleb_period,
 )
 from .utils import analyze_transcript, get_public_registration_url, is_passing_grade
 
@@ -86,6 +91,9 @@ class PendaftaranAslebListView(ListView):
         context['periode_form'] = PeriodeAslebForm(instance=current_period)
         context['pendaftaran_dibuka'] = is_registration_open()
         context['pengaturan_pendaftaran'] = PengaturanPendaftaranAsleb.get_solo()
+        pengguna = getattr(self.request, 'current_pengguna', None)
+        context['is_super_admin'] = bool(pengguna and pengguna.role == 'admin')
+        context['akhiri_periode_form'] = AkhiriPeriodeAslebForm()
         return context
 
 
@@ -338,6 +346,7 @@ class PendaftaranAslebPublicCreateView(View):
             tanda_tangan=signature_file,
             metode_rekening=form.cleaned_data['metode_rekening'],
             rekening=form.cleaned_data['rekening'],
+            nama_pemilik_rekening=form.cleaned_data['nama_pemilik_rekening'],
             nilai_transkrip=wizard['nilai_transkrip'],
             skor_nilai=PendaftaranAsleb.grade_to_score(wizard['nilai_transkrip']),
             alasan=form.cleaned_data.get('alasan', ''),
@@ -400,6 +409,38 @@ class PendaftaranAslebSuccessView(ListView):
     def get_queryset(self):
         return PendaftaranAsleb.objects.none()
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        pengguna = get_session_pengguna(self.request)
+        context['pendaftaran_terakhir'] = (
+            PendaftaranAsleb.objects.filter(nim=pengguna.nim_nik).order_by('-pk').first()
+            if pengguna else None
+        )
+        return context
+
+
+class RekeningPendaftaranUpdateView(UpdateView):
+    model = PendaftaranAsleb
+    form_class = RekeningPendaftaranForm
+    template_name = 'pendaftaran_asleb/rekening_form.html'
+    success_url = reverse_lazy('pendaftaran_asleb:pendaftaran_success')
+
+    def get_queryset(self):
+        pengguna = get_session_pengguna(self.request)
+        if not pengguna:
+            return PendaftaranAsleb.objects.none()
+        return PendaftaranAsleb.objects.filter(nim=pengguna.nim_nik)
+
+    def form_valid(self, form):
+        registration = form.save()
+        for honor in HonorAsleb.objects.filter(asleb__nim=registration.nim).exclude(status='dibayar'):
+            honor.metode_transfer = registration.metode_rekening
+            honor.nomor_transfer = registration.rekening
+            honor.nama_pemilik_transfer = registration.nama_pemilik_rekening
+            honor.save()
+        messages.success(self.request, 'Metode pembayaran honor berhasil diperbarui.')
+        return redirect(self.success_url)
+
 
 @require_POST
 def accept_pendaftaran(request, pk):
@@ -424,40 +465,56 @@ def reject_pendaftaran(request, pk):
 
 @require_POST
 def generate_asleb(request, pk):
-    pendaftaran = get_object_or_404(PendaftaranAsleb, pk=pk)
-
-    if pendaftaran.status != 'diterima':
-        messages.error(request, 'Hanya pendaftaran yang diterima yang bisa digenerate ke Data Aslab.')
-        return redirect('pendaftaran_asleb:pendaftaran_list')
-
-    create_or_update_asleb_from_pendaftaran(pendaftaran)
-    pendaftaran.status = 'digenerate'
-    pendaftaran.save(update_fields=['status', 'diperbarui_pada'])
-    send_pendaftaran_status_email(pendaftaran)
-    messages.success(request, 'Pendaftaran berhasil digenerate ke Data Aslab.')
-    return redirect('asleb:asleb_list')
+    get_object_or_404(PendaftaranAsleb, pk=pk)
+    return generate_all_accepted_asleb(request)
 
 
 @require_POST
+@transaction.atomic
 def generate_all_accepted_asleb(request):
-    accepted_registrations = PendaftaranAsleb.objects.filter(status='diterima').filter(
-        Q(periode=get_current_period()) | Q(periode__isnull=True)
-    )
-    generated_count = 0
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not pengguna or pengguna.role not in {'admin', 'laboran'}:
+        messages.error(request, 'Hanya admin dan laboran yang dapat melakukan generate Data Aslab.')
+        return redirect('pendaftaran_asleb:pendaftaran_list')
 
+    current_period = get_current_period()
+    registrations = PendaftaranAsleb.objects.select_for_update().select_related('matkul', 'periode').all()
+    registration_list = list(registrations)
+    if not registration_list:
+        messages.warning(request, 'Tidak ada data pendaftaran yang perlu diproses.')
+        return redirect('pendaftaran_asleb:pendaftaran_list')
+    if any(item.status == 'diajukan' for item in registration_list):
+        messages.error(request, 'Masih ada pendaftar berstatus Diajukan. Terima atau tolak seluruh pendaftar sebelum Generate.')
+        return redirect('pendaftaran_asleb:pendaftaran_list')
+
+    accepted_registrations = [item for item in registration_list if item.status in {'diterima', 'digenerate'}]
+    rejected_count = sum(item.status == 'ditolak' for item in registration_list)
     for pendaftaran in accepted_registrations:
+        period = pendaftaran.periode or current_period
+        RiwayatAsleb.objects.update_or_create(
+            nim=pendaftaran.nim,
+            periode=period,
+            matkul=pendaftaran.matkul,
+            defaults={
+                'nama': pendaftaran.nama,
+                'email': pendaftaran.email,
+                'metode_rekening': pendaftaran.metode_rekening,
+                'rekening': pendaftaran.rekening,
+                'nama_pemilik_rekening': pendaftaran.nama_pemilik_rekening or pendaftaran.nama,
+                'source_pendaftaran_id': pendaftaran.pk,
+            },
+        )
         create_or_update_asleb_from_pendaftaran(pendaftaran)
         pendaftaran.status = 'digenerate'
-        pendaftaran.save(update_fields=['status', 'diperbarui_pada'])
-        send_pendaftaran_status_email(pendaftaran)
-        generated_count += 1
+        transaction.on_commit(lambda item=pendaftaran: send_pendaftaran_status_email(item))
 
-    if generated_count:
-        messages.success(request, f'{generated_count} pendaftar diterima berhasil digenerate ke Data Aslab.')
-    else:
-        messages.warning(request, 'Belum ada pendaftar berstatus diterima untuk digenerate.')
-
-    return redirect('asleb:asleb_list' if generated_count else 'pendaftaran_asleb:pendaftaran_list')
+    registrations.delete()
+    messages.success(
+        request,
+        f'Generate selesai: {len(accepted_registrations)} pendaftar masuk Data Aslab dan '
+        f'{rejected_count} pendaftar ditolak dibersihkan dari tabel pendaftaran.',
+    )
+    return redirect('asleb:asleb_list' if accepted_registrations else 'pendaftaran_asleb:pendaftaran_list')
 
 
 @require_POST
@@ -619,6 +676,34 @@ def update_periode_schedule(request, pk):
         messages.success(request, f'Jadwal pendaftaran periode {period.nama} berhasil diperbarui.')
     else:
         messages.error(request, 'Jadwal periode tidak valid. Pastikan tanggal berada dalam periode enam bulan.')
+    return redirect('pendaftaran_asleb:pendaftaran_list')
+
+
+@require_POST
+def end_period_manually(request, pk):
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not pengguna or pengguna.role != 'admin':
+        messages.error(request, 'Hanya Super Admin yang dapat mengakhiri periode Asisten Lab.')
+        return redirect('pendaftaran_asleb:pendaftaran_list')
+
+    period = get_object_or_404(PeriodeAsleb, pk=pk)
+    form = AkhiriPeriodeAslebForm(request.POST)
+    if not form.is_valid():
+        messages.error(request, 'Konfirmasi dan password wajib diisi untuk mengakhiri periode.')
+        return redirect('pendaftaran_asleb:pendaftaran_list')
+    if not check_password(form.cleaned_data['password'], pengguna.password):
+        messages.error(request, 'Password Super Admin tidak sesuai. Periode tidak diakhiri.')
+        return redirect('pendaftaran_asleb:pendaftaran_list')
+    if period.selesai < timezone.localdate() or period.diakhiri_pada:
+        messages.warning(request, 'Periode ini sudah berakhir.')
+        return redirect('pendaftaran_asleb:pendaftaran_list')
+
+    inactive_count, demoted_count = end_asleb_period(period, pengguna)
+    messages.success(
+        request,
+        f'Periode {period.nama} berhasil diakhiri. {inactive_count} data Aslab dinonaktifkan '
+        f'dan {demoted_count} akun dikembalikan menjadi Mahasiswa.',
+    )
     return redirect('pendaftaran_asleb:pendaftaran_list')
 
 

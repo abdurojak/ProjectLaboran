@@ -22,6 +22,10 @@ class RuanganViewTests(TestCase):
         session = self.client.session
         session['pengguna_id'] = pengguna.pk
         session.save()
+        RuanganLab.objects.get_or_create(
+            kode='LAB-RPL',
+            defaults={'nama': 'Lab Rekayasa Perangkat Lunak', 'kapasitas': 20, 'warna': 'teal', 'aktif': True},
+        )
 
     def test_ruangan_page_loads(self):
         response = self.client.get(reverse('ruangan:ruangan_list'))

@@ -11,7 +11,32 @@
 
         <div class="surface-card p-5 md:p-6">
             <div class="flex items-center justify-between gap-3"><div><p class="text-xs font-black uppercase tracking-[0.2em] text-violet-700">Pembayaran</p><h3 class="mt-2 text-xl font-black text-slate-900">Riwayat Honor Saya</h3></div><span class="text-xs font-bold text-slate-500">3 bulan terakhir</span></div>
-            <div class="mt-5 grid gap-2">{% for honor in riwayat_honor_saya|slice:":3" %}<div class="dashboard-glass-item flex items-center justify-between gap-4 rounded-2xl border border-slate-200 px-4 py-3"><div><p class="font-bold text-slate-900">{{ honor.bulan|date:"F Y" }}</p><p class="mt-1 text-xs text-slate-500">{{ honor.get_status_display }}</p></div><span class="font-black text-violet-700">{{ honor.jumlah_rupiah }}</span></div>{% empty %}<div class="dashboard-glass-item rounded-2xl border border-dashed border-slate-200 px-4 py-7 text-center text-sm text-slate-500">Belum ada riwayat honor.</div>{% endfor %}</div>
+            <div class="mt-5 grid gap-4">
+                {% for honor in riwayat_honor_saya|slice:":3" %}
+                <article class="dashboard-glass-item overflow-hidden rounded-3xl border border-slate-200">
+                    <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                        <div><p class="font-black text-slate-900">{{ honor.bulan|date:"F Y" }}</p><p class="mt-1 text-xs text-slate-500">{{ honor.asleb.matkul|default:"Mata kuliah belum diisi" }}</p></div>
+                        <span class="rounded-full {% if honor.status == 'dibayar' %}bg-emerald-100 text-emerald-700{% elif honor.status == 'diproses' %}bg-amber-100 text-amber-700{% else %}bg-slate-100 text-slate-600{% endif %} px-3 py-1 text-xs font-black">{{ honor.get_status_display }}</span>
+                    </div>
+                    <div class="grid gap-3 p-5 sm:grid-cols-3">
+                        <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs font-bold text-slate-500">Sebelum Potongan</p><p class="mt-2 font-black text-slate-900">{{ honor.honor_sebelum_potongan_rupiah }}</p></div>
+                        <div class="rounded-2xl bg-amber-50 p-4"><p class="text-xs font-bold text-amber-700">Biaya Admin</p><p class="mt-2 font-black text-amber-800">{{ honor.biaya_admin_rupiah }}</p></div>
+                        <div class="rounded-2xl bg-violet-50 p-4"><p class="text-xs font-bold text-violet-700">Total Diterima</p><p class="mt-2 font-black text-violet-800">{{ honor.jumlah_rupiah }}</p></div>
+                    </div>
+                    <div class="border-t border-slate-100 px-5 py-4">
+                        <p class="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Bukti Pembayaran / Pendukung</p>
+                        <div class="mt-3 flex flex-wrap gap-2">
+                            {% if honor.bukti_transfer %}<a class="btn-secondary px-3 py-2 text-xs" href="{{ honor.bukti_transfer.url }}" target="_blank" rel="noreferrer"><i data-lucide="receipt-text" class="h-4 w-4"></i>Lihat Bukti Pembayaran</a>{% endif %}
+                            {% for bukti in honor.bukti_pendukung_list %}
+                                {% if bukti.file_modul %}<a class="btn-secondary px-3 py-2 text-xs" href="{{ bukti.file_modul.url }}" target="_blank" rel="noreferrer"><i data-lucide="file-text" class="h-4 w-4"></i>Modul {{ bukti.modul }}</a>{% endif %}
+                                {% if bukti.bukti_foto %}<a class="btn-secondary px-3 py-2 text-xs" href="{{ bukti.bukti_foto.url }}" target="_blank" rel="noreferrer"><i data-lucide="image" class="h-4 w-4"></i>Foto {{ bukti.modul }}</a>{% endif %}
+                                {% if bukti.bukti_video %}<a class="btn-secondary px-3 py-2 text-xs" href="{{ bukti.bukti_video.url }}" target="_blank" rel="noreferrer"><i data-lucide="video" class="h-4 w-4"></i>Video {{ bukti.modul }}</a>{% endif %}
+                            {% empty %}{% if not honor.bukti_transfer %}<span class="text-sm text-slate-500">Bukti belum tersedia.</span>{% endif %}{% endfor %}
+                        </div>
+                    </div>
+                </article>
+                {% empty %}<div class="dashboard-glass-item rounded-2xl border border-dashed border-slate-200 px-4 py-7 text-center text-sm text-slate-500">Belum ada riwayat honor.</div>{% endfor %}
+            </div>
         </div>
     </div>
 

@@ -131,6 +131,19 @@
         </article>
     </div>
 
+    {% if is_admin or is_laboran %}
+    <details class="surface-card group overflow-hidden">
+        <summary class="flex cursor-pointer list-none items-center justify-between gap-4 p-5">
+            <div class="flex items-center gap-3"><span class="honor-stat-icon"><i data-lucide="badge-dollar-sign" class="h-5 w-5"></i></span><div><h3 class="font-black text-slate-900">Pengaturan Biaya Admin</h3><p class="mt-1 text-sm text-slate-500">Atur potongan untuk rekap honor berikutnya.</p></div></div>
+            <i data-lucide="chevron-down" class="h-5 w-5 transition group-open:rotate-180"></i>
+        </summary>
+        <form method="post" action="{% url 'asleb:honor_transfer_fees' %}" class="grid gap-4 border-t border-slate-100 p-5 md:grid-cols-2 xl:grid-cols-3">{% csrf_token %}
+            {% for field in biaya_transfer_form %}<div>{{ field.label_tag }}{{ field }}{% for error in field.errors %}<p class="mt-1 text-sm text-rose-600">{{ error }}</p>{% endfor %}</div>{% endfor %}
+            <div class="flex items-end md:col-span-2 xl:col-span-3"><button class="btn-primary bg-violet-700 hover:bg-violet-800" type="submit"><i data-lucide="save" class="h-4 w-4"></i>Simpan Biaya Admin</button></div>
+        </form>
+    </details>
+    {% endif %}
+
     <form id="honor-filter-form" method="get" class="surface-card grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-[minmax(0,1.4fr)_180px_180px_auto] xl:items-end">
         <div>
             <label for="id_q">Cari aslab</label>

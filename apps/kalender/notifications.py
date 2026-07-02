@@ -5,7 +5,7 @@ from django.utils import timezone
 
 from apps.jadwal.models import JadwalPraktikum
 from apps.peminjaman.models import PeminjamanAlat
-from apps.pendaftaran_asleb.models import PendaftaranAsleb, PengaturanPendaftaranAsleb
+from apps.pendaftaran_asleb.models import PendaftaranAsleb, PengaturanPendaftaranAsleb, RiwayatAsleb
 from apps.pendaftaran_asleb.utils import get_public_registration_url
 
 from .models import KegiatanKalender, Notifikasi
@@ -31,7 +31,17 @@ def get_aslab_matkul_labels(pengguna):
         'matkul__dosen',
         'matkul__kelas',
     )
-    return [f'{nama} - {dosen} - {kelas}' for nama, dosen, kelas in matkul_values]
+    history_values = RiwayatAsleb.objects.filter(
+        nim=pengguna.nim_nik,
+    ).select_related('matkul').values_list(
+        'matkul__nama',
+        'matkul__dosen',
+        'matkul__kelas',
+    )
+    return sorted({
+        f'{nama} - {dosen} - {kelas}'
+        for nama, dosen, kelas in list(matkul_values) + list(history_values)
+    })
 
 
 def sync_user_notifications(pengguna):

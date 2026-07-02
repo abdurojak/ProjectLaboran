@@ -719,8 +719,9 @@ class DashboardViewTests(TestCase):
                 program_studi='Informatika',
                 semester=4,
                 matkul=matkul,
-                metode_rekening='rekening_bank',
+                metode_rekening='bank_lain',
                 rekening='BCA 123456789',
+                nama_pemilik_rekening='Ricardo Dharma Saputra',
                 status='digenerate',
             )
         HonorAsleb.objects.create(
@@ -738,7 +739,13 @@ class DashboardViewTests(TestCase):
         response = self.client.get(reverse('dashboard:home'))
 
         self.assertContains(response, 'Honor Bulan Ini')
+        self.assertContains(response, 'Sebelum Potongan')
+        self.assertContains(response, 'Biaya Admin')
+        self.assertContains(response, 'Total Diterima')
         self.assertContains(response, 'Rp 448.000')
+        self.assertContains(response, 'Rp 2.500')
+        self.assertContains(response, 'Rp 445.500')
+        self.assertContains(response, 'Bukti Pembayaran / Pendukung')
         self.assertNotContains(response, 'Inventaris')
         self.assertNotContains(response, 'Data Aslab')
         self.assertNotContains(response, 'Pendaftaran Aslab')

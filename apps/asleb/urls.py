@@ -27,6 +27,7 @@ from .views import (
     end_asleb_membership,
     delete_peserta_praktikum,
     toggle_absensi_status,
+    update_transfer_fees,
 )
 
 app_name = 'asleb'
@@ -55,6 +56,7 @@ urlpatterns = [
     path('honorarium/surat/<int:pk>/download/', download_surat_honor, name='surat_honor_download'),
     path('honorarium/tambah/', HonorAslebCreateView.as_view(), name='honor_create'),
     path('honorarium/bagi-tugas-tf/', auto_assign_honor_transfers, name='honor_auto_assign_transfers'),
+    path('honorarium/biaya-transfer/', update_transfer_fees, name='honor_transfer_fees'),
     path('honorarium/<int:pk>/konfirmasi-tf/', confirm_honor_transfer, name='honor_confirm_transfer'),
     path('honorarium/<int:pk>/edit/', HonorAslebUpdateView.as_view(), name='honor_update'),
     path('honorarium/<int:pk>/hapus/', HonorAslebDeleteView.as_view(), name='honor_delete'),
