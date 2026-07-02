@@ -357,6 +357,17 @@ class KalenderViewsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Notifikasi')
 
+    def test_notifikasi_dark_mode_dioptimalkan(self):
+        response = self.client.get(reverse('kalender:notifikasi_list'))
+
+        self.assertContains(response, 'notification-page')
+        self.assertContains(response, 'html[data-theme="dark"] .notification-page .notification-hero')
+        self.assertContains(response, 'html[data-theme="dark"] .notification-page .notification-inbox-header')
+        self.assertContains(response, 'html[data-theme="dark"] .notification-page .notification-item')
+        self.assertContains(response, 'html[data-theme="dark"] .notification-page .notification-item[data-unread="true"]')
+        self.assertContains(response, 'html[data-theme="dark"] .notification-page .notification-empty')
+        self.assertContains(response, 'data-unread="')
+
     def test_notifikasi_mahasiswa_menampilkan_perubahan_status_peminjaman_saya(self):
         mahasiswa = Pengguna.objects.create(
             nama_pengguna='Siti Aminah',
