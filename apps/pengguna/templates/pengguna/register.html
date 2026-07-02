@@ -165,7 +165,7 @@
 {% block extra_script %}
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        document.querySelectorAll('#id_nim_nik').forEach(function (input) {
+        document.querySelectorAll('#id_nim_nik, #id_no_hp').forEach(function (input) {
             input.addEventListener('input', function () {
                 input.value = input.value.replace(/\D/g, '');
             });
