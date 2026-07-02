@@ -15,7 +15,7 @@
             </h2>
             <p class="mt-2 text-sm text-slate-500">Kelola calon asisten laboratorium yang mendaftar berdasarkan matkul, kontak, dan status seleksi.</p>
         </div>
-        <div class="flex flex-wrap gap-3">
+        <div class="flex flex-wrap items-start gap-3">
             <form method="post" action="{% url 'pendaftaran_asleb:pendaftaran_generate_all_accepted' %}" onsubmit="return confirm('Generate sekarang? Semua pendaftar yang diterima akan dipindahkan ke Data Aslab. Setelah berhasil, seluruh data pendaftaran yang diterima maupun ditolak akan dihapus dari tabel ini.');">
                 {% csrf_token %}
                 <button type="submit" class="btn-primary bg-brand-700 hover:bg-brand-800 shadow-brand-900/15">
@@ -23,22 +23,20 @@
                     <span>Generate Semua Diterima</span>
                 </button>
             </form>
-            <a class="btn-secondary" href="{{ public_registration_url }}">
-                <i data-lucide="external-link" class="h-4 w-4"></i>
-                <span>Buka Link Form</span>
-            </a>
-            <a class="btn-secondary" href="{% url 'pendaftaran_asleb:matkul_list' %}">
-                <i data-lucide="book-open" class="h-4 w-4"></i>
-                <span>Kelola Matkul</span>
-            </a>
-            <a class="btn-primary bg-teal-700 hover:bg-teal-800 shadow-teal-900/15" href="{% url 'pendaftaran_asleb:pendaftaran_create' %}">
-                <i data-lucide="user-plus" class="h-4 w-4"></i>
-                <span>Tambah Manual</span>
-            </a>
+            <details class="group relative">
+                <summary class="btn-secondary cursor-pointer list-none gap-2">
+                    <i data-lucide="ellipsis" class="h-4 w-4"></i><span>Aksi lainnya</span><i data-lucide="chevron-down" class="h-4 w-4 transition group-open:rotate-180"></i>
+                </summary>
+                <div class="absolute right-0 z-30 mt-2 w-60 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+                    <a class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50" href="{{ public_registration_url }}"><i data-lucide="external-link" class="h-4 w-4 text-teal-700"></i><span>Buka form mahasiswa</span></a>
+                    <a class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50" href="{% url 'pendaftaran_asleb:matkul_list' %}"><i data-lucide="book-open" class="h-4 w-4 text-teal-700"></i><span>Kelola mata kuliah</span></a>
+                    <a class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50" href="{% url 'pendaftaran_asleb:pendaftaran_create' %}"><i data-lucide="user-plus" class="h-4 w-4 text-teal-700"></i><span>Tambah pendaftar manual</span></a>
+                </div>
+            </details>
         </div>
     </div>
 
-    <div class="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
+    <div class="grid gap-6 lg:grid-cols-[250px_minmax(0,1fr)]">
         <div class="surface-card p-6">
             <div class="flex items-start gap-4">
                 <span class="{% if pendaftaran_dibuka %}bg-teal-50 text-teal-700{% else %}bg-slate-100 text-slate-500{% endif %} flex h-14 w-14 items-center justify-center rounded-2xl">
@@ -59,9 +57,10 @@
                 {% if pendaftaran_dibuka %}Status: Dibuka{% else %}Status: Ditutup Otomatis{% endif %}
             </div>
             {% if pendaftaran_dibuka %}
-            <div class="mt-5 rounded-[24px] border border-slate-200 bg-white p-4">
-                <img src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data={{ public_registration_url|urlencode }}" alt="QR pendaftaran aslab" class="mx-auto h-52 w-52 rounded-2xl object-contain">
-            </div>
+            <details class="group mt-5">
+                <summary class="flex cursor-pointer list-none items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700"><span class="flex items-center gap-2"><i data-lucide="scan-qr-code" class="h-4 w-4"></i>Lihat QR</span><i data-lucide="chevron-down" class="h-4 w-4 transition group-open:rotate-180"></i></summary>
+                <div class="mt-3 rounded-[20px] border border-slate-200 bg-white p-4"><img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data={{ public_registration_url|urlencode }}" alt="QR pendaftaran aslab" class="mx-auto h-40 w-40 rounded-xl object-contain"></div>
+            </details>
             {% else %}
             <div class="mt-5 rounded-[24px] border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-semibold text-slate-500">
                 QR disembunyikan sampai admin membuka pendaftaran.
@@ -82,6 +81,12 @@
                     <span>{% if pendaftaran_dibuka %}Tutup Sekarang{% else %}Buka Pendaftaran 30 Hari{% endif %}</span>
                 </button>
             </form>
+            <details class="group mt-5 overflow-hidden rounded-3xl border border-slate-200 bg-slate-50/70">
+                <summary class="flex cursor-pointer list-none items-center justify-between gap-4 p-5 text-slate-800">
+                    <div class="flex items-center gap-3"><span class="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-slate-600 shadow-sm"><i data-lucide="sliders-horizontal" class="h-5 w-5"></i></span><div><div class="font-black">Pengaturan lanjutan</div><div class="mt-1 text-xs text-slate-500">Jadwal pendaftaran, masa tugas, dan penghentian darurat</div></div></div>
+                    <i data-lucide="chevron-down" class="h-5 w-5 transition group-open:rotate-180"></i>
+                </summary>
+                <div class="border-t border-slate-200 bg-white p-5">
             <form method="post" action="{% url 'pendaftaran_asleb:periode_schedule_update' periode_aktif.pk %}" class="mt-5 grid gap-3 sm:grid-cols-2">
                 {% csrf_token %}
                 <div>{{ periode_form.pendaftaran_mulai.label_tag }}{{ periode_form.pendaftaran_mulai }}</div>
@@ -89,6 +94,21 @@
                 <button type="submit" class="btn-secondary gap-2 sm:col-span-2"><i data-lucide="calendar-check" class="h-4 w-4"></i><span>Simpan Jadwal Otomatis</span></button>
             </form>
             {% if is_super_admin %}
+            <div class="mt-5 rounded-3xl border border-cyan-200 bg-cyan-50/70 p-5">
+                <div class="flex items-start gap-3">
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-cyan-100 text-cyan-800"><i data-lucide="calendar-range" class="h-5 w-5"></i></span>
+                    <div>
+                        <div class="font-black text-cyan-950">Atur Masa Tugas Asisten Lab</div>
+                        <p class="mt-1 text-xs leading-5 text-cyan-800">Masukkan tanggal awal dan akhir periode. Setelah tanggal akhir terlewati, role Asisten Lab otomatis kembali menjadi Mahasiswa.</p>
+                    </div>
+                </div>
+                <form method="post" action="{% url 'pendaftaran_asleb:periode_dates_update' periode_aktif.pk %}" class="mt-4 grid gap-3 sm:grid-cols-2">
+                    {% csrf_token %}
+                    <div>{{ masa_tugas_form.mulai.label_tag }}{{ masa_tugas_form.mulai }}</div>
+                    <div>{{ masa_tugas_form.selesai.label_tag }}{{ masa_tugas_form.selesai }}</div>
+                    <button type="submit" class="btn-primary gap-2 bg-cyan-700 shadow-cyan-900/15 hover:bg-cyan-800 sm:col-span-2"><i data-lucide="save" class="h-4 w-4"></i><span>Simpan Masa Tugas</span></button>
+                </form>
+            </div>
             <details class="group mt-5 overflow-hidden rounded-3xl border border-rose-200 bg-rose-50/70">
                 <summary class="flex cursor-pointer list-none items-center justify-between gap-4 p-5 text-rose-900"><div class="flex items-center gap-3"><span class="flex h-10 w-10 items-center justify-center rounded-2xl bg-rose-100"><i data-lucide="shield-alert" class="h-5 w-5"></i></span><div><div class="font-black">Akhiri Periode Asisten Lab</div><div class="mt-1 text-xs text-rose-700">Khusus Super Admin · memerlukan verifikasi password</div></div></div><i data-lucide="chevron-down" class="h-5 w-5 transition group-open:rotate-180"></i></summary>
                 <form method="post" action="{% url 'pendaftaran_asleb:periode_end' periode_aktif.pk %}" class="space-y-4 border-t border-rose-200 p-5" data-confirm-message="Akhiri periode {{ periode_aktif.nama }}? Seluruh Asisten Lab aktif akan dikembalikan menjadi Mahasiswa.">{% csrf_token %}
@@ -104,6 +124,8 @@
                 <div class="rounded-2xl bg-emerald-50 p-4 text-emerald-800"><strong>Diterima:</strong> siap digenerate sekaligus ke Data Aslab.</div>
                 <div class="rounded-2xl bg-rose-50 p-4 text-rose-800"><strong>Ditolak:</strong> tidak diproses lanjut.</div>
             </div>
+                </div>
+            </details>
         </div>
     </div>
 
