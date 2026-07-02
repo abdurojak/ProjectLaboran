@@ -22,6 +22,7 @@ from apps.pengguna.cv import build_cv_pdf, has_complete_asleb_profile
 from .forms import (
     MataKuliahAslebForm,
     AkhiriPeriodeAslebForm,
+    MasaTugasAslebForm,
     PendaftaranAslebForm,
     PendaftaranAslebPublicForm,
     PublicBerkasPendaftaranForm,
@@ -40,6 +41,7 @@ from .services import (
     is_registration_open,
     open_current_registration,
     end_asleb_period,
+    sync_expired_asleb_periods,
 )
 from .utils import analyze_transcript, get_public_registration_url, is_passing_grade
 
@@ -94,6 +96,7 @@ class PendaftaranAslebListView(ListView):
         pengguna = getattr(self.request, 'current_pengguna', None)
         context['is_super_admin'] = bool(pengguna and pengguna.role == 'admin')
         context['akhiri_periode_form'] = AkhiriPeriodeAslebForm()
+        context['masa_tugas_form'] = MasaTugasAslebForm(instance=current_period)
         return context
 
 
@@ -171,15 +174,27 @@ class PendaftaranAslebPublicCreateView(View):
         return self.render_current_step(request)
 
     def get_wizard(self, request):
-        wizard = request.session.get(WIZARD_SESSION_KEY) or {'step': 'matkul'}
+        current_pengguna = getattr(request, 'current_pengguna', None) or get_session_pengguna(request)
+        owner_id = current_pengguna.pk if current_pengguna else None
+        wizard = request.session.get(WIZARD_SESSION_KEY)
+        if wizard and wizard.get('owner_pengguna_id') != owner_id:
+            self.delete_temporary_transcript(wizard)
+            wizard = None
+        if not wizard:
+            wizard = {'step': 'matkul', 'owner_pengguna_id': owner_id}
         request.session[WIZARD_SESSION_KEY] = wizard
+        request.session.modified = True
         return wizard
 
     def clear_wizard(self, request):
         wizard = request.session.pop(WIZARD_SESSION_KEY, None)
+        self.delete_temporary_transcript(wizard)
+        request.session.modified = True
+
+    @staticmethod
+    def delete_temporary_transcript(wizard):
         if wizard and wizard.get('transkrip_path'):
             default_storage.delete(wizard['transkrip_path'])
-        request.session.modified = True
 
     def go_back(self, request):
         wizard = self.get_wizard(request)
@@ -225,6 +240,7 @@ class PendaftaranAslebPublicCreateView(View):
         wizard.update({
             'step': 'transkrip',
             'matkul_id': form.cleaned_data['matkul'].pk,
+            'owner_pengguna_id': current_pengguna.pk,
         })
         request.session.modified = True
         return redirect('pendaftaran_asleb:pendaftaran_public')
@@ -676,6 +692,29 @@ def update_periode_schedule(request, pk):
         messages.success(request, f'Jadwal pendaftaran periode {period.nama} berhasil diperbarui.')
     else:
         messages.error(request, 'Jadwal periode tidak valid. Pastikan tanggal berada dalam periode enam bulan.')
+    return redirect('pendaftaran_asleb:pendaftaran_list')
+
+
+@require_POST
+def update_period_dates(request, pk):
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not pengguna or pengguna.role != 'admin':
+        messages.error(request, 'Hanya Super Admin yang dapat mengubah masa tugas Asisten Lab.')
+        return redirect('pendaftaran_asleb:pendaftaran_list')
+
+    period = get_object_or_404(PeriodeAsleb, pk=pk)
+    form = MasaTugasAslebForm(request.POST, instance=period)
+    if not form.is_valid():
+        messages.error(request, 'Rentang masa tugas tidak valid. Pastikan tanggal akhir setelah tanggal mulai.')
+        return redirect('pendaftaran_asleb:pendaftaran_list')
+
+    period = form.save()
+    inactive_count, demoted_count = sync_expired_asleb_periods()
+    messages.success(
+        request,
+        f'Masa tugas berhasil diatur: {period.mulai:%d-%m-%Y} sampai {period.selesai:%d-%m-%Y}. '
+        f'{inactive_count} data Aslab dinonaktifkan dan {demoted_count} akun dikembalikan menjadi Mahasiswa.',
+    )
     return redirect('pendaftaran_asleb:pendaftaran_list')
 
 

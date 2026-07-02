@@ -305,6 +305,39 @@ class PeriodeAslebForm(forms.ModelForm):
         return cleaned_data
 
 
+class MasaTugasAslebForm(forms.ModelForm):
+    class Meta:
+        model = PeriodeAsleb
+        fields = ['mulai', 'selesai']
+        labels = {
+            'mulai': 'Tanggal mulai masa tugas',
+            'selesai': 'Tanggal akhir masa tugas',
+        }
+        widgets = {
+            'mulai': forms.DateInput(attrs={'type': 'date'}),
+            'selesai': forms.DateInput(attrs={'type': 'date'}),
+        }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        start = cleaned_data.get('mulai')
+        end = cleaned_data.get('selesai')
+        if start and end and start > end:
+            self.add_error('selesai', 'Tanggal akhir masa tugas harus setelah tanggal mulai.')
+        return cleaned_data
+
+    def save(self, commit=True):
+        period = super().save(commit=False)
+        period.pendaftaran_mulai = max(period.pendaftaran_mulai, period.mulai)
+        period.pendaftaran_selesai = min(period.pendaftaran_selesai, period.selesai)
+        if period.pendaftaran_mulai > period.pendaftaran_selesai:
+            period.pendaftaran_mulai = period.mulai
+            period.pendaftaran_selesai = period.mulai
+        if commit:
+            period.save()
+        return period
+
+
 class AkhiriPeriodeAslebForm(forms.Form):
     password = forms.CharField(
         label='Verifikasi Password Super Admin',

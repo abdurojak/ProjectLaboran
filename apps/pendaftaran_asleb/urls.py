@@ -19,6 +19,7 @@ from .views import (
     reject_pendaftaran,
     toggle_pendaftaran_status,
     update_periode_schedule,
+    update_period_dates,
     end_period_manually,
 )
 
@@ -43,5 +44,6 @@ urlpatterns = [
     path('generate-diterima/', generate_all_accepted_asleb, name='pendaftaran_generate_all_accepted'),
     path('toggle-status/', toggle_pendaftaran_status, name='pendaftaran_toggle_status'),
     path('periode/<int:pk>/jadwal/', update_periode_schedule, name='periode_schedule_update'),
+    path('periode/<int:pk>/masa-tugas/', update_period_dates, name='periode_dates_update'),
     path('periode/<int:pk>/akhiri/', end_period_manually, name='periode_end'),
 ]

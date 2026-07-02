@@ -1,7 +1,7 @@
 import base64
 import shutil
 import tempfile
-from datetime import date
+from datetime import date, timedelta
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -172,6 +172,7 @@ class PendaftaranAslebViewTests(TestCase):
         session = self.client.session
         session[WIZARD_SESSION_KEY] = {
             'step': 'berkas',
+            'owner_pengguna_id': mahasiswa.pk,
             'matkul_id': self.matkul.pk,
             'transkrip_path': transkrip_path,
             'transkrip_name': 'test-transkrip.pdf',
@@ -300,12 +301,38 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertRedirects(response, reverse('pendaftaran_asleb:pendaftaran_public'))
         self.assertEqual(self.client.session[WIZARD_SESSION_KEY]['step'], 'matkul')
 
+    def test_tahap_pendaftaran_direset_saat_akun_mahasiswa_berganti(self):
+        mahasiswa_a = self.create_mahasiswa_dengan_cv('0642201045')
+        transkrip_path = default_storage.save(
+            'pendaftaran_asleb/transkrip_tmp/akun-a.pdf',
+            ContentFile(b'transkrip akun A'),
+        )
+        session = self.client.session
+        session[WIZARD_SESSION_KEY] = {
+            'step': 'transkrip',
+            'owner_pengguna_id': mahasiswa_a.pk,
+            'matkul_id': self.matkul.pk,
+            'transkrip_path': transkrip_path,
+        }
+        session.save()
+
+        mahasiswa_b = self.create_mahasiswa_dengan_cv('0642201046')
+        response = self.client.get(reverse('pendaftaran_asleb:pendaftaran_public'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['step'], 'matkul')
+        wizard = self.client.session[WIZARD_SESSION_KEY]
+        self.assertEqual(wizard['owner_pengguna_id'], mahasiswa_b.pk)
+        self.assertNotIn('matkul_id', wizard)
+        self.assertFalse(default_storage.exists(transkrip_path))
+
     def test_tahap_berkas_bisa_kembali_tanpa_mengisi_form(self):
         mahasiswa = self.create_mahasiswa_dengan_cv('0642201044')
         session = self.client.session
         session['pengguna_id'] = mahasiswa.pk
         session[WIZARD_SESSION_KEY] = {
             'step': 'berkas',
+            'owner_pengguna_id': mahasiswa.pk,
             'matkul_id': self.matkul.pk,
             'transkrip_path': 'pendaftaran_asleb/transkrip_tmp/contoh.pdf',
             'nilai_transkrip': 'A',
@@ -384,6 +411,7 @@ class PendaftaranAslebViewTests(TestCase):
         session['pengguna_id'] = mahasiswa.pk
         session[WIZARD_SESSION_KEY] = {
             'step': 'transkrip',
+            'owner_pengguna_id': mahasiswa.pk,
             'matkul_id': self.matkul.pk,
         }
         session.save()
@@ -589,6 +617,22 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertRedirects(response, reverse('pendaftaran_asleb:pendaftaran_list'))
         period.refresh_from_db()
         self.assertIsNone(period.diakhiri_pada)
+
+    def test_super_admin_dapat_mengatur_tanggal_masa_tugas_manual(self):
+        today = timezone.localdate()
+        period = PeriodeAsleb.get_for_date(today)
+        start = today - timedelta(days=1)
+        end = today + timedelta(days=45)
+
+        response = self.client.post(
+            reverse('pendaftaran_asleb:periode_dates_update', args=[period.pk]),
+            {'mulai': start.isoformat(), 'selesai': end.isoformat()},
+        )
+
+        self.assertRedirects(response, reverse('pendaftaran_asleb:pendaftaran_list'))
+        period.refresh_from_db()
+        self.assertEqual(period.mulai, start)
+        self.assertEqual(period.selesai, end)
 
     def test_super_admin_dapat_mengakhiri_periode_dan_menonaktifkan_asleb(self):
         period = PeriodeAsleb.get_for_date(timezone.localdate())
