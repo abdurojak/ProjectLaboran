@@ -188,6 +188,7 @@
                     <div class="text-left sm:text-right">
                         <div class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Total Honor</div>
                         <div class="mt-1 text-2xl font-black text-violet-700">{{ honor.jumlah_rupiah }}</div>
+                        {% if honor.biaya_admin %}<div class="mt-1 text-xs font-bold text-amber-600">Sudah dipotong admin Rp {{ honor.biaya_admin|floatformat:0 }}</div>{% endif %}
                     </div>
                 </div>
 

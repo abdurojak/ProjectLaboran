@@ -82,6 +82,15 @@
                                 <a class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700" href="{% url 'asleb:asleb_update' asleb.pk %}">
                                     <i data-lucide="pencil" class="h-4 w-4"></i><span>Edit</span>
                                 </a>
+                                {% if can_end_asleb and asleb.status == 'aktif' %}
+                                <form method="post" action="{% url 'asleb:asleb_end_membership' asleb.pk %}" data-confirm-message="Akhiri seluruh penugasan aktif {{ asleb.nama }} dan ubah rolenya menjadi Mahasiswa?" class="inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="inline-flex items-center gap-1 text-orange-600 hover:text-orange-700">
+                                        <i data-lucide="user-round-x" class="h-4 w-4"></i>
+                                        <span>Keluarkan Aslab</span>
+                                    </button>
+                                </form>
+                                {% endif %}
                                 <form method="post" action="{% url 'asleb:asleb_delete' asleb.pk %}" data-confirm-message="Yakin ingin menghapus data ini?" class="inline">
                                     {% csrf_token %}
                                     <button type="submit" class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700">
@@ -105,7 +114,7 @@
 {% endblock %}
 
 {% block extra_script %}
-{% include "components/confirmation_modal.html" with title="Konfirmasi Hapus Aslab" confirm_label="Hapus" confirm_icon="trash-2" %}
+{% include "components/confirmation_modal.html" with title="Konfirmasi Perubahan Data Aslab" confirm_label="Lanjutkan" confirm_icon="user-round-check" %}
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const form = document.getElementById('asleb-filter-form');

@@ -5,9 +5,10 @@ from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
-from apps.asleb.models import Asleb
+from apps.asleb.models import Asleb, PesertaPraktikum
 from apps.core.views import PostOnlyDeleteMixin
 from apps.jadwal.models import JadwalPraktikum
+from apps.pendaftaran_asleb.models import PendaftaranAsleb
 
 from .forms import KegiatanKalenderForm
 from .models import KegiatanKalender, Notifikasi
@@ -46,23 +47,39 @@ def parse_asleb_matkul(matkul_text):
 
 
 def get_asisten_lab_jadwal_queryset(pengguna):
-    if not pengguna or pengguna.role != 'asisten_lab':
+    if not pengguna or pengguna.role not in {'asisten_lab', 'mahasiswa'}:
         return JadwalPraktikum.objects.none()
 
-    asleb_list = Asleb.objects.filter(nim=pengguna.nim_nik, status='aktif').exclude(matkul='')
-    query = Q()
+    if pengguna.role == 'asisten_lab':
+        matkul_list = [
+            item.matkul
+            for item in PendaftaranAsleb.objects.filter(
+                nim=pengguna.nim_nik,
+                status__in=['diterima', 'digenerate'],
+            ).select_related('matkul')
+        ]
+    else:
+        matkul_list = [
+            item.matkul
+            for item in PesertaPraktikum.objects.filter(
+                pengguna=pengguna,
+                aktif=True,
+            ).select_related('matkul')
+        ]
 
-    for asleb in asleb_list:
+    labels = [str(matkul) for matkul in matkul_list]
+    queryset = JadwalPraktikum.objects.select_related('ruangan', 'ruangan_tambahan')
+    if pengguna.role == 'mahasiswa':
+        return queryset.filter(mata_kuliah__in=labels, status=JadwalPraktikum.STATUS_DITERIMA).distinct()
+
+    query = Q(mata_kuliah__in=labels) if labels else Q(pk__in=[])
+    for asleb in Asleb.objects.filter(nim=pengguna.nim_nik, status='aktif').exclude(matkul=''):
         mata_kuliah, kelas = parse_asleb_matkul(asleb.matkul)
         if mata_kuliah and kelas:
             query |= Q(mata_kuliah__iexact=mata_kuliah, kelas__iexact=kelas)
         elif mata_kuliah:
             query |= Q(mata_kuliah__iexact=mata_kuliah)
-
-    if not query:
-        return JadwalPraktikum.objects.none()
-
-    return JadwalPraktikum.objects.select_related('ruangan', 'ruangan_tambahan').filter(query).distinct()
+    return queryset.filter(query).distinct()
 
 
 class KegiatanKalenderListView(ListView):
@@ -103,6 +120,22 @@ class KegiatanKalenderListView(ListView):
 
         pengguna = getattr(self.request, 'current_pengguna', None)
         jadwal_praktikum_saya = get_asisten_lab_jadwal_queryset(pengguna)
+        day_numbers = {'senin': 1, 'selasa': 2, 'rabu': 3, 'kamis': 4, 'jumat': 5, 'sabtu': 6}
+        for jadwal in jadwal_praktikum_saya:
+            calendar_events.append({
+                'title': f'Praktikum {jadwal.mata_kuliah}',
+                'daysOfWeek': [day_numbers[jadwal.hari]],
+                'startTime': jadwal.waktu_mulai.isoformat(),
+                'endTime': (jadwal.waktu_selesai or jadwal.waktu_mulai).isoformat(),
+                'url': reverse_lazy('jadwal:jadwal_detail', kwargs={'pk': jadwal.pk}),
+                'backgroundColor': '#0f766e',
+                'borderColor': '#0f766e',
+                'textColor': '#ffffff',
+                'extendedProps': {
+                    'lokasi': jadwal.get_display_ruangan_nama(),
+                    'notifikasi': 'Jadwal praktikum otomatis',
+                },
+            })
         calendar_events.extend(get_perayaan_calendar_events(timezone.localdate().year))
 
         context['calendar_events'] = calendar_events

@@ -6,7 +6,7 @@ from django import forms
 from django.core.files.base import ContentFile
 
 from .models import MataKuliahAsleb, PendaftaranAsleb, PeriodeAsleb
-from .utils import extract_grade_from_transcript
+from .utils import extract_grade_from_transcript, is_passing_grade
 
 
 class PendaftaranAslebForm(forms.ModelForm):
@@ -64,6 +64,8 @@ class PendaftaranAslebForm(forms.ModelForm):
             cleaned_data['nilai_transkrip'] = 'tidak_terbaca'
 
         cleaned_data['skor_nilai'] = PendaftaranAsleb.grade_to_score(cleaned_data['nilai_transkrip'])
+        if cleaned_data['nilai_transkrip'] != 'tidak_terbaca' and not is_passing_grade(cleaned_data['nilai_transkrip']):
+            self.add_error('transkrip', 'Nilai mata kuliah minimal B untuk mendaftar sebagai aslab.')
         return cleaned_data
 
     def save(self, commit=True):
@@ -167,7 +169,7 @@ class PublicTranskripForm(forms.Form):
     transkrip = forms.FileField(
         label='Upload Transkrip Nilai',
         widget=forms.FileInput(attrs={'accept': '.pdf,.png,.jpg,.jpeg,.webp,.txt,.csv'}),
-        help_text='Upload transkrip PDF/gambar. Sistem akan mencocokkan NIM akun dan membaca nilai mata kuliah yang dipilih.',
+        help_text='Gunakan file PDF agar hasil pembacaan paling akurat. Sistem mencocokkan NIM dan memastikan nilai mata kuliah minimal B.',
     )
 
 
@@ -182,7 +184,7 @@ class PublicBerkasPendaftaranForm(forms.Form):
     program_studi = forms.CharField(max_length=120, widget=forms.TextInput(attrs={'placeholder': 'Program studi'}))
     semester = forms.ChoiceField(choices=SEMESTER_CHOICES)
     metode_rekening = forms.ChoiceField(choices=PendaftaranAsleb.METODE_REKENING_CHOICES)
-    rekening = forms.CharField(max_length=150, widget=forms.TextInput(attrs={'placeholder': 'Contoh: BCA 123456789 / DANA 0812xxxx / OVO 0812xxxx'}))
+    rekening = forms.CharField(max_length=150, widget=forms.TextInput(attrs={'placeholder': 'Masukkan nomor rekening atau nomor e-wallet'}))
     alasan = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 4, 'placeholder': 'Alasan atau catatan pendaftaran'}))
 
     def __init__(self, *args, **kwargs):

@@ -13,7 +13,7 @@ from .realtime import broadcast_help_message, broadcast_help_status
 BOT_ANSWERS = [
     ({'login', 'masuk'}, 'Untuk login, pilih jenis akun lalu masukkan NIM mahasiswa atau NIK karyawan beserta password.'),
     ({'password', 'sandi', 'lupa'}, 'Gunakan menu Lupa password pada halaman login, lalu ikuti verifikasi yang dikirim ke email akun.'),
-    ({'aslab', 'asleb', 'transkrip'}, 'Pendaftaran aslab memerlukan CV di profil. NIM pada transkrip harus sama dengan NIM akun dan nilai mata kuliah minimal C.'),
+    ({'aslab', 'asleb', 'transkrip'}, 'Pendaftaran aslab memerlukan CV di profil. NIM pada transkrip harus sama dengan NIM akun dan nilai mata kuliah minimal B.'),
     ({'daftar', 'registrasi', 'register'}, 'Registrasi mandiri hanya tersedia untuk mahasiswa. Akun karyawan dibuat oleh admin.'),
     ({'cv', 'profil'}, 'Buka Profil Saya dari Pengaturan, pilih Edit Profil, lalu unggah CV PDF, DOC, atau DOCX maksimal 5 MB.'),
     ({'absensi', 'modul'}, 'Aslab memilih modul sesuai mata kuliah pada menu Absensi Aslab. Modul yang sudah diabsen tidak dapat dipilih kembali.'),

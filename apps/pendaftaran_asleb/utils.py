@@ -16,7 +16,7 @@ GRADE_PATTERN = re.compile(
 )
 TRANSCRIPT_GRADE_PATTERN = re.compile(r'\b((?:A|B|C|D|E)(?:[+-])?)\b', re.IGNORECASE)
 
-PASSING_GRADES = {'A', 'B', 'C'}
+PASSING_GRADES = {'A', 'B'}
 
 
 def extract_grade_from_transcript(file_obj, matkul=None):

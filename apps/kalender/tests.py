@@ -4,7 +4,7 @@ from django.test import TestCase
 from django.utils import timezone
 from django.urls import reverse
 
-from apps.asleb.models import Asleb
+from apps.asleb.models import Asleb, PesertaPraktikum
 from apps.pengguna.models import Pengguna
 from apps.inventaris.models import Barang
 from apps.peminjaman.models import PeminjamanAlat
@@ -112,6 +112,35 @@ class KalenderViewsTests(TestCase):
         self.assertNotContains(response, 'Hari Perayaan Otomatis')
         self.assertNotContains(response, 'Peringatan Universitas Trisakti')
         self.assertNotContains(response, 'Keterangan Notifikasi')
+
+    def test_jadwal_mahasiswa_hanya_muncul_untuk_matkul_yang_diambil(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Mahasiswa Kalender', nim_nik='0640020009',
+            email='0640020009@std.trisakti.ac.id', password='rahasia123',
+            no_hp='081234560009', alamat='Jakarta', fakultas='Teknologi Industri',
+            prodi='Informatika', gender='laki_laki', role='mahasiswa',
+        )
+        matkul = MataKuliahAsleb.objects.create(
+            kode='KAL-PESERTA', nama='Komputasi Awan', dosen='Dosen Cloud', kelas='TIF-02'
+        )
+        ruangan = RuanganLab.objects.create(nama='Lab Kalender', kode='LAB-KAL-PESERTA', kapasitas=20)
+        PesertaPraktikum.objects.create(
+            matkul=matkul, pengguna=mahasiswa, nim=mahasiswa.nim_nik, nama=mahasiswa.nama_pengguna
+        )
+        JadwalPraktikum.objects.create(
+            mata_kuliah=str(matkul), kelas=matkul.kelas, ruangan=ruangan,
+            pengampu=matkul.dosen, hari='rabu', waktu_mulai=time(10),
+            waktu_selesai=time(12), status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+
+        response = self.client.get(reverse('kalender:kegiatan_list'))
+
+        event_titles = [event['title'] for event in response.context['calendar_events']]
+        self.assertIn(f'Praktikum {matkul}', event_titles)
+        self.assertContains(response, str(matkul))
 
     def test_admin_bisa_share_kegiatan_ke_role_tertentu(self):
         response = self.client.post(reverse('kalender:kegiatan_create'), {

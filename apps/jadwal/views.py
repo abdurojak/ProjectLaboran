@@ -1,17 +1,20 @@
 from datetime import datetime, time, timedelta
 
 from django.contrib import messages
-from django.shortcuts import redirect
+from django.core.exceptions import ValidationError
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
 from apps.core.views import PostOnlyDeleteMixin
-from apps.pendaftaran_asleb.models import PendaftaranAsleb
+from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb
 from apps.ruangan.models import RuanganLab
 
 from .forms import JadwalPraktikumForm
-from .models import JadwalPraktikum
+from .models import JadwalPraktikum, PermintaanPerubahanJadwal
 
 
 def get_aslab_matkul_labels(pengguna):
@@ -101,6 +104,10 @@ class JadwalPraktikumListView(ListView):
             context['current_pengguna'],
         )
         context['praktikum_saya'] = self.get_praktikum_saya(context['current_pengguna'])
+        if context['current_pengguna'] and context['current_pengguna'].role in {'admin', 'laboran'}:
+            context['permintaan_perubahan'] = PermintaanPerubahanJadwal.objects.select_related(
+                'jadwal', 'matkul', 'ruangan', 'ruangan_tambahan', 'diajukan_oleh'
+            ).filter(status='diajukan')
         return context
 
     def get_praktikum_saya(self, pengguna):
@@ -204,6 +211,9 @@ class JadwalPraktikumDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         context['current_pengguna'] = getattr(self.request, 'current_pengguna', None)
         context['can_manage_jadwal'] = can_manage_jadwal(context['current_pengguna'], self.object)
+        context['permintaan_terakhir'] = self.object.permintaan_perubahan.select_related(
+            'ruangan', 'ruangan_tambahan', 'diajukan_oleh', 'diproses_oleh'
+        ).first()
         return context
 
 
@@ -237,6 +247,27 @@ class JadwalPraktikumUpdateView(MahasiswaJadwalReadOnlyMixin, UpdateView):
         kwargs['current_pengguna'] = getattr(self.request, 'current_pengguna', None)
         return kwargs
 
+    def form_valid(self, form):
+        pengguna = getattr(self.request, 'current_pengguna', None)
+        if pengguna and pengguna.role == 'asisten_lab':
+            if self.object.permintaan_perubahan.filter(status='diajukan').exists():
+                messages.warning(self.request, 'Masih ada permintaan perubahan jadwal yang menunggu persetujuan laboran.')
+                return redirect('jadwal:jadwal_detail', pk=self.object.pk)
+            PermintaanPerubahanJadwal.objects.create(
+                jadwal=self.object,
+                matkul=form.cleaned_data['matkul'],
+                ruangan=form.cleaned_data['ruangan'],
+                ruangan_tambahan=form.cleaned_data.get('ruangan_tambahan'),
+                hari=form.cleaned_data['hari'],
+                waktu_mulai=form.cleaned_data['waktu_mulai'],
+                waktu_selesai=form.cleaned_data.get('waktu_selesai'),
+                catatan=form.cleaned_data.get('catatan', ''),
+                diajukan_oleh=pengguna,
+            )
+            messages.success(self.request, 'Permintaan perubahan jadwal dikirim dan menunggu persetujuan laboran.')
+            return redirect('jadwal:jadwal_detail', pk=self.object.pk)
+        return super().form_valid(form)
+
 
 class JadwalPraktikumDeleteView(MahasiswaJadwalReadOnlyMixin, PostOnlyDeleteMixin, DeleteView):
     model = JadwalPraktikum
@@ -248,6 +279,69 @@ class JadwalPraktikumDeleteView(MahasiswaJadwalReadOnlyMixin, PostOnlyDeleteMixi
         queryset = super().get_queryset()
         pengguna = getattr(self.request, 'current_pengguna', None)
         if pengguna and pengguna.role == 'asisten_lab':
-            return queryset.filter(mata_kuliah__in=get_aslab_matkul_labels(pengguna))
+            return queryset.none()
         return queryset
+
+
+@require_POST
+def process_schedule_change_request(request, pk, decision):
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not pengguna or pengguna.role not in {'admin', 'laboran'}:
+        messages.error(request, 'Hanya admin dan laboran yang dapat memproses perubahan jadwal.')
+        return redirect('jadwal:jadwal_list')
+
+    change_request = get_object_or_404(
+        PermintaanPerubahanJadwal.objects.select_related('jadwal', 'matkul', 'ruangan', 'ruangan_tambahan'),
+        pk=pk,
+        status='diajukan',
+    )
+    if decision == 'tolak':
+        change_request.status = 'ditolak'
+        change_request.diproses_oleh = pengguna
+        change_request.diproses_pada = timezone.now()
+        change_request.save(update_fields=['status', 'diproses_oleh', 'diproses_pada'])
+        messages.success(request, 'Permintaan perubahan jadwal ditolak.')
+        return redirect('jadwal:jadwal_list')
+
+    jadwal = change_request.jadwal
+    jadwal.mata_kuliah = str(change_request.matkul)
+    jadwal.kelas = change_request.matkul.kelas
+    jadwal.pengampu = change_request.matkul.dosen
+    jadwal.ruangan = change_request.ruangan
+    jadwal.ruangan_tambahan = change_request.ruangan_tambahan
+    jadwal.hari = change_request.hari
+    jadwal.waktu_mulai = change_request.waktu_mulai
+    jadwal.waktu_selesai = change_request.waktu_selesai
+    jadwal.catatan = change_request.catatan
+    jadwal.status = JadwalPraktikum.STATUS_DITERIMA
+    try:
+        jadwal.full_clean()
+    except ValidationError as error:
+        messages.error(request, f'Perubahan belum dapat disetujui: {error}')
+        return redirect('jadwal:jadwal_list')
+
+    jadwal.save()
+    change_request.status = 'diterima'
+    change_request.diproses_oleh = pengguna
+    change_request.diproses_pada = timezone.now()
+    change_request.save(update_fields=['status', 'diproses_oleh', 'diproses_pada'])
+    messages.success(request, 'Perubahan jadwal disetujui dan jadwal telah diperbarui.')
+    return redirect('jadwal:jadwal_detail', pk=jadwal.pk)
+
+
+def available_rooms(request):
+    try:
+        matkul = MataKuliahAsleb.objects.get(pk=request.GET.get('matkul'))
+    except (ValueError, TypeError, MataKuliahAsleb.DoesNotExist):
+        return JsonResponse({'participant_count': 0, 'rooms': []})
+
+    participant_count = matkul.peserta_praktikum.filter(aktif=True).count()
+    rooms = RuanganLab.objects.filter(aktif=True, kapasitas__isnull=False).order_by('kapasitas', 'nama')
+    if participant_count:
+        capacities = list(rooms.filter(kapasitas__gte=participant_count).values_list('kapasitas', flat=True).distinct())
+        rooms = rooms.filter(kapasitas=min(capacities)) if capacities else rooms.none()
+    return JsonResponse({
+        'participant_count': participant_count,
+        'rooms': [{'id': room.pk, 'label': str(room), 'capacity': room.kapasitas} for room in rooms],
+    })
 

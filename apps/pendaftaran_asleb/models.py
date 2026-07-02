@@ -149,9 +149,12 @@ class PendaftaranAsleb(models.Model):
         ('digenerate', 'Masuk Data Aslab'),
     ]
     METODE_REKENING_CHOICES = [
-        ('rekening_bank', 'Rekening Bank'),
-        ('dana', 'DANA'),
-        ('ovo', 'OVO'),
+        ('bni', 'BNI (gratis biaya admin)'),
+        ('bank_lain', 'Bank lain (biaya admin Rp2.500)'),
+        ('dana', 'DANA (gratis biaya admin)'),
+        ('shopeepay', 'ShopeePay (biaya admin Rp1.500)'),
+        ('gopay', 'GoPay (biaya admin Rp1.500)'),
+        ('ovo', 'OVO (biaya admin Rp1.500)'),
     ]
     NILAI_CHOICES = [
         ('A', 'A'),
@@ -182,7 +185,7 @@ class PendaftaranAsleb(models.Model):
     metode_rekening = models.CharField(
         max_length=30,
         choices=METODE_REKENING_CHOICES,
-        default='rekening_bank',
+        default='bni',
     )
     rekening = models.CharField(max_length=150, blank=True)
     nilai_transkrip = models.CharField(
@@ -212,3 +215,13 @@ class PendaftaranAsleb(models.Model):
             'B': 2,
             'C': 1,
         }.get(grade, 0)
+
+    @property
+    def biaya_admin_transfer(self):
+        return {
+            'bank_lain': 2500,
+            'rekening_bank': 2500,
+            'shopeepay': 1500,
+            'gopay': 1500,
+            'ovo': 1500,
+        }.get(self.metode_rekening, 0)

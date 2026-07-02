@@ -82,7 +82,28 @@ class AslebListView(ListView):
         context['search_query'] = self.request.GET.get('q', '').strip()
         context['selected_status'] = self.request.GET.get('status', '').strip()
         context['status_choices'] = Asleb.STATUS_CHOICES
+        pengguna = getattr(self.request, 'current_pengguna', None)
+        context['can_end_asleb'] = bool(pengguna and pengguna.role in {'admin', 'laboran'})
         return context
+
+
+@require_POST
+@transaction.atomic
+def end_asleb_membership(request, pk):
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not pengguna or pengguna.role not in {'admin', 'laboran'}:
+        messages.error(request, 'Hanya admin dan laboran yang dapat mengakhiri masa tugas aslab.')
+        return redirect('asleb:asleb_list')
+
+    asleb = get_object_or_404(Asleb, pk=pk)
+    Asleb.objects.filter(nim=asleb.nim, status='aktif').update(status='nonaktif')
+    akun = Pengguna.objects.filter(nim_nik=asleb.nim).first()
+    if akun and akun.role == 'asisten_lab':
+        akun.role = 'mahasiswa'
+        akun.save(update_fields=['role', 'diperbarui_pada'])
+
+    messages.success(request, f'Masa tugas {asleb.nama} diakhiri. Role akun kini menjadi Mahasiswa.')
+    return redirect('asleb:asleb_list')
 
 
 class AslebDetailView(DetailView):

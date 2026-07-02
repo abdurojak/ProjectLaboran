@@ -98,7 +98,8 @@ def get_asleb_experience(nim):
             status__in=['diterima', 'digenerate'],
             periode__isnull=True,
         ).count()
-    return ('senior', 1) if period_count >= 3 else ('junior', 2)
+    # Dua periode yang sudah diterima membuat pendaftaran berikutnya berlevel Senior.
+    return ('senior', 2) if period_count >= 2 else ('junior', 1)
 
 
 def get_period_registration_count(nim, period=None):

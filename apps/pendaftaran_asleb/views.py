@@ -86,16 +86,6 @@ class PendaftaranAslebListView(ListView):
         context['periode_form'] = PeriodeAslebForm(instance=current_period)
         context['pendaftaran_dibuka'] = is_registration_open()
         context['pengaturan_pendaftaran'] = PengaturanPendaftaranAsleb.get_solo()
-        context['share_title'] = f'Pendaftaran Asisten Laboratorium - {current_period.nama}'
-        context['share_message'] = (
-            f'PENDAFTARAN ASISTEN LABORATORIUM DIBUKA\n\n'
-            f'LabHub JTIF Universitas Trisakti membuka pendaftaran Asisten Laboratorium '
-            f'untuk periode {current_period.nama}.\n\n'
-            f'Batas pendaftaran: {current_period.pendaftaran_selesai:%d %B %Y}\n'
-            f'Persyaratan: profil lengkap, transkrip sesuai NIM, dan nilai mata kuliah minimal C.\n\n'
-            f'Daftar melalui:\n{context["public_registration_url"]}\n\n'
-            f'Silakan bagikan informasi ini kepada mahasiswa yang berminat.'
-        )
         return context
 
 
@@ -188,6 +178,9 @@ class PendaftaranAslebPublicCreateView(View):
         if wizard.get('step') == 'berkas':
             wizard['step'] = 'transkrip'
         elif wizard.get('step') == 'transkrip':
+            if not wizard.get('transkrip_path'):
+                messages.warning(request, 'Upload dan baca transkrip terlebih dahulu sebelum kembali.')
+                return redirect('pendaftaran_asleb:pendaftaran_public')
             wizard['step'] = 'matkul'
         request.session.modified = True
         return redirect('pendaftaran_asleb:pendaftaran_public')
@@ -294,7 +287,7 @@ class PendaftaranAslebPublicCreateView(View):
         if is_passing_grade(detected_grade):
             messages.success(request, f'Nilai {detected_grade} terbaca untuk {matkul.nama}. Anda bisa lanjut mengisi berkas.')
         else:
-            messages.error(request, 'Nilai mata kuliah belum memenuhi minimal C atau tidak terbaca. Upload transkrip yang benar untuk melanjutkan.')
+            messages.error(request, 'Nilai mata kuliah belum memenuhi minimal B atau tidak terbaca. Upload transkrip yang benar untuk melanjutkan.')
         return redirect('pendaftaran_asleb:pendaftaran_public')
 
     def handle_berkas_step(self, request):
@@ -371,6 +364,7 @@ class PendaftaranAslebPublicCreateView(View):
             'selected_matkul': matkul,
             'nilai_transkrip': wizard.get('nilai_transkrip'),
             'nilai_lolos': wizard.get('nilai_lolos'),
+            'transkrip_uploaded': bool(wizard.get('transkrip_path')),
             'current_pengguna': current_pengguna,
             'matkul_form': forms.get('matkul_form') or PublicPilihMatkulForm(),
             'transkrip_form': forms.get('transkrip_form') or PublicTranskripForm(),
@@ -530,7 +524,7 @@ def notify_pendaftaran_dibuka():
             details=[
                 {'label': 'Periode', 'value': current_period.nama},
                 {'label': 'Batas pendaftaran', 'value': f'{current_period.pendaftaran_selesai:%d %b %Y}'},
-                {'label': 'Persyaratan', 'value': 'Profil dan pengalaman lengkap, transkrip sesuai NIM, dan nilai minimal C'},
+                {'label': 'Persyaratan', 'value': 'Profil dan pengalaman lengkap, transkrip sesuai NIM, dan nilai minimal B'},
             ],
             action_url=registration_url,
             action_label='Daftar Sebagai Aslab',

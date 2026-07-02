@@ -74,8 +74,11 @@ class HonorAsleb(models.Model):
         ('dibayar', 'Dibayar'),
     ]
     METODE_TRANSFER_CHOICES = [
-        ('rekening_bank', 'Rekening Bank'),
+        ('bni', 'BNI'),
+        ('bank_lain', 'Bank lain'),
         ('dana', 'DANA'),
+        ('shopeepay', 'ShopeePay'),
+        ('gopay', 'GoPay'),
         ('ovo', 'OVO'),
     ]
 
@@ -88,8 +91,9 @@ class HonorAsleb(models.Model):
     metode_transfer = models.CharField(
         max_length=30,
         choices=METODE_TRANSFER_CHOICES,
-        default='rekening_bank',
+        default='bni',
     )
+    biaya_admin = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     nomor_transfer = models.CharField('Nomor Rekening/E-Wallet', max_length=150, blank=True)
     nama_pemilik_transfer = models.CharField('Nama Pemilik Rekening/E-Wallet', max_length=150, blank=True)
     tanggal_transfer = models.DateField(blank=True, null=True)
@@ -134,6 +138,20 @@ class HonorAsleb(models.Model):
         return self.total_akhir * self.honor_per_jam
 
     @property
+    def honor_bersih(self):
+        return max(self.total_honor - self.biaya_admin_transfer, 0)
+
+    @property
+    def biaya_admin_transfer(self):
+        return {
+            'bank_lain': 2500,
+            'rekening_bank': 2500,
+            'shopeepay': 1500,
+            'gopay': 1500,
+            'ovo': 1500,
+        }.get(self.metode_transfer, 0)
+
+    @property
     def jumlah_rupiah(self):
         return f'Rp {self.jumlah:,.0f}'.replace(',', '.')
 
@@ -154,7 +172,8 @@ class HonorAsleb(models.Model):
         self.fill_transfer_from_registration()
         if not self.assigned_laboran_id:
             self.assigned_laboran = self.get_next_laboran_for_transfer()
-        self.jumlah = self.total_honor
+        self.biaya_admin = self.biaya_admin_transfer
+        self.jumlah = self.honor_bersih
         super().save(*args, **kwargs)
 
     def get_next_laboran_for_transfer(self):
