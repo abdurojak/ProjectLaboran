@@ -525,6 +525,24 @@
             background: transparent !important;
         }
 
+        html[data-theme="dark"] tbody tr:hover,
+        html[data-theme="dark"] tbody tr[class*="hover:bg-"]:hover {
+            background-color: rgba(30, 41, 59, 0.30) !important;
+        }
+
+        html[data-theme="dark"] tbody tr:hover td,
+        html[data-theme="dark"] tbody tr[class*="hover:bg-"]:hover td {
+            background-color: rgba(30, 41, 59, 0.30) !important;
+            color: var(--text-soft) !important;
+        }
+
+        html[data-theme="dark"] tbody tr:hover .text-slate-900,
+        html[data-theme="dark"] tbody tr:hover .text-slate-800,
+        html[data-theme="dark"] tbody tr:hover .text-slate-700,
+        html[data-theme="dark"] tbody tr:hover .text-slate-600 {
+            color: var(--text-main) !important;
+        }
+
         .shadow-soft,
         .shadow-lg,
         .shadow-xl,

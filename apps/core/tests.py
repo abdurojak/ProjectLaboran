@@ -77,6 +77,15 @@ class GlobalBackgroundTests(TestCase):
         self.assertContains(response, 'html[data-theme="dark"] #dashboard-sidebar *::-webkit-scrollbar-thumb')
         self.assertContains(response, 'background: rgba(51, 65, 85, 0.60);')
 
+    def test_table_hover_dark_mode_tidak_terang(self):
+        response = self.client.get(reverse('pengguna:login'))
+
+        self.assertContains(response, 'html[data-theme="dark"] tbody tr:hover')
+        self.assertContains(response, 'html[data-theme="dark"] tbody tr[class*="hover:bg-"]:hover')
+        self.assertContains(response, 'background-color: rgba(30, 41, 59, 0.30) !important;')
+        self.assertContains(response, 'html[data-theme="dark"] tbody tr:hover td')
+        self.assertContains(response, 'html[data-theme="dark"] tbody tr:hover .text-slate-900')
+
 from apps.pengguna.models import Pengguna
 
 from project_laboran.asgi import application
