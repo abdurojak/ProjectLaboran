@@ -128,6 +128,120 @@
         min-width: 0;
         overflow-wrap: anywhere;
     }
+    html[data-theme="dark"] .calendar-page {
+        --calendar-blue: #60a5fa;
+        --calendar-teal: #5eead4;
+        --calendar-orange: #fdba74;
+        --calendar-muted: #cbd5e1;
+    }
+    html[data-theme="dark"] .calendar-shell {
+        background:
+            linear-gradient(135deg, rgba(37, 99, 235, 0.14), transparent 34%),
+            linear-gradient(225deg, rgba(20, 184, 166, 0.12), transparent 30%),
+            rgba(15, 23, 42, 0.34) !important;
+        border-color: rgba(71, 85, 105, 0.30) !important;
+    }
+    html[data-theme="dark"] .calendar-scroll {
+        scrollbar-color: rgba(71, 85, 105, 0.62) rgba(15, 23, 42, 0.26);
+    }
+    html[data-theme="dark"] .calendar-scroll::-webkit-scrollbar-track {
+        background: rgba(15, 23, 42, 0.26);
+    }
+    html[data-theme="dark"] .calendar-scroll::-webkit-scrollbar-thumb {
+        background: rgba(71, 85, 105, 0.62);
+        border: 2px solid rgba(15, 23, 42, 0.26);
+        border-radius: 999px;
+    }
+    html[data-theme="dark"] .fc .fc-button {
+        background: rgba(15, 23, 42, 0.48);
+        border-color: rgba(71, 85, 105, 0.34);
+        color: #dbeafe;
+    }
+    html[data-theme="dark"] .fc .fc-button-primary:not(:disabled):active,
+    html[data-theme="dark"] .fc .fc-button-primary:not(:disabled).fc-button-active {
+        background: rgba(37, 99, 235, 0.70);
+        border-color: rgba(96, 165, 250, 0.42);
+        color: #eff6ff;
+    }
+    html[data-theme="dark"] .fc .fc-button:hover {
+        background: rgba(30, 41, 59, 0.64);
+        border-color: rgba(96, 165, 250, 0.30);
+        color: #eff6ff;
+    }
+    html[data-theme="dark"] .fc-theme-standard td,
+    html[data-theme="dark"] .fc-theme-standard th,
+    html[data-theme="dark"] .fc-theme-standard .fc-scrollgrid {
+        border-color: rgba(71, 85, 105, 0.32);
+    }
+    html[data-theme="dark"] .fc-theme-standard .fc-scrollgrid {
+        background: rgba(15, 23, 42, 0.28);
+    }
+    html[data-theme="dark"] .fc .fc-scrollgrid-section,
+    html[data-theme="dark"] .fc .fc-scrollgrid-section > td,
+    html[data-theme="dark"] .fc .fc-daygrid-body,
+    html[data-theme="dark"] .fc .fc-daygrid-body table,
+    html[data-theme="dark"] .fc .fc-col-header,
+    html[data-theme="dark"] .fc .fc-col-header table {
+        background: transparent !important;
+    }
+    html[data-theme="dark"] .fc .fc-scrollgrid-section-header > th,
+    html[data-theme="dark"] .fc .fc-scrollgrid-section-header > td,
+    html[data-theme="dark"] .fc .fc-col-header-cell,
+    html[data-theme="dark"] .fc .fc-timegrid-axis,
+    html[data-theme="dark"] .fc .fc-timegrid-slot-label,
+    html[data-theme="dark"] .fc .fc-list-day-cushion {
+        background: rgba(15, 23, 42, 0.66) !important;
+        border-color: rgba(71, 85, 105, 0.30) !important;
+    }
+    html[data-theme="dark"] .fc .fc-daygrid-day,
+    html[data-theme="dark"] .fc .fc-timegrid-slot,
+    html[data-theme="dark"] .fc .fc-list,
+    html[data-theme="dark"] .fc .fc-list-table,
+    html[data-theme="dark"] .fc .fc-list-event td {
+        background: rgba(15, 23, 42, 0.22) !important;
+        border-color: rgba(71, 85, 105, 0.26) !important;
+    }
+    html[data-theme="dark"] .fc .fc-col-header-cell {
+        background: rgba(15, 23, 42, 0.66) !important;
+    }
+    html[data-theme="dark"] .fc .fc-col-header-cell-cushion,
+    html[data-theme="dark"] .fc .fc-daygrid-day-number,
+    html[data-theme="dark"] .fc .fc-list-day-text,
+    html[data-theme="dark"] .fc .fc-list-day-side-text,
+    html[data-theme="dark"] .fc .fc-list-event-time,
+    html[data-theme="dark"] .fc .fc-list-event-title {
+        color: #cbd5e1;
+    }
+    html[data-theme="dark"] .fc .fc-day-today {
+        background: rgba(20, 184, 166, 0.13) !important;
+    }
+    html[data-theme="dark"] .fc .fc-daygrid-day.fc-day-other {
+        background: rgba(2, 6, 23, 0.24) !important;
+    }
+    html[data-theme="dark"] .fc .fc-daygrid-day.fc-day-other .fc-daygrid-day-number {
+        color: #64748b;
+    }
+    html[data-theme="dark"] .fc .fc-popover {
+        background: rgba(15, 23, 42, 0.94);
+        border-color: rgba(71, 85, 105, 0.34);
+        color: #e2e8f0;
+    }
+    html[data-theme="dark"] .fc .fc-popover-header {
+        background: rgba(30, 41, 59, 0.80);
+    }
+    html[data-theme="dark"] .fc .fc-more-link {
+        color: #93c5fd;
+    }
+    html[data-theme="dark"] .fc .fc-list-event:hover td {
+        background: rgba(30, 41, 59, 0.62) !important;
+    }
+    html[data-theme="dark"] .calendar-legend-item,
+    html[data-theme="dark"] .calendar-page .rounded-\[24px\],
+    html[data-theme="dark"] .calendar-page .rounded-\[22px\] {
+        background-color: rgba(30, 41, 59, 0.34) !important;
+        border-color: rgba(71, 85, 105, 0.30) !important;
+        color: #cbd5e1;
+    }
     @media (max-width: 767px) {
         .calendar-page {
             overflow: hidden;
@@ -219,33 +333,6 @@
         </div>
 
         <aside class="min-w-0 space-y-6">
-
-            {% if request.current_pengguna and request.current_pengguna.role == 'asisten_lab' or request.current_pengguna.role == 'mahasiswa' %}
-            <div class="calendar-side-card surface-card p-5 md:p-6">
-                <div class="flex items-start gap-4">
-                    <span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
-                        <i data-lucide="calendar-clock" class="h-6 w-6"></i>
-                    </span>
-                    <div>
-                        <h3 class="text-xl font-bold text-slate-900">Jadwal Praktikum Saya</h3>
-                        <p class="mt-2 text-sm leading-7 text-slate-500">Hanya jadwal mata kuliah yang terhubung dengan akun ini yang otomatis tampil di kalender.</p>
-                    </div>
-                </div>
-                <div class="mt-5 space-y-3">
-                    {% for jadwal in jadwal_praktikum_saya %}
-                    <div class="rounded-[22px] border border-teal-100 bg-teal-50/60 p-4">
-                        <div class="font-bold text-slate-900">{{ jadwal.mata_kuliah }} - {{ jadwal.kelas }}</div>
-                        <div class="mt-1 text-sm text-slate-600">{{ jadwal.get_hari_display }} · {{ jadwal.waktu_mulai|time:"H:i" }}{% if jadwal.waktu_selesai %} - {{ jadwal.waktu_selesai|time:"H:i" }}{% endif %}</div>
-                        <div class="mt-1 text-sm text-slate-500">{{ jadwal.get_display_ruangan_nama }}</div>
-                    </div>
-                    {% empty %}
-                    <div class="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-                        Belum ada jadwal praktikum yang cocok dengan data matkul aslab.
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endif %}
 
             {% if not request.current_pengguna or request.current_pengguna.role == 'admin' or request.current_pengguna.role == 'laboran' %}
             <div class="calendar-side-card surface-card p-5 md:p-6">
