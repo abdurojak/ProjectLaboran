@@ -42,6 +42,30 @@
             </article>
 
             <article class="surface-card overflow-hidden">
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-6 py-5"><div><p class="text-xs font-black uppercase tracking-[0.18em] text-brand-700">Perjalanan</p><h2 class="mt-2 text-xl font-black text-slate-900">Profil Profesional</h2><p class="mt-1 text-sm text-slate-500">Kelola setiap kategori secara terpisah agar profil mudah dibaca.</p></div><a class="btn-primary gap-2" href="{% url 'pengguna:experience_create' pengguna.pk %}"><i data-lucide="plus" class="h-4 w-4"></i>Tambahkan</a></div>
+                <div class="grid gap-4 p-5 sm:p-6">
+                    {% for section_key, section_label, section_items in riwayat_sections %}
+                    <section class="overflow-hidden rounded-3xl border border-slate-200 bg-white">
+                        <div class="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                            <div class="flex items-center gap-3"><span class="flex h-10 w-10 items-center justify-center rounded-2xl {% if section_key == 'pendidikan' %}bg-blue-50 text-blue-700{% elif section_key == 'organisasi' %}bg-emerald-50 text-emerald-700{% elif section_key == 'proyek' %}bg-violet-50 text-violet-700{% elif section_key == 'sertifikasi' %}bg-amber-50 text-amber-700{% else %}bg-brand-50 text-brand-700{% endif %}"><i data-lucide="{% if section_key == 'pendidikan' %}graduation-cap{% elif section_key == 'organisasi' %}users-round{% elif section_key == 'proyek' %}folder-kanban{% elif section_key == 'sertifikasi' %}badge-check{% else %}briefcase-business{% endif %}" class="h-5 w-5"></i></span><h3 class="font-black text-slate-900">{{ section_label }}</h3></div>
+                            <a class="rounded-xl p-2 text-brand-700 hover:bg-brand-50" href="{% url 'pengguna:experience_create' pengguna.pk %}?kategori={{ section_key }}" aria-label="Tambah {{ section_label }}"><i data-lucide="plus" class="h-4 w-4"></i></a>
+                        </div>
+                        <div class="divide-y divide-slate-100">
+                            {% for item in section_items %}
+                            <article class="p-5">
+                                <div class="flex flex-wrap items-start justify-between gap-3"><div class="min-w-0"><h4 class="text-lg font-black text-slate-900">{{ item.jabatan }}</h4><p class="mt-1 font-semibold text-brand-700">{{ item.organisasi }}</p>{% if item.bidang_studi %}<p class="mt-1 text-sm text-slate-600">{{ item.bidang_studi }}</p>{% endif %}<p class="mt-2 text-sm text-slate-500">{{ item.tanggal_mulai|date:"M Y" }} - {% if item.masih_berjalan %}Sekarang{% else %}{{ item.tanggal_selesai|date:"M Y"|default:"-" }}{% endif %}{% if item.lokasi %} &middot; {{ item.lokasi }}{% endif %}{% if item.otomatis %} &middot; Otomatis{% endif %}</p></div>{% if not item.otomatis %}<div class="flex gap-2"><a class="rounded-xl p-2 text-amber-600 hover:bg-amber-50" href="{% url 'pengguna:experience_update' pengguna.pk item.pk %}" aria-label="Edit {{ section_label }}"><i data-lucide="pencil" class="h-4 w-4"></i></a><form method="post" action="{% url 'pengguna:experience_delete' pengguna.pk item.pk %}">{% csrf_token %}<button class="rounded-xl p-2 text-rose-600 hover:bg-rose-50" type="submit" aria-label="Hapus {{ section_label }}"><i data-lucide="trash-2" class="h-4 w-4"></i></button></form></div>{% endif %}</div>
+                                {% if item.teknologi %}<p class="mt-3 text-sm"><span class="font-bold text-slate-700">Teknologi:</span> {{ item.teknologi }}</p>{% endif %}{% if item.deskripsi %}<p class="mt-3 whitespace-pre-line text-sm leading-6 text-slate-600">{{ item.deskripsi }}</p>{% endif %}
+                                {% if item.nomor_kredensial or item.tautan or item.file_sertifikat %}<div class="mt-4 flex flex-wrap gap-3 text-sm font-bold">{% if item.nomor_kredensial %}<span class="rounded-full bg-slate-100 px-3 py-1.5 text-slate-600">ID: {{ item.nomor_kredensial }}</span>{% endif %}{% if item.tautan %}<a class="text-brand-700" href="{{ item.tautan }}" target="_blank" rel="noopener">Buka tautan</a>{% endif %}{% if item.file_sertifikat %}<a class="text-brand-700" href="{{ item.file_sertifikat.url }}" target="_blank" rel="noopener">Lihat sertifikat</a>{% endif %}</div>{% endif %}
+                            </article>
+                            {% empty %}<div class="px-5 py-8 text-center text-sm text-slate-500">Belum ada data {{ section_label|lower }}.</div>{% endfor %}
+                        </div>
+                    </section>
+                    {% endfor %}
+                </div>
+            </article>
+
+            {% comment %}Legacy combined timeline replaced by category sections.
+            <article class="surface-card overflow-hidden">
                 <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-6 py-5"><div><p class="text-xs font-black uppercase tracking-[0.18em] text-brand-700">Perjalanan</p><h2 class="mt-2 text-xl font-black text-slate-900">Pendidikan & Pengalaman</h2></div><a class="btn-primary gap-2" href="{% url 'pengguna:experience_create' pengguna.pk %}"><i data-lucide="plus" class="h-4 w-4"></i>Tambah Bagian</a></div>
                 <div class="divide-y divide-slate-100">
                     {% for section_key, section_label, section_items in riwayat_sections %}{% for item in section_items %}
@@ -50,6 +74,7 @@
                     {% if not pengguna.pengalaman.exists %}<div class="px-6 py-12 text-center text-sm text-slate-500">Belum ada pendidikan atau pengalaman. Gunakan tombol Tambah Bagian untuk melengkapi profil.</div>{% endif %}
                 </div>
             </article>
+            {% endcomment %}
         </div>
 
         <aside class="space-y-5">
