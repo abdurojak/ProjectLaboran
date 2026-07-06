@@ -314,6 +314,37 @@ class JadwalViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(JadwalPraktikum.objects.filter(hari='rabu').exists())
 
+    def test_aslab_tidak_bisa_mengajukan_jadwal_kedua_untuk_matkul_yang_sama(self):
+        aslab = self.login_as_asisten_lab()
+        PendaftaranAsleb.objects.create(
+            nama=aslab.nama_pengguna,
+            nim=aslab.nim_nik,
+            no_hp=aslab.no_hp,
+            email=aslab.email,
+            program_studi=aslab.prodi,
+            semester=5,
+            matkul=self.matkul,
+            status='digenerate',
+        )
+        PesertaPraktikum.objects.create(
+            matkul=self.matkul,
+            nim='0640020999',
+            nama='Peserta Duplikat',
+        )
+
+        response = self.client.post(reverse('jadwal:jadwal_create'), {
+            'matkul': self.matkul.pk,
+            'ruangan': self.ruangan.pk,
+            'hari': 'rabu',
+            'waktu_mulai': '13:00',
+            'waktu_selesai': '14:00',
+            'catatan': '',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Jadwal untuk mata kuliah ini sudah pernah diajukan.')
+        self.assertEqual(JadwalPraktikum.objects.filter(mata_kuliah=str(self.matkul)).count(), 1)
+
     def test_aslab_melihat_list_praktikum_saya_berdasarkan_matkulnya(self):
         aslab = self.login_as_asisten_lab()
         PendaftaranAsleb.objects.create(

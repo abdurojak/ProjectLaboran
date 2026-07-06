@@ -14,6 +14,7 @@ from django.views.generic import CreateView, DeleteView, DetailView, FormView, L
 
 from apps.core.views import PostOnlyDeleteMixin
 from apps.jadwal.models import JadwalPraktikum
+from apps.kalender.realtime import send_attendance_update, send_honor_update
 from apps.pengguna.models import Pengguna
 from apps.pendaftaran_asleb.forms import PengaturanBiayaTransferForm
 from apps.pendaftaran_asleb.models import PengaturanBiayaTransfer
@@ -149,6 +150,8 @@ class HonorAslebListView(ListView):
 
         if pengguna and pengguna.role == 'laboran':
             queryset = queryset.filter(assigned_laboran=pengguna)
+        elif pengguna and pengguna.role == 'asisten_lab':
+            queryset = queryset.filter(asleb__nim=pengguna.nim_nik)
 
         if search:
             queryset = queryset.filter(
@@ -181,6 +184,8 @@ class HonorAslebListView(ListView):
         base_honor_qs = HonorAsleb.objects.all()
         if pengguna and pengguna.role == 'laboran':
             base_honor_qs = base_honor_qs.filter(assigned_laboran=pengguna)
+        elif pengguna and pengguna.role == 'asisten_lab':
+            base_honor_qs = base_honor_qs.filter(asleb__nim=pengguna.nim_nik)
 
         context['search_query'] = self.request.GET.get('q', '').strip()
         context['selected_bulan'] = selected_bulan
@@ -191,6 +196,7 @@ class HonorAslebListView(ListView):
         context['unassigned_honor_count'] = base_honor_qs.filter(assigned_laboran__isnull=True).count()
         context['is_admin'] = bool(pengguna and pengguna.role == 'admin')
         context['is_laboran'] = bool(pengguna and pengguna.role == 'laboran')
+        context['is_asisten_lab'] = bool(pengguna and pengguna.role == 'asisten_lab')
         context['formula_note'] = 'Total Honor = min(7 x Total Pertemuan, 60) x Honor/Jam. Level otomatis: periode aslab ke-1 dan ke-2 Junior Rp7.000, mulai ke-3 Senior Rp8.000.'
         context['biaya_transfer_form'] = PengaturanBiayaTransferForm(instance=PengaturanBiayaTransfer.get_solo())
         return context
@@ -224,6 +230,11 @@ class HonorAslebCreateView(HonorAdminRequiredMixin, CreateView):
         kwargs['current_pengguna'] = getattr(self.request, 'current_pengguna', None)
         return kwargs
 
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        transaction.on_commit(lambda: send_honor_update(self.object, event='honor.created'))
+        return response
+
 
 class HonorAslebUpdateView(UpdateView):
     model = HonorAsleb
@@ -242,6 +253,11 @@ class HonorAslebUpdateView(UpdateView):
         kwargs = super().get_form_kwargs()
         kwargs['current_pengguna'] = getattr(self.request, 'current_pengguna', None)
         return kwargs
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        transaction.on_commit(lambda: send_honor_update(self.object, event='honor.updated'))
+        return response
 
 
 class HonorAslebDeleteView(HonorAdminRequiredMixin, PostOnlyDeleteMixin, DeleteView):
@@ -460,6 +476,7 @@ class AbsensiAslebCreateView(CreateView):
         form.instance.asleb = self.asleb
         response = super().form_valid(form)
         sync_honor_from_absensi(self.object)
+        transaction.on_commit(lambda: send_attendance_update(self.object))
         messages.success(self.request, f'Absensi Modul {self.object.modul} berhasil disimpan.')
         return response
 
@@ -804,6 +821,7 @@ def confirm_honor_transfer(request, pk):
         honor.pic_transfer = pengguna.nama_pengguna
     honor.status = 'dibayar'
     honor.save()
+    transaction.on_commit(lambda: send_honor_update(honor, event='honor.paid'))
     messages.success(request, f'Honor {honor.asleb.nama} berhasil dikonfirmasi sudah ditransfer.')
     return redirect('asleb:honor_list')
 

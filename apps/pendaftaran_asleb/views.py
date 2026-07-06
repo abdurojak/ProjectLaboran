@@ -18,6 +18,7 @@ from io import BytesIO
 import qrcode
 
 from apps.asleb.models import Asleb, HonorAsleb
+from apps.kalender.realtime import send_registration_status_update
 from apps.core.views import PostOnlyDeleteMixin
 from apps.core.emails import send_branded_email
 from apps.pengguna.models import Pengguna
@@ -469,6 +470,7 @@ def accept_pendaftaran(request, pk):
     pendaftaran.save(update_fields=['status', 'diperbarui_pada'])
     promote_pengguna_to_asisten_lab(pendaftaran)
     send_pendaftaran_status_email(pendaftaran)
+    transaction.on_commit(lambda: send_registration_status_update(pendaftaran))
     messages.success(request, 'Pendaftaran aslab ditandai diterima.')
     return redirect('pendaftaran_asleb:pendaftaran_list')
 
@@ -479,6 +481,7 @@ def reject_pendaftaran(request, pk):
     pendaftaran.status = 'ditolak'
     pendaftaran.save(update_fields=['status', 'diperbarui_pada'])
     send_pendaftaran_status_email(pendaftaran)
+    transaction.on_commit(lambda: send_registration_status_update(pendaftaran))
     messages.warning(request, 'Pendaftaran aslab ditandai ditolak.')
     return redirect('pendaftaran_asleb:pendaftaran_list')
 
@@ -527,6 +530,7 @@ def generate_all_accepted_asleb(request):
         create_or_update_asleb_from_pendaftaran(pendaftaran)
         pendaftaran.status = 'digenerate'
         transaction.on_commit(lambda item=pendaftaran: send_pendaftaran_status_email(item))
+        transaction.on_commit(lambda item=pendaftaran: send_registration_status_update(item))
 
     registrations.delete()
     messages.success(

@@ -2,6 +2,7 @@ from datetime import datetime, time, timedelta
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
@@ -10,6 +11,7 @@ from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
 from apps.core.views import PostOnlyDeleteMixin
+from apps.kalender.realtime import send_schedule_update
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, RiwayatAsleb
 from apps.ruangan.models import RuanganLab
 
@@ -39,7 +41,7 @@ def get_aslab_matkul_labels(pengguna):
 
 def can_manage_jadwal(pengguna, jadwal):
     if not pengguna:
-        return True
+        return False
     if pengguna.role in ['admin', 'laboran']:
         return True
     if pengguna.role == 'asisten_lab':
@@ -233,6 +235,33 @@ class JadwalPraktikumCreateView(MahasiswaJadwalReadOnlyMixin, CreateView):
         kwargs['current_pengguna'] = getattr(self.request, 'current_pengguna', None)
         return kwargs
 
+    def form_valid(self, form):
+        pengguna = getattr(self.request, 'current_pengguna', None)
+        if pengguna and pengguna.role == 'asisten_lab':
+            mata_kuliah = str(form.cleaned_data['matkul'])
+            with transaction.atomic():
+                duplicate_exists = JadwalPraktikum.objects.select_for_update().filter(
+                    mata_kuliah=mata_kuliah,
+                    status__in=[
+                        JadwalPraktikum.STATUS_DIAJUKAN,
+                        JadwalPraktikum.STATUS_DITERIMA,
+                    ],
+                ).exists()
+                if duplicate_exists:
+                    form.add_error('matkul', 'Jadwal untuk mata kuliah ini sudah pernah diajukan.')
+                    return self.form_invalid(form)
+                response = super().form_valid(form)
+                transaction.on_commit(lambda: send_schedule_update(
+                    self.object,
+                    event='schedule.submitted',
+                    notify_managers=True,
+                ))
+                return response
+
+        response = super().form_valid(form)
+        transaction.on_commit(lambda: send_schedule_update(self.object, event='schedule.created'))
+        return response
+
 
 class JadwalPraktikumUpdateView(MahasiswaJadwalReadOnlyMixin, UpdateView):
     model = JadwalPraktikum
@@ -269,9 +298,16 @@ class JadwalPraktikumUpdateView(MahasiswaJadwalReadOnlyMixin, UpdateView):
                 catatan=form.cleaned_data.get('catatan', ''),
                 diajukan_oleh=pengguna,
             )
+            transaction.on_commit(lambda: send_schedule_update(
+                self.object,
+                event='schedule.change_requested',
+                notify_managers=True,
+            ))
             messages.success(self.request, 'Permintaan perubahan jadwal dikirim dan menunggu persetujuan laboran.')
             return redirect('jadwal:jadwal_detail', pk=self.object.pk)
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        transaction.on_commit(lambda: send_schedule_update(self.object, event='schedule.updated'))
+        return response
 
 
 class JadwalPraktikumDeleteView(MahasiswaJadwalReadOnlyMixin, PostOnlyDeleteMixin, DeleteView):
@@ -305,6 +341,10 @@ def process_schedule_change_request(request, pk, decision):
         change_request.diproses_oleh = pengguna
         change_request.diproses_pada = timezone.now()
         change_request.save(update_fields=['status', 'diproses_oleh', 'diproses_pada'])
+        transaction.on_commit(lambda: send_schedule_update(
+            change_request.jadwal,
+            event='schedule.change_rejected',
+        ))
         messages.success(request, 'Permintaan perubahan jadwal ditolak.')
         return redirect('jadwal:jadwal_list')
 
@@ -330,6 +370,7 @@ def process_schedule_change_request(request, pk, decision):
     change_request.diproses_oleh = pengguna
     change_request.diproses_pada = timezone.now()
     change_request.save(update_fields=['status', 'diproses_oleh', 'diproses_pada'])
+    transaction.on_commit(lambda: send_schedule_update(jadwal, event='schedule.change_accepted'))
     messages.success(request, 'Perubahan jadwal disetujui dan jadwal telah diperbarui.')
     return redirect('jadwal:jadwal_detail', pk=jadwal.pk)
 

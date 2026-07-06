@@ -107,11 +107,20 @@ TEMPLATES = [
 WSGI_APPLICATION = 'project_laboran.wsgi.application'
 ASGI_APPLICATION = 'project_laboran.asgi.application'
 
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels.layers.InMemoryChannelLayer',
-    },
-}
+CHANNEL_REDIS_URL = os.getenv('CHANNEL_REDIS_URL', '').strip()
+if CHANNEL_REDIS_URL:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {'hosts': [CHANNEL_REDIS_URL]},
+        },
+    }
+else:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        },
+    }
 
 
 # Database
