@@ -25,3 +25,7 @@ python manage.py runserver
 ```
 
 Setelah server berjalan, buka `http://127.0.0.1:8000/`.
+
+## Aplikasi Android Absensi Asleb
+
+Project Flutter tersedia di `mobile_absensi_asleb/`. API mobile berada di `/api/mobile/v1/` dan menggunakan JWT untuk akun dengan role Asisten Lab aktif. Panduan menjalankan Flutter dan build APK tersedia pada `mobile_absensi_asleb/README.md`.

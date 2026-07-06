@@ -1,0 +1,141 @@
+from decimal import Decimal
+from pathlib import Path
+
+from django.conf import settings
+from PIL import Image, UnidentifiedImageError
+from mutagen.mp4 import MP4, MP4StreamInfoError
+from rest_framework import serializers
+
+from apps.asleb.models import AbsensiMasukAsleb
+from apps.jadwal.models import JadwalPraktikum
+
+
+def absolute_file_url(request, field):
+    if not field:
+        return None
+    return request.build_absolute_uri(field.url)
+
+
+class LoginSerializer(serializers.Serializer):
+    identifier = serializers.CharField(max_length=254)
+    password = serializers.CharField(write_only=True, trim_whitespace=False)
+
+
+class RefreshSerializer(serializers.Serializer):
+    refresh = serializers.CharField()
+
+
+class ProfileSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    nama = serializers.CharField(source='nama_pengguna')
+    identitas = serializers.CharField(source='nim_nik')
+    email = serializers.EmailField()
+    role = serializers.CharField()
+    program_studi = serializers.CharField(source='prodi')
+    foto_url = serializers.SerializerMethodField()
+
+    def get_foto_url(self, obj):
+        return absolute_file_url(self.context['request'], obj.foto)
+
+
+class ScheduleSerializer(serializers.ModelSerializer):
+    hari_display = serializers.CharField(source='get_hari_display', read_only=True)
+    laboratorium = serializers.SerializerMethodField()
+    status_absensi = serializers.SerializerMethodField()
+    waktu_absensi = serializers.SerializerMethodField()
+
+    class Meta:
+        model = JadwalPraktikum
+        fields = [
+            'id', 'mata_kuliah', 'kelas', 'hari', 'hari_display', 'waktu_mulai',
+            'waktu_selesai', 'laboratorium', 'status_absensi', 'waktu_absensi',
+        ]
+
+    def get_laboratorium(self, obj):
+        return obj.get_display_ruangan_nama()
+
+    def get_status_absensi(self, obj):
+        override = self.context.get('status_by_schedule', {}).get(obj.pk)
+        if override:
+            return override
+        attendance = self.context.get('attendance_by_schedule', {}).get(obj.pk)
+        return attendance.status if attendance else 'belum_absen'
+
+    def get_waktu_absensi(self, obj):
+        attendance = self.context.get('attendance_by_schedule', {}).get(obj.pk)
+        return attendance.waktu_masuk if attendance else None
+
+
+class AttendanceSerializer(serializers.ModelSerializer):
+    mata_kuliah = serializers.CharField(source='jadwal.mata_kuliah', read_only=True)
+    kelas = serializers.CharField(source='jadwal.kelas', read_only=True)
+    laboratorium = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    foto_url = serializers.SerializerMethodField()
+    video_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AbsensiMasukAsleb
+        fields = [
+            'id', 'tanggal_absensi', 'waktu_masuk', 'mata_kuliah', 'kelas',
+            'laboratorium', 'status', 'status_display', 'latitude', 'longitude',
+            'jarak_lokasi_meter', 'akurasi_gps_meter', 'foto_url', 'video_url',
+        ]
+
+    def get_laboratorium(self, obj):
+        return obj.jadwal.get_display_ruangan_nama()
+
+    def get_foto_url(self, obj):
+        return absolute_file_url(self.context['request'], obj.foto_absensi)
+
+    def get_video_url(self, obj):
+        return absolute_file_url(self.context['request'], obj.video_absensi)
+
+
+class CheckInSerializer(serializers.Serializer):
+    jadwal_id = serializers.IntegerField(min_value=1)
+    latitude = serializers.DecimalField(
+        max_digits=10, decimal_places=7, min_value=Decimal('-90'), max_value=Decimal('90')
+    )
+    longitude = serializers.DecimalField(
+        max_digits=10, decimal_places=7, min_value=Decimal('-180'), max_value=Decimal('180')
+    )
+    accuracy = serializers.DecimalField(max_digits=8, decimal_places=2, min_value=Decimal('0'))
+    foto_absensi = serializers.ImageField()
+    video_absensi = serializers.FileField(required=False, allow_null=True)
+
+    def validate_foto_absensi(self, photo):
+        extension = Path(photo.name).suffix.lower()
+        content_type = (getattr(photo, 'content_type', '') or '').lower()
+        if extension not in {'.jpg', '.jpeg', '.png'} or content_type not in {'image/jpeg', 'image/png'}:
+            raise serializers.ValidationError('Foto harus berformat JPG, JPEG, atau PNG.')
+        if photo.size > settings.ABSENSI_MAX_PHOTO_SIZE_MB * 1024 * 1024:
+            raise serializers.ValidationError(f'Ukuran foto maksimal {settings.ABSENSI_MAX_PHOTO_SIZE_MB} MB.')
+        try:
+            Image.open(photo).verify()
+        except (UnidentifiedImageError, OSError, ValueError) as exc:
+            raise serializers.ValidationError('Isi file foto tidak valid.') from exc
+        finally:
+            photo.seek(0)
+        return photo
+
+    def validate_video_absensi(self, video):
+        if not video:
+            return video
+        extension = Path(video.name).suffix.lower()
+        content_type = (getattr(video, 'content_type', '') or '').lower()
+        if extension != '.mp4' or content_type != 'video/mp4':
+            raise serializers.ValidationError('Video harus berformat MP4.')
+        if video.size > settings.ABSENSI_MAX_VIDEO_SIZE_MB * 1024 * 1024:
+            raise serializers.ValidationError(f'Ukuran video maksimal {settings.ABSENSI_MAX_VIDEO_SIZE_MB} MB.')
+        try:
+            duration = MP4(video.file).info.length
+        except (MP4StreamInfoError, OSError, ValueError, AttributeError) as exc:
+            raise serializers.ValidationError('Isi file video MP4 tidak valid.') from exc
+        finally:
+            video.seek(0)
+        if duration > settings.ABSENSI_MAX_VIDEO_DURATION_SECONDS + 0.5:
+            raise serializers.ValidationError(
+                f'Durasi video maksimal {settings.ABSENSI_MAX_VIDEO_DURATION_SECONDS} detik.'
+            )
+        return video

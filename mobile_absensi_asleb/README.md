@@ -1,0 +1,80 @@
+# LabHub Absensi Asisten Lab
+
+Aplikasi Flutter khusus absensi masuk Asisten Laboratorium. Django tetap menjadi pusat autentikasi, kepemilikan jadwal, validasi waktu, GPS, file bukti, dan pencegahan absensi ganda.
+
+## Endpoint API
+
+Base URL: `http://<IP-SERVER>:8001/api/mobile/v1/`
+
+| Method | Endpoint | Fungsi |
+|---|---|---|
+| POST | `auth/login/` | Login NIM/email dan password Asisten Lab |
+| POST | `auth/refresh/` | Rotasi access dan refresh JWT |
+| POST | `auth/logout/` | Logout API; aplikasi menghapus token terenkripsi |
+| GET | `profile/` | Profil dan mata kuliah Asisten Lab |
+| GET | `dashboard/` | Profil, jadwal hari ini, status absensi |
+| GET | `schedules/` | Seluruh jadwal milik Asisten Lab |
+| GET | `schedules/<id>/` | Detail dan ketersediaan absensi jadwal |
+| POST | `attendance/check-in/` | Absensi masuk multipart |
+| GET | `attendance/history/` | Riwayat foto/video dan GPS |
+| GET | `config/location/` | Titik, radius, akurasi, dan batas file |
+
+Request `attendance/check-in/` menggunakan `multipart/form-data`: `jadwal_id`, `latitude`, `longitude`, `accuracy`, `foto_absensi`, dan `video_absensi` (opsional).
+
+## Menjalankan Backend
+
+Di root Project Laboran:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py runserver 0.0.0.0:8001
+```
+
+Pastikan XAMPP/MySQL aktif. HP dan laptop harus berada di jaringan yang sama. Windows Firewall harus mengizinkan Python pada port `8000`.
+
+Konfigurasi `.env` minimum:
+
+```env
+ALLOWED_HOSTS=localhost,127.0.0.1,10.24.80.245,192.168.1.9
+PUBLIC_ACCESS_BASE_URL=http://192.168.1.9:8001
+ABSENSI_CENTER_LATITUDE=-6.1680678
+ABSENSI_CENTER_LONGITUDE=106.7916257
+ABSENSI_RADIUS_METERS=150
+ABSENSI_MAX_GPS_ACCURACY_METERS=100
+```
+
+## Menjalankan Flutter
+
+```powershell
+cd mobile_absensi_asleb
+flutter pub get
+flutter run --dart-define=API_BASE_URL=http://192.168.1.9:8001/api/mobile/v1/
+```
+
+Untuk Android Emulator gunakan `http://10.0.2.2:8001/api/mobile/v1/`. Untuk HP fisik gunakan IP laptop yang dapat diakses HP.
+
+## Build APK
+
+Debug APK:
+
+```powershell
+flutter build apk --debug --dart-define=API_BASE_URL=http://192.168.1.9:8001/api/mobile/v1/
+```
+
+Release APK:
+
+```powershell
+flutter build apk --release --dart-define=API_BASE_URL=http://192.168.1.9:8001/api/mobile/v1/
+```
+
+Output berada di `build/app/outputs/flutter-apk/`. Untuk distribusi resmi, buat keystore release dan jangan memakai signing debug bawaan.
+
+## Catatan Keamanan
+
+- JWT disimpan dengan `flutter_secure_storage`.
+- Foto dan video hanya dapat dipilih melalui kamera pada UI aplikasi.
+- Backend tetap memeriksa role aktif, jadwal, waktu, duplikasi, radius, akurasi, MIME, isi gambar, durasi MP4, dan ukuran file.
+- Video bersifat opsional dan dibatasi maksimal 15 detik.
+- APK development mengizinkan HTTP LAN. Produksi sebaiknya memakai HTTPS dan menonaktifkan cleartext traffic.

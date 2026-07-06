@@ -11,3 +11,7 @@ pypdf==5.1.0
 pypdfium2==5.10.1
 opencv-python-headless==4.10.0.84
 reportlab==4.4.5
+djangorestframework==3.15.2
+django-cors-headers==4.7.0
+PyJWT==2.10.1
+mutagen==1.47.0

@@ -32,6 +32,7 @@ class PenggunaLoginRequiredMiddleware:
     }
 
     EXEMPT_PREFIXES = (
+        '/api/',
         '/admin/',
         '/media/',
         '/pendaftaran-asleb/daftar/',

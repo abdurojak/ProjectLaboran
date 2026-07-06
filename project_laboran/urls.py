@@ -20,6 +20,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 urlpatterns = [
+    path('api/mobile/v1/', include('apps.mobile_api.urls')),
     path('', include('apps.dashboard.urls')),
     path('asleb/', include('apps.asleb.urls')),
     path('barang-tertinggal/', include('apps.barang_tertinggal.urls')),

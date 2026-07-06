@@ -50,6 +50,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',
+    'rest_framework',
     'apps.core',
     'apps.asleb',
     'apps.barang_tertinggal',
@@ -62,6 +64,7 @@ INSTALLED_APPS = [
     'apps.pengguna',
     'apps.ruangan',
     'apps.surat',
+    'apps.mobile_api',
 ]
 
 WHITENOISE_INSTALLED = find_spec('whitenoise') is not None
@@ -69,6 +72,7 @@ WHITENOISE_INSTALLED = find_spec('whitenoise') is not None
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -173,6 +177,34 @@ ABSENSI_CENTER_LATITUDE = float(os.getenv('ABSENSI_CENTER_LATITUDE', '-6.1680678
 ABSENSI_CENTER_LONGITUDE = float(os.getenv('ABSENSI_CENTER_LONGITUDE', '106.7916257'))
 ABSENSI_RADIUS_METERS = int(os.getenv('ABSENSI_RADIUS_METERS', '150'))
 ABSENSI_MAX_GPS_ACCURACY_METERS = int(os.getenv('ABSENSI_MAX_GPS_ACCURACY_METERS', '100'))
+ABSENSI_EARLY_CHECKIN_MINUTES = int(os.getenv('ABSENSI_EARLY_CHECKIN_MINUTES', '30'))
+ABSENSI_MAX_PHOTO_SIZE_MB = int(os.getenv('ABSENSI_MAX_PHOTO_SIZE_MB', '5'))
+ABSENSI_MAX_VIDEO_SIZE_MB = int(os.getenv('ABSENSI_MAX_VIDEO_SIZE_MB', '25'))
+ABSENSI_MAX_VIDEO_DURATION_SECONDS = int(os.getenv('ABSENSI_MAX_VIDEO_DURATION_SECONDS', '15'))
+
+MOBILE_JWT_ACCESS_MINUTES = int(os.getenv('MOBILE_JWT_ACCESS_MINUTES', '30'))
+MOBILE_JWT_REFRESH_DAYS = int(os.getenv('MOBILE_JWT_REFRESH_DAYS', '7'))
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'apps.mobile_api.authentication.PenggunaJWTAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'apps.mobile_api.permissions.IsAsistenLab',
+    ],
+    'DEFAULT_PARSER_CLASSES': [
+        'rest_framework.parsers.JSONParser',
+        'rest_framework.parsers.FormParser',
+        'rest_framework.parsers.MultiPartParser',
+    ],
+}
+
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv('CORS_ALLOWED_ORIGINS', '').split(',')
+    if origin.strip()
+]
+CORS_ALLOW_ALL_ORIGINS = DEBUG and not CORS_ALLOWED_ORIGINS
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
