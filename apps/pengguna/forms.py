@@ -218,20 +218,118 @@ class PenggunaProfileForm(forms.ModelForm):
         return instance
 
 
-class PengalamanPenggunaForm(forms.ModelForm):
+class RiwayatProfilFormBase(forms.ModelForm):
+    category = None
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if cleaned_data.get('masih_berjalan'):
+            cleaned_data['tanggal_selesai'] = None
+            self.instance.tanggal_selesai = None
+        return cleaned_data
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        instance.kategori = self.category
+        if commit:
+            instance.save()
+            self.save_m2m()
+        return instance
+
     class Meta:
         model = PengalamanPengguna
-        fields = ['kategori', 'jabatan', 'organisasi', 'bidang_studi', 'lokasi', 'tanggal_mulai', 'tanggal_selesai', 'masih_berjalan', 'deskripsi']
+        fields = []
+        widgets = {
+            'tanggal_mulai': forms.DateInput(attrs={'type': 'date'}),
+            'tanggal_selesai': forms.DateInput(attrs={'type': 'date'}),
+            'deskripsi': forms.Textarea(attrs={'rows': 5}),
+        }
+
+
+class PengalamanPenggunaForm(RiwayatProfilFormBase):
+    category = 'pengalaman'
+
+    class Meta:
+        model = PengalamanPengguna
+        fields = ['jabatan', 'organisasi', 'lokasi', 'tanggal_mulai', 'tanggal_selesai', 'masih_berjalan', 'deskripsi']
         labels = {
-            'jabatan': 'Judul, jabatan, atau gelar',
-            'organisasi': 'Perusahaan, sekolah, atau organisasi',
-            'bidang_studi': 'Bidang studi atau bidang kegiatan',
+            'jabatan': 'Posisi/Jabatan',
+            'organisasi': 'Nama Instansi/Perusahaan',
+            'masih_berjalan': 'Masih berjalan sampai sekarang',
+            'deskripsi': 'Deskripsi pengalaman',
         }
         widgets = {
             'tanggal_mulai': forms.DateInput(attrs={'type': 'date'}),
             'tanggal_selesai': forms.DateInput(attrs={'type': 'date'}),
-            'deskripsi': forms.Textarea(attrs={'rows': 5, 'placeholder': 'Jelaskan tanggung jawab, proyek, atau pencapaian.'}),
+            'deskripsi': forms.Textarea(attrs={'rows': 5, 'placeholder': 'Jelaskan tanggung jawab dan pencapaian Anda.'}),
         }
+
+
+class PendidikanPenggunaForm(RiwayatProfilFormBase):
+    category = 'pendidikan'
+
+    class Meta:
+        model = PengalamanPengguna
+        fields = ['organisasi', 'jabatan', 'bidang_studi', 'tanggal_mulai', 'tanggal_selesai', 'masih_berjalan', 'deskripsi']
+        labels = {
+            'organisasi': 'Nama Sekolah/Kampus',
+            'jabatan': 'Jenjang Pendidikan',
+            'bidang_studi': 'Jurusan/Program Studi',
+            'masih_berjalan': 'Masih menempuh pendidikan',
+            'deskripsi': 'Deskripsi tambahan',
+        }
+        widgets = RiwayatProfilFormBase.Meta.widgets
+
+
+class OrganisasiPenggunaForm(RiwayatProfilFormBase):
+    category = 'organisasi'
+
+    class Meta:
+        model = PengalamanPengguna
+        fields = ['organisasi', 'jabatan', 'lokasi', 'tanggal_mulai', 'tanggal_selesai', 'masih_berjalan', 'deskripsi']
+        labels = {
+            'organisasi': 'Nama Organisasi',
+            'jabatan': 'Jabatan/Posisi',
+            'masih_berjalan': 'Masih aktif',
+            'deskripsi': 'Kegiatan atau tanggung jawab',
+        }
+        widgets = RiwayatProfilFormBase.Meta.widgets
+
+
+class ProyekPenggunaForm(RiwayatProfilFormBase):
+    category = 'proyek'
+
+    class Meta:
+        model = PengalamanPengguna
+        fields = ['jabatan', 'organisasi', 'teknologi', 'tautan', 'tanggal_mulai', 'tanggal_selesai', 'masih_berjalan', 'deskripsi']
+        labels = {
+            'jabatan': 'Nama Proyek',
+            'organisasi': 'Peran dalam Proyek',
+            'teknologi': 'Teknologi yang Digunakan',
+            'tautan': 'Link Proyek (opsional)',
+            'masih_berjalan': 'Masih dikerjakan',
+            'deskripsi': 'Deskripsi proyek',
+        }
+        widgets = RiwayatProfilFormBase.Meta.widgets
+
+
+class SertifikasiPenggunaForm(RiwayatProfilFormBase):
+    category = 'sertifikasi'
+
+    class Meta:
+        model = PengalamanPengguna
+        fields = ['jabatan', 'organisasi', 'tanggal_mulai', 'tanggal_selesai', 'masih_berjalan', 'nomor_kredensial', 'tautan', 'file_sertifikat']
+        labels = {
+            'jabatan': 'Nama Sertifikat',
+            'organisasi': 'Penerbit/Instansi',
+            'tanggal_mulai': 'Tanggal Terbit',
+            'tanggal_selesai': 'Tanggal Kedaluwarsa',
+            'masih_berjalan': 'Tidak ada tanggal kedaluwarsa',
+            'nomor_kredensial': 'Nomor Kredensial (opsional)',
+            'tautan': 'Link Kredensial (opsional)',
+            'file_sertifikat': 'Upload File Sertifikat (opsional)',
+        }
+        widgets = RiwayatProfilFormBase.Meta.widgets
 
 
 class ChangePasswordForm(forms.Form):

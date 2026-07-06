@@ -1,6 +1,59 @@
 {% extends "base.html" %}
-{% block title %}Pengalaman Profil{% endblock %}
+{% block title %}{% if selecting_category %}Tambah Profil{% else %}{{ category_meta.label }}{% endif %}{% endblock %}
 {% block content %}
-<section class="mx-auto max-w-3xl space-y-6"><div><p class="text-sm font-black uppercase tracking-[0.2em] text-brand-700">Profil Profesional</p><h2 class="mt-2 text-3xl font-black text-slate-900">{% if object %}Edit{% else %}Tambah{% endif %} Riwayat Profil</h2><p class="mt-2 text-sm text-slate-500">Tambahkan pendidikan, pengalaman, organisasi, proyek, atau sertifikasi seperti pada LinkedIn.</p></div>
-<form method="post" class="surface-card grid gap-5 p-6 md:grid-cols-2 md:p-8">{% csrf_token %}{% for field in form %}<div class="{% if field.name == 'deskripsi' or field.name == 'kategori' %}md:col-span-2{% endif %}">{{ field.label_tag }}{{ field }}{% if field.help_text %}<p class="mt-2 text-xs text-slate-500">{{ field.help_text }}</p>{% endif %}{% for error in field.errors %}<p class="mt-2 text-sm font-bold text-rose-600">{{ error }}</p>{% endfor %}</div>{% endfor %}<div class="flex gap-3 md:col-span-2"><button class="btn-primary" type="submit">Simpan Riwayat</button><a class="btn-secondary" href="{% url 'pengguna:detail' view.profile_user.pk %}">Batal</a></div></form></section>
+<section class="mx-auto max-w-5xl space-y-6">
+    <div>
+        <p class="text-sm font-black uppercase tracking-[0.2em] text-brand-700">Profil Profesional</p>
+        <h2 class="mt-2 text-3xl font-black text-slate-900">{% if selecting_category %}Apa yang ingin ditambahkan?{% elif object %}Edit {{ category_meta.label }}{% else %}Tambah {{ category_meta.label }}{% endif %}</h2>
+        <p class="mt-2 text-sm leading-6 text-slate-500">{% if selecting_category %}Pilih satu kategori. Form berikutnya hanya akan menampilkan data yang relevan.{% else %}{{ category_meta.description }}{% endif %}</p>
+    </div>
+
+    {% if selecting_category %}
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {% for category in category_choices %}
+        <a href="{% url 'pengguna:experience_create' profile_user.pk %}?kategori={{ category.key }}" class="surface-card group flex min-h-44 flex-col justify-between p-6 transition hover:-translate-y-1 hover:border-brand-300">
+            <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-700"><i data-lucide="{{ category.icon }}" class="h-5 w-5"></i></span>
+            <div class="mt-6"><h3 class="text-lg font-black text-slate-900">{{ category.label }}</h3><p class="mt-2 text-sm leading-6 text-slate-500">{{ category.description }}</p></div>
+        </a>
+        {% endfor %}
+    </div>
+    <a class="btn-secondary" href="{% url 'pengguna:detail' profile_user.pk %}"><i data-lucide="arrow-left" class="mr-2 h-4 w-4"></i>Kembali ke Profil</a>
+    {% else %}
+    <form method="post" enctype="multipart/form-data" class="surface-card grid gap-5 p-5 sm:p-6 md:grid-cols-2 md:p-8">
+        {% csrf_token %}
+        {% if form.non_field_errors %}<div class="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-bold text-rose-700 md:col-span-2">{{ form.non_field_errors }}</div>{% endif %}
+        {% for field in form %}
+        <div class="{% if field.name == 'deskripsi' or field.name == 'teknologi' or field.name == 'tautan' or field.name == 'file_sertifikat' or field.name == 'masih_berjalan' %}md:col-span-2{% endif %}"{% if field.name == 'tanggal_selesai' %} data-end-date-wrap{% endif %}>
+            {% if field.name == 'masih_berjalan' %}
+            <label class="flex cursor-pointer items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 p-4">{{ field }}<span class="mb-0 font-bold text-slate-800">{{ field.label }}</span></label>
+            {% else %}{{ field.label_tag }}{{ field }}{% endif %}
+            {% if field.help_text %}<p class="mt-2 text-xs text-slate-500">{{ field.help_text }}</p>{% endif %}
+            {% for error in field.errors %}<p class="mt-2 text-sm font-bold text-rose-600">{{ error }}</p>{% endfor %}
+        </div>
+        {% endfor %}
+        <div class="flex flex-col gap-3 sm:flex-row md:col-span-2">
+            <button class="btn-primary" type="submit"><i data-lucide="save" class="mr-2 h-4 w-4"></i>Simpan {{ category_meta.label }}</button>
+            {% if not object %}<a class="btn-secondary" href="{% url 'pengguna:experience_create' profile_user.pk %}"><i data-lucide="layout-grid" class="mr-2 h-4 w-4"></i>Pilih Kategori Lain</a>{% endif %}
+            <a class="btn-secondary" href="{% url 'pengguna:detail' profile_user.pk %}">Batal</a>
+        </div>
+    </form>
+    {% endif %}
+</section>
+{% endblock %}
+{% block extra_script %}
+{% if not selecting_category %}<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const checkbox = document.getElementById('id_masih_berjalan');
+    const endWrap = document.querySelector('[data-end-date-wrap]');
+    const endInput = document.getElementById('id_tanggal_selesai');
+    if (!checkbox || !endWrap || !endInput) return;
+    function syncEndDate() {
+        endWrap.classList.toggle('hidden', checkbox.checked);
+        endInput.disabled = checkbox.checked;
+        if (checkbox.checked) endInput.value = '';
+    }
+    checkbox.addEventListener('change', syncEndDate);
+    syncEndDate();
+});
+</script>{% endif %}
 {% endblock %}
