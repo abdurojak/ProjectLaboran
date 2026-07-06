@@ -181,7 +181,8 @@ class PublicBerkasPendaftaranForm(forms.Form):
     signature_data = forms.CharField(widget=forms.HiddenInput, required=False)
     pernyataan_data = forms.BooleanField(
         required=True,
-        error_messages={'required': 'Anda harus menyetujui pernyataan kebenaran data sebelum mengirim pendaftaran.'},
+        widget=forms.CheckboxInput(attrs={'class': 'registration-check-input'}),
+        error_messages={'required': 'Anda wajib memverifikasi dan menyetujui pernyataan data sebelum mengirim pendaftaran.'},
     )
 
     nama = forms.CharField(max_length=150, widget=forms.TextInput(attrs={'placeholder': 'Nama lengkap calon aslab'}))

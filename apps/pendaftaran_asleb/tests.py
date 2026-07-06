@@ -571,6 +571,24 @@ class PendaftaranAslebViewTests(TestCase):
 
         self.assertFalse(form.is_valid())
         self.assertIn('pernyataan_data', form.errors)
+        self.assertIn(
+            'Anda wajib memverifikasi dan menyetujui pernyataan data sebelum mengirim pendaftaran.',
+            form.errors['pernyataan_data'],
+        )
+
+    def test_tahap_berkas_checkbox_pernyataan_memakai_style_verifikasi_data(self):
+        mahasiswa = self.create_mahasiswa_dengan_cv('0642201046')
+        self.start_transcript_step(mahasiswa)
+
+        response = self.client.get(reverse('pendaftaran_asleb:pendaftaran_public'))
+
+        self.assertContains(response, 'registration-check-card')
+        self.assertContains(response, 'registration-check-label flex cursor-pointer gap-4')
+        self.assertContains(response, 'class="registration-check-input"')
+        self.assertContains(response, 'Verifikasi dan Pernyataan Data')
+        self.assertContains(response, 'Saya menyatakan bahwa seluruh data, dokumen, informasi rekening, dan tanda tangan yang saya kirimkan adalah benar')
+        self.assertContains(response, 'accent-color: #0f766e;')
+        self.assertContains(response, 'box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.14) !important;')
 
     def test_rekening_bni_hanya_angka_dan_bank_lain_menerima_nama_bank(self):
         bni_form = RekeningPendaftaranForm(data={

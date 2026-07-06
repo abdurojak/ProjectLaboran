@@ -49,6 +49,7 @@ class PenggunaForm(forms.ModelForm):
             'ringkasan_profesional',
             'keahlian',
             'role',
+            'is_verified',
         ]
         widgets = {
             'foto': forms.FileInput(attrs={'class': 'hidden', 'accept': 'image/*'}),
@@ -66,6 +67,7 @@ class PenggunaForm(forms.ModelForm):
         if self.instance.pk:
             self.fields['password'].required = False
             self.fields['password'].help_text = 'Kosongkan jika tidak ingin mengganti password.'
+        self.fields['is_verified'].help_text = 'Jika dinonaktifkan, pengguna tidak dapat login sampai akun diverifikasi kembali.'
 
     def clean_foto(self):
         foto = self.cleaned_data.get('foto')

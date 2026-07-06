@@ -2,6 +2,51 @@
 
 {% block title %}Pendaftaran Aslab{% endblock %}
 
+{% block extra_head %}
+<style>
+    .registration-check-card {
+        transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+    }
+
+    .registration-check-label {
+        align-items: flex-start;
+    }
+
+    .registration-check-input {
+        accent-color: #0f766e;
+        border-color: #cbd5e1 !important;
+        color: #0f766e !important;
+        margin-top: 0.125rem;
+    }
+
+    .registration-check-card:hover {
+        border-color: rgba(20, 184, 166, 0.36);
+        background-color: rgba(240, 253, 250, 0.86);
+    }
+
+    .registration-check-input:focus {
+        border-color: #0f766e !important;
+        box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.14) !important;
+        outline: none;
+    }
+
+    html[data-theme="dark"] .registration-check-card {
+        background: rgba(20, 184, 166, 0.12) !important;
+        border-color: rgba(94, 234, 212, 0.24) !important;
+    }
+
+    html[data-theme="dark"] .registration-check-card:hover {
+        background: rgba(20, 184, 166, 0.18) !important;
+        border-color: rgba(94, 234, 212, 0.34) !important;
+    }
+
+    html[data-theme="dark"] .registration-check-input {
+        border-color: rgba(148, 163, 184, 0.44) !important;
+        background-color: rgba(15, 23, 42, 0.54) !important;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <section class="mx-auto max-w-5xl space-y-6">
     <div class="surface-card overflow-hidden">
@@ -156,12 +201,12 @@
                 {% endif %}
             </div>
 
-            <div class="rounded-3xl border border-emerald-200 bg-emerald-50/70 p-5">
-                <label for="{{ berkas_form.pernyataan_data.id_for_label }}" class="flex cursor-pointer items-start gap-4">
-                    <span class="mt-0.5">{{ berkas_form.pernyataan_data }}</span>
+            <div class="registration-check-card rounded-3xl border border-emerald-200 bg-emerald-50/70 p-5">
+                <label for="{{ berkas_form.pernyataan_data.id_for_label }}" class="registration-check-label flex cursor-pointer gap-4">
+                    <span>{{ berkas_form.pernyataan_data }}</span>
                     <span>
-                        <span class="block font-black text-emerald-950">Pernyataan kebenaran data</span>
-                        <span class="mt-1 block text-sm leading-6 text-emerald-900/75">Saya menyatakan bahwa seluruh data, dokumen, informasi rekening, dan tanda tangan yang saya isi di atas adalah benar, lengkap, serta dapat dipertanggungjawabkan. Saya bersedia menerima konsekuensi apabila di kemudian hari ditemukan informasi yang tidak sesuai.</span>
+                        <span class="block font-black text-emerald-950">Verifikasi dan Pernyataan Data</span>
+                        <span class="mt-1 block text-sm leading-6 text-emerald-900/75">Saya menyatakan bahwa seluruh data, dokumen, informasi rekening, dan tanda tangan yang saya kirimkan adalah benar, lengkap, dan dapat dipertanggungjawabkan. Saya memahami bahwa ketidaksesuaian data dapat memengaruhi proses seleksi.</span>
                     </span>
                 </label>
                 {% if berkas_form.pernyataan_data.errors %}

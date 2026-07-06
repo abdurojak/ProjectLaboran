@@ -261,6 +261,7 @@ class PenggunaViewTests(TestCase):
                 'prodi': 'Informatika',
                 'gender': 'laki_laki',
                 'role': 'laboran',
+                'is_verified': 'on',
             },
         )
 
@@ -269,6 +270,49 @@ class PenggunaViewTests(TestCase):
         self.assertEqual(self.pengguna.nama_pengguna, 'Andi Updated')
         self.assertEqual(self.pengguna.password, password_lama)
         self.assertEqual(self.pengguna.role, 'laboran')
+        self.assertTrue(self.pengguna.is_verified)
+
+    def test_admin_dapat_mengubah_status_verified_pengguna(self):
+        target = Pengguna.objects.create(
+            nama_pengguna='User Belum Verif',
+            nim_nik='2203001',
+            email='belum-verif@example.com',
+            password='rahasia123',
+            no_hp='081333333333',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='mahasiswa',
+            is_verified=True,
+        )
+
+        response = self.client.post(
+            reverse('pengguna:update', args=[target.pk]),
+            {
+                'nama_pengguna': target.nama_pengguna,
+                'nim_nik': target.nim_nik,
+                'email': target.email,
+                'password': '',
+                'no_hp': target.no_hp,
+                'alamat': target.alamat,
+                'fakultas': target.fakultas,
+                'prodi': target.prodi,
+                'gender': target.gender,
+                'role': target.role,
+            },
+        )
+
+        target.refresh_from_db()
+        self.assertRedirects(response, reverse('pengguna:list'))
+        self.assertFalse(target.is_verified)
+
+    def test_form_pengguna_menampilkan_checkbox_verified(self):
+        response = self.client.get(reverse('pengguna:update', args=[self.pengguna.pk]))
+
+        self.assertContains(response, 'name="is_verified"')
+        self.assertContains(response, 'Akun terverifikasi')
+        self.assertContains(response, 'Jika dinonaktifkan, pengguna tidak dapat login sampai akun diverifikasi kembali.')
 
     def test_detail_pengguna_tidak_menampilkan_tombol_hapus(self):
         response = self.client.get(reverse('pengguna:detail', args=[self.pengguna.pk]))

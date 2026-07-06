@@ -24,6 +24,17 @@
         </div>
         {% for field in form %}
         <div class="{% if field.name == 'foto' or field.name == 'nama_pengguna' or field.name == 'alamat' %}md:col-span-2{% endif %}">
+            {% if field.name == 'is_verified' %}
+            <label for="{{ field.id_for_label }}" class="flex min-h-14 cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:bg-brand-50">
+                <span class="mt-0.5">{{ field }}</span>
+                <span>
+                    <span class="block font-black text-slate-900">Akun terverifikasi</span>
+                    {% if field.help_text %}
+                    <span class="mt-1 block text-sm font-medium leading-6 text-slate-500">{{ field.help_text }}</span>
+                    {% endif %}
+                </span>
+            </label>
+            {% else %}
             {{ field.label_tag }}
             {% if field.name == 'foto' %}
             {% include "components/file_upload.html" with field=field current_file=object.foto button_label="Pilih Foto" title="Upload foto pengguna" empty_label="Belum ada foto dipilih" delete_label="Foto akan dihapus saat disimpan" preview_label="Preview foto" preview_alt="Preview foto pengguna" delete_input_id="id_hapus_foto" delete_button_label="Hapus Foto" %}
@@ -32,6 +43,7 @@
             {% endif %}
             {% if field.help_text %}
             <p class="mt-2 text-sm text-slate-500">{{ field.help_text }}</p>
+            {% endif %}
             {% endif %}
             {% if field.errors %}
             <div class="mt-2 text-sm font-semibold text-rose-600">{{ field.errors|striptags }}</div>
