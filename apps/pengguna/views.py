@@ -7,7 +7,7 @@ from django.contrib import messages
 from django.contrib.auth.hashers import check_password, make_password
 from django.conf import settings
 from django.http import HttpResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -27,6 +27,10 @@ from .forms import (
     PenggunaForm,
     PenggunaProfileForm,
     PengalamanPenggunaForm,
+    PendidikanPenggunaForm,
+    OrganisasiPenggunaForm,
+    ProyekPenggunaForm,
+    SertifikasiPenggunaForm,
     ProdiForm,
     RegisterPenggunaForm,
     ResetPasswordForm,
@@ -38,6 +42,21 @@ from .models import Fakultas, PengalamanPengguna, Pengguna, Prodi
 
 OTP_SESSION_KEY = 'pengguna_otp'
 OTP_EXPIRE_MINUTES = 10
+
+RIWAYAT_FORM_CLASSES = {
+    'pengalaman': PengalamanPenggunaForm,
+    'pendidikan': PendidikanPenggunaForm,
+    'organisasi': OrganisasiPenggunaForm,
+    'proyek': ProyekPenggunaForm,
+    'sertifikasi': SertifikasiPenggunaForm,
+}
+RIWAYAT_CATEGORY_META = {
+    'pengalaman': {'label': 'Pengalaman', 'icon': 'briefcase-business', 'description': 'Posisi kerja, magang, atau pengalaman profesional.'},
+    'pendidikan': {'label': 'Pendidikan', 'icon': 'graduation-cap', 'description': 'Sekolah, kampus, jenjang, dan program studi.'},
+    'organisasi': {'label': 'Organisasi', 'icon': 'users-round', 'description': 'Kepengurusan dan kegiatan organisasi.'},
+    'proyek': {'label': 'Proyek', 'icon': 'folder-kanban', 'description': 'Proyek, peran, teknologi, dan tautan hasil kerja.'},
+    'sertifikasi': {'label': 'Lisensi & Sertifikat', 'icon': 'badge-check', 'description': 'Sertifikat, penerbit, kredensial, dan dokumen pendukung.'},
+}
 
 
 class AdminRequiredMixin:
@@ -356,12 +375,54 @@ class PengalamanOwnerMixin:
 
 class PengalamanCreateView(PengalamanOwnerMixin, CreateView):
     model = PengalamanPengguna
-    form_class = PengalamanPenggunaForm
     template_name = 'pengguna/pengalaman_form.html'
+
+    def get_category(self):
+        return self.request.GET.get('kategori', '').strip()
+
+    def get(self, request, *args, **kwargs):
+        category = self.get_category()
+        if not category:
+            return render(request, self.template_name, self.get_category_context())
+        if category not in RIWAYAT_FORM_CLASSES:
+            messages.error(request, 'Kategori profil yang dipilih tidak valid.')
+            return redirect('pengguna:experience_create', user_pk=self.profile_user.pk)
+        return super().get(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        if self.get_category() not in RIWAYAT_FORM_CLASSES:
+            messages.error(request, 'Pilih kategori profil sebelum mengisi data.')
+            return redirect('pengguna:experience_create', user_pk=self.profile_user.pk)
+        return super().post(request, *args, **kwargs)
+
+    def get_form_class(self):
+        return RIWAYAT_FORM_CLASSES[self.get_category()]
+
+    def get_category_context(self):
+        return {
+            'view': self,
+            'profile_user': self.profile_user,
+            'category_choices': [
+                {'key': key, **meta}
+                for key, meta in RIWAYAT_CATEGORY_META.items()
+            ],
+            'selecting_category': True,
+        }
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        category = self.get_category()
+        context.update({
+            'profile_user': self.profile_user,
+            'selected_category': category,
+            'category_meta': RIWAYAT_CATEGORY_META[category],
+        })
+        return context
 
     def form_valid(self, form):
         form.instance.pengguna = self.profile_user
-        messages.success(self.request, 'Pengalaman berhasil ditambahkan.')
+        label = RIWAYAT_CATEGORY_META[self.get_category()]['label']
+        messages.success(self.request, f'Data {label.lower()} berhasil ditambahkan.')
         return super().form_valid(form)
 
     def get_success_url(self):
@@ -370,15 +431,27 @@ class PengalamanCreateView(PengalamanOwnerMixin, CreateView):
 
 class PengalamanUpdateView(PengalamanOwnerMixin, UpdateView):
     model = PengalamanPengguna
-    form_class = PengalamanPenggunaForm
     template_name = 'pengguna/pengalaman_form.html'
     pk_url_kwarg = 'experience_pk'
 
     def get_queryset(self):
         return super().get_queryset().filter(pengguna=self.profile_user, otomatis=False)
 
+    def get_form_class(self):
+        return RIWAYAT_FORM_CLASSES[self.object.kategori]
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update({
+            'profile_user': self.profile_user,
+            'selected_category': self.object.kategori,
+            'category_meta': RIWAYAT_CATEGORY_META[self.object.kategori],
+        })
+        return context
+
     def get_success_url(self):
-        messages.success(self.request, 'Pengalaman berhasil diperbarui.')
+        label = RIWAYAT_CATEGORY_META[self.object.kategori]['label']
+        messages.success(self.request, f'Data {label.lower()} berhasil diperbarui.')
         return reverse('pengguna:detail', args=[self.profile_user.pk])
 
 

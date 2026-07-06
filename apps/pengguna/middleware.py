@@ -19,6 +19,7 @@ class PenggunaLoginRequiredMiddleware:
     ASISTEN_LAB_ALLOWED_ASLEB_URLS = {
         'absensi_list',
         'absensi_create',
+        'honor_list',
         'praktikum_mahasiswa_list',
         'praktikum_nilai',
     }
@@ -37,6 +38,7 @@ class PenggunaLoginRequiredMiddleware:
         '/media/',
         '/pendaftaran-asleb/daftar/',
         '/pendaftaran-asleb/berhasil/',
+        '/pendaftaran-asleb/qr/',
         '/static/',
     )
 
@@ -101,7 +103,12 @@ class PenggunaLoginRequiredMiddleware:
                 if not self.asisten_lab_can_access_pengguna(path, resolved, pengguna):
                     return redirect('dashboard:home')
 
-        return self.get_response(request)
+        response = self.get_response(request)
+        if pengguna_id and not is_exempt:
+            response['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
+            response['Pragma'] = 'no-cache'
+            response['Expires'] = '0'
+        return response
 
     def mahasiswa_can_access(self, namespace, path, resolved, pengguna):
         if namespace == 'pendaftaran_asleb':

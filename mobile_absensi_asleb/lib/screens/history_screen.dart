@@ -190,6 +190,7 @@ class _HistoryDetailState extends State<_HistoryDetail> {
                       ).format(record.waktuMasuk.toLocal()),
                     ),
                     _Data(label: 'Laboratorium', value: record.laboratorium),
+                    /* Data lokasi lama tidak ditampilkan lagi.
                     _Data(
                       label: 'Koordinat',
                       value: '${record.latitude}, ${record.longitude}',
@@ -199,6 +200,7 @@ class _HistoryDetailState extends State<_HistoryDetail> {
                       label: 'Akurasi GPS',
                       value: '±${record.akurasi} meter',
                     ),
+                    */
                   ],
                 ),
               ),

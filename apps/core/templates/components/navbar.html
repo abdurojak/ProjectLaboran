@@ -57,9 +57,7 @@
                         <a href="{% url 'kalender:notifikasi_list' %}" class="flex items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-slate-50">
                             <i data-lucide="bell" class="h-4 w-4 text-brand-700"></i>
                             <span>Notifikasi</span>
-                            {% if unread_notification_count %}
-                            <span class="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-50 px-1.5 text-xs font-bold text-rose-700">{{ unread_notification_count }}</span>
-                            {% endif %}
+                            <span data-realtime-notification-count class="ml-auto {% if not unread_notification_count %}hidden {% endif %}flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-50 px-1.5 text-xs font-bold text-rose-700">{{ unread_notification_count|default:0 }}</span>
                         </a>
                         <form method="post" action="{% url 'pengguna:logout' %}">
                             {% csrf_token %}

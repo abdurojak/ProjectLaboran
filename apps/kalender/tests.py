@@ -1,6 +1,11 @@
 from datetime import date, time, timedelta
 
-from django.test import TestCase
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+from channels.testing import WebsocketCommunicator
+from django.conf import settings
+from django.contrib.sessions.backends.db import SessionStore
+from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 from django.urls import reverse
 
@@ -14,7 +19,87 @@ from apps.jadwal.models import JadwalPraktikum
 from apps.ruangan.models import RuanganLab
 
 from .models import KegiatanKalender, Notifikasi
+from .realtime import send_user_notification, user_group_name
 from .utils import get_perayaan_notifications
+from project_laboran.asgi import application
+
+
+class NotificationRealtimeTests(TransactionTestCase):
+    reset_sequences = True
+
+    def setUp(self):
+        self.mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Mahasiswa Realtime', nim_nik='0640020991',
+            email='realtime1@std.trisakti.ac.id', password='rahasia123',
+            no_hp='081200000991', alamat='Jakarta', fakultas='FTI',
+            prodi='Informatika', gender='laki_laki', role='mahasiswa',
+        )
+        self.mahasiswa_lain = Pengguna.objects.create(
+            nama_pengguna='Mahasiswa Realtime Lain', nim_nik='0640020992',
+            email='realtime2@std.trisakti.ac.id', password='rahasia123',
+            no_hp='081200000992', alamat='Jakarta', fakultas='FTI',
+            prodi='Informatika', gender='perempuan', role='mahasiswa',
+        )
+
+    def session_headers(self, pengguna):
+        session = SessionStore()
+        session['pengguna_id'] = pengguna.pk
+        session.save()
+        return [(b'cookie', f'{settings.SESSION_COOKIE_NAME}={session.session_key}'.encode())]
+
+    def test_websocket_notifikasi_menolak_pengguna_tanpa_login(self):
+        async def scenario():
+            socket = WebsocketCommunicator(application, '/ws/notifikasi/')
+            connected, close_code = await socket.connect()
+            self.assertFalse(connected)
+            self.assertEqual(close_code, 4401)
+
+        async_to_sync(scenario)()
+
+    def test_event_pribadi_tidak_bocor_ke_pengguna_lain(self):
+        owner_headers = self.session_headers(self.mahasiswa)
+        other_headers = self.session_headers(self.mahasiswa_lain)
+
+        async def scenario():
+            owner_socket = WebsocketCommunicator(
+                application, '/ws/notifikasi/', headers=owner_headers
+            )
+            other_socket = WebsocketCommunicator(
+                application, '/ws/notifikasi/', headers=other_headers
+            )
+            owner_connected, _ = await owner_socket.connect()
+            other_connected, _ = await other_socket.connect()
+            self.assertTrue(owner_connected)
+            self.assertTrue(other_connected)
+
+            await get_channel_layer().group_send(user_group_name(self.mahasiswa.pk), {
+                'type': 'realtime.event',
+                'payload': {'title': 'Khusus pemilik akun'},
+            })
+            payload = await owner_socket.receive_json_from()
+            self.assertEqual(payload['payload']['title'], 'Khusus pemilik akun')
+            self.assertTrue(await other_socket.receive_nothing(timeout=0.1))
+            await owner_socket.disconnect()
+            await other_socket.disconnect()
+
+        async_to_sync(scenario)()
+
+    def test_notifikasi_realtime_tetap_disimpan_tanpa_socket_aktif(self):
+        sent = send_user_notification(self.mahasiswa.pk, {
+            'event': 'test.persisted',
+            'source_key': 'realtime-test:persisted',
+            'title': 'Notifikasi tersimpan',
+            'message': 'Riwayat tetap tersedia setelah login ulang.',
+            'related_url': '/',
+        })
+
+        self.assertTrue(sent)
+        notification = Notifikasi.objects.get(
+            pengguna=self.mahasiswa,
+            source_key='realtime-test:persisted',
+        )
+        self.assertEqual(notification.judul, 'Notifikasi tersimpan')
+        self.assertIsNone(notification.dibaca_pada)
 
 
 class KalenderViewsTests(TestCase):

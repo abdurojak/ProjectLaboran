@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import date, timedelta
 
 from django.utils import timezone
 from django.db import transaction
@@ -6,7 +6,7 @@ from django.db import transaction
 from apps.asleb.models import Asleb
 from apps.pengguna.models import PengalamanPengguna, Pengguna
 
-from .models import PendaftaranAsleb, PeriodeAsleb, RiwayatAsleb
+from .models import PendaftaranAsleb, PengaturanPendaftaranAsleb, PeriodeAsleb, RiwayatAsleb
 
 
 def get_current_period(value=None):
@@ -16,15 +16,25 @@ def get_current_period(value=None):
 def is_registration_open(value=None):
     period = get_current_period(value)
     check_date = value or timezone.localdate()
-    return period.pendaftaran_mulai <= check_date <= period.pendaftaran_selesai
+    setting = PengaturanPendaftaranAsleb.get_solo()
+    return setting.dibuka and period.pendaftaran_mulai <= check_date <= period.pendaftaran_selesai
 
 
 def open_current_registration(days=30):
     today = timezone.localdate()
     period = get_current_period(today)
+    if period.selesai < today or period.diakhiri_pada:
+        semester_end = date(today.year, 6, 30) if today.month <= 6 else date(today.year, 12, 31)
+        period.mulai = today
+        period.selesai = semester_end
+        period.diakhiri_pada = None
+        period.diakhiri_oleh = None
     period.pendaftaran_mulai = today
     period.pendaftaran_selesai = min(period.selesai, today + timedelta(days=days - 1))
-    period.save(update_fields=['pendaftaran_mulai', 'pendaftaran_selesai', 'diperbarui_pada'])
+    period.save(update_fields=[
+        'mulai', 'selesai', 'pendaftaran_mulai', 'pendaftaran_selesai',
+        'diakhiri_pada', 'diakhiri_oleh', 'diperbarui_pada',
+    ])
     return period
 
 

@@ -12,6 +12,7 @@ from apps.asleb.models import AbsensiAsleb, Asleb, HonorAsleb
 from apps.inventaris.models import ACTIVE_PEMINJAMAN_STATUSES, Barang, InventarisBarang
 from apps.jadwal.models import JadwalPraktikum
 from apps.jadwal.notifications import send_jadwal_status_notification
+from apps.kalender.realtime import send_schedule_update
 from apps.kalender.models import KegiatanKalender
 from apps.peminjaman.models import PeminjamanAlat
 from apps.peminjaman.notifications import send_peminjaman_status_notification
@@ -550,6 +551,7 @@ def accept_jadwal(request, pk):
 
     jadwal.save(update_fields=['status', 'diperbarui_pada'])
     send_jadwal_status_notification(jadwal)
+    transaction.on_commit(lambda: send_schedule_update(jadwal, event='schedule.accepted'))
     messages.success(request, 'Pengajuan jadwal praktikum diterima.')
     return redirect('dashboard:home')
 
@@ -564,6 +566,7 @@ def reject_jadwal(request, pk):
     jadwal.status = JadwalPraktikum.STATUS_DITOLAK
     jadwal.save(update_fields=['status', 'diperbarui_pada'])
     send_jadwal_status_notification(jadwal)
+    transaction.on_commit(lambda: send_schedule_update(jadwal, event='schedule.rejected'))
     messages.success(request, 'Pengajuan jadwal praktikum ditolak.')
     return redirect('dashboard:home')
 

@@ -17,6 +17,7 @@ from .views import (
     generate_all_accepted_asleb,
     generate_asleb,
     reject_pendaftaran,
+    registration_qr,
     toggle_pendaftaran_status,
     update_periode_schedule,
     update_period_dates,
@@ -26,6 +27,7 @@ from .views import (
 app_name = 'pendaftaran_asleb'
 
 urlpatterns = [
+    path('qr/', registration_qr, name='registration_qr'),
     path('', PendaftaranAslebListView.as_view(), name='pendaftaran_list'),
     path('daftar/', PendaftaranAslebPublicCreateView.as_view(), name='pendaftaran_public'),
     path('berhasil/', PendaftaranAslebSuccessView.as_view(), name='pendaftaran_success'),
