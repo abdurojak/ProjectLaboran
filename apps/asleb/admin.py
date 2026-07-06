@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from .models import (
     AbsensiAsleb,
+    AbsensiMasukAsleb,
     Asleb,
     HonorAsleb,
     ModulPraktikum,
@@ -41,6 +42,21 @@ class AbsensiAslebAdmin(admin.ModelAdmin):
     list_display = ('asleb', 'tanggal_praktikum', 'modul', 'materi_praktikum', 'dibuat_pada')
     list_filter = ('tanggal_praktikum', 'modul')
     search_fields = ('asleb__nama', 'asleb__nim', 'materi_praktikum')
+
+
+@admin.register(AbsensiMasukAsleb)
+class AbsensiMasukAslebAdmin(admin.ModelAdmin):
+    list_display = ('asleb', 'jadwal', 'tanggal_absensi', 'waktu_masuk', 'status', 'jarak_lokasi_meter')
+    list_filter = ('status', 'tanggal_absensi', 'jadwal__ruangan')
+    search_fields = ('asleb__nama', 'asleb__nim', 'jadwal__mata_kuliah', 'jadwal__kelas')
+    readonly_fields = (
+        'asleb', 'jadwal', 'tanggal_absensi', 'waktu_masuk', 'latitude', 'longitude',
+        'jarak_lokasi_meter', 'akurasi_gps_meter', 'status', 'foto_absensi',
+        'video_absensi', 'dibuat_pada', 'diperbarui_pada',
+    )
+
+    def has_add_permission(self, request):
+        return False
 
 
 @admin.register(ModulPraktikum)

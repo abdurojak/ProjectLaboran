@@ -385,6 +385,47 @@ class AbsensiAsleb(models.Model):
         return f'{self.asleb.nama} - Modul {self.modul}'
 
 
+class AbsensiMasukAsleb(models.Model):
+    STATUS_SUDAH_ABSEN = 'sudah_absen'
+    STATUS_TERLAMBAT = 'terlambat'
+    STATUS_CHOICES = [
+        (STATUS_SUDAH_ABSEN, 'Sudah Absen'),
+        (STATUS_TERLAMBAT, 'Terlambat'),
+    ]
+
+    asleb = models.ForeignKey(Asleb, on_delete=models.PROTECT, related_name='absensi_masuk')
+    jadwal = models.ForeignKey(
+        'jadwal.JadwalPraktikum',
+        on_delete=models.PROTECT,
+        related_name='absensi_masuk_asleb',
+    )
+    tanggal_absensi = models.DateField(default=timezone.localdate)
+    waktu_masuk = models.DateTimeField(default=timezone.now)
+    latitude = models.DecimalField(max_digits=10, decimal_places=7)
+    longitude = models.DecimalField(max_digits=10, decimal_places=7)
+    jarak_lokasi_meter = models.DecimalField(max_digits=9, decimal_places=2)
+    akurasi_gps_meter = models.DecimalField(max_digits=8, decimal_places=2)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_SUDAH_ABSEN)
+    foto_absensi = models.ImageField(upload_to='absensi_asleb/masuk/foto/%Y/%m/')
+    video_absensi = models.FileField(upload_to='absensi_asleb/masuk/video/%Y/%m/', blank=True)
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+    diperbarui_pada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-tanggal_absensi', '-waktu_masuk']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['asleb', 'jadwal', 'tanggal_absensi'],
+                name='unique_absensi_masuk_asleb_jadwal_tanggal',
+            ),
+        ]
+        verbose_name = 'Absensi Masuk Aslab'
+        verbose_name_plural = 'Absensi Masuk Aslab'
+
+    def __str__(self):
+        return f'{self.asleb.nama} - {self.jadwal} - {self.tanggal_absensi:%d-%m-%Y}'
+
+
 class PesertaPraktikum(models.Model):
     matkul = models.ForeignKey(
         'pendaftaran_asleb.MataKuliahAsleb',
