@@ -1,6 +1,6 @@
 from django.views.generic import ListView
 
-from .models import RuanganLab
+from .models import GrupRuanganGabungan, RuanganLab
 
 
 class RuanganListView(ListView):
@@ -14,4 +14,9 @@ class RuanganListView(ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['jumlah_ruangan'] = context['ruangan_list'].count()
+        context['grup_gabungan_list'] = (
+            GrupRuanganGabungan.objects.filter(aktif=True)
+            .prefetch_related('ruangan')
+            .order_by('nama')
+        )
         return context

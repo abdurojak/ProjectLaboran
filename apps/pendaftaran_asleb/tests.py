@@ -87,6 +87,15 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertContains(response, 'Buka Pendaftaran')
         self.assertContains(response, get_public_registration_url())
 
+    def test_pendaftaran_success_hanya_mengarahkan_ke_dashboard(self):
+        response = self.client.get(reverse('pendaftaran_asleb:pendaftaran_success'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse('dashboard:home'))
+        self.assertContains(response, 'Kembali ke Dashboard')
+        self.assertNotContains(response, reverse('pendaftaran_asleb:pendaftaran_public'))
+        self.assertNotContains(response, 'Kembali ke Form')
+
     def test_toggle_pendaftaran_membuka_dan_menutup_form(self):
         Pengguna.objects.create(
             nama_pengguna='Mahasiswa Pendaftar',
@@ -222,6 +231,7 @@ class PendaftaranAslebViewTests(TestCase):
             'alasan': 'Ingin membantu praktikum.',
             'signature_data': make_signature_data(),
             'pernyataan_data': 'on',
+            'pernyataan_kesanggupan': 'on',
         })
 
         self.assertRedirects(post_response, reverse('pendaftaran_asleb:pendaftaran_success'))
@@ -596,6 +606,7 @@ class PendaftaranAslebViewTests(TestCase):
                 'metode_rekening': 'bni',
                 'rekening': '1234567890',
                 'signature_data': make_signature_data(),
+                'pernyataan_kesanggupan': 'on',
             },
             current_pengguna=mahasiswa,
         )
@@ -605,6 +616,26 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertIn(
             'Anda wajib memverifikasi dan menyetujui pernyataan data sebelum mengirim pendaftaran.',
             form.errors['pernyataan_data'],
+        )
+
+    def test_tahap_berkas_wajib_menyetujui_pernyataan_kesanggupan(self):
+        mahasiswa = self.create_mahasiswa_dengan_cv('0642201047')
+        form = PublicBerkasPendaftaranForm(
+            data={
+                'semester': 4,
+                'metode_rekening': 'bni',
+                'rekening': '1234567890',
+                'signature_data': make_signature_data(),
+                'pernyataan_data': 'on',
+            },
+            current_pengguna=mahasiswa,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('pernyataan_kesanggupan', form.errors)
+        self.assertIn(
+            'Anda wajib menyetujui pernyataan kesanggupan menjalankan tugas asisten laboratorium.',
+            form.errors['pernyataan_kesanggupan'],
         )
 
     def test_tahap_berkas_checkbox_pernyataan_memakai_style_verifikasi_data(self):
@@ -617,6 +648,8 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertContains(response, 'registration-check-label flex cursor-pointer gap-4')
         self.assertContains(response, 'class="registration-check-input"')
         self.assertContains(response, 'Verifikasi dan Pernyataan Data')
+        self.assertContains(response, 'Pernyataan Kesanggupan Tugas')
+        self.assertContains(response, 'bersedia menjalankan tugas dan kewajiban sebagai Asisten Laboratorium')
         self.assertContains(response, 'Saya menyatakan bahwa seluruh data, dokumen, informasi rekening, dan tanda tangan yang saya kirimkan adalah benar')
         self.assertContains(response, 'accent-color: #0f766e;')
         self.assertContains(response, 'box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.14) !important;')

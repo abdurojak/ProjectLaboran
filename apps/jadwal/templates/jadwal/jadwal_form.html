@@ -34,7 +34,7 @@
             {% endfor %}
         </div>
         <div id="capacity-note" class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-800">
-            {% if form.participant_count %}Pilihan lab hanya menampilkan kapasitas {{ form.participant_count }} mahasiswa atau lebih.{% elif request.current_pengguna.role == 'asisten_lab' %}Laboran belum menginput mahasiswa. Pilihan lab belum dapat digunakan.{% else %}Pilih mata kuliah agar sistem menyesuaikan kapasitas lab dengan jumlah peserta.{% endif %}
+            {% if form.participant_count %}Pilihan lab menyesuaikan {{ form.participant_count }} peserta aktif. Lab berkapasitas kecil tetap dapat dipilih jika memiliki grup ruangan gabungan yang kapasitas totalnya mencukupi.{% elif request.current_pengguna.role == 'asisten_lab' %}Laboran belum menginput mahasiswa. Pilihan lab belum dapat digunakan.{% else %}Pilih mata kuliah agar sistem menyesuaikan kapasitas lab dan grup ruangan gabungan dengan jumlah peserta.{% endif %}
         </div>
         {% if request.current_pengguna.role == 'asisten_lab' and object %}
         <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
@@ -51,6 +51,7 @@
         </div>
     </form>
 </section>
+{{ form.combinable_room_options|json_script:"combinable-room-options" }}
 {% endblock %}
 
 {% block extra_script %}
@@ -60,6 +61,7 @@
     const additionalRoomInput = document.getElementById('id_ruangan_tambahan');
     const capacityNote = document.getElementById('capacity-note');
     const roomsUrl = "{% url 'jadwal:ruangan_tersedia' %}";
+    let combinableRoomOptions = JSON.parse(document.getElementById('combinable-room-options')?.textContent || '{}');
 
     if (matkulInput && roomInput) {
         matkulInput.addEventListener('change', async () => {
@@ -67,8 +69,9 @@
             const data = await response.json();
             roomInput.replaceChildren(new Option('Pilih ruangan', ''));
             data.rooms.forEach((room) => roomInput.add(new Option(`${room.label} - kapasitas ${room.capacity}`, room.id)));
+            combinableRoomOptions = data.combinable_rooms || {};
             capacityNote.textContent = data.participant_count
-                ? `${data.participant_count} peserta aktif - hanya lab berkapasitas ${data.participant_count} atau lebih yang ditampilkan.`
+                ? `${data.participant_count} peserta aktif - lab tunggal atau grup ruangan gabungan yang mencukupi akan ditampilkan.`
                 : 'Belum ada peserta aktif. Asisten Lab belum dapat memilih laboratorium sebelum data diinput laboran.';
             updateAdditionalRoomState();
         });
@@ -76,8 +79,15 @@
 
     function updateAdditionalRoomState() {
         if (!roomInput || !additionalRoomInput) return;
-        const selectedText = roomInput.options[roomInput.selectedIndex]?.text || '';
-        const eligible = selectedText.includes('LAB-RPL') || selectedText.includes('LAB-SKI');
+        const selectedRoomId = roomInput.value;
+        const availableRooms = combinableRoomOptions[selectedRoomId] || [];
+        const currentValue = additionalRoomInput.value;
+        additionalRoomInput.replaceChildren(new Option('Tidak ada ruangan tambahan', ''));
+        availableRooms.forEach((room) => additionalRoomInput.add(new Option(room.label, room.id)));
+        if (availableRooms.some((room) => String(room.id) === currentValue)) {
+            additionalRoomInput.value = currentValue;
+        }
+        const eligible = availableRooms.length > 0;
         additionalRoomInput.disabled = !eligible;
         if (!eligible) additionalRoomInput.value = '';
     }
