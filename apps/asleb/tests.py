@@ -331,6 +331,82 @@ class AslebViewTests(TestCase):
         self.assertEqual(honor.nomor_transfer, '123456789')
         self.assertEqual(honor.nama_pemilik_transfer, 'Riwayat Asleb 3')
 
+    def test_asisten_lab_hanya_melihat_honor_milik_sendiri_tanpa_aksi_pengelola(self):
+        asisten_user = Pengguna.objects.create(
+            nama_pengguna=self.asleb.nama,
+            nim_nik=self.asleb.nim,
+            email='asisten-honor@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081234567899',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='asisten_lab',
+        )
+        asleb_lain = Asleb.objects.create(
+            nama='Asisten Lab Lain',
+            nim='2301999',
+            no_hp='081200009999',
+            email='asisten-lain@std.trisakti.ac.id',
+            program_studi='Informatika',
+            semester=5,
+            tanggal_bergabung=date(2026, 6, 22),
+        )
+        honor_sendiri = HonorAsleb.objects.create(
+            asleb=self.asleb,
+            bulan=date(2026, 7, 1),
+            total_pertemuan=3,
+            status='diproses',
+        )
+        honor_lain = HonorAsleb.objects.create(
+            asleb=asleb_lain,
+            bulan=date(2026, 7, 1),
+            total_pertemuan=4,
+            status='diproses',
+        )
+        session = self.client.session
+        session['pengguna_id'] = asisten_user.pk
+        session.save()
+
+        response = self.client.get(reverse('asleb:honor_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.asleb.nama)
+        self.assertNotContains(response, asleb_lain.nama)
+        self.assertContains(response, 'Honor sebelum potongan')
+        self.assertContains(response, 'Biaya admin')
+        self.assertContains(response, 'Total setelah potongan')
+        self.assertNotContains(response, reverse('asleb:honor_update', args=[honor_sendiri.pk]))
+        self.assertNotContains(response, reverse('asleb:honor_confirm_transfer', args=[honor_sendiri.pk]))
+        self.assertNotContains(response, reverse('asleb:honor_update', args=[honor_lain.pk]))
+
+    def test_asisten_lab_tidak_bisa_mengakses_edit_honor_melalui_url(self):
+        asisten_user = Pengguna.objects.create(
+            nama_pengguna=self.asleb.nama,
+            nim_nik=self.asleb.nim,
+            email='asisten-honor-url@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081234567898',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='asisten_lab',
+        )
+        honor = HonorAsleb.objects.create(
+            asleb=self.asleb,
+            bulan=date(2026, 7, 1),
+            total_pertemuan=3,
+        )
+        session = self.client.session
+        session['pengguna_id'] = asisten_user.pk
+        session.save()
+
+        response = self.client.get(reverse('asleb:honor_update', args=[honor.pk]))
+
+        self.assertRedirects(response, reverse('dashboard:home'))
+
     def test_honor_asleb_dua_periode_masih_junior(self):
         self.create_pendaftaran_history(self.asleb.nim, 2)
 

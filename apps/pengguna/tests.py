@@ -941,6 +941,22 @@ class PenggunaAuthTests(TestCase):
         self.assertRedirects(response, reverse('pengguna:login'))
         self.assertNotIn('pengguna_id', self.client.session)
 
+    def test_halaman_terproteksi_dan_logout_mencegah_cache_browser(self):
+        session = self.client.session
+        session['pengguna_id'] = self.pengguna.pk
+        session.save()
+
+        dashboard_response = self.client.get(reverse('dashboard:home'))
+        logout_response = self.client.post(reverse('pengguna:logout'))
+        after_logout_response = self.client.get(reverse('dashboard:home'))
+
+        self.assertIn('no-store', dashboard_response['Cache-Control'])
+        self.assertIn('no-store', logout_response['Cache-Control'])
+        self.assertRedirects(
+            after_logout_response,
+            f"{reverse('pengguna:login')}?next={reverse('dashboard:home')}",
+        )
+
     def test_menu_membutuhkan_login(self):
         response = self.client.get(reverse('dashboard:home'))
 

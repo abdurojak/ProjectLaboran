@@ -65,6 +65,7 @@
             <p class="mt-2 text-sm text-slate-500">{{ formula_note }}</p>
         </div>
         <div class="honor-page-actions flex w-full flex-wrap gap-3 lg:w-auto lg:justify-end">
+            {% if is_admin or is_laboran %}
             <a class="btn-secondary" href="{% url 'asleb:surat_honor_list' %}">
                 <i data-lucide="archive" class="h-4 w-4"></i>
                 <span>Arsip Surat</span>
@@ -73,6 +74,7 @@
                 <i data-lucide="file-plus-2" class="h-4 w-4"></i>
                 <span>Generate Surat</span>
             </a>
+            {% endif %}
             {% if is_admin %}
             <form method="post" action="{% url 'asleb:honor_auto_assign_transfers' %}">
                 {% csrf_token %}
@@ -92,6 +94,7 @@
         </div>
     </div>
 
+    {% if not is_asisten_lab %}
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <article class="surface-card honor-stat p-5">
             <div class="relative z-10 flex items-start justify-between gap-4">
@@ -130,6 +133,7 @@
             </div>
         </article>
     </div>
+    {% endif %}
 
     {% if is_admin or is_laboran %}
     <details class="surface-card group overflow-hidden">
@@ -199,28 +203,23 @@
                         <div class="mt-1 text-sm text-slate-500">{{ honor.asleb.nim }} &middot; {{ honor.asleb.matkul|default:"Matkul belum diisi" }}</div>
                     </div>
                     <div class="text-left sm:text-right">
-                        <div class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Total Honor</div>
+                        <div class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Honor Bersih</div>
                         <div class="mt-1 text-2xl font-black text-violet-700">{{ honor.jumlah_rupiah }}</div>
-                        {% if honor.biaya_admin %}<div class="mt-1 text-xs font-bold text-amber-600">Sudah dipotong admin Rp {{ honor.biaya_admin|floatformat:0 }}</div>{% endif %}
                     </div>
                 </div>
 
-                <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                     <div class="rounded-2xl bg-slate-50 p-3">
-                        <div class="text-xs font-bold uppercase text-slate-500">Praktikum</div>
-                        <div class="mt-1 font-black text-slate-900">{{ honor.jumlah_praktikum }}</div>
+                        <div class="text-xs font-bold uppercase text-slate-500">Honor sebelum potongan</div>
+                        <div class="mt-1 font-black text-slate-900">{{ honor.honor_sebelum_potongan_rupiah }}</div>
                     </div>
                     <div class="rounded-2xl bg-slate-50 p-3">
-                        <div class="text-xs font-bold uppercase text-slate-500">Pertemuan</div>
-                        <div class="mt-1 font-black text-slate-900">{{ honor.total_pertemuan }}</div>
+                        <div class="text-xs font-bold uppercase text-slate-500">Biaya admin</div>
+                        <div class="mt-1 font-black text-amber-700">{{ honor.biaya_admin_rupiah }}</div>
                     </div>
                     <div class="rounded-2xl bg-slate-50 p-3">
-                        <div class="text-xs font-bold uppercase text-slate-500">Jam Realisasi</div>
-                        <div class="mt-1 font-black text-slate-900">{{ honor.total_jam_terealisasi }}</div>
-                    </div>
-                    <div class="rounded-2xl bg-slate-50 p-3">
-                        <div class="text-xs font-bold uppercase text-slate-500">Akhir / Honor per Jam</div>
-                        <div class="mt-1 font-black text-slate-900">{{ honor.total_akhir }} &middot; {{ honor.honor_per_jam_rupiah }}</div>
+                        <div class="text-xs font-bold uppercase text-slate-500">Total setelah potongan</div>
+                        <div class="mt-1 font-black text-emerald-700">{{ honor.jumlah_rupiah }}</div>
                     </div>
                 </div>
 
@@ -249,7 +248,13 @@
                         {% endif %}
                     </div>
                     <div class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-                        <div class="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Aksi</div>
+                        <div class="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Bukti dan Aksi</div>
+                        {% if honor.bukti_transfer %}
+                        <a class="mt-3 inline-flex items-center gap-1 text-sm font-bold text-brand-700 hover:text-brand-800" href="{{ honor.bukti_transfer.url }}" target="_blank" rel="noreferrer"><i data-lucide="file-check-2" class="h-4 w-4"></i>Lihat bukti pembayaran</a>
+                        {% else %}
+                        <div class="mt-3 text-sm text-slate-500">Bukti pembayaran belum tersedia.</div>
+                        {% endif %}
+                        {% if is_admin or is_laboran %}
                         <div class="mt-3 flex flex-wrap gap-3 text-sm font-semibold">
                             <a class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700" href="{% url 'asleb:honor_update' honor.pk %}">
                                 <i data-lucide="pencil" class="h-4 w-4"></i><span>Edit</span>
@@ -264,11 +269,12 @@
                             </form>
                             {% endif %}
                         </div>
+                        {% endif %}
                         <div class="mt-3 text-sm text-slate-500">PIC: {{ honor.pic_transfer|default:"-" }}</div>
                     </div>
                 </div>
 
-                {% if honor.status != 'dibayar' %}
+                {% if honor.status != 'dibayar' and not is_asisten_lab %}
                 <form method="post" enctype="multipart/form-data" action="{% url 'asleb:honor_confirm_transfer' honor.pk %}" class="honor-transfer-card mt-4 grid gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4 md:grid-cols-[160px_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-center">
                     {% csrf_token %}
                     <input type="date" name="tanggal_transfer" value="{% now 'Y-m-d' %}" class="min-h-10 rounded-xl bg-white text-xs">
