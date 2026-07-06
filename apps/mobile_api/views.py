@@ -24,7 +24,6 @@ from .serializers import (
 )
 from .services import (
     WEEKDAY_KEYS,
-    calculate_distance_meters,
     get_active_asleb,
     get_asleb_course_labels,
     get_checkin_window,
@@ -203,37 +202,12 @@ class CheckInView(APIView):
         if not valid_time:
             return api_error(reason, 'invalid_schedule_time')
 
-        accuracy = serializer.validated_data['accuracy']
-        if accuracy > settings.ABSENSI_MAX_GPS_ACCURACY_METERS:
-            return api_error(
-                'Akurasi GPS belum memenuhi batas. Aktifkan GPS dan coba lagi di area terbuka.',
-                'gps_accuracy_too_low',
-                accuracy=float(accuracy),
-                maximum_accuracy=settings.ABSENSI_MAX_GPS_ACCURACY_METERS,
-            )
-        distance = calculate_distance_meters(
-            serializer.validated_data['latitude'],
-            serializer.validated_data['longitude'],
-        )
-        if distance > settings.ABSENSI_RADIUS_METERS:
-            return api_error(
-                'Absensi ditolak karena Anda berada di luar radius lokasi.',
-                'outside_attendance_radius',
-                attendance_status='ditolak_di_luar_radius',
-                distance_meters=float(distance),
-                radius_meters=settings.ABSENSI_RADIUS_METERS,
-            )
-
         try:
             attendance = AbsensiMasukAsleb.objects.create(
                 asleb=asleb,
                 jadwal=schedule,
                 tanggal_absensi=today,
                 waktu_masuk=timezone.now(),
-                latitude=serializer.validated_data['latitude'],
-                longitude=serializer.validated_data['longitude'],
-                jarak_lokasi_meter=distance,
-                akurasi_gps_meter=accuracy,
                 status=attendance_status,
                 foto_absensi=serializer.validated_data['foto_absensi'],
                 video_absensi=serializer.validated_data.get('video_absensi') or '',
