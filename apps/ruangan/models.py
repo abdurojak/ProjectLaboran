@@ -26,3 +26,51 @@ class RuanganLab(models.Model):
 
     def __str__(self):
         return f'{self.kode} - {self.nama}'
+
+
+class GrupRuanganGabungan(models.Model):
+    nama = models.CharField(max_length=150)
+    ruangan = models.ManyToManyField(RuanganLab, related_name='grup_gabungan')
+    deskripsi = models.TextField(blank=True)
+    aktif = models.BooleanField(default=True)
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+    diperbarui_pada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['nama']
+        verbose_name = 'Grup Ruangan Gabungan'
+        verbose_name_plural = 'Grup Ruangan Gabungan'
+
+    def __str__(self):
+        return self.nama
+
+    def get_total_kapasitas(self):
+        capacities = [
+            ruangan.kapasitas
+            for ruangan in self.ruangan.all()
+            if ruangan.kapasitas is not None
+        ]
+        return sum(capacities) if capacities else None
+
+    @classmethod
+    def get_active_pair(cls, first_room, second_room):
+        if not first_room or not second_room or first_room.pk == second_room.pk:
+            return None
+        return (
+            cls.objects.filter(aktif=True, ruangan=first_room)
+            .filter(ruangan=second_room)
+            .distinct()
+            .first()
+        )
+
+    @classmethod
+    def get_combinable_room_ids_for(cls, room):
+        if not room:
+            return set()
+        groups = cls.objects.filter(aktif=True, ruangan=room).prefetch_related('ruangan')
+        return {
+            grouped_room.pk
+            for group in groups
+            for grouped_room in group.ruangan.all()
+            if grouped_room.pk != room.pk and grouped_room.aktif
+        }

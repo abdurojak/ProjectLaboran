@@ -184,6 +184,11 @@ class PublicBerkasPendaftaranForm(forms.Form):
         widget=forms.CheckboxInput(attrs={'class': 'registration-check-input'}),
         error_messages={'required': 'Anda wajib memverifikasi dan menyetujui pernyataan data sebelum mengirim pendaftaran.'},
     )
+    pernyataan_kesanggupan = forms.BooleanField(
+        required=True,
+        widget=forms.CheckboxInput(attrs={'class': 'registration-check-input'}),
+        error_messages={'required': 'Anda wajib menyetujui pernyataan kesanggupan menjalankan tugas asisten laboratorium.'},
+    )
 
     nama = forms.CharField(max_length=150, widget=forms.TextInput(attrs={'placeholder': 'Nama lengkap calon aslab'}))
     nim = forms.CharField(max_length=30, widget=forms.TextInput(attrs={'placeholder': 'NIM mahasiswa'}))

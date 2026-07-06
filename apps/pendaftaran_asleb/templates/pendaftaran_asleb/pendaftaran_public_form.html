@@ -156,7 +156,7 @@
                 {% for field in berkas_form %}
                     {% if field.name == 'signature_data' %}
                         {{ field }}
-                    {% elif field.name == 'pernyataan_data' %}
+                    {% elif field.name == 'pernyataan_data' or field.name == 'pernyataan_kesanggupan' %}
                     {% elif field.is_hidden %}
                         {{ field }}
                     {% else %}
@@ -211,6 +211,19 @@
                 </label>
                 {% if berkas_form.pernyataan_data.errors %}
                 <div class="mt-3 text-sm font-semibold text-rose-600">{{ berkas_form.pernyataan_data.errors|striptags }}</div>
+                {% endif %}
+            </div>
+
+            <div class="registration-check-card rounded-3xl border border-emerald-200 bg-emerald-50/70 p-5">
+                <label for="{{ berkas_form.pernyataan_kesanggupan.id_for_label }}" class="registration-check-label flex cursor-pointer gap-4">
+                    <span>{{ berkas_form.pernyataan_kesanggupan }}</span>
+                    <span>
+                        <span class="block font-black text-emerald-950">Pernyataan Kesanggupan Tugas</span>
+                        <span class="mt-1 block text-sm leading-6 text-emerald-900/75">Saya menyatakan bersedia menjalankan tugas dan kewajiban sebagai Asisten Laboratorium secara bertanggung jawab, disiplin, menjaga etika akademik, serta mengikuti ketentuan dan arahan pengelola laboratorium selama masa penugasan.</span>
+                    </span>
+                </label>
+                {% if berkas_form.pernyataan_kesanggupan.errors %}
+                <div class="mt-3 text-sm font-semibold text-rose-600">{{ berkas_form.pernyataan_kesanggupan.errors|striptags }}</div>
                 {% endif %}
             </div>
 
@@ -278,7 +291,6 @@
         const clearButton = document.getElementById('clear-signature');
         const status = document.getElementById('signature-status');
         const signatureInput = document.getElementById('id_signature_data');
-        const confirmationInput = document.getElementById('id_pernyataan_data');
         const submitButton = document.getElementById('submit-registration');
         const form = canvas ? canvas.closest('form') : null;
 
@@ -352,9 +364,8 @@
                 return;
             }
             const requiredFieldsComplete = Array.from(form.querySelectorAll('input[required], select[required], textarea[required]'))
-                .filter((field) => field !== confirmationInput)
                 .every((field) => field.type === 'checkbox' ? field.checked : Boolean(field.value.trim()));
-            submitButton.disabled = !(requiredFieldsComplete && hasSignature && confirmationInput && confirmationInput.checked);
+            submitButton.disabled = !(requiredFieldsComplete && hasSignature);
         }
 
         form.addEventListener('input', updateSubmitState);

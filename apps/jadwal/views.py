@@ -13,7 +13,7 @@ from django.views.generic import CreateView, DeleteView, DetailView, ListView, U
 from apps.core.views import PostOnlyDeleteMixin
 from apps.kalender.realtime import send_schedule_update
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, RiwayatAsleb
-from apps.ruangan.models import RuanganLab
+from apps.ruangan.models import GrupRuanganGabungan, RuanganLab
 
 from .forms import JadwalPraktikumForm
 from .models import JadwalPraktikum, PermintaanPerubahanJadwal
@@ -388,8 +388,24 @@ def available_rooms(request):
         rooms = rooms.none()
     elif participant_count:
         rooms = rooms.filter(kapasitas__gte=participant_count)
+    groups = GrupRuanganGabungan.objects.filter(aktif=True).prefetch_related('ruangan')
+    combinable_rooms = {}
+    for group in groups:
+        grouped_rooms = [room for room in group.ruangan.all() if room.aktif]
+        for room in grouped_rooms:
+            combinable_rooms[str(room.pk)] = [
+                {
+                    'id': other_room.pk,
+                    'label': str(other_room),
+                    'capacity': other_room.kapasitas,
+                }
+                for other_room in grouped_rooms
+                if other_room.pk != room.pk
+            ]
+
     return JsonResponse({
         'participant_count': participant_count,
         'rooms': [{'id': room.pk, 'label': str(room), 'capacity': room.kapasitas} for room in rooms],
+        'combinable_rooms': combinable_rooms,
     })
 

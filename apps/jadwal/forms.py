@@ -1,7 +1,7 @@
 from django import forms
 
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, RiwayatAsleb
-from apps.ruangan.models import RuanganLab
+from apps.ruangan.models import GrupRuanganGabungan, RuanganLab
 
 from .models import JadwalPraktikum
 
@@ -20,8 +20,7 @@ class JadwalPraktikumForm(forms.ModelForm):
         label='Ruangan Tambahan',
         widget=forms.Select(attrs={'class': 'min-h-12'}),
         help_text=(
-            'Opsional untuk kelas besar. Saat ini gabungan dua lab hanya berlaku untuk '
-            'Lab Rekayasa Perangkat Lunak dan Lab Sistem Keamanan Informasi.'
+            'Opsional untuk kelas besar. Hanya lab dalam grup ruangan gabungan aktif yang dapat dipilih bersama.'
         ),
     )
 
@@ -32,11 +31,9 @@ class JadwalPraktikumForm(forms.ModelForm):
         self.fields['matkul'].initial = self.get_initial_matkul()
         room_queryset = self.get_optimal_room_queryset()
         self.fields['ruangan'].queryset = room_queryset
-        self.fields['ruangan_tambahan'].queryset = RuanganLab.objects.filter(
-            aktif=True,
-            kode__in=['LAB-RPL', 'LAB-SKI'],
-        )
-        self.fields['ruangan_tambahan'].help_text = 'Hanya untuk pasangan Lab RPL dan Lab SKI. Lab lain tidak dapat memakai ruang tambahan.'
+        self.fields['ruangan_tambahan'].queryset = self.get_additional_room_queryset()
+        self.fields['ruangan_tambahan'].help_text = 'Hanya lab dalam grup ruangan gabungan aktif yang dapat dipakai sebagai ruangan tambahan.'
+        self.combinable_room_options = self.get_combinable_room_options()
         selected_matkul = self.get_selected_matkul()
         self.participant_count = selected_matkul.peserta_praktikum.filter(aktif=True).count() if selected_matkul else 0
 
@@ -101,7 +98,38 @@ class JadwalPraktikumForm(forms.ModelForm):
             if self.current_pengguna and self.current_pengguna.role == 'asisten_lab':
                 return queryset.none()
             return queryset
-        return queryset.filter(kapasitas__gte=participant_count)
+        eligible_ids = []
+        groups = GrupRuanganGabungan.objects.filter(aktif=True).prefetch_related('ruangan')
+        for room in queryset:
+            if (room.kapasitas or 0) >= participant_count:
+                eligible_ids.append(room.pk)
+                continue
+            for group in groups:
+                grouped_rooms = [grouped_room for grouped_room in group.ruangan.all() if grouped_room.aktif]
+                if room in grouped_rooms and sum((grouped_room.kapasitas or 0) for grouped_room in grouped_rooms) >= participant_count:
+                    eligible_ids.append(room.pk)
+                    break
+        return queryset.filter(pk__in=eligible_ids)
+
+    def get_additional_room_queryset(self):
+        return (
+            RuanganLab.objects.filter(aktif=True, grup_gabungan__aktif=True)
+            .distinct()
+            .order_by('nama')
+        )
+
+    def get_combinable_room_options(self):
+        groups = GrupRuanganGabungan.objects.filter(aktif=True).prefetch_related('ruangan')
+        options = {}
+        for group in groups:
+            grouped_rooms = [room for room in group.ruangan.all() if room.aktif]
+            for room in grouped_rooms:
+                options[str(room.pk)] = [
+                    {'id': other_room.pk, 'label': str(other_room)}
+                    for other_room in grouped_rooms
+                    if other_room.pk != room.pk
+                ]
+        return options
 
     def clean(self):
         cleaned_data = super().clean()
@@ -115,9 +143,8 @@ class JadwalPraktikumForm(forms.ModelForm):
             if participant_count and (ruangan.kapasitas or 0) < participant_count:
                 self.add_error('ruangan', f'Kapasitas lab hanya {ruangan.kapasitas or 0}, sedangkan peserta aktif berjumlah {participant_count}.')
         if tambahan and ruangan:
-            selected_codes = frozenset({ruangan.kode, tambahan.kode})
-            if selected_codes not in JadwalPraktikum.ALLOWED_COMBINED_ROOM_CODE_SETS:
-                self.add_error('ruangan_tambahan', 'Ruang tambahan hanya berlaku untuk pasangan Lab RPL dan Lab SKI.')
+            if not GrupRuanganGabungan.get_active_pair(ruangan, tambahan):
+                self.add_error('ruangan_tambahan', 'Ruangan tambahan hanya berlaku untuk lab dalam grup ruangan gabungan aktif.')
         return cleaned_data
 
     def save(self, commit=True):

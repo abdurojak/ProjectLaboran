@@ -2,7 +2,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from apps.pengguna.models import Pengguna
-from apps.ruangan.models import RuanganLab
+from apps.ruangan.models import GrupRuanganGabungan, RuanganLab
 
 
 class RuanganViewTests(TestCase):
@@ -50,4 +50,26 @@ class RuanganViewTests(TestCase):
         self.assertContains(response, 'LAB-TEST')
         self.assertContains(response, 'Kapasitas 12 mahasiswa')
         self.assertEqual(response.context['jumlah_ruangan'], 1)
+
+    def test_ruangan_page_menampilkan_grup_ruangan_gabungan(self):
+        lab_rpl = RuanganLab.objects.get(kode='LAB-RPL')
+        lab_ski = RuanganLab.objects.create(
+            nama='Lab Sistem Keamanan Informasi',
+            kode='LAB-SKI-UI',
+            deskripsi='Lab pasangan untuk pengujian.',
+            kapasitas=18,
+            warna='amber',
+        )
+        grup = GrupRuanganGabungan.objects.create(
+            nama='Lab RPL dan Lab SKI',
+            deskripsi='Dua lab berdampingan untuk kelas besar.',
+        )
+        grup.ruangan.set([lab_rpl, lab_ski])
+
+        response = self.client.get(reverse('ruangan:ruangan_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Grup Ruangan Gabungan')
+        self.assertContains(response, 'Lab RPL dan Lab SKI')
+        self.assertContains(response, 'Kapasitas gabungan 38 mahasiswa')
 

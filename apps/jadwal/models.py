@@ -4,11 +4,10 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
 
-from apps.ruangan.models import RuanganLab
+from apps.ruangan.models import GrupRuanganGabungan, RuanganLab
 
 
 class JadwalPraktikum(models.Model):
-    ALLOWED_COMBINED_ROOM_CODE_SETS = {frozenset({'LAB-RPL', 'LAB-SKI'})}
     JAM_KERJA_MULAI = time(7, 30)
     JAM_KERJA_SELESAI = time(18, 0)
     STATUS_DIAJUKAN = 'diajukan'
@@ -102,13 +101,10 @@ class JadwalPraktikum(models.Model):
         if self.ruangan_id and self.ruangan_tambahan_id:
             if self.ruangan_id == self.ruangan_tambahan_id:
                 errors['ruangan_tambahan'] = 'Ruangan tambahan harus berbeda dari ruangan utama.'
-            else:
-                selected_codes = frozenset({self.ruangan.kode, self.ruangan_tambahan.kode})
-                if selected_codes not in self.ALLOWED_COMBINED_ROOM_CODE_SETS:
-                    errors['ruangan_tambahan'] = (
-                        'Ruang tambahan hanya boleh digunakan untuk pasangan Lab Rekayasa '
-                        'Perangkat Lunak dan Lab Sistem Keamanan Informasi.'
-                    )
+            elif not GrupRuanganGabungan.get_active_pair(self.ruangan, self.ruangan_tambahan):
+                errors['ruangan_tambahan'] = (
+                    'Ruangan tambahan hanya boleh digunakan untuk lab yang berada dalam grup ruangan gabungan aktif.'
+                )
 
         if errors:
             raise ValidationError(errors)

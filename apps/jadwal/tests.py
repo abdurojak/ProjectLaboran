@@ -6,7 +6,7 @@ from django.urls import reverse
 
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb
 from apps.pengguna.models import Pengguna
-from apps.ruangan.models import RuanganLab
+from apps.ruangan.models import GrupRuanganGabungan, RuanganLab
 from apps.asleb.models import PesertaPraktikum
 
 from .models import JadwalPraktikum, PermintaanPerubahanJadwal
@@ -141,7 +141,7 @@ class JadwalViewTests(TestCase):
         self.assertContains(response, 'name="ruangan_tambahan"', html=False)
         self.assertContains(response, 'Lab Rekayasa Perangkat Lunak')
         self.assertContains(response, 'Lab Sistem Keamanan Informasi')
-        self.assertContains(response, 'Hanya untuk pasangan Lab RPL dan Lab SKI')
+        self.assertContains(response, 'Hanya lab dalam grup ruangan gabungan aktif')
 
     def test_form_jadwal_menyimpan_matkul_kelas_dan_pengampu_dari_pilihan_matkul(self):
         response = self.client.post(reverse('jadwal:jadwal_create'), {
@@ -181,6 +181,27 @@ class JadwalViewTests(TestCase):
             jadwal.get_display_ruangan_nama(),
             'Lab Sistem Keamanan Informasi + Lab Rekayasa Perangkat Lunak',
         )
+
+    def test_form_jadwal_ruangan_tambahan_mengikuti_grup_gabungan_aktif(self):
+        lab_a = RuanganLab.objects.create(nama='Lab Barat', kode='LAB-BRT', kapasitas=12)
+        lab_b = RuanganLab.objects.create(nama='Lab Timur', kode='LAB-TMR', kapasitas=12)
+        group = GrupRuanganGabungan.objects.create(nama='Lab Barat dan Timur')
+        group.ruangan.set([lab_a, lab_b])
+
+        response = self.client.post(reverse('jadwal:jadwal_create'), {
+            'matkul': self.matkul_lain.pk,
+            'ruangan': lab_a.pk,
+            'ruangan_tambahan': lab_b.pk,
+            'hari': 'rabu',
+            'waktu_mulai': '13:00',
+            'waktu_selesai': '15:00',
+            'catatan': 'Lab berdampingan',
+        })
+
+        self.assertRedirects(response, reverse('jadwal:jadwal_list'))
+        jadwal = JadwalPraktikum.objects.get(hari='rabu', mata_kuliah=str(self.matkul_lain))
+        self.assertEqual(jadwal.ruangan_id, lab_a.pk)
+        self.assertEqual(jadwal.ruangan_tambahan_id, lab_b.pk)
 
     def test_jadwal_lab_pasangan_dianggap_bentrok_saat_salah_satunya_sudah_dipakai(self):
         lab_rpl = RuanganLab.objects.get(kode='LAB-RPL')
@@ -487,8 +508,10 @@ class JadwalViewTests(TestCase):
         payload = response.json()
         self.assertEqual(payload['participant_count'], 20)
         self.assertTrue(payload['rooms'])
-        self.assertTrue(all(room['capacity'] >= 20 for room in payload['rooms']))
+        self.assertTrue(all(room['capacity'] >= 20 or str(room['id']) in payload['combinable_rooms'] for room in payload['rooms']))
         self.assertTrue(any(room['capacity'] > 20 for room in payload['rooms']))
+        self.assertIn(str(self.lab_rpl.pk), payload['combinable_rooms'])
+        self.assertIn(str(self.lab_ski.pk), payload['combinable_rooms'])
 
     def test_aslab_tidak_dapat_memilih_lab_sebelum_peserta_diinput_laboran(self):
         aslab = self.login_as_asisten_lab()
@@ -516,7 +539,7 @@ class JadwalViewTests(TestCase):
         })
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Ruang tambahan hanya berlaku untuk pasangan Lab RPL dan Lab SKI')
+        self.assertContains(response, 'Ruangan tambahan hanya berlaku untuk lab dalam grup ruangan gabungan aktif')
 
     def test_edit_jadwal_aslab_menunggu_persetujuan_laboran(self):
         aslab = self.login_as_asisten_lab()
