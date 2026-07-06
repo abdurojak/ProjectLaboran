@@ -1,0 +1,73 @@
+<div id="labhub-realtime-toasts" class="pointer-events-none fixed right-4 top-24 z-[90] grid w-[min(24rem,calc(100vw-2rem))] gap-3" aria-live="polite"></div>
+<script>
+    (function () {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const socketUrl = protocol + '//' + window.location.host + '/ws/notifikasi/';
+        const toastRoot = document.getElementById('labhub-realtime-toasts');
+        let socket = null;
+        let reconnectTimer = null;
+        let reconnectAttempt = 0;
+        let refreshTimer = null;
+        let closedByPage = false;
+
+        function updateBadge(count) {
+            document.querySelectorAll('[data-realtime-notification-count]').forEach(function (badge) {
+                const value = Number(count || 0);
+                badge.textContent = value;
+                badge.classList.toggle('hidden', value < 1);
+            });
+        }
+
+        function showToast(payload) {
+            if (!toastRoot) return;
+            const toast = document.createElement('a');
+            toast.href = payload.related_url || '#';
+            toast.className = 'pointer-events-auto block rounded-2xl border border-brand-200 bg-white/95 p-4 shadow-xl shadow-slate-900/15 backdrop-blur transition';
+            toast.innerHTML = '<div class="flex items-start gap-3"><span class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-700"><i data-lucide="bell-ring" class="h-4 w-4"></i></span><div class="min-w-0"><div class="font-black text-slate-900"></div><p class="mt-1 text-sm leading-5 text-slate-600"></p></div></div>';
+            toast.querySelector('.font-black').textContent = payload.title || 'Pembaruan LabHub';
+            toast.querySelector('p').textContent = payload.message || '';
+            toastRoot.prepend(toast);
+            if (window.lucide) window.lucide.createIcons();
+            window.setTimeout(function () { toast.remove(); }, 7000);
+        }
+
+        function scheduleRefresh(payload) {
+            const paths = Array.isArray(payload.refresh_paths) ? payload.refresh_paths : [];
+            const shouldRefresh = paths.some(function (path) {
+                return path === '/' ? window.location.pathname === '/' : window.location.pathname.startsWith(path);
+            });
+            if (!shouldRefresh || document.visibilityState !== 'visible') return;
+            window.clearTimeout(refreshTimer);
+            refreshTimer = window.setTimeout(function () { window.location.reload(); }, 900);
+        }
+
+        function connect() {
+            if (closedByPage || socket && socket.readyState < 2) return;
+            socket = new WebSocket(socketUrl);
+            socket.addEventListener('open', function () { reconnectAttempt = 0; });
+            socket.addEventListener('message', function (event) {
+                let message;
+                try { message = JSON.parse(event.data); } catch (error) { return; }
+                if (message.type !== 'notification' || !message.payload) return;
+                showToast(message.payload);
+                if (message.payload.unread_count !== undefined) updateBadge(message.payload.unread_count);
+                document.dispatchEvent(new CustomEvent('labhub:realtime', {detail: message.payload}));
+                scheduleRefresh(message.payload);
+            });
+            socket.addEventListener('close', function (event) {
+                if (closedByPage || event.code === 4401 || event.code === 4403) return;
+                const delay = Math.min(30000, 1000 * Math.pow(2, reconnectAttempt++));
+                window.clearTimeout(reconnectTimer);
+                reconnectTimer = window.setTimeout(connect, delay);
+            });
+            socket.addEventListener('error', function () { socket.close(); });
+        }
+
+        window.addEventListener('beforeunload', function () {
+            closedByPage = true;
+            window.clearTimeout(reconnectTimer);
+            if (socket) socket.close();
+        });
+        connect();
+    }());
+</script>

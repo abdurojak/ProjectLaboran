@@ -116,9 +116,6 @@ class ApiService {
 
   Future<AttendanceRecord> checkIn({
     required int scheduleId,
-    required double latitude,
-    required double longitude,
-    required double accuracy,
     required XFile photo,
     XFile? video,
   }) async {
@@ -128,9 +125,6 @@ class ApiService {
           : DioMediaType('image', 'jpeg');
       final data = <String, dynamic>{
         'jadwal_id': scheduleId,
-        'latitude': latitude,
-        'longitude': longitude,
-        'accuracy': accuracy,
         'foto_absensi': await MultipartFile.fromFile(
           photo.path,
           filename: photo.name,

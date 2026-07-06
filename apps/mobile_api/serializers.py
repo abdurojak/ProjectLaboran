@@ -1,4 +1,3 @@
-from decimal import Decimal
 from pathlib import Path
 
 from django.conf import settings
@@ -94,13 +93,6 @@ class AttendanceSerializer(serializers.ModelSerializer):
 
 class CheckInSerializer(serializers.Serializer):
     jadwal_id = serializers.IntegerField(min_value=1)
-    latitude = serializers.DecimalField(
-        max_digits=10, decimal_places=7, min_value=Decimal('-90'), max_value=Decimal('90')
-    )
-    longitude = serializers.DecimalField(
-        max_digits=10, decimal_places=7, min_value=Decimal('-180'), max_value=Decimal('180')
-    )
-    accuracy = serializers.DecimalField(max_digits=8, decimal_places=2, min_value=Decimal('0'))
     foto_absensi = serializers.ImageField()
     video_absensi = serializers.FileField(required=False, allow_null=True)
 

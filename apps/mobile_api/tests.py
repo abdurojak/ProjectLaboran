@@ -23,12 +23,6 @@ def valid_photo(name='selfie.jpg'):
     return SimpleUploadedFile(name, buffer.getvalue(), content_type='image/jpeg')
 
 
-@override_settings(
-    ABSENSI_CENTER_LATITUDE=0.0,
-    ABSENSI_CENTER_LONGITUDE=0.0,
-    ABSENSI_RADIUS_METERS=200,
-    ABSENSI_MAX_GPS_ACCURACY_METERS=50,
-)
 class MobileAbsensiApiTests(TestCase):
     @classmethod
     def setUpClass(cls):
@@ -87,9 +81,6 @@ class MobileAbsensiApiTests(TestCase):
     def check_in_payload(self, **overrides):
         payload = {
             'jadwal_id': self.schedule.pk,
-            'latitude': '0.0000000',
-            'longitude': '0.0000000',
-            'accuracy': '5.00',
             'foto_absensi': valid_photo(),
         }
         payload.update(overrides)
@@ -125,7 +116,7 @@ class MobileAbsensiApiTests(TestCase):
         self.assertEqual(response.data['results'][0]['id'], self.schedule.pk)
 
     @patch('apps.mobile_api.views.validate_schedule_time', return_value=(True, '', 'sudah_absen'))
-    def test_absensi_masuk_menyimpan_gps_dan_foto_tanpa_video(self, _mock_time):
+    def test_absensi_masuk_tanpa_lokasi_menyimpan_foto(self, _mock_time):
         self.authenticate()
         response = self.client.post(
             reverse('mobile_api:check_in'), self.check_in_payload(), format='multipart'
@@ -135,33 +126,14 @@ class MobileAbsensiApiTests(TestCase):
         self.assertEqual(attendance.asleb, self.asleb)
         self.assertTrue(attendance.foto_absensi)
         self.assertFalse(attendance.video_absensi)
+        self.assertIsNone(attendance.latitude)
+        self.assertIsNone(attendance.longitude)
 
         duplicate = self.client.post(
             reverse('mobile_api:check_in'), self.check_in_payload(), format='multipart'
         )
         self.assertEqual(duplicate.status_code, 400)
         self.assertEqual(AbsensiMasukAsleb.objects.count(), 1)
-
-    @patch('apps.mobile_api.views.validate_schedule_time', return_value=(True, '', 'sudah_absen'))
-    def test_absensi_di_luar_radius_ditolak_tanpa_menyimpan_data(self, _mock_time):
-        self.authenticate()
-        response = self.client.post(
-            reverse('mobile_api:check_in'),
-            self.check_in_payload(latitude='1.0000000', longitude='1.0000000'),
-            format='multipart',
-        )
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.data['attendance_status'], 'ditolak_di_luar_radius')
-        self.assertFalse(AbsensiMasukAsleb.objects.exists())
-
-    @patch('apps.mobile_api.views.validate_schedule_time', return_value=(True, '', 'sudah_absen'))
-    def test_akurasi_gps_buruk_ditolak(self, _mock_time):
-        self.authenticate()
-        response = self.client.post(
-            reverse('mobile_api:check_in'), self.check_in_payload(accuracy='80'), format='multipart'
-        )
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.data['code'], 'gps_accuracy_too_low')
 
     @patch('apps.mobile_api.views.validate_schedule_time', return_value=(True, '', 'sudah_absen'))
     def test_jadwal_orang_lain_tidak_dapat_diabsen(self, _mock_time):

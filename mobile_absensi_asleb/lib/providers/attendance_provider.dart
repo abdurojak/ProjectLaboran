@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../models/attendance.dart';
@@ -52,15 +51,11 @@ class AttendanceProvider extends ChangeNotifier {
 
   Future<AttendanceRecord> checkIn({
     required PraktikumSchedule schedule,
-    required Position position,
     required XFile photo,
     XFile? video,
   }) async {
     final record = await api.checkIn(
       scheduleId: schedule.id,
-      latitude: position.latitude,
-      longitude: position.longitude,
-      accuracy: position.accuracy,
       photo: photo,
       video: video,
     );

@@ -127,6 +127,13 @@ class PengalamanPengguna(models.Model):
     organisasi = models.CharField(max_length=150)
     bidang_studi = models.CharField(max_length=150, blank=True)
     lokasi = models.CharField(max_length=150, blank=True)
+    teknologi = models.CharField(max_length=250, blank=True)
+    tautan = models.URLField('Tautan', blank=True)
+    nomor_kredensial = models.CharField(max_length=120, blank=True)
+    file_sertifikat = models.FileField(
+        upload_to='pengguna/sertifikat/',
+        blank=True,
+    )
     tanggal_mulai = models.DateField()
     tanggal_selesai = models.DateField(blank=True, null=True)
     masih_berjalan = models.BooleanField(default=False)
@@ -145,8 +152,17 @@ class PengalamanPengguna(models.Model):
         from django.core.exceptions import ValidationError
         if self.masih_berjalan:
             self.tanggal_selesai = None
-        elif self.tanggal_selesai and self.tanggal_selesai < self.tanggal_mulai:
+        elif not self.tanggal_selesai:
+            raise ValidationError({'tanggal_selesai': 'Tanggal selesai wajib diisi jika kegiatan sudah berakhir.'})
+        elif self.tanggal_selesai < self.tanggal_mulai:
             raise ValidationError({'tanggal_selesai': 'Tanggal selesai tidak boleh lebih awal dari tanggal mulai.'})
+
+        if self.file_sertifikat:
+            extension = self.file_sertifikat.name.rsplit('.', 1)[-1].lower()
+            if extension not in {'pdf', 'jpg', 'jpeg', 'png'}:
+                raise ValidationError({'file_sertifikat': 'File sertifikat harus berformat PDF, JPG, JPEG, atau PNG.'})
+            if self.file_sertifikat.size > 5 * 1024 * 1024:
+                raise ValidationError({'file_sertifikat': 'Ukuran file sertifikat maksimal 5 MB.'})
 
     def __str__(self):
         return f'{self.jabatan} - {self.organisasi}'
