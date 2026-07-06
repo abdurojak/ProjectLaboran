@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
@@ -9,7 +8,6 @@ import 'package:video_player/video_player.dart';
 import '../models/schedule.dart';
 import '../providers/attendance_provider.dart';
 import '../services/api_exception.dart';
-import '../services/location_service.dart';
 import '../utils/app_theme.dart';
 
 class CheckInScreen extends StatefulWidget {
@@ -22,12 +20,9 @@ class CheckInScreen extends StatefulWidget {
 
 class _CheckInScreenState extends State<CheckInScreen> {
   final picker = ImagePicker();
-  final locationService = LocationService();
   XFile? photo;
   XFile? video;
-  Position? position;
   VideoPlayerController? videoController;
-  bool loadingLocation = false;
   bool submitting = false;
   String? error;
 
@@ -61,29 +56,12 @@ class _CheckInScreenState extends State<CheckInScreen> {
     });
   }
 
-  Future<void> acquireLocation() async {
-    setState(() {
-      loadingLocation = true;
-      error = null;
-    });
-    try {
-      final result = await locationService.currentPosition();
-      setState(() => position = result);
-    } on ApiException catch (exception) {
-      setState(() => error = exception.message);
-    } finally {
-      setState(() => loadingLocation = false);
-    }
-  }
-
   Future<void> submit() async {
     final provider = context.read<AttendanceProvider>();
     if (photo == null) {
       setState(() => error = 'Ambil foto selfie terlebih dahulu.');
       return;
     }
-    if (position == null) await acquireLocation();
-    if (position == null) return;
     setState(() {
       submitting = true;
       error = null;
@@ -91,7 +69,6 @@ class _CheckInScreenState extends State<CheckInScreen> {
     try {
       await provider.checkIn(
         schedule: widget.schedule,
-        position: position!,
         photo: photo!,
         video: video,
       );
@@ -241,6 +218,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
               icon: const Icon(Icons.refresh),
               label: const Text('Rekam ulang video'),
             ),
+          /* Lokasi dihapus dari alur absensi.
           const SizedBox(height: 22),
           const _SectionTitle(
             number: '3',
@@ -282,6 +260,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
               ),
             ),
           ),
+          */
           if (error != null) ...[
             const SizedBox(height: 14),
             Container(

@@ -20,7 +20,7 @@ from apps.ruangan.models import RuanganLab
 
 from .forms import PendaftaranAslebPublicForm, PublicBerkasPendaftaranForm, RekeningPendaftaranForm
 from .models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb, PeriodeAsleb, RiwayatAsleb
-from .services import get_asleb_experience, sync_expired_asleb_periods
+from .services import get_asleb_experience, is_registration_open, sync_expired_asleb_periods
 from .utils import analyze_transcript, extract_grade_from_transcript, get_public_registration_url
 from .views import WIZARD_SESSION_KEY
 
@@ -114,6 +114,30 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertRedirects(response, reverse('pendaftaran_asleb:pendaftaran_list'))
         self.assertFalse(PengaturanPendaftaranAsleb.get_solo().dibuka)
 
+    def test_buka_pendaftaran_memulihkan_periode_yang_sudah_diakhiri(self):
+        today = timezone.localdate()
+        period = PeriodeAsleb.get_for_date(today)
+        period.selesai = today - timedelta(days=1)
+        period.pendaftaran_mulai = today
+        period.pendaftaran_selesai = today - timedelta(days=1)
+        period.diakhiri_pada = timezone.now()
+        period.diakhiri_oleh = self.admin
+        period.save(update_fields=[
+            'selesai', 'pendaftaran_mulai', 'pendaftaran_selesai',
+            'diakhiri_pada', 'diakhiri_oleh', 'diperbarui_pada',
+        ])
+        PengaturanPendaftaranAsleb.objects.filter(pk=1).update(dibuka=True)
+
+        response = self.client.post(reverse('pendaftaran_asleb:pendaftaran_toggle_status'))
+
+        self.assertRedirects(response, reverse('pendaftaran_asleb:pendaftaran_list'))
+        period.refresh_from_db()
+        self.assertIsNone(period.diakhiri_pada)
+        self.assertGreaterEqual(period.selesai, today)
+        self.assertEqual(period.pendaftaran_mulai, today)
+        self.assertGreaterEqual(period.pendaftaran_selesai, today)
+        self.assertTrue(is_registration_open())
+
     def test_public_form_ditutup_jika_pendaftaran_belum_dibuka(self):
         self.client.session.flush()
 
@@ -121,6 +145,13 @@ class PendaftaranAslebViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Pendaftaran sedang ditutup')
+
+    def test_qr_pendaftaran_dibuat_lokal_oleh_django(self):
+        response = self.client.get(reverse('pendaftaran_asleb:registration_qr'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'image/png')
+        self.assertGreater(len(response.content), 100)
 
     def test_public_form_mahasiswa_memakai_sidebar_dan_identitas_akun(self):
         mahasiswa = Pengguna.objects.create(

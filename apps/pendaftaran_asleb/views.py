@@ -6,12 +6,16 @@ from django.core.files.storage import default_storage
 from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
+from django.http import HttpResponse
 from django.urls import reverse_lazy
 from django.utils.text import get_valid_filename
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView, View
 import uuid
+from io import BytesIO
+
+import qrcode
 
 from apps.asleb.models import Asleb, HonorAsleb
 from apps.core.views import PostOnlyDeleteMixin
@@ -534,6 +538,7 @@ def generate_all_accepted_asleb(request):
 
 
 @require_POST
+@transaction.atomic
 def toggle_pendaftaran_status(request):
     pengaturan = PengaturanPendaftaranAsleb.get_solo()
     currently_open = is_registration_open()
@@ -544,8 +549,15 @@ def toggle_pendaftaran_status(request):
     pengaturan.dibuka = not currently_open
     pengaturan.save(update_fields=['dibuka', 'diperbarui_pada'])
 
-    status = 'dibuka selama 30 hari atau sampai periode berakhir' if pengaturan.dibuka else 'ditutup'
-    notified_count = notify_pendaftaran_dibuka() if pengaturan.dibuka else 0
+    actually_open = is_registration_open()
+    if pengaturan.dibuka and not actually_open:
+        pengaturan.dibuka = False
+        pengaturan.save(update_fields=['dibuka', 'diperbarui_pada'])
+        messages.error(request, 'Pendaftaran gagal dibuka karena rentang periode tidak valid. Atur masa tugas terlebih dahulu.')
+        return redirect('pendaftaran_asleb:pendaftaran_list')
+
+    status = 'dibuka selama 30 hari atau sampai periode berakhir' if actually_open else 'ditutup'
+    notified_count = notify_pendaftaran_dibuka() if actually_open else 0
 
     if notified_count:
         messages.success(request, f'Pendaftaran aslab berhasil {status}. Notifikasi email dikirim ke {notified_count} akun.')
@@ -603,6 +615,18 @@ def notify_pendaftaran_dibuka():
         sent_count += sent
 
     return sent_count
+
+
+def registration_qr(request):
+    qr = qrcode.QRCode(version=1, box_size=8, border=3)
+    qr.add_data(get_public_registration_url())
+    qr.make(fit=True)
+    image = qr.make_image(fill_color='#006d6f', back_color='white')
+    output = BytesIO()
+    image.save(output, format='PNG')
+    response = HttpResponse(output.getvalue(), content_type='image/png')
+    response['Cache-Control'] = 'private, max-age=300'
+    return response
 
 
 def send_pendaftaran_status_email(pendaftaran):

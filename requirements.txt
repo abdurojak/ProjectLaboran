@@ -15,3 +15,4 @@ djangorestframework==3.15.2
 django-cors-headers==4.7.0
 PyJWT==2.10.1
 mutagen==1.47.0
+qrcode[pil]==8.2

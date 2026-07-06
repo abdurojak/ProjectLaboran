@@ -37,6 +37,7 @@ class PenggunaLoginRequiredMiddleware:
         '/media/',
         '/pendaftaran-asleb/daftar/',
         '/pendaftaran-asleb/berhasil/',
+        '/pendaftaran-asleb/qr/',
         '/static/',
     )
 
