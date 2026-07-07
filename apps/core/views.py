@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect
+from django.utils import timezone
 from django.urls import reverse
 from django.views import View
 from django.views.generic import TemplateView
@@ -112,6 +113,15 @@ class SettingsView(TemplateView):
                 'url': 'pengguna:list',
                 'args': [],
                 'icon': 'users',
+            })
+
+        if pengguna.role == 'laboran':
+            cards.append({
+                'title': 'Bug & Error List',
+                'description': 'Ambil dan pantau bug/error yang sedang ditangani laboran.',
+                'url': 'core:bug_error_list',
+                'args': [],
+                'icon': 'bug',
             })
 
         if pengguna.role == 'admin':
@@ -239,13 +249,13 @@ class BugErrorListView(TemplateView):
 
     def dispatch(self, request, *args, **kwargs):
         pengguna = getattr(request, 'current_pengguna', None)
-        if not pengguna or pengguna.role != 'admin':
-            messages.error(request, 'Hanya admin yang dapat membuka Bug & Error List.')
+        if not pengguna or pengguna.role not in {'admin', 'laboran'}:
+            messages.error(request, 'Hanya admin dan laboran yang dapat membuka Bug & Error List.')
             return redirect('dashboard:home')
         return super().dispatch(request, *args, **kwargs)
 
     def get_queryset(self):
-        queryset = BugErrorLog.objects.select_related('dilaporkan_oleh')
+        queryset = BugErrorLog.objects.select_related('dilaporkan_oleh', 'ditangani_oleh')
         status = self.request.GET.get('status', '').strip()
         q = self.request.GET.get('q', '').strip()
         if status in dict(BugErrorLog.STATUS_CHOICES):
@@ -270,6 +280,8 @@ class BugErrorListView(TemplateView):
         context['status_choices'] = BugErrorLog.STATUS_CHOICES
         context['kategori_choices'] = BugErrorLog.KATEGORI_CHOICES
         context['prioritas_choices'] = BugErrorLog.PRIORITAS_CHOICES
+        context['can_manage_bug_error'] = self.request.current_pengguna.role == 'admin'
+        context['can_claim_bug_error'] = self.request.current_pengguna.role == 'laboran'
         context['current_status'] = self.request.GET.get('status', '').strip()
         context['current_q'] = self.request.GET.get('q', '').strip()
         context['bug_error_list'] = queryset[:80]
@@ -282,7 +294,30 @@ class BugErrorListView(TemplateView):
         return context
 
     def post(self, request, *args, **kwargs):
-        if request.POST.get('action') == 'create':
+        pengguna = getattr(request, 'current_pengguna', None)
+        action = request.POST.get('action')
+
+        if action == 'claim':
+            if not pengguna or pengguna.role != 'laboran':
+                messages.error(request, 'Hanya laboran yang dapat mengambil bug/error.')
+                return redirect('core:bug_error_list')
+            log = get_object_or_404(BugErrorLog, pk=request.POST.get('log_id'))
+            updated = BugErrorLog.objects.filter(pk=log.pk, ditangani_oleh__isnull=True).update(
+                ditangani_oleh=pengguna,
+                status=BugErrorLog.STATUS_DIPROSES,
+                diperbarui_pada=timezone.now(),
+            )
+            if updated:
+                messages.success(request, 'Bug/error berhasil diambil dan status diubah menjadi Diproses.')
+            else:
+                messages.error(request, 'Bug/error ini sudah diambil oleh laboran lain.')
+            return redirect(f"{reverse('core:bug_error_list')}?log={log.pk}")
+
+        if not pengguna or pengguna.role != 'admin':
+            messages.error(request, 'Hanya admin yang dapat mengubah data Bug & Error List.')
+            return redirect('core:bug_error_list')
+
+        if action == 'create':
             title = request.POST.get('judul', '').strip()
             description = request.POST.get('deskripsi', '').strip()
             if not title or not description:
@@ -305,7 +340,7 @@ class BugErrorListView(TemplateView):
             return redirect(f"{reverse('core:bug_error_list')}?log={log.pk}")
 
         log = get_object_or_404(BugErrorLog, pk=request.POST.get('log_id'))
-        if request.POST.get('action') == 'delete':
+        if action == 'delete':
             log.delete()
             messages.success(request, 'Bug/error berhasil dihapus.')
             return redirect('core:bug_error_list')

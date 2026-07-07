@@ -19,7 +19,11 @@ class PesanBantuanAdmin(admin.ModelAdmin):
 
 @admin.register(BugErrorLog)
 class BugErrorLogAdmin(admin.ModelAdmin):
-    list_display = ('judul', 'kategori', 'prioritas', 'status', 'dilaporkan_oleh', 'dibuat_pada')
+    list_display = ('judul', 'kategori', 'prioritas', 'status', 'dilaporkan_oleh', 'ditangani_oleh', 'dibuat_pada')
     list_filter = ('status', 'kategori', 'prioritas')
-    search_fields = ('judul', 'lokasi', 'deskripsi', 'dilaporkan_oleh__nama_pengguna', 'dilaporkan_oleh__email')
+    search_fields = (
+        'judul', 'lokasi', 'deskripsi',
+        'dilaporkan_oleh__nama_pengguna', 'dilaporkan_oleh__email',
+        'ditangani_oleh__nama_pengguna', 'ditangani_oleh__email',
+    )
     readonly_fields = ('dibuat_pada', 'diperbarui_pada')
