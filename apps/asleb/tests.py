@@ -1,7 +1,9 @@
 import base64
 import shutil
 import tempfile
+import zipfile
 from datetime import date, datetime, timedelta
+from io import BytesIO
 from unittest import skipUnless
 from unittest.mock import patch
 
@@ -345,7 +347,8 @@ class AslebViewTests(TestCase):
             modul=modul,
             tanggal_praktikum=date(2026, 7, 1),
             status_absensi='hadir',
-            nilai=88,
+            nilai_realtime=80,
+            nilai_laporan=90,
             catatan='Baik',
             dicatat_oleh=self.pengguna,
         )
@@ -356,6 +359,38 @@ class AslebViewTests(TestCase):
         self.assertEqual(response['Content-Type'], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         self.assertTrue(response.content.startswith(b'PK'))
         self.assertIn(b'workbook.xml', response.content)
+        with zipfile.ZipFile(BytesIO(response.content)) as workbook:
+            sheet = workbook.read('xl/worksheets/sheet1.xml').decode()
+        self.assertIn('Nilai Realtime', sheet)
+        self.assertIn('Nilai Laporan', sheet)
+        self.assertIn('Rata-rata Mahasiswa', sheet)
+        self.assertIn('85.00', sheet)
+
+    def test_input_nilai_menghitung_rata_rata_realtime_dan_laporan(self):
+        peserta = PesertaPraktikum.objects.create(matkul=self.matkul, nim='0640020099', nama='Mahasiswa Nilai')
+        modul = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=1,
+            judul='Pengenalan',
+            file=SimpleUploadedFile('modul.pdf', b'%PDF-1.4', content_type='application/pdf'),
+        )
+
+        response = self.client.post(
+            reverse('asleb:praktikum_nilai', args=[self.matkul.pk, modul.pk]),
+            {
+                'tanggal_praktikum': '2026-07-01',
+                f'peserta-{peserta.pk}-status_absensi': 'hadir',
+                f'peserta-{peserta.pk}-nilai_realtime': '80',
+                f'peserta-{peserta.pk}-nilai_laporan': '90',
+                f'peserta-{peserta.pk}-catatan': 'Stabil',
+            },
+        )
+
+        self.assertRedirects(response, reverse('asleb:praktikum_nilai', args=[self.matkul.pk, modul.pk]))
+        hasil = HasilPraktikumMahasiswa.objects.get(peserta=peserta, modul=modul)
+        self.assertEqual(hasil.nilai_realtime, 80)
+        self.assertEqual(hasil.nilai_laporan, 90)
+        self.assertEqual(hasil.nilai, 85)
 
     def test_peserta_dikosongkan_saat_periode_asleb_berakhir_nilai_tetap_tersimpan(self):
         today = timezone.localdate()

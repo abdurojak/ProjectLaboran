@@ -510,6 +510,27 @@ class PenggunaViewTests(TestCase):
         self.assertRedirects(response, reverse('pengguna:detail', args=[self.pengguna.pk]))
         self.assertFalse(PengalamanPengguna.objects.filter(pk=riwayat.pk).exists())
 
+    def test_download_cv_menghasilkan_pdf_resume(self):
+        self.pengguna.ringkasan_profesional = 'Fresh graduate Informatika yang tertarik pada QA dan backend.'
+        self.pengguna.keahlian = 'JMeter, JavaScript, SQL'
+        self.pengguna.save(update_fields=['ringkasan_profesional', 'keahlian'])
+        PengalamanPengguna.objects.create(
+            pengguna=self.pengguna,
+            kategori='pengalaman',
+            jabatan='Information Technology Intern',
+            organisasi='Indomaret Group',
+            lokasi='Jakarta',
+            tanggal_mulai=date(2024, 2, 1),
+            tanggal_selesai=date(2024, 6, 1),
+            deskripsi='Create testing plan documents.',
+        )
+
+        response = self.client.get(reverse('pengguna:cv_download', args=[self.pengguna.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertTrue(response.content.startswith(b'%PDF'))
+
     def test_non_admin_tidak_bisa_edit_riwayat_profile_milik_orang_lain(self):
         pemilik = Pengguna.objects.create(
             nama_pengguna='Maya Mahasiswa',
