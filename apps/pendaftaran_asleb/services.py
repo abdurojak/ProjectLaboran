@@ -3,7 +3,7 @@ from datetime import date, timedelta
 from django.utils import timezone
 from django.db import transaction
 
-from apps.asleb.models import Asleb
+from apps.asleb.models import Asleb, PesertaPraktikum
 from apps.pengguna.models import PengalamanPengguna, Pengguna
 
 from .models import PendaftaranAsleb, PengaturanPendaftaranAsleb, PeriodeAsleb, RiwayatAsleb
@@ -106,6 +106,8 @@ def sync_expired_asleb_periods(value=None):
             pengguna.role = 'mahasiswa'
             pengguna.save(update_fields=['role', 'diperbarui_pada'])
             demoted += 1
+    if expired_nims:
+        PesertaPraktikum.objects.all().delete()
     return len(expired_nims), demoted
 
 

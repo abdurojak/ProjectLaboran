@@ -79,6 +79,34 @@ class DashboardViewTests(TestCase):
         settings_response = self.client.get(reverse('core:settings'))
         self.assertContains(settings_response, 'Master Akademik')
 
+    def test_admin_tidak_melihat_menu_operasional_laboran(self):
+        self.pengguna.role = 'admin'
+        self.pengguna.save(update_fields=['role'])
+
+        response = self.client.get(reverse('dashboard:home'))
+
+        titles = [link['title'] for link in response.context['sidebar_links']]
+        self.assertIn('Dashboard', titles)
+        self.assertIn('Kalender', titles)
+        self.assertIn('Pengaturan', titles)
+        self.assertNotIn('Barang & Peminjaman', titles)
+        self.assertNotIn('Asisten Laboratorium', titles)
+        self.assertNotIn('Surat Laboran', titles)
+        self.assertNotIn('Ruangan', titles)
+
+    def test_admin_ditolak_dari_url_operasional_laboran(self):
+        self.pengguna.role = 'admin'
+        self.pengguna.save(update_fields=['role'])
+
+        for url in [
+            reverse('inventaris:barang_list'),
+            reverse('barang_tertinggal:list'),
+            reverse('surat:list'),
+            reverse('asleb:asleb_list'),
+            reverse('pendaftaran_asleb:pendaftaran_list'),
+        ]:
+            self.assertRedirects(self.client.get(url), reverse('dashboard:home'))
+
     def test_dashboard_shows_pending_peminjaman(self):
         PeminjamanAlat.objects.create(
             barang=self.barang,

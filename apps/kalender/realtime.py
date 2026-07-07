@@ -130,7 +130,6 @@ def send_schedule_update(jadwal, event='schedule.updated', notify_managers=False
     }
     if notify_managers:
         send_role_notification('laboran', payload)
-        send_role_notification('admin', payload)
 
     from apps.pendaftaran_asleb.models import PendaftaranAsleb, RiwayatAsleb
     nims = set()
@@ -176,4 +175,3 @@ def send_attendance_update(absensi):
     for pengguna in users_for_nim(absensi.asleb.nim):
         send_user_notification(pengguna.pk, payload)
     send_role_notification('laboran', payload)
-    send_role_notification('admin', payload)

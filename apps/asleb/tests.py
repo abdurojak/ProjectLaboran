@@ -1,7 +1,7 @@
 import base64
 import shutil
 import tempfile
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from unittest import skipUnless
 from unittest.mock import patch
 
@@ -13,13 +13,14 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 from reportlab.lib.enums import TA_RIGHT
 
-from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb
+from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, PeriodeAsleb
+from apps.pendaftaran_asleb.services import sync_expired_asleb_periods
 from apps.pengguna.models import Pengguna
 from apps.jadwal.models import JadwalPraktikum
 from apps.ruangan.models import RuanganLab
 
 from .forms import AbsensiAslebForm, ENABLE_CAMERA_LOCATION_CAPTURE
-from .models import AbsensiAsleb, Asleb, HonorAsleb, ModulPraktikum, PengaturanAbsensiAsleb, PesertaPraktikum
+from .models import AbsensiAsleb, Asleb, HasilPraktikumMahasiswa, HonorAsleb, ModulPraktikum, PengaturanAbsensiAsleb, PesertaPraktikum
 from .surat_honor import LAB_SIGNATURES, build_lab_signature, build_lampiran_page, build_styles
 
 
@@ -39,16 +40,16 @@ class AslebViewTests(TestCase):
 
     def setUp(self):
         pengguna = Pengguna.objects.create(
-            nama_pengguna='Lab Admin',
-            nim_nik='ADM-ASLEB',
-            email='admin-asleb@example.com',
+            nama_pengguna='Lab Laboran',
+            nim_nik='LAB-ASLEB',
+            email='laboran-asleb@example.com',
             password='rahasia123',
             no_hp='081234567800',
             alamat='Jakarta',
             fakultas='Teknologi Industri',
             prodi='Informatika',
             gender='laki_laki',
-            role='admin',
+            role='laboran',
         )
         self.matkul, _ = MataKuliahAsleb.objects.get_or_create(
             kode='SDA_TIF01_ABDUL',
@@ -65,6 +66,7 @@ class AslebViewTests(TestCase):
         session = self.client.session
         session['pengguna_id'] = pengguna.pk
         session.save()
+        self.pengguna = pengguna
 
         self.asleb = Asleb.objects.create(
             nama='Siti Nurhaliza',
@@ -299,6 +301,7 @@ class AslebViewTests(TestCase):
         )
 
         response = self.client.post(reverse('asleb:praktikum_peserta_create'), {
+            'metode_input': 'manual',
             'matkul': self.matkul.pk,
             'daftar_mahasiswa': '0640020099, Mahasiswa Terhubung\n0640020088, Belum Punya Akun',
         })
@@ -308,6 +311,101 @@ class AslebViewTests(TestCase):
         unlinked = PesertaPraktikum.objects.get(matkul=self.matkul, nim='0640020088')
         self.assertEqual(linked.pengguna, mahasiswa)
         self.assertIsNone(unlinked.pengguna)
+
+    def test_import_peserta_praktikum_dari_csv(self):
+        csv_file = SimpleUploadedFile(
+            'peserta.csv',
+            b'No,Student Name,Student ID\n1,NAUFAL FAHREZI MAULANA,64102500001\n2,RAJA PANGLIMA ISLAM,64102500004\n',
+            content_type='text/csv',
+        )
+
+        response = self.client.post(
+            reverse('asleb:praktikum_peserta_create'),
+            {
+                'metode_input': 'csv',
+                'matkul': self.matkul.pk,
+                'file_csv': csv_file,
+            },
+        )
+
+        self.assertRedirects(response, f'{reverse("asleb:praktikum_mahasiswa_list")}?matkul={self.matkul.pk}')
+        self.assertTrue(PesertaPraktikum.objects.filter(matkul=self.matkul, nim='64102500001', nama='NAUFAL FAHREZI MAULANA').exists())
+        self.assertTrue(PesertaPraktikum.objects.filter(matkul=self.matkul, nim='64102500004', nama='RAJA PANGLIMA ISLAM').exists())
+
+    def test_export_nilai_praktikum_excel(self):
+        peserta = PesertaPraktikum.objects.create(matkul=self.matkul, nim='0640020099', nama='Mahasiswa Nilai')
+        modul = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=1,
+            judul='Pengenalan',
+            file=SimpleUploadedFile('modul.pdf', b'%PDF-1.4', content_type='application/pdf'),
+        )
+        HasilPraktikumMahasiswa.objects.create(
+            peserta=peserta,
+            modul=modul,
+            tanggal_praktikum=date(2026, 7, 1),
+            status_absensi='hadir',
+            nilai=88,
+            catatan='Baik',
+            dicatat_oleh=self.pengguna,
+        )
+
+        response = self.client.get(reverse('asleb:praktikum_nilai_export'), {'matkul': self.matkul.pk})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        self.assertTrue(response.content.startswith(b'PK'))
+        self.assertIn(b'workbook.xml', response.content)
+
+    def test_peserta_dikosongkan_saat_periode_asleb_berakhir_nilai_tetap_tersimpan(self):
+        today = timezone.localdate()
+        period = PeriodeAsleb.objects.create(
+            tahun=today.year,
+            semester=1 if today.month <= 6 else 2,
+            mulai=today - timedelta(days=120),
+            selesai=today - timedelta(days=1),
+            pendaftaran_mulai=today - timedelta(days=150),
+            pendaftaran_selesai=today - timedelta(days=130),
+        )
+        self.asleb.periode_aktif = period
+        self.asleb.status = 'aktif'
+        self.asleb.matkul = str(self.matkul)
+        self.asleb.save(update_fields=['periode_aktif', 'status', 'matkul'])
+        Pengguna.objects.create(
+            nama_pengguna=self.asleb.nama,
+            nim_nik=self.asleb.nim,
+            email='asleb-expired@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081234567899',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='asisten_lab',
+        )
+        peserta = PesertaPraktikum.objects.create(matkul=self.matkul, nim='0640020099', nama='Mahasiswa Nilai')
+        modul = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=2,
+            judul='Percabangan',
+            file=SimpleUploadedFile('modul2.pdf', b'%PDF-1.4', content_type='application/pdf'),
+        )
+        hasil = HasilPraktikumMahasiswa.objects.create(
+            peserta=peserta,
+            modul=modul,
+            tanggal_praktikum=date(2026, 7, 2),
+            status_absensi='hadir',
+            nilai=90,
+        )
+
+        sync_expired_asleb_periods(today)
+
+        self.assertFalse(PesertaPraktikum.objects.exists())
+        hasil.refresh_from_db()
+        self.assertIsNone(hasil.peserta)
+        self.assertEqual(hasil.peserta_nim, '0640020099')
+        self.assertEqual(hasil.peserta_nama, 'Mahasiswa Nilai')
+        self.assertEqual(hasil.nilai, 90)
 
     def test_honor_asleb_mengikuti_rumus_excel(self):
         self.create_pendaftaran_history(self.asleb.nim, 3)

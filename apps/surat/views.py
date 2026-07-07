@@ -4,6 +4,8 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, ListView, UpdateView
 
+from apps.core.permissions import can_manage_lab_operations
+
 from .forms import SuratPengadaanForm
 from .models import SuratPengadaan
 from .pdf import build_surat_pdf
@@ -12,8 +14,8 @@ from .pdf import build_surat_pdf
 class LaboranSuratRequiredMixin:
     def dispatch(self, request, *args, **kwargs):
         pengguna = getattr(request, 'current_pengguna', None)
-        if not pengguna or pengguna.role not in {'admin', 'laboran'}:
-            messages.error(request, 'Menu surat hanya tersedia untuk admin dan laboran.')
+        if not can_manage_lab_operations(pengguna):
+            messages.error(request, 'Menu surat hanya tersedia untuk Laboran.')
             return redirect('dashboard:home')
         return super().dispatch(request, *args, **kwargs)
 
@@ -49,7 +51,7 @@ class SuratUpdateView(LaboranSuratRequiredMixin, UpdateView):
 
 def download_surat_pdf(request, pk):
     pengguna = getattr(request, 'current_pengguna', None)
-    if not pengguna or pengguna.role not in {'admin', 'laboran'}:
+    if not can_manage_lab_operations(pengguna):
         return redirect('dashboard:home')
     surat = get_object_or_404(SuratPengadaan, pk=pk)
     response = HttpResponse(build_surat_pdf(surat), content_type='application/pdf')

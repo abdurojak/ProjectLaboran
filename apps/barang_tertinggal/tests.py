@@ -2,11 +2,28 @@ from django.test import TestCase
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
+from apps.pengguna.models import Pengguna
+
 from .models import BarangTertinggal
 
 
 class BarangTertinggalViewTests(TestCase):
     def setUp(self):
+        pengguna = Pengguna.objects.create(
+            nama_pengguna='Laboran Barang Tertinggal',
+            nim_nik='LAB-BRT',
+            email='laboran-brt@trisakti.ac.id',
+            password='rahasia123',
+            no_hp='080000000003',
+            alamat='Kampus',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='laboran',
+        )
+        session = self.client.session
+        session['pengguna_id'] = pengguna.pk
+        session.save()
         self.barang = BarangTertinggal.objects.create(
             nama_barang='Flashdisk',
             jenis_barang='Elektronik',

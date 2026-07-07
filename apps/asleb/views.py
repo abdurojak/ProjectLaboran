@@ -1,10 +1,14 @@
 import logging
+import zipfile
+from decimal import Decimal, ROUND_HALF_UP
+from io import BytesIO
+from html import escape
 
 from django.contrib import messages
 from django.core.files.base import ContentFile
 from django.db import transaction
-from django.db.models import Q, Sum
-from django.http import FileResponse
+from django.db.models import Avg, Count, Q, Sum
+from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils.text import slugify
@@ -13,6 +17,7 @@ from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView
 
 from apps.core.views import PostOnlyDeleteMixin
+from apps.core.permissions import ASISTEN_LAB_ROLE, LABORAN_ROLE, can_manage_lab_operations
 from apps.jadwal.models import JadwalPraktikum
 from apps.kalender.realtime import send_attendance_update, send_honor_update
 from apps.pengguna.models import Pengguna
@@ -50,13 +55,31 @@ logger = logging.getLogger(__name__)
 class HonorAdminRequiredMixin:
     def dispatch(self, request, *args, **kwargs):
         pengguna = getattr(request, 'current_pengguna', None)
-        if not pengguna or pengguna.role != 'admin':
-            messages.error(request, 'Hanya admin yang bisa mengelola rekap honorarium.')
+        if not can_manage_lab_operations(pengguna):
+            messages.error(request, 'Hanya laboran yang bisa mengelola rekap honorarium.')
             return redirect('asleb:honor_list')
         return super().dispatch(request, *args, **kwargs)
 
 
-class AslebListView(ListView):
+class LabOperationsRequiredMixin:
+    def dispatch(self, request, *args, **kwargs):
+        pengguna = getattr(request, 'current_pengguna', None)
+        if not can_manage_lab_operations(pengguna):
+            messages.error(request, 'Menu ini hanya tersedia untuk Laboran.')
+            return redirect('dashboard:home')
+        return super().dispatch(request, *args, **kwargs)
+
+
+class HonorAccessMixin:
+    def dispatch(self, request, *args, **kwargs):
+        pengguna = getattr(request, 'current_pengguna', None)
+        if not pengguna or pengguna.role not in {LABORAN_ROLE, ASISTEN_LAB_ROLE}:
+            messages.error(request, 'Anda tidak memiliki akses ke rekap honorarium.')
+            return redirect('dashboard:home')
+        return super().dispatch(request, *args, **kwargs)
+
+
+class AslebListView(LabOperationsRequiredMixin, ListView):
     model = Asleb
     template_name = 'asleb/asleb_list.html'
     context_object_name = 'asleb_list'
@@ -86,7 +109,7 @@ class AslebListView(ListView):
         context['selected_status'] = self.request.GET.get('status', '').strip()
         context['status_choices'] = Asleb.STATUS_CHOICES
         pengguna = getattr(self.request, 'current_pengguna', None)
-        context['can_end_asleb'] = bool(pengguna and pengguna.role in {'admin', 'laboran'})
+        context['can_end_asleb'] = can_manage_lab_operations(pengguna)
         return context
 
 
@@ -94,8 +117,8 @@ class AslebListView(ListView):
 @transaction.atomic
 def end_asleb_membership(request, pk):
     pengguna = getattr(request, 'current_pengguna', None)
-    if not pengguna or pengguna.role not in {'admin', 'laboran'}:
-        messages.error(request, 'Hanya admin dan laboran yang dapat mengakhiri masa tugas aslab.')
+    if not can_manage_lab_operations(pengguna):
+        messages.error(request, 'Hanya laboran yang dapat mengakhiri masa tugas aslab.')
         return redirect('asleb:asleb_list')
 
     asleb = get_object_or_404(Asleb, pk=pk)
@@ -109,34 +132,34 @@ def end_asleb_membership(request, pk):
     return redirect('asleb:asleb_list')
 
 
-class AslebDetailView(DetailView):
+class AslebDetailView(LabOperationsRequiredMixin, DetailView):
     model = Asleb
     template_name = 'asleb/asleb_detail.html'
     context_object_name = 'asleb'
 
 
-class AslebCreateView(CreateView):
+class AslebCreateView(LabOperationsRequiredMixin, CreateView):
     model = Asleb
     form_class = AslebForm
     template_name = 'asleb/asleb_form.html'
     success_url = reverse_lazy('asleb:asleb_list')
 
 
-class AslebUpdateView(UpdateView):
+class AslebUpdateView(LabOperationsRequiredMixin, UpdateView):
     model = Asleb
     form_class = AslebForm
     template_name = 'asleb/asleb_form.html'
     success_url = reverse_lazy('asleb:asleb_list')
 
 
-class AslebDeleteView(PostOnlyDeleteMixin, DeleteView):
+class AslebDeleteView(LabOperationsRequiredMixin, PostOnlyDeleteMixin, DeleteView):
     model = Asleb
     template_name = 'asleb/asleb_confirm_delete.html'
     context_object_name = 'asleb'
     success_url = reverse_lazy('asleb:asleb_list')
 
 
-class HonorAslebListView(ListView):
+class HonorAslebListView(HonorAccessMixin, ListView):
     model = HonorAsleb
     template_name = 'asleb/honor_list.html'
     context_object_name = 'honor_list'
@@ -148,10 +171,12 @@ class HonorAslebListView(ListView):
         bulan = self.request.GET.get('bulan', '').strip()
         status = self.request.GET.get('status', '').strip()
 
-        if pengguna and pengguna.role == 'laboran':
+        if pengguna and pengguna.role == LABORAN_ROLE:
             queryset = queryset.filter(assigned_laboran=pengguna)
-        elif pengguna and pengguna.role == 'asisten_lab':
+        elif pengguna and pengguna.role == ASISTEN_LAB_ROLE:
             queryset = queryset.filter(asleb__nim=pengguna.nim_nik)
+        elif pengguna:
+            queryset = queryset.none()
 
         if search:
             queryset = queryset.filter(
@@ -182,10 +207,12 @@ class HonorAslebListView(ListView):
         total_honor = self.get_queryset().aggregate(total=Sum('jumlah'))['total'] or 0
         pengguna = getattr(self.request, 'current_pengguna', None)
         base_honor_qs = HonorAsleb.objects.all()
-        if pengguna and pengguna.role == 'laboran':
+        if pengguna and pengguna.role == LABORAN_ROLE:
             base_honor_qs = base_honor_qs.filter(assigned_laboran=pengguna)
-        elif pengguna and pengguna.role == 'asisten_lab':
+        elif pengguna and pengguna.role == ASISTEN_LAB_ROLE:
             base_honor_qs = base_honor_qs.filter(asleb__nim=pengguna.nim_nik)
+        elif pengguna:
+            base_honor_qs = base_honor_qs.none()
 
         context['search_query'] = self.request.GET.get('q', '').strip()
         context['selected_bulan'] = selected_bulan
@@ -194,9 +221,9 @@ class HonorAslebListView(ListView):
         context['total_honor'] = f'Rp {total_honor:,.0f}'.replace(',', '.')
         context['laboran_count'] = Pengguna.objects.filter(role='laboran', is_verified=True).count()
         context['unassigned_honor_count'] = base_honor_qs.filter(assigned_laboran__isnull=True).count()
-        context['is_admin'] = bool(pengguna and pengguna.role == 'admin')
-        context['is_laboran'] = bool(pengguna and pengguna.role == 'laboran')
-        context['is_asisten_lab'] = bool(pengguna and pengguna.role == 'asisten_lab')
+        context['is_admin'] = False
+        context['is_laboran'] = bool(pengguna and pengguna.role == LABORAN_ROLE)
+        context['is_asisten_lab'] = bool(pengguna and pengguna.role == ASISTEN_LAB_ROLE)
         context['formula_note'] = 'Total Honor = min(7 x Total Pertemuan, 60) x Honor/Jam. Level otomatis: periode aslab ke-1 dan ke-2 Junior Rp7.000, mulai ke-3 Senior Rp8.000.'
         context['biaya_transfer_form'] = PengaturanBiayaTransferForm(instance=PengaturanBiayaTransfer.get_solo())
         return context
@@ -205,8 +232,8 @@ class HonorAslebListView(ListView):
 @require_POST
 def update_transfer_fees(request):
     pengguna = getattr(request, 'current_pengguna', None)
-    if not pengguna or pengguna.role not in {'admin', 'laboran'}:
-        messages.error(request, 'Hanya admin dan laboran yang dapat mengubah biaya transfer.')
+    if not can_manage_lab_operations(pengguna):
+        messages.error(request, 'Hanya laboran yang dapat mengubah biaya transfer.')
         return redirect('asleb:honor_list')
     form = PengaturanBiayaTransferForm(request.POST, instance=PengaturanBiayaTransfer.get_solo())
     if form.is_valid():
@@ -245,8 +272,10 @@ class HonorAslebUpdateView(UpdateView):
     def get_queryset(self):
         queryset = super().get_queryset()
         pengguna = getattr(self.request, 'current_pengguna', None)
-        if pengguna and pengguna.role == 'laboran':
+        if pengguna and pengguna.role == LABORAN_ROLE:
             return queryset.filter(assigned_laboran=pengguna)
+        if pengguna and pengguna.role != LABORAN_ROLE:
+            return queryset.none()
         return queryset
 
     def get_form_kwargs(self):
@@ -271,8 +300,8 @@ class SuratHonorAccessMixin:
     def dispatch(self, request, *args, **kwargs):
         cleanup_expired_surat_honor()
         pengguna = getattr(request, 'current_pengguna', None)
-        if not pengguna or pengguna.role not in {'admin', 'laboran'}:
-            messages.error(request, 'Hanya admin dan laboran yang bisa mengakses arsip surat honor.')
+        if not can_manage_lab_operations(pengguna):
+            messages.error(request, 'Hanya laboran yang bisa mengakses arsip surat honor.')
             return redirect('dashboard:home')
         return super().dispatch(request, *args, **kwargs)
 
@@ -359,8 +388,8 @@ class SuratHonorAslebGenerateView(SuratHonorAccessMixin, FormView):
 def download_surat_honor(request, pk):
     cleanup_expired_surat_honor()
     pengguna = getattr(request, 'current_pengguna', None)
-    if not pengguna or pengguna.role not in {'admin', 'laboran'}:
-        messages.error(request, 'Hanya admin dan laboran yang bisa mengunduh surat honor.')
+    if not can_manage_lab_operations(pengguna):
+        messages.error(request, 'Hanya laboran yang bisa mengunduh surat honor.')
         return redirect('dashboard:home')
 
     surat = get_object_or_404(SuratHonorAsleb, pk=pk)
@@ -383,8 +412,10 @@ class AbsensiAslebListView(ListView):
         search = self.request.GET.get('q', '').strip()
         modul = self.request.GET.get('modul', '').strip()
 
-        if pengguna and pengguna.role == 'asisten_lab':
+        if pengguna and pengguna.role == ASISTEN_LAB_ROLE:
             queryset = queryset.filter(asleb__nim=pengguna.nim_nik)
+        elif pengguna and pengguna.role != LABORAN_ROLE:
+            queryset = queryset.none()
 
         if search:
             queryset = queryset.filter(
@@ -403,7 +434,7 @@ class AbsensiAslebListView(ListView):
         context = super().get_context_data(**kwargs)
         pengguna = getattr(self.request, 'current_pengguna', None)
         context['pengaturan_absensi'] = PengaturanAbsensiAsleb.get_solo()
-        context['is_asisten_lab'] = bool(pengguna and pengguna.role == 'asisten_lab')
+        context['is_asisten_lab'] = bool(pengguna and pengguna.role == ASISTEN_LAB_ROLE)
         context['search_query'] = self.request.GET.get('q', '').strip()
         context['selected_modul'] = self.request.GET.get('modul', '').strip()
         context['modul_choices'] = AbsensiAsleb.MODUL_CHOICES
@@ -414,18 +445,18 @@ class AbsensiAslebListView(ListView):
             else None
         )
         context['modul_list'] = self.get_modul_list(pengguna, context['asleb_profile'])
-        context['can_manage_modul'] = bool(pengguna and pengguna.role in {'admin', 'laboran'})
+        context['can_manage_modul'] = can_manage_lab_operations(pengguna)
         return context
 
     def get_modul_list(self, pengguna, asleb_profile):
         queryset = ModulPraktikum.objects.select_related('matkul', 'diunggah_oleh')
-        if pengguna and pengguna.role == 'asisten_lab':
+        if pengguna and pengguna.role == ASISTEN_LAB_ROLE:
             matkul = get_asleb_matkul(asleb_profile) if asleb_profile else None
             return queryset.filter(matkul=matkul) if matkul else queryset.none()
         return queryset
 
     def get_asleb_profile(self, pengguna):
-        if not pengguna or pengguna.role != 'asisten_lab':
+        if not pengguna or pengguna.role != ASISTEN_LAB_ROLE:
             return None
 
         return Asleb.objects.filter(nim=pengguna.nim_nik).first()
@@ -441,7 +472,7 @@ class AbsensiAslebCreateView(CreateView):
         pengguna = getattr(request, 'current_pengguna', None)
         self.asleb = Asleb.objects.filter(nim=getattr(pengguna, 'nim_nik', '')).first()
 
-        if not pengguna or pengguna.role != 'asisten_lab':
+        if not pengguna or pengguna.role != ASISTEN_LAB_ROLE:
             messages.error(request, 'Absensi hanya bisa diisi oleh role Asisten Lab.')
             return redirect('dashboard:home')
 
@@ -450,7 +481,7 @@ class AbsensiAslebCreateView(CreateView):
             return redirect('dashboard:home')
 
         if not PengaturanAbsensiAsleb.get_solo().dibuka:
-            messages.warning(request, 'Absensi aslab sedang ditutup oleh admin/laboran.')
+            messages.warning(request, 'Absensi aslab sedang ditutup oleh laboran.')
             return redirect('asleb:absensi_list')
 
         self.jadwal = get_active_absensi_schedule(self.asleb)
@@ -535,8 +566,8 @@ def get_active_absensi_schedule(asleb, current_time=None):
 class ModulManageRequiredMixin:
     def dispatch(self, request, *args, **kwargs):
         pengguna = getattr(request, 'current_pengguna', None)
-        if not pengguna or pengguna.role not in {'admin', 'laboran'}:
-            messages.error(request, 'Hanya laboran dan admin yang bisa mengelola modul praktikum.')
+        if not can_manage_lab_operations(pengguna):
+            messages.error(request, 'Hanya laboran yang bisa mengelola modul praktikum.')
             return redirect('asleb:absensi_list')
         return super().dispatch(request, *args, **kwargs)
 
@@ -583,9 +614,9 @@ def get_praktikum_matkul_queryset(pengguna):
     queryset = MataKuliahAsleb.objects.filter(aktif=True)
     if not pengguna:
         return queryset.none()
-    if pengguna.role in {'admin', 'laboran'}:
+    if pengguna.role == LABORAN_ROLE:
         return queryset
-    if pengguna.role != 'asisten_lab':
+    if pengguna.role != ASISTEN_LAB_ROLE:
         return queryset.none()
 
     matkul_ids = PendaftaranAsleb.objects.filter(
@@ -605,7 +636,7 @@ def get_praktikum_matkul_queryset(pengguna):
 class PraktikumMahasiswaAccessMixin:
     def dispatch(self, request, *args, **kwargs):
         pengguna = getattr(request, 'current_pengguna', None)
-        if not pengguna or pengguna.role not in {'admin', 'laboran', 'asisten_lab'}:
+        if not pengguna or pengguna.role not in {LABORAN_ROLE, ASISTEN_LAB_ROLE}:
             messages.error(request, 'Anda tidak memiliki akses ke nilai dan absensi mahasiswa.')
             return redirect('dashboard:home')
         return super().dispatch(request, *args, **kwargs)
@@ -614,8 +645,8 @@ class PraktikumMahasiswaAccessMixin:
 class PesertaPraktikumManageMixin:
     def dispatch(self, request, *args, **kwargs):
         pengguna = getattr(request, 'current_pengguna', None)
-        if not pengguna or pengguna.role not in {'admin', 'laboran'}:
-            messages.error(request, 'Hanya admin dan laboran yang dapat mengelola peserta praktikum.')
+        if not can_manage_lab_operations(pengguna):
+            messages.error(request, 'Hanya laboran yang dapat mengelola peserta praktikum.')
             return redirect('asleb:praktikum_mahasiswa_list')
         return super().dispatch(request, *args, **kwargs)
 
@@ -639,16 +670,32 @@ class PraktikumMahasiswaListView(PraktikumMahasiswaAccessMixin, TemplateView):
         selected_matkul = next((item for item in matkul_list if str(item.pk) == selected_id), None)
         if not selected_matkul and len(matkul_list) == 1:
             selected_matkul = matkul_list[0]
+        peserta_list = (
+            list(selected_matkul.peserta_praktikum.select_related('pengguna').all())
+            if selected_matkul else []
+        )
+        if peserta_list:
+            nilai_summary = {
+                item['peserta_id']: item
+                for item in HasilPraktikumMahasiswa.objects.filter(
+                    peserta__in=peserta_list,
+                    nilai__isnull=False,
+                ).values('peserta_id').annotate(
+                    rata_rata=Avg('nilai'),
+                    jumlah_nilai=Count('id'),
+                )
+            }
+            for peserta in peserta_list:
+                summary = nilai_summary.get(peserta.pk, {})
+                peserta.rata_rata_nilai = summary.get('rata_rata')
+                peserta.jumlah_nilai = summary.get('jumlah_nilai', 0)
 
         context.update({
             'matkul_list': matkul_list,
             'selected_matkul': selected_matkul,
-            'peserta_list': (
-                selected_matkul.peserta_praktikum.select_related('pengguna').all()
-                if selected_matkul else PesertaPraktikum.objects.none()
-            ),
-            'can_manage_peserta': pengguna.role in {'admin', 'laboran'},
-            'is_asisten_lab': pengguna.role == 'asisten_lab',
+            'peserta_list': peserta_list,
+            'can_manage_peserta': pengguna.role == LABORAN_ROLE,
+            'is_asisten_lab': pengguna.role == ASISTEN_LAB_ROLE,
         })
         return context
 
@@ -663,7 +710,7 @@ class PesertaPraktikumBulkCreateView(PesertaPraktikumManageMixin, FormView):
         created = 0
         updated = 0
         with transaction.atomic():
-            for row in form.cleaned_data['daftar_mahasiswa']:
+            for row in form.cleaned_data['peserta_rows']:
                 account = Pengguna.objects.filter(nim_nik=row['nim']).first()
                 _, was_created = PesertaPraktikum.objects.update_or_create(
                     matkul=matkul,
@@ -684,8 +731,8 @@ class PesertaPraktikumBulkCreateView(PesertaPraktikumManageMixin, FormView):
 @require_POST
 def delete_peserta_praktikum(request, pk):
     pengguna = getattr(request, 'current_pengguna', None)
-    if not pengguna or pengguna.role not in {'admin', 'laboran'}:
-        messages.error(request, 'Hanya admin dan laboran yang dapat menghapus peserta praktikum.')
+    if not can_manage_lab_operations(pengguna):
+        messages.error(request, 'Hanya laboran yang dapat menghapus peserta praktikum.')
         return redirect('asleb:praktikum_mahasiswa_list')
     peserta = get_object_or_404(PesertaPraktikum.objects.select_related('matkul'), pk=pk)
     matkul_id = peserta.matkul_id
@@ -721,6 +768,7 @@ class NilaiAbsensiMahasiswaView(PraktikumMahasiswaAccessMixin, TemplateView):
                     instance=existing.get(peserta.pk),
                     prefix=f'peserta-{peserta.pk}',
                 ),
+                'rata_rata': existing[peserta.pk].nilai_rata_rata_display if peserta.pk in existing else '-',
             }
             for peserta in peserta_list
         ]
@@ -755,17 +803,144 @@ class NilaiAbsensiMahasiswaView(PraktikumMahasiswaAccessMixin, TemplateView):
             'modul': self.modul,
             'rows': kwargs.get('rows') or self.build_rows(),
             'tanggal_praktikum': kwargs.get('tanggal_praktikum') or timezone.localdate().isoformat(),
-            'is_asisten_lab': self.request.current_pengguna.role == 'asisten_lab',
+            'is_asisten_lab': self.request.current_pengguna.role == ASISTEN_LAB_ROLE,
         })
         return context
+
+
+def export_nilai_praktikum_excel(request):
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not pengguna or pengguna.role not in {LABORAN_ROLE, ASISTEN_LAB_ROLE}:
+        messages.error(request, 'Anda tidak memiliki akses mengunduh rekap nilai praktikum.')
+        return redirect('dashboard:home')
+
+    matkul_qs = get_praktikum_matkul_queryset(pengguna)
+    matkul_id = request.GET.get('matkul', '').strip()
+    hasil_qs = (
+        HasilPraktikumMahasiswa.objects
+        .select_related('peserta', 'modul', 'modul__matkul', 'dicatat_oleh')
+        .filter(modul__matkul__in=matkul_qs)
+        .order_by('modul__matkul__nama', 'modul__matkul__kelas', 'modul__nomor', 'peserta_nama')
+    )
+    if matkul_id:
+        hasil_qs = hasil_qs.filter(modul__matkul_id=matkul_id)
+    hasil_list = list(hasil_qs)
+    nilai_by_nim = {}
+    for hasil in hasil_list:
+        nim = hasil.peserta.nim if hasil.peserta_id else hasil.peserta_nim
+        nilai = hasil.hitung_nilai_rata_rata()
+        if nim and nilai is not None:
+            nilai_by_nim.setdefault(nim, []).append(nilai)
+    rata_rata_mahasiswa = {
+        nim: (sum(values, Decimal('0')) / Decimal(len(values))).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        for nim, values in nilai_by_nim.items()
+        if values
+    }
+
+    rows = [[
+        'Mata Kuliah',
+        'Kelas',
+        'Dosen',
+        'Modul',
+        'Tanggal Praktikum',
+        'NIM',
+        'Nama Mahasiswa',
+        'Status Absensi',
+        'Nilai Realtime',
+        'Nilai Laporan',
+        'Rata-rata Modul',
+        'Rata-rata Mahasiswa',
+        'Catatan',
+        'Dicatat Oleh',
+    ]]
+    for hasil in hasil_list:
+        matkul = hasil.modul.matkul
+        nim = hasil.peserta.nim if hasil.peserta_id else hasil.peserta_nim
+        rows.append([
+            matkul.nama,
+            matkul.kelas,
+            matkul.dosen,
+            f'Modul {hasil.modul.nomor} - {hasil.modul.judul}',
+            hasil.tanggal_praktikum.isoformat(),
+            nim,
+            hasil.peserta.nama if hasil.peserta_id else hasil.peserta_nama,
+            hasil.get_status_absensi_display(),
+            '' if hasil.nilai_realtime is None else str(hasil.nilai_realtime),
+            '' if hasil.nilai_laporan is None else str(hasil.nilai_laporan),
+            '' if hasil.hitung_nilai_rata_rata() is None else str(hasil.hitung_nilai_rata_rata()),
+            '' if nim not in rata_rata_mahasiswa else str(rata_rata_mahasiswa[nim]),
+            hasil.catatan,
+            hasil.dicatat_oleh.nama_pengguna if hasil.dicatat_oleh_id else '',
+        ])
+
+    workbook_bytes = build_simple_xlsx(rows, sheet_name='Rekap Nilai')
+    response = HttpResponse(
+        workbook_bytes,
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = 'attachment; filename="rekap-nilai-praktikum.xlsx"'
+    return response
+
+
+def build_simple_xlsx(rows, sheet_name='Sheet1'):
+    def col_name(index):
+        name = ''
+        while index:
+            index, remainder = divmod(index - 1, 26)
+            name = chr(65 + remainder) + name
+        return name
+
+    sheet_rows = []
+    for row_index, row in enumerate(rows, start=1):
+        cells = []
+        for col_index, value in enumerate(row, start=1):
+            coordinate = f'{col_name(col_index)}{row_index}'
+            safe_value = escape(str(value or ''))
+            cells.append(f'<c r="{coordinate}" t="inlineStr"><is><t>{safe_value}</t></is></c>')
+        sheet_rows.append(f'<row r="{row_index}">{"".join(cells)}</row>')
+
+    worksheet = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetViews><sheetView workbookViewId="0"/></sheetViews>
+  <sheetFormatPr defaultRowHeight="15"/>
+  <sheetData>{''.join(sheet_rows)}</sheetData>
+</worksheet>'''
+    workbook = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets><sheet name="{escape(sheet_name)}" sheetId="1" r:id="rId1"/></sheets>
+</workbook>'''
+    content_types = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>'''
+    root_rels = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>'''
+    workbook_rels = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+</Relationships>'''
+
+    output = BytesIO()
+    with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr('[Content_Types].xml', content_types)
+        archive.writestr('_rels/.rels', root_rels)
+        archive.writestr('xl/workbook.xml', workbook)
+        archive.writestr('xl/_rels/workbook.xml.rels', workbook_rels)
+        archive.writestr('xl/worksheets/sheet1.xml', worksheet)
+    return output.getvalue()
 
 
 def download_modul_praktikum(request, pk):
     pengguna = getattr(request, 'current_pengguna', None)
     modul = get_object_or_404(ModulPraktikum.objects.select_related('matkul'), pk=pk)
-    allowed = bool(pengguna and pengguna.role in {'admin', 'laboran'})
+    allowed = can_manage_lab_operations(pengguna)
 
-    if pengguna and pengguna.role == 'asisten_lab':
+    if pengguna and pengguna.role == ASISTEN_LAB_ROLE:
         asleb = Asleb.objects.filter(nim=pengguna.nim_nik).first()
         allowed = bool(asleb and get_asleb_matkul(asleb) == modul.matkul)
 
@@ -783,8 +958,8 @@ def download_modul_praktikum(request, pk):
 @require_POST
 def toggle_absensi_status(request):
     pengguna = getattr(request, 'current_pengguna', None)
-    if not pengguna or pengguna.role not in {'admin', 'laboran'}:
-        messages.error(request, 'Hanya admin dan laboran yang bisa membuka atau menutup absensi.')
+    if not can_manage_lab_operations(pengguna):
+        messages.error(request, 'Hanya laboran yang bisa membuka atau menutup absensi.')
         return redirect('asleb:absensi_list')
 
     pengaturan = PengaturanAbsensiAsleb.get_solo()
@@ -799,12 +974,12 @@ def toggle_absensi_status(request):
 @require_POST
 def confirm_honor_transfer(request, pk):
     pengguna = getattr(request, 'current_pengguna', None)
-    if not pengguna or pengguna.role not in {'admin', 'laboran'}:
-        messages.error(request, 'Hanya admin dan laboran yang bisa mengonfirmasi transfer honor.')
+    if not can_manage_lab_operations(pengguna):
+        messages.error(request, 'Hanya laboran yang bisa mengonfirmasi transfer honor.')
         return redirect('asleb:honor_list')
 
     honor = get_object_or_404(HonorAsleb, pk=pk)
-    if pengguna.role == 'laboran' and honor.assigned_laboran_id != pengguna.pk:
+    if pengguna.role == LABORAN_ROLE and honor.assigned_laboran_id != pengguna.pk:
         messages.error(request, 'Tugas TF honor ini bukan milik akun laboran Anda.')
         return redirect('asleb:honor_list')
 
@@ -829,8 +1004,8 @@ def confirm_honor_transfer(request, pk):
 @require_POST
 def auto_assign_honor_transfers(request):
     pengguna = getattr(request, 'current_pengguna', None)
-    if not pengguna or pengguna.role != 'admin':
-        messages.error(request, 'Hanya admin yang bisa membagi tugas TF otomatis.')
+    if not can_manage_lab_operations(pengguna):
+        messages.error(request, 'Hanya laboran yang bisa membagi tugas TF otomatis.')
         return redirect('asleb:honor_list')
 
     selected_bulan = request.POST.get('bulan', '').strip()

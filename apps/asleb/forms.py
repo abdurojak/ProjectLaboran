@@ -1,3 +1,6 @@
+import csv
+import io
+
 from django import forms
 from django.conf import settings
 from django.utils import timezone
@@ -311,6 +314,19 @@ class ModulPraktikumForm(forms.ModelForm):
 
 
 class PesertaPraktikumBulkForm(forms.Form):
+    INPUT_MANUAL = 'manual'
+    INPUT_CSV = 'csv'
+    INPUT_METHOD_CHOICES = [
+        (INPUT_MANUAL, 'Tulis manual'),
+        (INPUT_CSV, 'Import otomatis dari CSV'),
+    ]
+
+    metode_input = forms.ChoiceField(
+        label='Metode input',
+        choices=INPUT_METHOD_CHOICES,
+        widget=forms.RadioSelect,
+        initial=INPUT_MANUAL,
+    )
     matkul = forms.ModelChoiceField(label='Mata kuliah dan kelas', queryset=None)
     daftar_mahasiswa = forms.CharField(
         label='Daftar mahasiswa',
@@ -319,6 +335,12 @@ class PesertaPraktikumBulkForm(forms.Form):
             'placeholder': '064002000001, Nama Mahasiswa\n064002000002, Nama Mahasiswa Kedua',
         }),
         help_text='Satu mahasiswa per baris dengan format NIM, Nama. Bisa memakai koma, titik koma, atau tab.',
+        required=False,
+    )
+    file_csv = forms.FileField(
+        label='File CSV peserta',
+        required=False,
+        help_text='Format yang didukung: CSV dengan kolom Student ID/NIM dan Student Name/Nama.',
     )
 
     def __init__(self, *args, **kwargs):
@@ -326,11 +348,36 @@ class PesertaPraktikumBulkForm(forms.Form):
         from apps.pendaftaran_asleb.models import MataKuliahAsleb
         self.fields['matkul'].queryset = MataKuliahAsleb.objects.filter(aktif=True)
 
-    def clean_daftar_mahasiswa(self):
+    def clean_file_csv(self):
+        uploaded = self.cleaned_data.get('file_csv')
+        if not uploaded:
+            return uploaded
+        if not uploaded.name.lower().endswith('.csv'):
+            raise forms.ValidationError('File harus berformat CSV.')
+        if uploaded.size > 2 * 1024 * 1024:
+            raise forms.ValidationError('Ukuran file CSV maksimal 2 MB.')
+        return uploaded
+
+    def clean(self):
+        cleaned_data = super().clean()
+        metode = cleaned_data.get('metode_input') or self.INPUT_MANUAL
+        if metode == self.INPUT_CSV:
+            uploaded = cleaned_data.get('file_csv')
+            if not uploaded:
+                self.add_error('file_csv', 'Upload file CSV terlebih dahulu.')
+                return cleaned_data
+            cleaned_data['peserta_rows'] = self.parse_csv(uploaded)
+            return cleaned_data
+
+        raw_text = cleaned_data.get('daftar_mahasiswa', '')
+        cleaned_data['peserta_rows'] = self.parse_manual_rows(raw_text)
+        return cleaned_data
+
+    def parse_manual_rows(self, raw_text):
         rows = []
         errors = []
         seen = set()
-        for line_number, raw_line in enumerate(self.cleaned_data['daftar_mahasiswa'].splitlines(), start=1):
+        for line_number, raw_line in enumerate(raw_text.splitlines(), start=1):
             line = raw_line.strip()
             if not line:
                 continue
@@ -353,13 +400,70 @@ class PesertaPraktikumBulkForm(forms.Form):
             raise forms.ValidationError('Masukkan minimal satu mahasiswa.')
         return rows
 
+    def parse_csv(self, uploaded):
+        try:
+            uploaded.seek(0)
+            content = uploaded.read().decode('utf-8-sig')
+        except UnicodeDecodeError:
+            uploaded.seek(0)
+            content = uploaded.read().decode('latin-1')
+
+        reader = csv.DictReader(io.StringIO(content))
+        if not reader.fieldnames:
+            raise forms.ValidationError('CSV tidak memiliki header kolom.')
+
+        normalized_fields = {
+            (field or '').strip().lower().replace(' ', '_'): field
+            for field in reader.fieldnames
+        }
+        nim_field = (
+            normalized_fields.get('student_id')
+            or normalized_fields.get('nim')
+            or normalized_fields.get('nim_mahasiswa')
+            or normalized_fields.get('id')
+        )
+        nama_field = (
+            normalized_fields.get('student_name')
+            or normalized_fields.get('nama')
+            or normalized_fields.get('nama_mahasiswa')
+            or normalized_fields.get('name')
+        )
+        if not nim_field or not nama_field:
+            raise forms.ValidationError('CSV harus memiliki kolom Student ID/NIM dan Student Name/Nama.')
+
+        rows = []
+        errors = []
+        seen = set()
+        for line_number, row in enumerate(reader, start=2):
+            nim = (row.get(nim_field) or '').strip()
+            nama = (row.get(nama_field) or '').strip()
+            if not nim and not nama:
+                continue
+            if not nim or not nama:
+                errors.append(f'Baris {line_number}: NIM dan Nama wajib terisi.')
+                continue
+            if not nim.isdigit():
+                errors.append(f'Baris {line_number}: NIM hanya boleh berisi angka.')
+                continue
+            if nim in seen:
+                continue
+            seen.add(nim)
+            rows.append({'nim': nim, 'nama': nama})
+
+        if errors:
+            raise forms.ValidationError(errors)
+        if not rows:
+            raise forms.ValidationError('CSV tidak berisi data peserta.')
+        return rows
+
 
 class HasilPraktikumMahasiswaForm(forms.ModelForm):
     class Meta:
         model = HasilPraktikumMahasiswa
-        fields = ['status_absensi', 'nilai', 'catatan']
+        fields = ['status_absensi', 'nilai_realtime', 'nilai_laporan', 'catatan']
         widgets = {
-            'nilai': forms.NumberInput(attrs={'min': 0, 'max': 100, 'step': '0.01', 'placeholder': '0-100'}),
+            'nilai_realtime': forms.NumberInput(attrs={'min': 0, 'max': 100, 'step': '0.01', 'placeholder': '0-100'}),
+            'nilai_laporan': forms.NumberInput(attrs={'min': 0, 'max': 100, 'step': '0.01', 'placeholder': '0-100'}),
             'catatan': forms.TextInput(attrs={'placeholder': 'Opsional'}),
         }
 

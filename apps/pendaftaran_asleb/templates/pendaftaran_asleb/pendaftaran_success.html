@@ -9,7 +9,7 @@
             <i data-lucide="check-circle-2" class="h-10 w-10"></i>
         </div>
         <h2 class="mt-6 text-3xl font-black tracking-tight text-slate-900">Pendaftaran Terkirim</h2>
-        <p class="mt-3 text-sm leading-7 text-slate-500">Terima kasih. Data pendaftaran aslab sudah masuk dan akan dicek oleh admin laboratorium.</p>
+        <p class="mt-3 text-sm leading-7 text-slate-500">Terima kasih. Data pendaftaran aslab sudah masuk dan akan dicek oleh laboran.</p>
         <div class="mt-6 flex flex-wrap justify-center gap-3">
             {% if pendaftaran_terakhir %}<a href="{% url 'pendaftaran_asleb:rekening_update' pendaftaran_terakhir.pk %}" class="btn-primary"><i data-lucide="wallet-cards" class="h-4 w-4"></i><span>Edit Metode Pembayaran</span></a>{% endif %}
             <a href="{% url 'dashboard:home' %}" class="btn-secondary"><i data-lucide="layout-dashboard" class="h-4 w-4"></i><span>Kembali ke Dashboard</span></a>

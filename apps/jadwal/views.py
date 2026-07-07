@@ -11,6 +11,7 @@ from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
 from apps.core.views import PostOnlyDeleteMixin
+from apps.core.permissions import ADMIN_ROLE, ASISTEN_LAB_ROLE, LABORAN_ROLE
 from apps.kalender.realtime import send_schedule_update
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, RiwayatAsleb
 from apps.ruangan.models import GrupRuanganGabungan, RuanganLab
@@ -42,18 +43,18 @@ def get_aslab_matkul_labels(pengguna):
 def can_manage_jadwal(pengguna, jadwal):
     if not pengguna:
         return False
-    if pengguna.role in ['admin', 'laboran']:
+    if pengguna.role == LABORAN_ROLE:
         return True
-    if pengguna.role == 'asisten_lab':
+    if pengguna.role == ASISTEN_LAB_ROLE:
         return jadwal.mata_kuliah in get_aslab_matkul_labels(pengguna)
     return False
 
 
-class MahasiswaJadwalReadOnlyMixin:
+class JadwalMutationAccessMixin:
     def dispatch(self, request, *args, **kwargs):
         pengguna = getattr(request, 'current_pengguna', None)
-        if pengguna and pengguna.role == 'mahasiswa':
-            messages.warning(request, 'Mahasiswa hanya dapat melihat jadwal praktikum.')
+        if not pengguna or pengguna.role not in {LABORAN_ROLE, ASISTEN_LAB_ROLE}:
+            messages.warning(request, 'Akses kelola jadwal hanya tersedia untuk Laboran dan Asisten Lab sesuai kewenangannya.')
             return redirect('jadwal:jadwal_list')
 
         return super().dispatch(request, *args, **kwargs)
@@ -111,7 +112,7 @@ class JadwalPraktikumListView(ListView):
             context['current_pengguna'],
         )
         context['praktikum_saya'] = self.get_praktikum_saya(context['current_pengguna'])
-        if context['current_pengguna'] and context['current_pengguna'].role in {'admin', 'laboran'}:
+        if context['current_pengguna'] and context['current_pengguna'].role == LABORAN_ROLE:
             context['permintaan_perubahan'] = PermintaanPerubahanJadwal.objects.select_related(
                 'jadwal', 'matkul', 'ruangan', 'ruangan_tambahan', 'diajukan_oleh'
             ).filter(status='diajukan')
@@ -212,6 +213,8 @@ class JadwalPraktikumDetailView(DetailView):
         pengguna = getattr(self.request, 'current_pengguna', None)
         if pengguna and pengguna.role == 'mahasiswa':
             return queryset.filter(status=JadwalPraktikum.STATUS_DITERIMA)
+        if pengguna and pengguna.role == ADMIN_ROLE:
+            return queryset.filter(status=JadwalPraktikum.STATUS_DITERIMA)
         return queryset
 
     def get_context_data(self, **kwargs):
@@ -224,7 +227,7 @@ class JadwalPraktikumDetailView(DetailView):
         return context
 
 
-class JadwalPraktikumCreateView(MahasiswaJadwalReadOnlyMixin, CreateView):
+class JadwalPraktikumCreateView(JadwalMutationAccessMixin, CreateView):
     model = JadwalPraktikum
     form_class = JadwalPraktikumForm
     template_name = 'jadwal/jadwal_form.html'
@@ -263,7 +266,7 @@ class JadwalPraktikumCreateView(MahasiswaJadwalReadOnlyMixin, CreateView):
         return response
 
 
-class JadwalPraktikumUpdateView(MahasiswaJadwalReadOnlyMixin, UpdateView):
+class JadwalPraktikumUpdateView(JadwalMutationAccessMixin, UpdateView):
     model = JadwalPraktikum
     form_class = JadwalPraktikumForm
     template_name = 'jadwal/jadwal_form.html'
@@ -272,8 +275,11 @@ class JadwalPraktikumUpdateView(MahasiswaJadwalReadOnlyMixin, UpdateView):
     def get_queryset(self):
         queryset = super().get_queryset()
         pengguna = getattr(self.request, 'current_pengguna', None)
-        if pengguna and pengguna.role == 'asisten_lab':
+        if pengguna and pengguna.role == ASISTEN_LAB_ROLE:
             return queryset.filter(mata_kuliah__in=get_aslab_matkul_labels(pengguna))
+        if pengguna and pengguna.role == LABORAN_ROLE:
+            return queryset
+        return queryset.none()
         return queryset
 
     def get_form_kwargs(self):
@@ -310,7 +316,7 @@ class JadwalPraktikumUpdateView(MahasiswaJadwalReadOnlyMixin, UpdateView):
         return response
 
 
-class JadwalPraktikumDeleteView(MahasiswaJadwalReadOnlyMixin, PostOnlyDeleteMixin, DeleteView):
+class JadwalPraktikumDeleteView(JadwalMutationAccessMixin, PostOnlyDeleteMixin, DeleteView):
     model = JadwalPraktikum
     template_name = 'jadwal/jadwal_confirm_delete.html'
     context_object_name = 'jadwal'
@@ -319,16 +325,18 @@ class JadwalPraktikumDeleteView(MahasiswaJadwalReadOnlyMixin, PostOnlyDeleteMixi
     def get_queryset(self):
         queryset = super().get_queryset()
         pengguna = getattr(self.request, 'current_pengguna', None)
-        if pengguna and pengguna.role == 'asisten_lab':
+        if pengguna and pengguna.role == ASISTEN_LAB_ROLE:
             return queryset.none()
+        if pengguna and pengguna.role == LABORAN_ROLE:
+            return queryset
         return queryset
 
 
 @require_POST
 def process_schedule_change_request(request, pk, decision):
     pengguna = getattr(request, 'current_pengguna', None)
-    if not pengguna or pengguna.role not in {'admin', 'laboran'}:
-        messages.error(request, 'Hanya admin dan laboran yang dapat memproses perubahan jadwal.')
+    if not pengguna or pengguna.role != LABORAN_ROLE:
+        messages.error(request, 'Hanya laboran yang dapat memproses perubahan jadwal.')
         return redirect('jadwal:jadwal_list')
 
     change_request = get_object_or_404(
