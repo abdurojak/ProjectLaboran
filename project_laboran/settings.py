@@ -21,6 +21,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / '.env')
 
 
+def env_path(name, default):
+    value = Path(os.getenv(name, default)).expanduser()
+    return value if value.is_absolute() else BASE_DIR / value
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
@@ -179,8 +184,8 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 WHITENOISE_USE_FINDERS = DEBUG
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_URL = os.getenv('MEDIA_URL', '/media/')
+MEDIA_ROOT = env_path('MEDIA_ROOT', 'media')
 
 ABSENSI_CENTER_LATITUDE = float(os.getenv('ABSENSI_CENTER_LATITUDE', '-6.1680678'))
 ABSENSI_CENTER_LONGITUDE = float(os.getenv('ABSENSI_CENTER_LONGITUDE', '106.7916257'))
