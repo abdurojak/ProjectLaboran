@@ -88,6 +88,13 @@ class BugErrorLog(models.Model):
         blank=True,
         null=True,
     )
+    ditangani_oleh = models.ForeignKey(
+        'pengguna.Pengguna',
+        on_delete=models.SET_NULL,
+        related_name='bug_error_ditangani',
+        blank=True,
+        null=True,
+    )
     dibuat_pada = models.DateTimeField(auto_now_add=True)
     diperbarui_pada = models.DateTimeField(auto_now=True)
 

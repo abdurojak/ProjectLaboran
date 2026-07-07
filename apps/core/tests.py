@@ -262,6 +262,84 @@ class BantuanTests(TestCase):
 
         self.assertRedirects(response, reverse('dashboard:home'))
 
+    def test_laboran_dapat_mengambil_bug_error_yang_belum_ditangani(self):
+        laboran = Pengguna.objects.create(
+            nama_pengguna='Laboran Bug',
+            nim_nik='LAB-BUG',
+            email='laboran-bug@example.com',
+            password='rahasia123',
+            no_hp='081234567874',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='laboran',
+        )
+        log = BugErrorLog.objects.create(
+            judul='Sidebar dark mode terlalu terang',
+            kategori='ui',
+            prioritas='sedang',
+            lokasi='/jadwal/',
+            deskripsi='Item sidebar terlihat putih saat ditekan.',
+            dilaporkan_oleh=self.mahasiswa,
+        )
+        self.login_as(laboran)
+
+        response = self.client.post(reverse('core:bug_error_list'), {
+            'action': 'claim',
+            'log_id': log.pk,
+        })
+
+        self.assertRedirects(response, f"{reverse('core:bug_error_list')}?log={log.pk}")
+        log.refresh_from_db()
+        self.assertEqual(log.ditangani_oleh, laboran)
+        self.assertEqual(log.status, BugErrorLog.STATUS_DIPROSES)
+
+    def test_laboran_lain_tidak_dapat_mengambil_bug_error_yang_sudah_ditangani(self):
+        laboran_awal = Pengguna.objects.create(
+            nama_pengguna='Laboran Awal',
+            nim_nik='LAB-AWAL',
+            email='laboran-awal@example.com',
+            password='rahasia123',
+            no_hp='081234567875',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='laboran',
+        )
+        laboran_lain = Pengguna.objects.create(
+            nama_pengguna='Laboran Lain',
+            nim_nik='LAB-LAIN',
+            email='laboran-lain@example.com',
+            password='rahasia123',
+            no_hp='081234567876',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='laboran',
+        )
+        log = BugErrorLog.objects.create(
+            judul='Filter status nyaru',
+            kategori='ui',
+            prioritas='rendah',
+            lokasi='/pengaturan/bug-error/',
+            deskripsi='Select box status kurang terlihat.',
+            ditangani_oleh=laboran_awal,
+            status=BugErrorLog.STATUS_DIPROSES,
+        )
+        self.login_as(laboran_lain)
+
+        response = self.client.post(reverse('core:bug_error_list'), {
+            'action': 'claim',
+            'log_id': log.pk,
+        })
+
+        self.assertRedirects(response, f"{reverse('core:bug_error_list')}?log={log.pk}")
+        log.refresh_from_db()
+        self.assertEqual(log.ditangani_oleh, laboran_awal)
+
     def test_admin_menambahkan_bug_error_manual(self):
         admin = Pengguna.objects.create(
             nama_pengguna='Admin Manual Bug',
