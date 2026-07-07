@@ -22,6 +22,7 @@ class PenggunaLoginRequiredMiddleware:
         'honor_list',
         'praktikum_mahasiswa_list',
         'praktikum_nilai',
+        'praktikum_nilai_export',
     }
     ASISTEN_LAB_ALLOWED_KALENDER_URLS = {
         'kegiatan_list',

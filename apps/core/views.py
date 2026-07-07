@@ -8,28 +8,28 @@ from django.views.generic import TemplateView
 
 from apps.pengguna.forms import PenggunaAppearanceForm
 
+<<<<<<< HEAD
 from .models import BugErrorLog, PercakapanBantuan, PesanBantuan
+=======
+from .bot_knowledge import BOT_FALLBACK, BOT_GUIDE_TOPICS, BOT_GUIDE_INTRO
+from .models import PercakapanBantuan, PesanBantuan
+>>>>>>> 1184bf7 (feat: perbaikan semuanya nilai, ruangan, UI)
 from .realtime import broadcast_help_message, broadcast_help_status
-
-
-BOT_ANSWERS = [
-    ({'login', 'masuk'}, 'Untuk login, pilih jenis akun lalu masukkan NIM mahasiswa atau NIK karyawan beserta password.'),
-    ({'password', 'sandi', 'lupa'}, 'Gunakan menu Lupa password pada halaman login, lalu ikuti verifikasi yang dikirim ke email akun.'),
-    ({'aslab', 'asleb', 'transkrip'}, 'Pendaftaran aslab memerlukan CV di profil. NIM pada transkrip harus sama dengan NIM akun dan nilai mata kuliah minimal B.'),
-    ({'daftar', 'registrasi', 'register'}, 'Registrasi mandiri hanya tersedia untuk mahasiswa. Akun karyawan dibuat oleh admin.'),
-    ({'cv', 'profil'}, 'Buka Profil Saya dari Pengaturan, pilih Edit Profil, lalu unggah CV PDF, DOC, atau DOCX maksimal 5 MB.'),
-    ({'absensi', 'modul'}, 'Aslab memilih modul sesuai mata kuliah pada menu Absensi Aslab. Modul yang sudah diabsen tidak dapat dipilih kembali.'),
-    ({'honor', 'honorarium'}, 'Rekap honorarium dihitung dari absensi dan total pertemuan. Hubungi laboran bila data pertemuan belum sesuai.'),
-    ({'tema', 'background', 'tampilan'}, 'Mode terang, gelap, dan background dapat diubah melalui menu Pengaturan.'),
-]
 
 
 def bot_answer(question):
     normalized = question.lower()
-    for keywords, answer in BOT_ANSWERS:
-        if any(keyword in normalized for keyword in keywords):
-            return answer
-    return 'Maaf, saya belum memahami pertanyaan tersebut. Anda dapat mencoba menjelaskan dengan kata lain atau meneruskannya ke admin.'
+    if any(keyword in normalized for keyword in {'panduan', 'fitur web', 'fitur labhub', 'apa saja', 'bisa apa'}):
+        return (
+            f'{BOT_GUIDE_INTRO}\n\n'
+            'Topik yang bisa saya bantu: login/registrasi, role dan hak akses, pendaftaran asleb, absensi asleb, '
+            'nilai dan absensi mahasiswa, peserta praktikum CSV, inventaris dan peminjaman, kalender, profil/CV, honorarium, notifikasi, '
+            'pengaturan, dan aplikasi mobile absensi.'
+        )
+    for topic in BOT_GUIDE_TOPICS:
+        if any(keyword in normalized for keyword in topic['keywords']):
+            return topic['answer']
+    return BOT_FALLBACK
 
 
 def get_active_help_conversation(pengguna):
@@ -40,7 +40,7 @@ def get_active_help_conversation(pengguna):
     PesanBantuan.objects.create(
         percakapan=conversation,
         pengirim='bot',
-        isi='Halo, saya Bot Bantuan LabHub. Silakan tanyakan cara menggunakan fitur aplikasi.',
+        isi=f'{BOT_GUIDE_INTRO} Silakan tanyakan cara menggunakan fitur aplikasi.',
     )
     return conversation
 

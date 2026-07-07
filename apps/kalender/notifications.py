@@ -238,7 +238,8 @@ def build_pendaftaran_aslab_notifications(pengguna):
             icon_class = 'bg-emerald-50 text-emerald-700'
         elif pendaftaran.status == 'ditolak':
             title = 'Pendaftaran aslab Anda ditolak'
-            description = f'Pengajuan asisten laboratorium untuk {pendaftaran.matkul} belum dapat diterima pada periode ini.'
+            reason = f' Alasan/catatan: {pendaftaran.alasan}' if pendaftaran.alasan else ''
+            description = f'Status ditolak. Pengajuan asisten laboratorium untuk {pendaftaran.matkul} belum dapat diterima pada periode ini.{reason}'
             badge = 'Ditolak'
             icon = 'badge-x'
             icon_class = 'bg-rose-50 text-rose-700'

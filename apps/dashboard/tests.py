@@ -14,6 +14,7 @@ from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, Pen
 from apps.pendaftaran_asleb.utils import get_public_registration_url
 from apps.pengguna.models import Pengguna
 from apps.ruangan.models import RuanganLab
+from apps.dashboard.views import DashboardView
 
 
 class DashboardViewTests(TestCase):
@@ -823,6 +824,85 @@ class DashboardViewTests(TestCase):
         self.assertContains(response, 'dashboard-glass-item')
         self.assertContains(response, '.dashboard-page .dashboard-glass-item')
         self.assertContains(response, 'Dibayar')
+
+    def test_dashboard_asisten_lab_hanya_menampilkan_jadwal_matkul_sendiri(self):
+        asisten = Pengguna.objects.create(
+            nama_pengguna='Dian Asisten',
+            nim_nik='20260003',
+            email='dian.asisten@trisakti.ac.id',
+            password='rahasia123',
+            no_hp='',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='asisten_lab',
+        )
+        matkul_sendiri = MataKuliahAsleb.objects.create(
+            kode='PM_DASHBOARD_ASLAB',
+            nama='Pemrograman Mobile',
+            dosen='Dian Pratiwi, S.T., MTI',
+            kelas='SI-01',
+        )
+        matkul_lain = MataKuliahAsleb.objects.create(
+            kode='AI_DASHBOARD_LAIN',
+            nama='Kecerdasan Buatan',
+            dosen='Anung B. Aribowo, M.Kom',
+            kelas='SI-01',
+        )
+        PendaftaranAsleb.objects.create(
+            nama=asisten.nama_pengguna,
+            nim=asisten.nim_nik,
+            no_hp='',
+            email=asisten.email,
+            program_studi='Informatika',
+            semester=5,
+            matkul=matkul_sendiri,
+            metode_rekening='bni',
+            rekening='1234567890',
+            nama_pemilik_rekening=asisten.nama_pengguna,
+            status='digenerate',
+        )
+        Asleb.objects.create(
+            nama=asisten.nama_pengguna,
+            nim=asisten.nim_nik,
+            no_hp='',
+            email=asisten.email,
+            program_studi='Informatika',
+            matkul=str(matkul_sendiri),
+            semester=5,
+            tanggal_bergabung=timezone.localdate(),
+        )
+        ruangan = RuanganLab.objects.create(nama='Lab Dashboard Aslab', kode='LAB-ASLAB-DASH', kapasitas=30)
+        hari_ini = DashboardView.WEEKDAY_TO_HARI[timezone.localdate().weekday()]
+        JadwalPraktikum.objects.create(
+            mata_kuliah=str(matkul_sendiri),
+            kelas='SI-01',
+            ruangan=ruangan,
+            pengampu='Dian Pratiwi, S.T., MTI',
+            hari=hari_ini,
+            waktu_mulai=time(10, 30),
+            waktu_selesai=time(12, 0),
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+        JadwalPraktikum.objects.create(
+            mata_kuliah=str(matkul_lain),
+            kelas='SI-01',
+            ruangan=ruangan,
+            pengampu='Anung B. Aribowo, M.Kom',
+            hari=hari_ini,
+            waktu_mulai=time(14, 0),
+            waktu_selesai=time(15, 30),
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+        session = self.client.session
+        session['pengguna_id'] = asisten.pk
+        session.save()
+
+        response = self.client.get(reverse('dashboard:home'))
+
+        self.assertContains(response, 'Pemrograman Mobile')
+        self.assertNotContains(response, 'Kecerdasan Buatan')
 
     def test_dashboard_asisten_lab_tidak_menampilkan_pendaftaran_saat_dibuka(self):
         asisten = Pengguna.objects.create(
