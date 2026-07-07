@@ -75,7 +75,7 @@ class PesertaPraktikumAdmin(admin.ModelAdmin):
 
 @admin.register(HasilPraktikumMahasiswa)
 class HasilPraktikumMahasiswaAdmin(admin.ModelAdmin):
-    list_display = ('peserta', 'modul', 'tanggal_praktikum', 'status_absensi', 'nilai', 'dicatat_oleh')
+    list_display = ('peserta', 'modul', 'tanggal_praktikum', 'status_absensi', 'nilai_realtime', 'nilai_laporan', 'nilai', 'dicatat_oleh')
     list_filter = ('status_absensi', 'modul__matkul', 'modul')
     search_fields = ('peserta__nim', 'peserta__nama', 'modul__judul')
 

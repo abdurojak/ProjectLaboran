@@ -92,7 +92,7 @@ def build_notification_payloads(pengguna):
 
 
 def build_peminjaman_notifications(pengguna):
-    if pengguna.role in {'admin', 'laboran'}:
+    if pengguna.role == 'laboran':
         return build_admin_peminjaman_request_notifications()
 
     if pengguna.role not in {'mahasiswa', 'asisten_lab'}:

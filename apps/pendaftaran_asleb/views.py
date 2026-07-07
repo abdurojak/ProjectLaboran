@@ -20,6 +20,7 @@ import qrcode
 from apps.asleb.models import Asleb, HonorAsleb
 from apps.kalender.realtime import send_registration_status_update
 from apps.core.views import PostOnlyDeleteMixin
+from apps.core.permissions import LABORAN_ROLE, can_manage_lab_operations
 from apps.core.emails import send_branded_email
 from apps.pengguna.models import Pengguna
 from apps.pengguna.cv import build_cv_pdf, has_complete_asleb_profile
@@ -54,7 +55,24 @@ from .utils import analyze_transcript, get_public_registration_url, is_passing_g
 WIZARD_SESSION_KEY = 'pendaftaran_asleb_wizard'
 
 
-class PendaftaranAslebListView(ListView):
+class LaboranPendaftaranRequiredMixin:
+    def dispatch(self, request, *args, **kwargs):
+        pengguna = getattr(request, 'current_pengguna', None)
+        if not can_manage_lab_operations(pengguna):
+            messages.error(request, 'Menu pendaftaran aslab hanya tersedia untuk Laboran.')
+            return redirect('dashboard:home')
+        return super().dispatch(request, *args, **kwargs)
+
+
+def require_laboran_operation(request, message='Aksi ini hanya tersedia untuk Laboran.'):
+    pengguna = getattr(request, 'current_pengguna', None)
+    if can_manage_lab_operations(pengguna):
+        return True
+    messages.error(request, message)
+    return False
+
+
+class PendaftaranAslebListView(LaboranPendaftaranRequiredMixin, ListView):
     model = PendaftaranAsleb
     template_name = 'pendaftaran_asleb/pendaftaran_list.html'
     context_object_name = 'pendaftaran_list'
@@ -99,19 +117,19 @@ class PendaftaranAslebListView(ListView):
         context['pendaftaran_dibuka'] = is_registration_open()
         context['pengaturan_pendaftaran'] = PengaturanPendaftaranAsleb.get_solo()
         pengguna = getattr(self.request, 'current_pengguna', None)
-        context['is_super_admin'] = bool(pengguna and pengguna.role == 'admin')
+        context['is_super_admin'] = bool(pengguna and pengguna.role == LABORAN_ROLE)
         context['akhiri_periode_form'] = AkhiriPeriodeAslebForm()
         context['masa_tugas_form'] = MasaTugasAslebForm(instance=current_period)
         return context
 
 
-class PendaftaranAslebDetailView(DetailView):
+class PendaftaranAslebDetailView(LaboranPendaftaranRequiredMixin, DetailView):
     model = PendaftaranAsleb
     template_name = 'pendaftaran_asleb/pendaftaran_detail.html'
     context_object_name = 'pendaftaran'
 
 
-class PendaftaranAslebCreateView(CreateView):
+class PendaftaranAslebCreateView(LaboranPendaftaranRequiredMixin, CreateView):
     model = PendaftaranAsleb
     form_class = PendaftaranAslebForm
     template_name = 'pendaftaran_asleb/pendaftaran_form.html'
@@ -127,7 +145,7 @@ class PendaftaranAslebCreateView(CreateView):
         return super().form_valid(form)
 
 
-class PendaftaranAslebUpdateView(UpdateView):
+class PendaftaranAslebUpdateView(LaboranPendaftaranRequiredMixin, UpdateView):
     model = PendaftaranAsleb
     form_class = PendaftaranAslebForm
     template_name = 'pendaftaran_asleb/pendaftaran_form.html'
@@ -139,7 +157,7 @@ class PendaftaranAslebUpdateView(UpdateView):
         return kwargs
 
 
-class PendaftaranAslebDeleteView(PostOnlyDeleteMixin, DeleteView):
+class PendaftaranAslebDeleteView(LaboranPendaftaranRequiredMixin, PostOnlyDeleteMixin, DeleteView):
     model = PendaftaranAsleb
     template_name = 'pendaftaran_asleb/pendaftaran_confirm_delete.html'
     context_object_name = 'pendaftaran'
@@ -465,6 +483,8 @@ class RekeningPendaftaranUpdateView(UpdateView):
 
 @require_POST
 def accept_pendaftaran(request, pk):
+    if not require_laboran_operation(request, 'Hanya laboran yang dapat menerima pendaftaran aslab.'):
+        return redirect('pendaftaran_asleb:pendaftaran_list')
     pendaftaran = get_object_or_404(PendaftaranAsleb, pk=pk)
     pendaftaran.status = 'diterima'
     pendaftaran.save(update_fields=['status', 'diperbarui_pada'])
@@ -477,6 +497,8 @@ def accept_pendaftaran(request, pk):
 
 @require_POST
 def reject_pendaftaran(request, pk):
+    if not require_laboran_operation(request, 'Hanya laboran yang dapat menolak pendaftaran aslab.'):
+        return redirect('pendaftaran_asleb:pendaftaran_list')
     pendaftaran = get_object_or_404(PendaftaranAsleb, pk=pk)
     pendaftaran.status = 'ditolak'
     pendaftaran.save(update_fields=['status', 'diperbarui_pada'])
@@ -488,6 +510,8 @@ def reject_pendaftaran(request, pk):
 
 @require_POST
 def generate_asleb(request, pk):
+    if not require_laboran_operation(request, 'Hanya laboran yang dapat generate Data Aslab.'):
+        return redirect('pendaftaran_asleb:pendaftaran_list')
     get_object_or_404(PendaftaranAsleb, pk=pk)
     return generate_all_accepted_asleb(request)
 
@@ -496,8 +520,8 @@ def generate_asleb(request, pk):
 @transaction.atomic
 def generate_all_accepted_asleb(request):
     pengguna = getattr(request, 'current_pengguna', None)
-    if not pengguna or pengguna.role not in {'admin', 'laboran'}:
-        messages.error(request, 'Hanya admin dan laboran yang dapat melakukan generate Data Aslab.')
+    if not can_manage_lab_operations(pengguna):
+        messages.error(request, 'Hanya laboran yang dapat melakukan generate Data Aslab.')
         return redirect('pendaftaran_asleb:pendaftaran_list')
 
     current_period = get_current_period()
@@ -544,6 +568,8 @@ def generate_all_accepted_asleb(request):
 @require_POST
 @transaction.atomic
 def toggle_pendaftaran_status(request):
+    if not require_laboran_operation(request, 'Hanya laboran yang dapat membuka atau menutup pendaftaran aslab.'):
+        return redirect('pendaftaran_asleb:pendaftaran_list')
     pengaturan = PengaturanPendaftaranAsleb.get_solo()
     currently_open = is_registration_open()
     if currently_open:
@@ -710,8 +736,8 @@ def promote_pengguna_to_asisten_lab(pendaftaran):
 @require_POST
 def update_periode_schedule(request, pk):
     pengguna = getattr(request, 'current_pengguna', None)
-    if not pengguna or pengguna.role not in {'admin', 'laboran'}:
-        messages.error(request, 'Hanya admin dan laboran yang dapat mengatur jadwal pendaftaran.')
+    if not can_manage_lab_operations(pengguna):
+        messages.error(request, 'Hanya laboran yang dapat mengatur jadwal pendaftaran.')
         return redirect('pendaftaran_asleb:pendaftaran_list')
     period = get_object_or_404(PeriodeAsleb, pk=pk)
     form = PeriodeAslebForm(request.POST, instance=period)
@@ -726,8 +752,8 @@ def update_periode_schedule(request, pk):
 @require_POST
 def update_period_dates(request, pk):
     pengguna = getattr(request, 'current_pengguna', None)
-    if not pengguna or pengguna.role != 'admin':
-        messages.error(request, 'Hanya Super Admin yang dapat mengubah masa tugas Asisten Lab.')
+    if not can_manage_lab_operations(pengguna):
+        messages.error(request, 'Hanya laboran yang dapat mengubah masa tugas Asisten Lab.')
         return redirect('pendaftaran_asleb:pendaftaran_list')
 
     period = get_object_or_404(PeriodeAsleb, pk=pk)
@@ -749,8 +775,8 @@ def update_period_dates(request, pk):
 @require_POST
 def end_period_manually(request, pk):
     pengguna = getattr(request, 'current_pengguna', None)
-    if not pengguna or pengguna.role != 'admin':
-        messages.error(request, 'Hanya Super Admin yang dapat mengakhiri periode Asisten Lab.')
+    if not can_manage_lab_operations(pengguna):
+        messages.error(request, 'Hanya laboran yang dapat mengakhiri periode Asisten Lab.')
         return redirect('pendaftaran_asleb:pendaftaran_list')
 
     period = get_object_or_404(PeriodeAsleb, pk=pk)
@@ -759,7 +785,7 @@ def end_period_manually(request, pk):
         messages.error(request, 'Konfirmasi dan password wajib diisi untuk mengakhiri periode.')
         return redirect('pendaftaran_asleb:pendaftaran_list')
     if not check_password(form.cleaned_data['password'], pengguna.password):
-        messages.error(request, 'Password Super Admin tidak sesuai. Periode tidak diakhiri.')
+        messages.error(request, 'Password Laboran tidak sesuai. Periode tidak diakhiri.')
         return redirect('pendaftaran_asleb:pendaftaran_list')
     if period.selesai < timezone.localdate() or period.diakhiri_pada:
         messages.warning(request, 'Periode ini sudah berakhir.')
@@ -774,27 +800,27 @@ def end_period_manually(request, pk):
     return redirect('pendaftaran_asleb:pendaftaran_list')
 
 
-class MataKuliahAslebListView(ListView):
+class MataKuliahAslebListView(LaboranPendaftaranRequiredMixin, ListView):
     model = MataKuliahAsleb
     template_name = 'pendaftaran_asleb/matkul_list.html'
     context_object_name = 'matkul_list'
 
 
-class MataKuliahAslebCreateView(CreateView):
+class MataKuliahAslebCreateView(LaboranPendaftaranRequiredMixin, CreateView):
     model = MataKuliahAsleb
     form_class = MataKuliahAslebForm
     template_name = 'pendaftaran_asleb/matkul_form.html'
     success_url = reverse_lazy('pendaftaran_asleb:matkul_list')
 
 
-class MataKuliahAslebUpdateView(UpdateView):
+class MataKuliahAslebUpdateView(LaboranPendaftaranRequiredMixin, UpdateView):
     model = MataKuliahAsleb
     form_class = MataKuliahAslebForm
     template_name = 'pendaftaran_asleb/matkul_form.html'
     success_url = reverse_lazy('pendaftaran_asleb:matkul_list')
 
 
-class MataKuliahAslebDeleteView(PostOnlyDeleteMixin, DeleteView):
+class MataKuliahAslebDeleteView(LaboranPendaftaranRequiredMixin, PostOnlyDeleteMixin, DeleteView):
     model = MataKuliahAsleb
     template_name = 'pendaftaran_asleb/matkul_confirm_delete.html'
     context_object_name = 'matkul'

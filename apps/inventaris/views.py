@@ -1,11 +1,13 @@
 from django.db import transaction
 from django.db.models import Count, Q
 from django.db.models.functions import Coalesce
-from django.shortcuts import get_object_or_404
+from django.contrib import messages
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
 from apps.core.views import PostOnlyDeleteMixin
+from apps.core.permissions import can_manage_lab_operations
 
 from .forms import (
     BarangForm,
@@ -17,7 +19,16 @@ from .forms import (
 from .models import ACTIVE_PEMINJAMAN_STATUSES, Barang, InventarisBarang, Lokasi, PaketBarang
 
 
-class BarangListView(ListView):
+class LaboranInventarisRequiredMixin:
+    def dispatch(self, request, *args, **kwargs):
+        pengguna = getattr(request, 'current_pengguna', None)
+        if not can_manage_lab_operations(pengguna):
+            messages.error(request, 'Inventaris hanya dapat dikelola oleh Laboran.')
+            return redirect('dashboard:home')
+        return super().dispatch(request, *args, **kwargs)
+
+
+class BarangListView(LaboranInventarisRequiredMixin, ListView):
     model = InventarisBarang
     template_name = 'inventaris/barang_list.html'
     context_object_name = 'barang_list'
@@ -49,7 +60,7 @@ class BarangListView(ListView):
         return context
 
 
-class PaketBarangListView(ListView):
+class PaketBarangListView(LaboranInventarisRequiredMixin, ListView):
     model = PaketBarang
     template_name = 'inventaris/paket_list.html'
     context_object_name = 'paket_list'
@@ -71,7 +82,7 @@ class PaketBarangListView(ListView):
         return context
 
 
-class PaketBarangDetailView(DetailView):
+class PaketBarangDetailView(LaboranInventarisRequiredMixin, DetailView):
     model = PaketBarang
     template_name = 'inventaris/paket_detail.html'
     context_object_name = 'paket'
@@ -110,28 +121,28 @@ class PaketBarangFormMixin:
         return reverse('inventaris:paket_detail', args=[self.object.pk])
 
 
-class PaketBarangCreateView(PaketBarangFormMixin, CreateView):
+class PaketBarangCreateView(LaboranInventarisRequiredMixin, PaketBarangFormMixin, CreateView):
     pass
 
 
-class PaketBarangUpdateView(PaketBarangFormMixin, UpdateView):
+class PaketBarangUpdateView(LaboranInventarisRequiredMixin, PaketBarangFormMixin, UpdateView):
     pass
 
 
-class PaketBarangDeleteView(PostOnlyDeleteMixin, DeleteView):
+class PaketBarangDeleteView(LaboranInventarisRequiredMixin, PostOnlyDeleteMixin, DeleteView):
     model = PaketBarang
     template_name = 'inventaris/paket_confirm_delete.html'
     context_object_name = 'paket'
     success_url = reverse_lazy('inventaris:paket_list')
 
 
-class BarangDetailView(DetailView):
+class BarangDetailView(LaboranInventarisRequiredMixin, DetailView):
     model = Barang
     template_name = 'inventaris/barang_detail.html'
     context_object_name = 'barang'
 
 
-class DetailBarangCreateView(CreateView):
+class DetailBarangCreateView(LaboranInventarisRequiredMixin, CreateView):
     model = Barang
     form_class = BarangForm
     template_name = 'inventaris/detail_barang_form.html'
@@ -157,7 +168,7 @@ class DetailBarangCreateView(CreateView):
         return reverse('inventaris:inventaris_detail', args=[self.inventaris.pk])
 
 
-class DetailBarangUpdateView(UpdateView):
+class DetailBarangUpdateView(LaboranInventarisRequiredMixin, UpdateView):
     model = Barang
     form_class = BarangForm
     template_name = 'inventaris/detail_barang_form.html'
@@ -172,7 +183,7 @@ class DetailBarangUpdateView(UpdateView):
         return reverse('inventaris:inventaris_detail', args=[self.object.inventaris_id])
 
 
-class DetailBarangDeleteView(PostOnlyDeleteMixin, DeleteView):
+class DetailBarangDeleteView(LaboranInventarisRequiredMixin, PostOnlyDeleteMixin, DeleteView):
     model = Barang
     template_name = 'inventaris/detail_barang_confirm_delete.html'
     context_object_name = 'barang'
@@ -189,7 +200,7 @@ class DetailBarangDeleteView(PostOnlyDeleteMixin, DeleteView):
         return reverse('inventaris:inventaris_detail', args=[self.object.inventaris_id])
 
 
-class InventarisBarangDetailView(DetailView):
+class InventarisBarangDetailView(LaboranInventarisRequiredMixin, DetailView):
     model = InventarisBarang
     template_name = 'inventaris/inventaris_detail.html'
     context_object_name = 'inventaris'
@@ -235,7 +246,7 @@ class InventarisBarangDetailView(DetailView):
         return context
 
 
-class BarangCreateView(CreateView):
+class BarangCreateView(LaboranInventarisRequiredMixin, CreateView):
     model = InventarisBarang
     form_class = InventarisBarangCreateForm
     template_name = 'inventaris/barang_form.html'
@@ -257,47 +268,47 @@ class BarangCreateView(CreateView):
         return response
 
 
-class BarangUpdateView(UpdateView):
+class BarangUpdateView(LaboranInventarisRequiredMixin, UpdateView):
     model = InventarisBarang
     form_class = InventarisBarangUpdateForm
     template_name = 'inventaris/barang_form.html'
     success_url = reverse_lazy('inventaris:barang_list')
 
 
-class BarangDeleteView(PostOnlyDeleteMixin, DeleteView):
+class BarangDeleteView(LaboranInventarisRequiredMixin, PostOnlyDeleteMixin, DeleteView):
     model = InventarisBarang
     template_name = 'inventaris/barang_confirm_delete.html'
     context_object_name = 'barang'
     success_url = reverse_lazy('inventaris:barang_list')
 
 
-class LokasiListView(ListView):
+class LokasiListView(LaboranInventarisRequiredMixin, ListView):
     model = Lokasi
     template_name = 'inventaris/lokasi_list.html'
     context_object_name = 'lokasi_list'
 
 
-class LokasiDetailView(DetailView):
+class LokasiDetailView(LaboranInventarisRequiredMixin, DetailView):
     model = Lokasi
     template_name = 'inventaris/lokasi_detail.html'
     context_object_name = 'lokasi'
 
 
-class LokasiCreateView(CreateView):
+class LokasiCreateView(LaboranInventarisRequiredMixin, CreateView):
     model = Lokasi
     template_name = 'inventaris/lokasi_form.html'
     fields = ['nama_lokasi', 'ukuran_lokasi']
     success_url = reverse_lazy('inventaris:lokasi_list')
 
 
-class LokasiUpdateView(UpdateView):
+class LokasiUpdateView(LaboranInventarisRequiredMixin, UpdateView):
     model = Lokasi
     template_name = 'inventaris/lokasi_form.html'
     fields = ['nama_lokasi', 'ukuran_lokasi']
     success_url = reverse_lazy('inventaris:lokasi_list')
 
 
-class LokasiDeleteView(PostOnlyDeleteMixin, DeleteView):
+class LokasiDeleteView(LaboranInventarisRequiredMixin, PostOnlyDeleteMixin, DeleteView):
     model = Lokasi
     template_name = 'inventaris/lokasi_confirm_delete.html'
     context_object_name = 'lokasi'

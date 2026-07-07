@@ -16,6 +16,7 @@ from django.views.decorators.http import require_POST
 
 from apps.asleb.models import Asleb
 from apps.core.views import PostOnlyDeleteMixin
+from apps.asleb.services import link_peserta_praktikum_to_pengguna
 from apps.core.emails import send_branded_email
 from apps.pendaftaran_asleb.models import PendaftaranAsleb
 
@@ -567,9 +568,16 @@ class PenggunaVerifyRegisterView(FormView):
         pengguna = Pengguna.objects.get(pk=otp['pengguna_id'])
         pengguna.is_verified = True
         pengguna.save(update_fields=['is_verified', 'diperbarui_pada'])
+        linked_count = link_peserta_praktikum_to_pengguna(pengguna)
         self.request.session.pop(OTP_SESSION_KEY, None)
         self.request.session['pengguna_id'] = pengguna.pk
-        messages.success(self.request, 'Akun berhasil diverifikasi. Anda sudah masuk ke LabHub.')
+        if linked_count:
+            messages.success(
+                self.request,
+                f'Akun berhasil diverifikasi dan terhubung ke {linked_count} data peserta praktikum. Anda sudah masuk ke LabHub.',
+            )
+        else:
+            messages.success(self.request, 'Akun berhasil diverifikasi. Anda sudah masuk ke LabHub.')
         return redirect(self.success_url)
 
 

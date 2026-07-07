@@ -11,9 +11,14 @@
             <p class="mt-2 text-sm text-slate-500">Peserta otomatis tersedia pada setiap modul di mata kuliah masing-masing.</p>
         </div>
         {% if can_manage_peserta %}
-        <a class="btn-primary gap-2" href="{% url 'asleb:praktikum_peserta_create' %}">
-            <i data-lucide="user-round-plus" class="h-4 w-4"></i><span>Input Peserta</span>
-        </a>
+        <div class="flex flex-wrap gap-2">
+            <a class="btn-secondary gap-2" href="{% url 'asleb:praktikum_nilai_export' %}{% if selected_matkul %}?matkul={{ selected_matkul.pk }}{% endif %}">
+                <i data-lucide="file-spreadsheet" class="h-4 w-4"></i><span>Download Excel Nilai</span>
+            </a>
+            <a class="btn-primary gap-2" href="{% url 'asleb:praktikum_peserta_create' %}">
+                <i data-lucide="user-round-plus" class="h-4 w-4"></i><span>Input Peserta</span>
+            </a>
+        </div>
         {% endif %}
     </div>
 
@@ -53,16 +58,17 @@
         </div>
         <div class="overflow-x-auto">
             <table class="min-w-[720px]">
-                <thead><tr><th>NIM</th><th>Nama</th><th>Akun</th><th>Status</th><th>Aksi</th></tr></thead>
+                <thead><tr><th>NIM</th><th>Nama</th><th>Akun</th><th>Rata-rata Nilai</th><th>Status</th><th>Aksi</th></tr></thead>
                 <tbody>
                     {% for peserta in peserta_list %}
                     <tr>
                         <td class="font-bold">{{ peserta.nim }}</td><td>{{ peserta.nama }}</td>
                         <td>{% if peserta.pengguna %}Terhubung{% else %}Belum terhubung{% endif %}</td>
+                        <td>{% if peserta.rata_rata_nilai %}<span class="font-black text-brand-700">{{ peserta.rata_rata_nilai|floatformat:2 }}</span><span class="ml-1 text-xs text-slate-400">({{ peserta.jumlah_nilai }} modul)</span>{% else %}<span class="text-slate-400">Belum ada nilai</span>{% endif %}</td>
                         <td>{% if peserta.aktif %}<span class="text-emerald-700">Aktif</span>{% else %}<span class="text-slate-500">Nonaktif</span>{% endif %}</td>
                         <td><form method="post" action="{% url 'asleb:praktikum_peserta_delete' peserta.pk %}">{% csrf_token %}<button class="font-bold text-rose-600" type="submit">Hapus</button></form></td>
                     </tr>
-                    {% empty %}<tr><td colspan="5" class="py-10 text-center text-slate-500">Belum ada peserta.</td></tr>{% endfor %}
+                    {% empty %}<tr><td colspan="6" class="py-10 text-center text-slate-500">Belum ada peserta.</td></tr>{% endfor %}
                 </tbody>
             </table>
         </div>

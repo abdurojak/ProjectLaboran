@@ -11,14 +11,14 @@ from django.views.decorators.http import require_GET, require_POST
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
 from apps.core.views import PostOnlyDeleteMixin
+from apps.core.permissions import BORROWER_ROLES, LABORAN_ROLE
 from apps.inventaris.models import ACTIVE_PEMINJAMAN_STATUSES, Barang, PaketBarang
 from .forms import PeminjamanAlatForm
 from .models import PeminjamanAlat, PeminjamanTransaksi
 from .notifications import send_peminjaman_request_notifications, send_peminjaman_status_notification
 
 
-BORROWER_ROLES = {'mahasiswa', 'asisten_lab'}
-MANAGER_ROLES = {'admin', 'laboran'}
+MANAGER_ROLES = {LABORAN_ROLE}
 BULK_STATUS_CHOICES = {'dipinjam', 'dikembalikan', 'hilang', 'rusak', 'digantikan'}
 ARCHIVED_STATUS_CHOICES = {'ditolak', 'digantikan', 'dikembalikan'}
 

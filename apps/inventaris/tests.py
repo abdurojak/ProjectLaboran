@@ -7,6 +7,25 @@ from apps.pengguna.models import Pengguna
 from .models import Barang, InventarisBarang, Lokasi, PaketBarang
 
 
+def login_laboran(client, suffix='TEST'):
+    pengguna = Pengguna.objects.create(
+        nama_pengguna=f'Laboran {suffix}',
+        nim_nik=f'LAB-{suffix}',
+        email=f'laboran-{suffix.lower()}@trisakti.ac.id',
+        password='rahasia123',
+        no_hp='080000000000',
+        alamat='Kampus',
+        fakultas='Teknologi Industri',
+        prodi='Informatika',
+        gender='laki_laki',
+        role='laboran',
+    )
+    session = client.session
+    session['pengguna_id'] = pengguna.pk
+    session.save()
+    return pengguna
+
+
 class LokasiModelTests(TestCase):
     def test_kode_lokasi_dibuat_dari_id_database(self):
         lokasi = Lokasi.objects.create(nama_lokasi='Lab Kimia')
@@ -16,6 +35,9 @@ class LokasiModelTests(TestCase):
 
 
 class LokasiViewTests(TestCase):
+    def setUp(self):
+        login_laboran(self.client, 'LOKASI')
+
     def test_tambah_lokasi_tidak_meminta_kode_lokasi(self):
         response = self.client.get(reverse('inventaris:lokasi_create'))
 
@@ -35,6 +57,9 @@ class LokasiViewTests(TestCase):
 
 
 class BarangLokasiTests(TestCase):
+    def setUp(self):
+        login_laboran(self.client, 'BARANG-LOKASI')
+
     def test_form_create_inventaris_meminta_lokasi_untuk_detail_awal(self):
         lokasi = Lokasi.objects.create(nama_lokasi='Lab Fisika')
 
@@ -102,12 +127,10 @@ class BarangModelTests(TestCase):
 
 class BarangFotoFormTests(TestCase):
     def setUp(self):
-        self.lokasi = Lokasi.objects.create(nama_lokasi='Lab Foto')
-        self.barang = Barang.objects.create(
+        login_laboran(self.client, 'FOTO')
+        self.barang = InventarisBarang.objects.create(
             nama='Kamera',
             jumlah=1,
-            lokasi=self.lokasi,
-            kondisi='baik',
             foto=SimpleUploadedFile('kamera.jpg', b'fake-image-content', content_type='image/jpeg'),
         )
 
@@ -124,9 +147,6 @@ class BarangFotoFormTests(TestCase):
             reverse('inventaris:barang_update', args=[self.barang.pk]),
             {
                 'nama': 'Kamera',
-                'jumlah': 1,
-                'lokasi': self.lokasi.pk,
-                'kondisi': 'baik',
                 'hapus_foto': '1',
                 'keterangan': '',
             },
@@ -391,6 +411,7 @@ class DetailBarangCrudTests(TestCase):
 
 class InventarisCrudTests(TestCase):
     def setUp(self):
+        login_laboran(self.client, 'CRUD')
         self.lokasi = Lokasi.objects.create(nama_lokasi='Gudang Utama')
 
     def test_create_inventaris_otomatis_membuat_detail_sejumlah_stok(self):

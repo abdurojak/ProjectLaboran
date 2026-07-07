@@ -14,7 +14,7 @@ def build_public_url(route_name, **kwargs):
 
 def send_peminjaman_request_notifications(peminjaman):
     recipients = list(
-        Pengguna.objects.filter(role__in=['admin', 'laboran'])
+        Pengguna.objects.filter(role='laboran')
         .exclude(email='')
         .values_list('email', flat=True)
         .distinct()
@@ -34,7 +34,7 @@ def send_peminjaman_request_notifications(peminjaman):
         recipients=recipients,
         text_body=text_body,
         title='Pengajuan peminjaman baru',
-        greeting='Halo Admin dan Laboran,',
+        greeting='Halo Laboran,',
         intro=f'{peminjaman.nama_peminjam} mengajukan peminjaman alat laboratorium yang perlu ditinjau.',
         details=[
             {'label': 'Kode', 'value': peminjaman.kode_pinjam},

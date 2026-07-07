@@ -1,4 +1,4 @@
-from datetime import time
+from datetime import date, time, timedelta
 from unittest.mock import patch
 
 from django.contrib.auth.hashers import check_password
@@ -11,6 +11,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.asleb.models import Asleb
+from apps.asleb.models import PesertaPraktikum
 from apps.kalender.models import KegiatanKalender
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb
 from .models import Fakultas, PengalamanPengguna, Pengguna, Prodi
@@ -363,6 +364,212 @@ class PenggunaViewTests(TestCase):
         self.assertContains(response, 'Senior')
         self.assertContains(response, '3 periode sebagai aslab.')
 
+    def test_tambah_riwayat_profile_menampilkan_pilihan_kategori_dulu(self):
+        response = self.client.get(reverse('pengguna:experience_create', args=[self.pengguna.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Apa yang ingin ditambahkan?')
+        self.assertContains(response, 'Pengalaman')
+        self.assertContains(response, 'Pendidikan')
+        self.assertContains(response, 'Organisasi')
+        self.assertContains(response, 'Proyek')
+        self.assertContains(response, 'Lisensi &amp; Sertifikat')
+        self.assertNotContains(response, 'name="jabatan"')
+
+    def test_form_riwayat_profile_hanya_menampilkan_field_sesuai_kategori(self):
+        response = self.client.get(
+            f'{reverse("pengguna:experience_create", args=[self.pengguna.pk])}?kategori=proyek'
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Nama Proyek')
+        self.assertContains(response, 'Teknologi yang Digunakan')
+        self.assertContains(response, 'Link Proyek')
+        self.assertNotContains(response, 'Nama Sekolah/Kampus')
+        self.assertNotContains(response, 'Nomor Kredensial')
+
+    def test_tambah_pendidikan_profile_menyimpan_kategori_dan_membersihkan_tanggal_selesai(self):
+        response = self.client.post(
+            f'{reverse("pengguna:experience_create", args=[self.pengguna.pk])}?kategori=pendidikan',
+            {
+                'organisasi': 'Universitas Trisakti',
+                'jabatan': 'S1',
+                'bidang_studi': 'Informatika',
+                'tanggal_mulai': '2024-09-01',
+                'tanggal_selesai': '2026-01-01',
+                'masih_berjalan': 'on',
+                'deskripsi': 'Fokus pada rekayasa perangkat lunak.',
+            },
+        )
+
+        self.assertRedirects(response, reverse('pengguna:detail', args=[self.pengguna.pk]))
+        riwayat = PengalamanPengguna.objects.get(pengguna=self.pengguna)
+        self.assertEqual(riwayat.kategori, 'pendidikan')
+        self.assertEqual(riwayat.organisasi, 'Universitas Trisakti')
+        self.assertEqual(riwayat.jabatan, 'S1')
+        self.assertIsNone(riwayat.tanggal_selesai)
+        self.assertTrue(riwayat.masih_berjalan)
+
+    def test_tambah_riwayat_profile_mewajibkan_tanggal_selesai_jika_tidak_berjalan(self):
+        response = self.client.post(
+            f'{reverse("pengguna:experience_create", args=[self.pengguna.pk])}?kategori=pengalaman',
+            {
+                'jabatan': 'Asisten Praktikum',
+                'organisasi': 'LabHub',
+                'lokasi': 'Jakarta',
+                'tanggal_mulai': '2024-01-01',
+                'tanggal_selesai': '',
+                'deskripsi': 'Membantu praktikum mahasiswa.',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Tanggal selesai wajib diisi jika kegiatan sudah berakhir.')
+        self.assertFalse(PengalamanPengguna.objects.filter(pengguna=self.pengguna).exists())
+
+    def test_tambah_riwayat_profile_menolak_tanggal_selesai_lebih_awal(self):
+        response = self.client.post(
+            f'{reverse("pengguna:experience_create", args=[self.pengguna.pk])}?kategori=organisasi',
+            {
+                'organisasi': 'Himpunan Mahasiswa',
+                'jabatan': 'Ketua Divisi',
+                'lokasi': 'Jakarta',
+                'tanggal_mulai': '2025-01-01',
+                'tanggal_selesai': '2024-12-31',
+                'deskripsi': 'Mengelola program kerja.',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Tanggal selesai tidak boleh lebih awal dari tanggal mulai.')
+        self.assertFalse(PengalamanPengguna.objects.filter(pengguna=self.pengguna).exists())
+
+    def test_edit_riwayat_profile_tetap_memakai_kategori_data_asli(self):
+        riwayat = PengalamanPengguna.objects.create(
+            pengguna=self.pengguna,
+            kategori='proyek',
+            jabatan='Dashboard Lab',
+            organisasi='Fullstack Developer',
+            teknologi='Django, Tailwind',
+            tautan='https://example.com',
+            tanggal_mulai=date(2025, 1, 1),
+            tanggal_selesai=date(2025, 2, 1),
+            deskripsi='Membangun dashboard laboratorium.',
+        )
+        url = reverse('pengguna:experience_update', args=[self.pengguna.pk, riwayat.pk])
+
+        response = self.client.get(f'{url}?kategori=pendidikan')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Nama Proyek')
+        self.assertNotContains(response, 'Nama Sekolah/Kampus')
+
+        response = self.client.post(
+            f'{url}?kategori=pendidikan',
+            {
+                'jabatan': 'Dashboard Lab v2',
+                'organisasi': 'Backend Developer',
+                'teknologi': 'Django REST Framework',
+                'tautan': 'https://example.com/v2',
+                'tanggal_mulai': '2025-03-01',
+                'tanggal_selesai': '2025-04-01',
+                'deskripsi': 'Merapikan API dashboard.',
+            },
+        )
+
+        self.assertRedirects(response, reverse('pengguna:detail', args=[self.pengguna.pk]))
+        riwayat.refresh_from_db()
+        self.assertEqual(riwayat.kategori, 'proyek')
+        self.assertEqual(riwayat.jabatan, 'Dashboard Lab v2')
+        self.assertEqual(riwayat.organisasi, 'Backend Developer')
+
+    def test_hapus_riwayat_profile_milik_sendiri(self):
+        riwayat = PengalamanPengguna.objects.create(
+            pengguna=self.pengguna,
+            kategori='pengalaman',
+            jabatan='Asisten Praktikum',
+            organisasi='LabHub',
+            tanggal_mulai=date(2024, 1, 1),
+            tanggal_selesai=date(2024, 6, 1),
+        )
+
+        response = self.client.post(
+            reverse('pengguna:experience_delete', args=[self.pengguna.pk, riwayat.pk])
+        )
+
+        self.assertRedirects(response, reverse('pengguna:detail', args=[self.pengguna.pk]))
+        self.assertFalse(PengalamanPengguna.objects.filter(pk=riwayat.pk).exists())
+
+    def test_non_admin_tidak_bisa_edit_riwayat_profile_milik_orang_lain(self):
+        pemilik = Pengguna.objects.create(
+            nama_pengguna='Maya Mahasiswa',
+            nim_nik='2202001',
+            email='maya@example.com',
+            password='rahasia123',
+            no_hp='081111111111',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='mahasiswa',
+        )
+        penyerobot = Pengguna.objects.create(
+            nama_pengguna='Budi Mahasiswa',
+            nim_nik='2202002',
+            email='budi@example.com',
+            password='rahasia123',
+            no_hp='082222222222',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+        )
+        riwayat = PengalamanPengguna.objects.create(
+            pengguna=pemilik,
+            kategori='pengalaman',
+            jabatan='Asisten Praktikum',
+            organisasi='LabHub',
+            tanggal_mulai=date(2024, 1, 1),
+            tanggal_selesai=date(2024, 6, 1),
+        )
+        session = self.client.session
+        session['pengguna_id'] = penyerobot.pk
+        session.save()
+
+        response = self.client.get(
+            reverse('pengguna:experience_update', args=[pemilik.pk, riwayat.pk])
+        )
+
+        self.assertRedirects(response, reverse('dashboard:home'))
+        riwayat.refresh_from_db()
+        self.assertEqual(riwayat.jabatan, 'Asisten Praktikum')
+
+    def test_tambah_sertifikasi_profile_menyimpan_file_pendukung(self):
+        sertifikat = SimpleUploadedFile(
+            'sertifikat.pdf',
+            b'%PDF-1.4 sertifikat',
+            content_type='application/pdf',
+        )
+
+        response = self.client.post(
+            f'{reverse("pengguna:experience_create", args=[self.pengguna.pk])}?kategori=sertifikasi',
+            {
+                'jabatan': 'Database Fundamentals',
+                'organisasi': 'Oracle Academy',
+                'tanggal_mulai': '2025-01-01',
+                'tanggal_selesai': '2026-01-01',
+                'nomor_kredensial': 'CERT-001',
+                'tautan': 'https://example.com/cert',
+                'file_sertifikat': sertifikat,
+            },
+        )
+
+        self.assertRedirects(response, reverse('pengguna:detail', args=[self.pengguna.pk]))
+        riwayat = PengalamanPengguna.objects.get(pengguna=self.pengguna, kategori='sertifikasi')
+        self.assertEqual(riwayat.jabatan, 'Database Fundamentals')
+        self.assertEqual(riwayat.nomor_kredensial, 'CERT-001')
+        self.assertTrue(riwayat.file_sertifikat.name.endswith('.pdf'))
+
     def test_update_profile_mengubah_data_pengguna(self):
         response = self.client.post(
             reverse('pengguna:update_profile', args=[self.pengguna.pk]),
@@ -657,7 +864,49 @@ class PenggunaAuthTests(TestCase):
         )
 
         self.assertRedirects(response, reverse('dashboard:home'))
-        self.assertEqual(self.client.session['pengguna_id'], admin.pk)
+
+    def test_verifikasi_register_menautkan_peserta_praktikum_berdasarkan_nim(self):
+        matkul = MataKuliahAsleb.objects.create(
+            kode='PW_TIF02',
+            nama='Pemrograman Web',
+            dosen='Ir. Gatot Budi Santoso, M.Kom',
+            kelas='TIF-02',
+        )
+        peserta = PesertaPraktikum.objects.create(
+            matkul=matkul,
+            nim='064002000040',
+            nama='Ricardo Dharma Saputra',
+        )
+        pengguna = Pengguna.objects.create(
+            nama_pengguna='Ricardo Dharma Saputra',
+            nim_nik='064002000040',
+            email='ricardo.dharma@student.std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081234567890',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+            is_verified=False,
+        )
+        session = self.client.session
+        session['pengguna_otp'] = {
+            'purpose': 'register',
+            'pengguna_id': pengguna.pk,
+            'method': 'email',
+            'code': '123456',
+            'expires_at': (timezone.now() + timedelta(minutes=10)).isoformat(),
+        }
+        session.save()
+
+        response = self.client.post(reverse('pengguna:verify_register'), {'kode': '123456'})
+
+        self.assertRedirects(response, reverse('dashboard:home'))
+        peserta.refresh_from_db()
+        pengguna.refresh_from_db()
+        self.assertTrue(pengguna.is_verified)
+        self.assertEqual(peserta.pengguna, pengguna)
 
     def test_login_mahasiswa_ditolak_di_mode_karyawan(self):
         response = self.client.post(

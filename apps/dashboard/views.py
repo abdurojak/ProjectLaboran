@@ -14,6 +14,7 @@ from apps.jadwal.models import JadwalPraktikum
 from apps.jadwal.notifications import send_jadwal_status_notification
 from apps.kalender.realtime import send_schedule_update
 from apps.kalender.models import KegiatanKalender
+from apps.core.permissions import LABORAN_ROLE, can_manage_lab_operations
 from apps.peminjaman.models import PeminjamanAlat
 from apps.peminjaman.notifications import send_peminjaman_status_notification
 from apps.pendaftaran_asleb.models import PendaftaranAsleb, PengaturanPendaftaranAsleb
@@ -107,7 +108,7 @@ class DashboardView(TemplateView):
         is_asisten_lab = bool(pengguna and pengguna.role == 'asisten_lab')
         context['is_mahasiswa_dashboard'] = is_mahasiswa or is_asisten_lab
         context['is_asisten_lab_dashboard'] = is_asisten_lab
-        context['is_manager_dashboard'] = bool(pengguna and pengguna.role in {'admin', 'laboran'})
+        context['is_manager_dashboard'] = bool(pengguna and pengguna.role == LABORAN_ROLE)
 
         if context['is_mahasiswa_dashboard']:
             pengaturan_pendaftaran = PengaturanPendaftaranAsleb.get_solo()
@@ -528,7 +529,7 @@ def reject_peminjaman(request, pk):
 
 def _is_admin_or_laboran(request):
     pengguna = getattr(request, 'current_pengguna', None)
-    return bool(pengguna and pengguna.role in ['admin', 'laboran'])
+    return can_manage_lab_operations(pengguna)
 
 
 @require_POST

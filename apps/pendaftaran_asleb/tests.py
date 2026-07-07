@@ -42,21 +42,21 @@ class PendaftaranAslebViewTests(TestCase):
     def setUp(self):
         PengaturanPendaftaranAsleb.objects.update_or_create(pk=1, defaults={'dibuka': False})
         pengguna = Pengguna.objects.create(
-            nama_pengguna='Lab Admin',
-            nim_nik='ADM-PENDAFTARAN',
-            email='admin-pendaftaran@example.com',
+            nama_pengguna='Lab Laboran',
+            nim_nik='LAB-PENDAFTARAN',
+            email='laboran-pendaftaran@example.com',
             password='rahasia123',
             no_hp='081234567802',
             alamat='Jakarta',
             fakultas='Teknologi Industri',
             prodi='Informatika',
             gender='laki_laki',
-            role='admin',
+            role='laboran',
         )
         session = self.client.session
         session['pengguna_id'] = pengguna.pk
         session.save()
-        self.admin = pengguna
+        self.laboran = pengguna
 
         self.matkul, _ = MataKuliahAsleb.objects.get_or_create(
             kode='SDA_TIF01_ABDUL',
@@ -130,7 +130,7 @@ class PendaftaranAslebViewTests(TestCase):
         period.pendaftaran_mulai = today
         period.pendaftaran_selesai = today - timedelta(days=1)
         period.diakhiri_pada = timezone.now()
-        period.diakhiri_oleh = self.admin
+        period.diakhiri_oleh = self.laboran
         period.save(update_fields=[
             'selesai', 'pendaftaran_mulai', 'pendaftaran_selesai',
             'diakhiri_pada', 'diakhiri_oleh', 'diperbarui_pada',
@@ -688,7 +688,7 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertEqual(self.pendaftaran.metode_rekening, 'bank_lain')
         self.assertEqual(self.pendaftaran.nama_pemilik_rekening, 'Rizki Pratama')
 
-    def test_super_admin_wajib_password_benar_untuk_mengakhiri_periode(self):
+    def test_laboran_wajib_password_benar_untuk_mengakhiri_periode(self):
         period = PeriodeAsleb.get_for_date(timezone.localdate())
 
         response = self.client.post(reverse('pendaftaran_asleb:periode_end', args=[period.pk]), {
@@ -700,7 +700,7 @@ class PendaftaranAslebViewTests(TestCase):
         period.refresh_from_db()
         self.assertIsNone(period.diakhiri_pada)
 
-    def test_super_admin_dapat_mengatur_tanggal_masa_tugas_manual(self):
+    def test_laboran_dapat_mengatur_tanggal_masa_tugas_manual(self):
         today = timezone.localdate()
         period = PeriodeAsleb.get_for_date(today)
         start = today - timedelta(days=1)
@@ -716,7 +716,7 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertEqual(period.mulai, start)
         self.assertEqual(period.selesai, end)
 
-    def test_super_admin_dapat_mengakhiri_periode_dan_menonaktifkan_asleb(self):
+    def test_laboran_dapat_mengakhiri_periode_dan_menonaktifkan_asleb(self):
         period = PeriodeAsleb.get_for_date(timezone.localdate())
         akun_asleb = Pengguna.objects.create(
             nama_pengguna='Aslab Akhir Periode', nim_nik='0640020999',
@@ -748,22 +748,22 @@ class PendaftaranAslebViewTests(TestCase):
         akun_asleb.refresh_from_db()
         asleb.refresh_from_db()
         jadwal.refresh_from_db()
-        self.assertEqual(period.diakhiri_oleh, self.admin)
+        self.assertEqual(period.diakhiri_oleh, self.laboran)
         self.assertIsNotNone(period.diakhiri_pada)
         self.assertEqual(akun_asleb.role, 'mahasiswa')
         self.assertEqual(asleb.status, 'nonaktif')
         self.assertEqual(jadwal.status, JadwalPraktikum.STATUS_DITOLAK)
 
-    def test_laboran_tidak_dapat_mengakhiri_periode(self):
+    def test_admin_tidak_dapat_mengakhiri_periode_asleb(self):
         period = PeriodeAsleb.get_for_date(timezone.localdate())
-        laboran = Pengguna.objects.create(
-            nama_pengguna='Laboran Biasa', nim_nik='LAB-PERIODE',
-            email='laboran-periode@trisakti.ac.id', password='rahasia123', no_hp='081288888888',
+        admin = Pengguna.objects.create(
+            nama_pengguna='Admin Sistem', nim_nik='ADM-PERIODE',
+            email='admin-periode@trisakti.ac.id', password='rahasia123', no_hp='081288888888',
             alamat='Jakarta', fakultas='Teknologi Industri', prodi='Informatika',
-            gender='laki_laki', role='laboran', is_verified=True,
+            gender='laki_laki', role='admin', is_verified=True,
         )
         session = self.client.session
-        session['pengguna_id'] = laboran.pk
+        session['pengguna_id'] = admin.pk
         session.save()
 
         self.client.post(reverse('pendaftaran_asleb:periode_end', args=[period.pk]), {

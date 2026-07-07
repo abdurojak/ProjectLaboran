@@ -1,3 +1,5 @@
+from decimal import Decimal, ROUND_HALF_UP
+
 from django.apps import apps
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -472,11 +474,30 @@ class HasilPraktikumMahasiswa(models.Model):
         ('alpa', 'Alpa'),
     ]
 
-    peserta = models.ForeignKey(PesertaPraktikum, on_delete=models.PROTECT, related_name='hasil_praktikum')
+    peserta = models.ForeignKey(PesertaPraktikum, on_delete=models.SET_NULL, blank=True, null=True, related_name='hasil_praktikum')
     modul = models.ForeignKey(ModulPraktikum, on_delete=models.PROTECT, related_name='hasil_mahasiswa')
+    peserta_nim = models.CharField('NIM peserta', max_length=40, blank=True)
+    peserta_nama = models.CharField('Nama peserta', max_length=150, blank=True)
+    matkul_label = models.CharField('Mata kuliah', max_length=250, blank=True)
     tanggal_praktikum = models.DateField(default=timezone.localdate)
     status_absensi = models.CharField(max_length=12, choices=STATUS_CHOICES, default='hadir')
     nilai = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    nilai_realtime = models.DecimalField(
+        'Nilai realtime',
+        max_digits=5,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    nilai_laporan = models.DecimalField(
+        'Nilai laporan',
         max_digits=5,
         decimal_places=2,
         blank=True,
@@ -508,8 +529,36 @@ class HasilPraktikumMahasiswa(models.Model):
             from django.core.exceptions import ValidationError
             raise ValidationError({'modul': 'Modul harus berasal dari mata kuliah peserta.'})
 
+    def save(self, *args, **kwargs):
+        if self.peserta_id:
+            self.peserta_nim = self.peserta.nim
+            self.peserta_nama = self.peserta.nama
+            self.matkul_label = str(self.peserta.matkul)
+        elif self.modul_id and not self.matkul_label:
+            self.matkul_label = str(self.modul.matkul)
+        nilai_rata_rata = self.hitung_nilai_rata_rata()
+        if nilai_rata_rata is not None:
+            self.nilai = nilai_rata_rata
+        super().save(*args, **kwargs)
+
+    def hitung_nilai_rata_rata(self):
+        nilai_komponen = [
+            nilai for nilai in [self.nilai_realtime, self.nilai_laporan]
+            if nilai is not None
+        ]
+        if not nilai_komponen:
+            return self.nilai
+        total = sum(nilai_komponen, Decimal('0'))
+        return (total / Decimal(len(nilai_komponen))).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    @property
+    def nilai_rata_rata_display(self):
+        nilai = self.hitung_nilai_rata_rata()
+        return '-' if nilai is None else f'{nilai:.2f}'
+
     def __str__(self):
-        return f'{self.peserta.nama} - {self.modul} - {self.get_status_absensi_display()}'
+        nama = self.peserta.nama if self.peserta_id else self.peserta_nama
+        return f'{nama} - {self.modul} - {self.get_status_absensi_display()}'
 
 
 class PengingatAbsensiAsleb(models.Model):

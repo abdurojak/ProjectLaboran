@@ -1,5 +1,12 @@
 from django.utils import timezone
 
+from apps.core.permissions import (
+    ADMIN_ROLE,
+    ASISTEN_LAB_ROLE,
+    LABORAN_ROLE,
+    MAHASISWA_ROLE,
+)
+
 
 TONES = {
     'teal': {
@@ -48,21 +55,21 @@ SIDEBAR_LINKS = [
                     'barang_delete', 'lokasi_list', 'lokasi_create', 'lokasi_detail',
                     'lokasi_update', 'lokasi_delete',
                 },
-                'roles': {'admin', 'laboran'},
+                'roles': {LABORAN_ROLE},
             },
             {
                 'title': 'Barang Tertinggal',
                 'icon': 'briefcase',
                 'url': 'barang_tertinggal:list',
                 'namespace': 'barang_tertinggal',
-                'roles': {'admin', 'laboran'},
+                'roles': {LABORAN_ROLE},
             },
             {
                 'title': 'Peminjaman Alat',
                 'icon': 'arrow-left-right',
                 'url': 'peminjaman:peminjaman_list',
                 'namespace': 'peminjaman',
-                'roles': {'admin', 'laboran', 'asisten_lab', 'mahasiswa'},
+                'roles': {LABORAN_ROLE, ASISTEN_LAB_ROLE, MAHASISWA_ROLE},
             },
         ],
     },
@@ -78,7 +85,7 @@ SIDEBAR_LINKS = [
                 'url': 'asleb:absensi_list',
                 'namespace': 'asleb',
                 'url_names': {'absensi_list', 'absensi_create', 'absensi_toggle_status', 'modul_create', 'modul_update', 'modul_delete', 'modul_download'},
-                'roles': {'admin', 'laboran', 'asisten_lab'},
+                'roles': {LABORAN_ROLE, ASISTEN_LAB_ROLE},
             },
             {
                 'title': 'Nilai & Absensi Mahasiswa',
@@ -86,7 +93,7 @@ SIDEBAR_LINKS = [
                 'url': 'asleb:praktikum_mahasiswa_list',
                 'namespace': 'asleb',
                 'url_names': {'praktikum_mahasiswa_list', 'praktikum_peserta_create', 'praktikum_peserta_delete', 'praktikum_nilai'},
-                'roles': {'admin', 'laboran', 'asisten_lab'},
+                'roles': {LABORAN_ROLE, ASISTEN_LAB_ROLE},
             },
             {
                 'title': 'Data Aslab',
@@ -94,7 +101,7 @@ SIDEBAR_LINKS = [
                 'url': 'asleb:asleb_list',
                 'namespace': 'asleb',
                 'url_names': {'asleb_list', 'asleb_create', 'asleb_detail', 'asleb_update', 'asleb_delete'},
-                'roles': {'admin', 'laboran'},
+                'roles': {LABORAN_ROLE},
             },
             {
                 'title': 'Pendaftaran Aslab',
@@ -108,7 +115,7 @@ SIDEBAR_LINKS = [
                     'pendaftaran_toggle_status', 'periode_schedule_update', 'matkul_list',
                     'matkul_create', 'matkul_update', 'matkul_delete',
                 },
-                'roles': {'admin', 'laboran'},
+                'roles': {LABORAN_ROLE},
             },
             {
                 'title': 'Rekap Honorarium',
@@ -120,17 +127,18 @@ SIDEBAR_LINKS = [
                     'honor_confirm_transfer', 'honor_update', 'honor_delete',
                     'surat_honor_list', 'surat_honor_generate', 'surat_honor_download',
                 },
-                'roles': {'admin', 'laboran'},
+                'roles': {LABORAN_ROLE},
             },
         ],
     },
-    {'title': 'Ruangan', 'icon': 'door-open', 'url': 'ruangan:ruangan_list', 'namespace': 'ruangan'},
-    {'title': 'Surat Laboran', 'icon': 'mails', 'url': 'surat:list', 'namespace': 'surat', 'roles': {'admin', 'laboran'}},
+    {'title': 'Ruangan', 'icon': 'door-open', 'url': 'ruangan:ruangan_list', 'namespace': 'ruangan', 'roles': {LABORAN_ROLE, ASISTEN_LAB_ROLE, MAHASISWA_ROLE}},
+    {'title': 'Surat Laboran', 'icon': 'mails', 'url': 'surat:list', 'namespace': 'surat', 'roles': {LABORAN_ROLE}},
     {'title': 'Pengaturan', 'icon': 'settings', 'url': 'core:settings', 'namespace': 'core', 'url_names': {'settings'}},
 ]
 
 MAHASISWA_VISIBLE_NAMESPACES = {'core', 'dashboard', 'kalender', 'peminjaman', 'jadwal', 'ruangan'}
 ASISTEN_LAB_HIDDEN_NAMESPACES = {'inventaris', 'barang_tertinggal', 'asleb', 'pendaftaran_asleb', 'pengguna'}
+ADMIN_VISIBLE_NAMESPACES = {'core', 'dashboard', 'kalender', 'pengguna'}
 
 
 def _set_active(item, current_namespace, current_url_name):
@@ -172,10 +180,13 @@ def dashboard_sidebar(request):
         if role and role not in link.get('roles', {role}):
             continue
 
-        if current_pengguna and current_pengguna.role == 'mahasiswa' and link['namespace'] not in MAHASISWA_VISIBLE_NAMESPACES:
+        if current_pengguna and current_pengguna.role == ADMIN_ROLE and link['namespace'] not in ADMIN_VISIBLE_NAMESPACES:
             continue
 
-        if current_pengguna and current_pengguna.role == 'asisten_lab':
+        if current_pengguna and current_pengguna.role == MAHASISWA_ROLE and link['namespace'] not in MAHASISWA_VISIBLE_NAMESPACES:
+            continue
+
+        if current_pengguna and current_pengguna.role == ASISTEN_LAB_ROLE:
             if link['namespace'] in ASISTEN_LAB_HIDDEN_NAMESPACES:
                 continue
 
