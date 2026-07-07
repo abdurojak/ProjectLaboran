@@ -90,7 +90,7 @@ from apps.pengguna.models import Pengguna
 
 from project_laboran.asgi import application
 
-from .models import PercakapanBantuan, PesanBantuan
+from .models import BugErrorLog, PercakapanBantuan, PesanBantuan
 from .emails import send_branded_email
 
 
@@ -221,6 +221,75 @@ class BantuanTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, '<h3 class="mt-5 text-lg font-black tracking-tight text-slate-900">Bantuan</h3>', html=False)
         self.assertContains(response, 'Chat Bantuan Masuk')
+        self.assertIn('Bug & Error List', [card['title'] for card in response.context['settings_cards']])
+
+    def test_admin_dapat_membuka_bug_error_list(self):
+        admin = Pengguna.objects.create(
+            nama_pengguna='Admin Bug',
+            nim_nik='ADM-BUG',
+            email='admin-bug@example.com',
+            password='rahasia123',
+            no_hp='081234567871',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='admin',
+        )
+        BugErrorLog.objects.create(
+            judul='Upload foto profil gagal',
+            kategori='error',
+            prioritas='tinggi',
+            lokasi='/pengguna/1/edit-profil/',
+            deskripsi='Folder media tidak ditemukan',
+            dilaporkan_oleh=self.mahasiswa,
+        )
+        self.login_as(admin)
+
+        response = self.client.get(reverse('core:bug_error_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Bug & Error List')
+        self.assertContains(response, 'Upload foto profil gagal')
+        self.assertContains(response, 'Folder media tidak ditemukan')
+        self.assertContains(response, 'Tambah Bug/Error')
+
+    def test_non_admin_tidak_dapat_membuka_bug_error_list(self):
+        response = self.client.get(reverse('core:bug_error_list'))
+
+        self.assertRedirects(response, reverse('dashboard:home'))
+
+    def test_admin_menambahkan_bug_error_manual(self):
+        admin = Pengguna.objects.create(
+            nama_pengguna='Admin Manual Bug',
+            nim_nik='ADM-MANUAL-BUG',
+            email='admin-manual-bug@example.com',
+            password='rahasia123',
+            no_hp='081234567872',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='admin',
+        )
+        self.login_as(admin)
+
+        response = self.client.post(reverse('core:bug_error_list'), {
+            'action': 'create',
+            'judul': 'Modal profil terlalu terang',
+            'kategori': 'ui',
+            'prioritas': 'sedang',
+            'lokasi': '/pengguna/1/',
+            'deskripsi': 'Beberapa input masih kurang kontras saat dark mode.',
+            'langkah_reproduksi': 'Buka profil, aktifkan dark mode, klik edit.',
+            'hasil_aktual': 'Input tanggal sulit terlihat.',
+            'ekspektasi': 'Ikon dan border terlihat jelas.',
+        })
+
+        log = BugErrorLog.objects.get(judul='Modal profil terlalu terang')
+        self.assertRedirects(response, f"{reverse('core:bug_error_list')}?log={log.pk}")
+        self.assertEqual(log.dilaporkan_oleh, admin)
+        self.assertEqual(log.kategori, 'ui')
 
     def test_settings_tidak_menampilkan_kartu_pendaftaran_aslab(self):
         laboran = Pengguna.objects.create(
