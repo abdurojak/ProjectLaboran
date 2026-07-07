@@ -21,6 +21,7 @@ from .models import (
 
 
 ENABLE_CAMERA_LOCATION_CAPTURE = False
+MAX_DAILY_MODULE_ATTENDANCE = 2
 
 
 class AslebForm(forms.ModelForm):
@@ -207,13 +208,15 @@ class AbsensiAslebForm(forms.ModelForm):
         longitude = self._read_decimal(cleaned_data.get('longitude'))
         accuracy = self._read_float(cleaned_data.get('gps_accuracy'))
 
-        if self.asleb and AbsensiAsleb.objects.filter(
+        daily_attendance = AbsensiAsleb.objects.filter(
             asleb=self.asleb,
             tanggal_praktikum=attendance_date,
-        ).exists():
+        ) if self.asleb else AbsensiAsleb.objects.none()
+        if self.instance and self.instance.pk:
+            daily_attendance = daily_attendance.exclude(pk=self.instance.pk)
+        if daily_attendance.count() >= MAX_DAILY_MODULE_ATTENDANCE:
             raise forms.ValidationError(
-                'Anda sudah melakukan absensi untuk jadwal praktikum hari ini. '
-                'Perubahan jadwal tidak membuka absensi baru pada tanggal yang sama.'
+                f'Anda sudah melakukan absensi maksimal {MAX_DAILY_MODULE_ATTENDANCE} modul untuk jadwal praktikum hari ini.'
             )
 
         if not ENABLE_CAMERA_LOCATION_CAPTURE:

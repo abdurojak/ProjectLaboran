@@ -1,6 +1,12 @@
 from django.contrib import admin
 
-from .models import GrupRuanganGabungan, RuanganLab
+from .models import FotoRuanganLab, GrupRuanganGabungan, RuanganLab
+
+
+class FotoRuanganLabInline(admin.TabularInline):
+    model = FotoRuanganLab
+    extra = 1
+    fields = ('gambar', 'judul', 'urutan')
 
 
 @admin.register(RuanganLab)
@@ -8,6 +14,14 @@ class RuanganLabAdmin(admin.ModelAdmin):
     list_display = ('kode', 'nama', 'kapasitas', 'warna', 'aktif')
     list_filter = ('aktif', 'warna')
     search_fields = ('kode', 'nama', 'deskripsi')
+    inlines = (FotoRuanganLabInline,)
+
+
+@admin.register(FotoRuanganLab)
+class FotoRuanganLabAdmin(admin.ModelAdmin):
+    list_display = ('ruangan', 'judul', 'urutan', 'dibuat_pada')
+    list_filter = ('ruangan',)
+    search_fields = ('ruangan__nama', 'ruangan__kode', 'judul')
 
 
 @admin.register(GrupRuanganGabungan)

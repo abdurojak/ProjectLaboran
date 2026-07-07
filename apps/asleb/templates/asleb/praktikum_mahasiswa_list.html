@@ -68,7 +68,8 @@
         color: #fda4af !important;
     }
 
-    html[data-theme="dark"] .participant-modal .participant-danger-action:hover {
+    html[data-theme="dark"] .participant-modal .participant-danger-action:hover,
+    html[data-theme="dark"] .participant-modal [data-bulk-delete-button]:not(:disabled):hover {
         background: rgba(127, 29, 29, 0.18) !important;
     }
 
@@ -78,14 +79,11 @@
         color: #cbd5e1 !important;
     }
 
-    html[data-theme="dark"] .participant-modal [data-bulk-delete-button] {
+    html[data-theme="dark"] .participant-modal [data-bulk-delete-button],
+    html[data-theme="dark"] .participant-modal [data-delete-all-button] {
         border-color: rgba(251, 113, 133, 0.24) !important;
         background: rgba(127, 29, 29, 0.16) !important;
         color: #fda4af !important;
-    }
-
-    html[data-theme="dark"] .participant-modal [data-bulk-delete-button]:not(:disabled):hover {
-        background: rgba(127, 29, 29, 0.28) !important;
     }
 
     html[data-theme="dark"] .participant-filter-control option {
@@ -105,16 +103,18 @@
             <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Nilai & Absensi Mahasiswa</h2>
             <p class="mt-2 text-sm text-slate-500">Peserta otomatis tersedia pada setiap modul di mata kuliah masing-masing.</p>
         </div>
-        {% if can_manage_peserta %}
         <div class="flex flex-wrap gap-2">
-            <a class="btn-secondary gap-2" href="{% url 'asleb:praktikum_nilai_export' %}{% if selected_matkul_id %}?matkul={{ selected_matkul_id }}{% endif %}">
-                <i data-lucide="file-spreadsheet" class="h-4 w-4"></i><span>Download Excel Nilai</span>
+            <a class="btn-primary gap-2" href="{% url 'asleb:praktikum_nilai_export' %}{% if rekap_matkul %}?matkul={{ rekap_matkul.pk }}{% endif %}" data-download-rekap>
+                <i data-lucide="download" class="h-4 w-4" data-download-icon></i>
+                <svg class="hidden h-4 w-4 animate-spin" data-download-spinner viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path></svg>
+                <span data-download-label>Download Rekap Nilai</span>
             </a>
+            {% if can_manage_peserta %}
             <a class="btn-primary gap-2" href="{% url 'asleb:praktikum_peserta_create' %}">
                 <i data-lucide="user-round-plus" class="h-4 w-4"></i><span>Input Peserta</span>
             </a>
+            {% endif %}
         </div>
-        {% endif %}
     </div>
 
     <div class="grid gap-4 lg:grid-cols-2">
@@ -148,6 +148,62 @@
         {% endfor %}
     </div>
 
+    <div class="grid gap-4 md:grid-cols-4">
+        <div class="surface-card p-5"><p class="text-xs font-black uppercase tracking-wider text-slate-400">Total Mahasiswa</p><div class="mt-2 text-3xl font-black text-slate-900">{{ rekap_summary.total_mahasiswa }}</div></div>
+        <div class="surface-card p-5"><p class="text-xs font-black uppercase tracking-wider text-slate-400">Mata Kuliah</p><div class="mt-2 text-3xl font-black text-brand-700">{{ rekap_summary.jumlah_matkul }}</div></div>
+        <div class="surface-card p-5"><p class="text-xs font-black uppercase tracking-wider text-slate-400">Total Modul</p><div class="mt-2 text-3xl font-black text-blue-700">{{ rekap_summary.jumlah_modul }}</div></div>
+        <div class="surface-card p-5"><p class="text-xs font-black uppercase tracking-wider text-slate-400">Kelengkapan Nilai</p><div class="mt-2 text-3xl font-black text-emerald-700">{{ rekap_summary.kelengkapan }}%</div></div>
+    </div>
+
+    <div class="surface-card overflow-hidden">
+        <div class="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 p-5">
+            <div>
+                <p class="text-xs font-black uppercase tracking-[0.18em] text-brand-700">Rekap Gabungan</p>
+                <h3 class="mt-2 text-xl font-black text-slate-900">{% if rekap_matkul %}{{ rekap_matkul.nama }} - {{ rekap_matkul.kelas }}{% else %}Belum ada mata kuliah{% endif %}</h3>
+                <p class="mt-1 text-sm text-slate-500">Semua modul digabung dalam satu tabel rekap per mata kuliah.</p>
+            </div>
+            <form class="flex flex-wrap gap-2" method="get">
+                <select name="kelas" class="min-w-44">
+                    <option value="">Semua kelas</option>
+                    {% for kelas in class_options %}
+                    <option value="{{ kelas }}" {% if selected_kelas == kelas %}selected{% endif %}>{{ kelas }}</option>
+                    {% endfor %}
+                </select>
+                <select name="matkul" class="min-w-64">
+                    {% for item in matkul_list %}
+                    <option value="{{ item.pk }}" {% if rekap_matkul and item.pk == rekap_matkul.pk %}selected{% endif %}>{{ item.nama }} - {{ item.kelas }}</option>
+                    {% endfor %}
+                </select>
+                <input type="search" data-rekap-search placeholder="Cari NIM atau nama..." class="min-w-64">
+                <button class="btn-secondary gap-2" type="submit"><i data-lucide="filter" class="h-4 w-4"></i>Terapkan</button>
+            </form>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-[1100px]" data-rekap-table>
+                <thead>
+                    <tr>
+                        <th>No</th><th>NIM</th><th>Nama Mahasiswa</th><th>Kelas</th><th>Mata Kuliah</th>
+                        {% for modul in rekap_modules %}<th>Modul {{ modul.nomor }}</th>{% endfor %}
+                        <th>Total Nilai</th><th>Rata-rata Nilai</th><th>Keterangan</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rekap_rows %}
+                    <tr data-rekap-row>
+                        <td>{{ row.no }}</td><td class="font-bold">{{ row.nim }}</td><td>{{ row.nama }}</td><td>{{ row.kelas }}</td><td>{{ row.matkul }}</td>
+                        {% for score in row.scores %}<td>{% if score is not None %}{{ score|floatformat:2 }}{% else %}<span class="text-slate-400">-</span>{% endif %}</td>{% endfor %}
+                        <td>{% if row.total is not None %}{{ row.total|floatformat:2 }}{% else %}<span class="text-slate-400">-</span>{% endif %}</td>
+                        <td>{% if row.average is not None %}<span class="font-black text-brand-700">{{ row.average|floatformat:2 }}</span>{% else %}<span class="text-slate-400">-</span>{% endif %}</td>
+                        <td><span class="rounded-full {% if row.keterangan == 'Lengkap' %}bg-emerald-50 text-emerald-700{% else %}bg-amber-50 text-amber-700{% endif %} px-3 py-1 text-xs font-bold">{{ row.keterangan }}</span></td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="9" class="py-12 text-center text-slate-500">Belum ada data rekap nilai untuk mata kuliah ini.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     {% if can_manage_peserta %}
         {% for item in matkul_list %}
         <div class="participant-modal fixed z-50 bg-slate-950/60 p-4 backdrop-blur-sm" id="participants-{{ item.pk }}" aria-hidden="true" role="dialog" aria-modal="true">
@@ -159,9 +215,19 @@
                             <h3 class="mt-2 text-2xl font-black text-slate-900">{{ item.nama }}{% if item.kelas %} - {{ item.kelas }}{% endif %}</h3>
                             <p class="mt-1 text-sm text-slate-500">{{ item.jumlah_peserta }} peserta aktif</p>
                         </div>
-                        <button type="button" class="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 text-slate-500 transition hover:bg-slate-50" data-participant-modal-close aria-label="Tutup modal">
-                            <i data-lucide="x" class="h-5 w-5"></i>
-                        </button>
+                        <div class="flex flex-wrap gap-2">
+                            {% if item.peserta_modal_list %}
+                            <form method="post" action="{% url 'asleb:praktikum_peserta_delete_all' item.pk %}" data-confirm-message="Hapus semua peserta pada mata kuliah ini? Riwayat nilai tetap disimpan, tetapi daftar peserta aktif akan dikosongkan.">
+                                {% csrf_token %}
+                                <button class="inline-flex items-center justify-center rounded-2xl border border-rose-200 px-4 py-3 text-sm font-black text-rose-700 transition hover:bg-rose-50" data-delete-all-button type="submit">
+                                    <i data-lucide="trash-2" class="mr-2 h-4 w-4"></i>Hapus Semua
+                                </button>
+                            </form>
+                            {% endif %}
+                            <button type="button" class="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 text-slate-500 transition hover:bg-slate-50" data-participant-modal-close aria-label="Tutup modal">
+                                <i data-lucide="x" class="h-5 w-5"></i>
+                            </button>
+                        </div>
                     </div>
 
                     <form method="post" action="{% url 'asleb:praktikum_peserta_bulk_delete' %}" class="flex min-h-0 flex-1 flex-col" data-participant-form>
@@ -331,10 +397,46 @@
         });
 
         const selectedMatkul = '{{ selected_matkul_id|escapejs }}';
-        if (selectedMatkul) {
+        if (selectedMatkul && '{{ show_peserta_modal|yesno:"1,0" }}' === '1') {
             const modal = document.getElementById(`participants-${selectedMatkul}`);
             if (modal) openModal(modal);
         }
     })();
+</script>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const searchInput = document.querySelector('[data-rekap-search]');
+        const rows = Array.from(document.querySelectorAll('[data-rekap-row]'));
+        if (searchInput) {
+            searchInput.addEventListener('input', function () {
+                const keyword = searchInput.value.trim().toLowerCase();
+                rows.forEach(function (row) {
+                    row.classList.toggle('hidden', keyword && !row.textContent.toLowerCase().includes(keyword));
+                });
+            });
+        }
+
+        const download = document.querySelector('[data-download-rekap]');
+        const toast = document.querySelector('[data-download-toast]');
+        if (download) {
+            download.addEventListener('click', function () {
+                const icon = download.querySelector('[data-download-icon]');
+                const spinner = download.querySelector('[data-download-spinner]');
+                const label = download.querySelector('[data-download-label]');
+                if (icon) icon.classList.add('hidden');
+                if (spinner) spinner.classList.remove('hidden');
+                if (label) label.textContent = 'Menyiapkan file...';
+                if (toast) toast.classList.remove('hidden');
+                window.setTimeout(function () {
+                    if (icon) icon.classList.remove('hidden');
+                    if (spinner) spinner.classList.add('hidden');
+                    if (label) label.textContent = 'Download Rekap Nilai';
+                }, 3500);
+            });
+        }
+    });
 </script>
 {% endblock %}

@@ -9,6 +9,48 @@
         let reconnectAttempt = 0;
         let refreshTimer = null;
         let closedByPage = false;
+        let audioContext = null;
+        let soundUnlocked = false;
+
+        function getAudioContext() {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContextClass) return null;
+            if (!audioContext) audioContext = new AudioContextClass();
+            return audioContext;
+        }
+
+        function unlockNotificationSound() {
+            const context = getAudioContext();
+            if (!context) return;
+            if (context.state === 'suspended') {
+                context.resume().catch(function () {});
+            }
+            soundUnlocked = true;
+            document.removeEventListener('pointerdown', unlockNotificationSound);
+            document.removeEventListener('keydown', unlockNotificationSound);
+        }
+
+        function playNotificationSound() {
+            if (!soundUnlocked || document.hidden) return;
+            const context = getAudioContext();
+            if (!context || context.state === 'suspended') return;
+
+            const now = context.currentTime;
+            const gain = context.createGain();
+            gain.gain.setValueAtTime(0.0001, now);
+            gain.gain.exponentialRampToValueAtTime(0.075, now + 0.025);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
+            gain.connect(context.destination);
+
+            [740, 980].forEach(function (frequency, index) {
+                const oscillator = context.createOscillator();
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(frequency, now + (index * 0.11));
+                oscillator.connect(gain);
+                oscillator.start(now + (index * 0.11));
+                oscillator.stop(now + 0.24 + (index * 0.11));
+            });
+        }
 
         function updateBadge(count) {
             document.querySelectorAll('[data-realtime-notification-count]').forEach(function (badge) {
@@ -49,6 +91,7 @@
                 let message;
                 try { message = JSON.parse(event.data); } catch (error) { return; }
                 if (message.type !== 'notification' || !message.payload) return;
+                playNotificationSound();
                 showToast(message.payload);
                 if (message.payload.unread_count !== undefined) updateBadge(message.payload.unread_count);
                 document.dispatchEvent(new CustomEvent('labhub:realtime', {detail: message.payload}));
@@ -68,6 +111,8 @@
             window.clearTimeout(reconnectTimer);
             if (socket) socket.close();
         });
+        document.addEventListener('pointerdown', unlockNotificationSound, {once: true});
+        document.addEventListener('keydown', unlockNotificationSound, {once: true});
         connect();
     }());
 </script>

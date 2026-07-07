@@ -295,6 +295,30 @@
             -webkit-backdrop-filter: blur(18px) saturate(1.16);
         }
 
+        html[data-bg="custom"] .surface-card,
+        html[data-bg="custom"] .glass-card,
+        html[data-bg="custom"] main article,
+        html[data-bg="custom"] main aside,
+        html[data-bg="custom"] main form {
+            background: rgba(255, 255, 255, 0.88) !important;
+            border-color: rgba(15, 23, 42, 0.14) !important;
+            color: #0f172a !important;
+            box-shadow: 0 20px 55px rgba(15, 23, 42, 0.12) !important;
+            backdrop-filter: blur(20px) saturate(1.18);
+            -webkit-backdrop-filter: blur(20px) saturate(1.18);
+        }
+
+        html[data-theme="dark"][data-bg="custom"] .surface-card,
+        html[data-theme="dark"][data-bg="custom"] .glass-card,
+        html[data-theme="dark"][data-bg="custom"] main article,
+        html[data-theme="dark"][data-bg="custom"] main aside,
+        html[data-theme="dark"][data-bg="custom"] main form {
+            background: rgba(15, 23, 42, 0.78) !important;
+            border-color: rgba(148, 163, 184, 0.24) !important;
+            color: #f8fafc !important;
+            box-shadow: 0 24px 60px rgba(2, 6, 23, 0.38) !important;
+        }
+
         input, select, textarea {
             background: var(--field-bg) !important;
             color: var(--field-text) !important;
@@ -335,6 +359,62 @@
         th, td, label {
             color: var(--text-soft) !important;
             border-color: var(--border-color) !important;
+        }
+
+        html[data-bg="custom"] main .text-slate-900,
+        html[data-bg="custom"] main .text-slate-800,
+        html[data-bg="custom"] main .text-slate-700 {
+            color: #0f172a !important;
+        }
+
+        html[data-bg="custom"] main .text-slate-600,
+        html[data-bg="custom"] main .text-slate-500,
+        html[data-bg="custom"] main .text-slate-400 {
+            color: #475569 !important;
+        }
+
+        html[data-theme="dark"] main .text-slate-950,
+        html[data-theme="dark"] main .text-slate-900,
+        html[data-theme="dark"] main .text-slate-800,
+        html[data-theme="dark"] main .text-slate-700 {
+            color: #f8fafc !important;
+        }
+
+        html[data-theme="dark"] main .text-slate-600,
+        html[data-theme="dark"] main .text-slate-500,
+        html[data-theme="dark"] main .text-slate-400 {
+            color: #cbd5e1 !important;
+        }
+
+        html[data-bg="custom"] main .bg-white,
+        html[data-bg="custom"] main .bg-slate-50,
+        html[data-bg="custom"] main .bg-slate-50\/70,
+        html[data-bg="custom"] main .bg-slate-50\/80,
+        html[data-bg="custom"] main .bg-slate-100 {
+            background-color: rgba(255, 255, 255, 0.74) !important;
+            border-color: rgba(15, 23, 42, 0.12) !important;
+        }
+
+        html[data-theme="dark"] main .bg-white,
+        html[data-theme="dark"] main .bg-slate-50,
+        html[data-theme="dark"] main .bg-slate-50\/70,
+        html[data-theme="dark"] main .bg-slate-50\/80,
+        html[data-theme="dark"] main .bg-slate-100 {
+            background-color: rgba(30, 41, 59, 0.70) !important;
+            border-color: rgba(148, 163, 184, 0.18) !important;
+        }
+
+        html[data-theme="dark"] main input,
+        html[data-theme="dark"] main select,
+        html[data-theme="dark"] main textarea {
+            background-color: rgba(15, 23, 42, 0.86) !important;
+            color: #f8fafc !important;
+            border-color: rgba(148, 163, 184, 0.24) !important;
+        }
+
+        html[data-theme="dark"] main input::placeholder,
+        html[data-theme="dark"] main textarea::placeholder {
+            color: #94a3b8 !important;
         }
 
         html[data-theme="dark"] .btn-secondary {

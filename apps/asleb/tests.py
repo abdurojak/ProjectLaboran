@@ -413,19 +413,94 @@ class AslebViewTests(TestCase):
             catatan='Baik',
             dicatat_oleh=self.pengguna,
         )
+        modul_2 = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=2,
+            judul='Array',
+            file=SimpleUploadedFile('modul-2.pdf', b'%PDF-1.4', content_type='application/pdf'),
+        )
+        HasilPraktikumMahasiswa.objects.create(
+            peserta=peserta,
+            modul=modul_2,
+            tanggal_praktikum=date(2026, 7, 8),
+            status_absensi='hadir',
+            nilai_realtime=90,
+            nilai_laporan=100,
+            dicatat_oleh=self.pengguna,
+        )
 
         response = self.client.get(reverse('asleb:praktikum_nilai_export'), {'matkul': self.matkul.pk})
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response['Content-Type'], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        self.assertEqual(response['Content-Type'], 'application/zip')
         self.assertTrue(response.content.startswith(b'PK'))
-        self.assertIn(b'workbook.xml', response.content)
-        with zipfile.ZipFile(BytesIO(response.content)) as workbook:
+        with zipfile.ZipFile(BytesIO(response.content)) as archive:
+            names = archive.namelist()
+            self.assertEqual(len(names), 1)
+            workbook_bytes = archive.read(names[0])
+        with zipfile.ZipFile(BytesIO(workbook_bytes)) as workbook:
             sheet = workbook.read('xl/worksheets/sheet1.xml').decode()
-        self.assertIn('Nilai Realtime', sheet)
-        self.assertIn('Nilai Laporan', sheet)
-        self.assertIn('Rata-rata Mahasiswa', sheet)
+        self.assertIn('Modul 1', sheet)
+        self.assertIn('Modul 2', sheet)
+        self.assertIn('Total Nilai', sheet)
+        self.assertIn('Rata-rata Nilai', sheet)
         self.assertIn('85.00', sheet)
+        self.assertIn('95.00', sheet)
+        self.assertIn('180.00', sheet)
+        self.assertIn('90.00', sheet)
+
+    def test_export_nilai_semua_matkul_dipisah_dalam_zip(self):
+        matkul_lain = MataKuliahAsleb.objects.create(
+            nama='Pemrograman Web',
+            kode='IF202',
+            kelas='TIF-02',
+            dosen='Bu Dosen',
+        )
+        peserta_1 = PesertaPraktikum.objects.create(matkul=self.matkul, nim='0640020099', nama='Mahasiswa Satu')
+        peserta_2 = PesertaPraktikum.objects.create(matkul=matkul_lain, nim='0640020100', nama='Mahasiswa Dua')
+        modul_1 = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=1,
+            judul='Pengenalan',
+            file=SimpleUploadedFile('modul-1.pdf', b'%PDF-1.4', content_type='application/pdf'),
+        )
+        modul_2 = ModulPraktikum.objects.create(
+            matkul=matkul_lain,
+            nomor=1,
+            judul='HTML',
+            file=SimpleUploadedFile('modul-web.pdf', b'%PDF-1.4', content_type='application/pdf'),
+        )
+        HasilPraktikumMahasiswa.objects.create(peserta=peserta_1, modul=modul_1, nilai_realtime=80, nilai_laporan=90)
+        HasilPraktikumMahasiswa.objects.create(peserta=peserta_2, modul=modul_2, nilai_realtime=70, nilai_laporan=80)
+
+        response = self.client.get(reverse('asleb:praktikum_nilai_export'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/zip')
+        with zipfile.ZipFile(BytesIO(response.content)) as archive:
+            names = archive.namelist()
+        self.assertEqual(len(names), len(set(names)))
+        self.assertGreaterEqual(len(names), 2)
+        self.assertTrue(all(name.endswith('.xlsx') for name in names))
+
+    def test_hapus_semua_peserta_mengosongkan_daftar_dan_menyimpan_riwayat_nilai(self):
+        peserta_dengan_nilai = PesertaPraktikum.objects.create(matkul=self.matkul, nim='0640020099', nama='Mahasiswa Nilai')
+        peserta_tanpa_nilai = PesertaPraktikum.objects.create(matkul=self.matkul, nim='0640020100', nama='Mahasiswa Kosong')
+        modul = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=1,
+            judul='Pengenalan',
+            file=SimpleUploadedFile('modul.pdf', b'%PDF-1.4', content_type='application/pdf'),
+        )
+        HasilPraktikumMahasiswa.objects.create(peserta=peserta_dengan_nilai, modul=modul, nilai_realtime=80, nilai_laporan=90)
+
+        response = self.client.post(reverse('asleb:praktikum_peserta_delete_all', args=[self.matkul.pk]))
+
+        self.assertRedirects(response, f'{reverse("asleb:praktikum_mahasiswa_list")}?matkul={self.matkul.pk}')
+        peserta_dengan_nilai.refresh_from_db()
+        self.assertFalse(peserta_dengan_nilai.aktif)
+        self.assertFalse(PesertaPraktikum.objects.filter(pk=peserta_tanpa_nilai.pk).exists())
+        self.assertTrue(HasilPraktikumMahasiswa.objects.filter(peserta=peserta_dengan_nilai).exists())
 
     def test_input_nilai_menghitung_rata_rata_realtime_dan_laporan(self):
         peserta = PesertaPraktikum.objects.create(matkul=self.matkul, nim='0640020099', nama='Mahasiswa Nilai')
@@ -874,7 +949,7 @@ class AslebViewTests(TestCase):
 
         self.assertTrue(form.is_valid(), form.errors)
 
-    def test_absensi_menolak_absensi_kedua_di_hari_yang_sama_meski_jadwal_berubah(self):
+    def test_absensi_mengizinkan_maksimal_dua_modul_di_hari_yang_sama(self):
         PendaftaranAsleb.objects.create(
             nama=self.asleb.nama,
             nim=self.asleb.nim,
@@ -896,6 +971,12 @@ class AslebViewTests(TestCase):
             nomor=5,
             judul='Searching',
             file=SimpleUploadedFile('modul-5.pdf', b'isi modul 5', content_type='application/pdf'),
+        )
+        modul_ketiga = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=6,
+            judul='Tree',
+            file=SimpleUploadedFile('modul-6.pdf', b'isi modul 6', content_type='application/pdf'),
         )
         jadwal_awal = self.create_active_schedule()
         AbsensiAsleb.objects.create(
@@ -922,7 +1003,7 @@ class AslebViewTests(TestCase):
             waktu_selesai='15:00',
             status=JadwalPraktikum.STATUS_DITERIMA,
         )
-        form = AbsensiAslebForm(
+        second_form = AbsensiAslebForm(
             data={
                 'modul_praktikum': modul_kedua.pk,
                 'pekerjaan': 'Membantu praktikum sesi kedua',
@@ -938,8 +1019,29 @@ class AslebViewTests(TestCase):
             jadwal=jadwal_diubah,
         )
 
-        self.assertFalse(form.is_valid())
-        self.assertIn('sudah melakukan absensi', str(form.non_field_errors()))
+        self.assertTrue(second_form.is_valid(), second_form.errors)
+        second_absensi = second_form.save(commit=False)
+        second_absensi.asleb = self.asleb
+        second_absensi.save()
+
+        third_form = AbsensiAslebForm(
+            data={
+                'modul_praktikum': modul_ketiga.pk,
+                'pekerjaan': 'Membantu praktikum sesi ketiga',
+                'latitude': '-6.1680678',
+                'longitude': '106.7916257',
+                'gps_accuracy': '10',
+            },
+            files={
+                'bukti_foto': self.make_camera_photo('foto-ketiga.png'),
+                'bukti_video': SimpleUploadedFile('video-ketiga.mp4', b'video ketiga', content_type='video/mp4'),
+            },
+            asleb=self.asleb,
+            jadwal=jadwal_diubah,
+        )
+
+        self.assertFalse(third_form.is_valid())
+        self.assertIn('maksimal 2 modul', str(third_form.non_field_errors()))
 
     def test_pengingat_email_maksimal_tiga_kali(self):
         PendaftaranAsleb.objects.create(
