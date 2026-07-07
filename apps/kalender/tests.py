@@ -442,6 +442,16 @@ class KalenderViewsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Notifikasi')
 
+    def test_kalender_tidak_memakai_scroll_horizontal(self):
+        response = self.client.get(reverse('kalender:kegiatan_list'))
+
+        self.assertContains(response, 'overflow-x: hidden;')
+        self.assertContains(response, '.calendar-scroll .fc table,')
+        self.assertContains(response, 'width: 100% !important;')
+        self.assertNotContains(response, 'min-width: 680px;')
+        self.assertNotContains(response, 'min-width: 600px;')
+        self.assertNotContains(response, 'min-width: 540px;')
+
     def test_notifikasi_dark_mode_dioptimalkan(self):
         response = self.client.get(reverse('kalender:notifikasi_list'))
 
@@ -452,6 +462,14 @@ class KalenderViewsTests(TestCase):
         self.assertContains(response, 'html[data-theme="dark"] .notification-page .notification-item[data-unread="true"]')
         self.assertContains(response, 'html[data-theme="dark"] .notification-page .notification-empty')
         self.assertContains(response, 'data-unread="')
+
+    def test_realtime_notifikasi_memiliki_suara(self):
+        response = self.client.get(reverse('kalender:notifikasi_list'))
+
+        self.assertContains(response, 'function playNotificationSound()')
+        self.assertContains(response, 'window.AudioContext || window.webkitAudioContext')
+        self.assertContains(response, 'playNotificationSound();')
+        self.assertContains(response, "document.addEventListener('pointerdown', unlockNotificationSound, {once: true});")
 
     def test_notifikasi_mahasiswa_menampilkan_perubahan_status_peminjaman_saya(self):
         mahasiswa = Pengguna.objects.create(

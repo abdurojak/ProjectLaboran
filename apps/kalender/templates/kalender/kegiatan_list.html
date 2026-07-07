@@ -22,13 +22,23 @@
     .calendar-scroll {
         max-width: 100%;
         min-width: 0;
-        overflow-x: auto;
+        overflow-x: hidden;
         overflow-y: hidden;
-        overscroll-behavior-x: contain;
         padding-bottom: 0.25rem;
     }
     .calendar-scroll .fc {
-        min-width: 680px;
+        min-width: 0;
+        width: 100%;
+        max-width: 100%;
+    }
+    .calendar-scroll .fc table,
+    .calendar-scroll .fc .fc-scrollgrid,
+    .calendar-scroll .fc .fc-daygrid-body,
+    .calendar-scroll .fc .fc-daygrid-body table,
+    .calendar-scroll .fc .fc-col-header,
+    .calendar-scroll .fc .fc-col-header table {
+        min-width: 0 !important;
+        width: 100% !important;
     }
     .fc .fc-toolbar.fc-header-toolbar {
         align-items: center;
@@ -247,7 +257,7 @@
             overflow: hidden;
         }
         .calendar-scroll .fc {
-            min-width: 600px;
+            min-width: 0;
         }
         .fc .fc-toolbar.fc-header-toolbar {
             display: grid;
@@ -280,7 +290,7 @@
     }
     @media (max-width: 480px) {
         .calendar-scroll .fc {
-            min-width: 540px;
+            min-width: 0;
         }
         .fc .fc-toolbar-chunk {
             flex-wrap: wrap;

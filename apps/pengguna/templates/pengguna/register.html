@@ -24,7 +24,7 @@
         </div>
     </div>
 
-    <form method="post" enctype="multipart/form-data" class="register-form surface-card p-6 md:p-7">
+    <form method="post" enctype="multipart/form-data" class="register-form surface-card p-6 md:p-7" data-register-form>
         {% csrf_token %}
         <div class="register-grid">
             {% for field in form %}
@@ -50,9 +50,13 @@
             {% endfor %}
         </div>
         <div class="mt-5 flex flex-wrap gap-3 border-t border-slate-100 pt-5">
-            <button type="submit" class="btn-primary gap-2">
-                <i data-lucide="user-plus" class="h-4 w-4"></i>
-                <span>Register</span>
+            <button type="submit" class="btn-primary gap-2" data-register-submit>
+                <i data-lucide="user-plus" class="h-4 w-4" data-register-icon></i>
+                <svg class="hidden h-4 w-4 animate-spin" data-register-spinner viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                </svg>
+                <span data-register-label>Register</span>
             </button>
             <a class="btn-secondary gap-2" href="{% url 'pengguna:login' %}">
                 <i data-lucide="x" class="h-4 w-4"></i>
@@ -224,6 +228,21 @@
                 }
             });
         });
+
+        const registerForm = document.querySelector('[data-register-form]');
+        const registerButton = document.querySelector('[data-register-submit]');
+        if (registerForm && registerButton) {
+            registerForm.addEventListener('submit', function () {
+                registerButton.disabled = true;
+                registerButton.classList.add('opacity-80', 'cursor-not-allowed');
+                const icon = registerButton.querySelector('[data-register-icon]');
+                const spinner = registerButton.querySelector('[data-register-spinner]');
+                const label = registerButton.querySelector('[data-register-label]');
+                if (icon) icon.classList.add('hidden');
+                if (spinner) spinner.classList.remove('hidden');
+                if (label) label.textContent = 'Memproses...';
+            });
+        }
     });
 </script>
 {% endblock %}

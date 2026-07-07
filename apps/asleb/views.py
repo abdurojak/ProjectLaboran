@@ -676,10 +676,16 @@ class PraktikumMahasiswaListView(PraktikumMahasiswaAccessMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         pengguna = self.request.current_pengguna
+        base_matkul_qs = get_praktikum_matkul_queryset(pengguna).order_by('nama', 'kelas')
+        class_options = list(
+            base_matkul_qs.exclude(kelas='').values_list('kelas', flat=True).distinct().order_by('kelas')
+        )
+        selected_kelas = self.request.GET.get('kelas', '').strip()
+        if selected_kelas:
+            base_matkul_qs = base_matkul_qs.filter(kelas=selected_kelas)
         matkul_list = list(
-            get_praktikum_matkul_queryset(pengguna)
+            base_matkul_qs
             .prefetch_related('modul_praktikum')
-            .order_by('nama', 'kelas')
         )
         for matkul in matkul_list:
             matkul.jumlah_peserta = matkul.peserta_praktikum.filter(aktif=True).count()
@@ -687,11 +693,48 @@ class PraktikumMahasiswaListView(PraktikumMahasiswaAccessMixin, TemplateView):
             matkul.peserta_modal_list = list(matkul.peserta_praktikum.select_related('pengguna').all())
             self.attach_participant_summaries(matkul.peserta_modal_list)
 
+        selected_id = self.request.GET.get('matkul', '').strip()
+        selected_matkul = next((item for item in matkul_list if str(item.pk) == selected_id), None)
+        if not selected_matkul and len(matkul_list) == 1:
+            selected_matkul = matkul_list[0]
+        peserta_list = selected_matkul.peserta_modal_list if selected_matkul else []
+        rekap_matkul = selected_matkul or (matkul_list[0] if matkul_list else None)
+        rekap_hasil = list(
+            HasilPraktikumMahasiswa.objects
+            .select_related('peserta', 'modul', 'modul__matkul')
+            .filter(modul__matkul=rekap_matkul)
+            .order_by('peserta_nama', 'peserta__nama', 'modul__nomor')
+        ) if rekap_matkul else []
+        rekap_data = build_rekap_nilai_matkul(rekap_matkul, rekap_hasil) if rekap_matkul else {
+            'modules': [],
+            'rows': [],
+            'total_mahasiswa': 0,
+            'nilai_terisi': 0,
+            'nilai_target': 0,
+            'kelengkapan': 0,
+        }
+        total_modul = sum(len(item.modul_tersedia) for item in matkul_list)
+        total_mahasiswa = sum(item.jumlah_peserta for item in matkul_list)
+
         context.update({
             'matkul_list': matkul_list,
-            'selected_matkul_id': self.request.GET.get('matkul', '').strip(),
+            'selected_matkul': selected_matkul,
+            'rekap_matkul': rekap_matkul,
+            'rekap_modules': rekap_data['modules'],
+            'rekap_rows': rekap_data['rows'],
+            'rekap_summary': {
+                'total_mahasiswa': total_mahasiswa,
+                'jumlah_matkul': len(matkul_list),
+                'jumlah_modul': total_modul,
+                'kelengkapan': rekap_data['kelengkapan'],
+            },
+            'class_options': class_options,
+            'selected_kelas': selected_kelas,
+            'peserta_list': peserta_list,
+            'selected_matkul_id': selected_id,
             'can_manage_peserta': pengguna.role == LABORAN_ROLE,
             'is_asisten_lab': pengguna.role == ASISTEN_LAB_ROLE,
+            'show_peserta_modal': self.request.GET.get('show_peserta') == '1',
         })
         return context
 
@@ -789,6 +832,23 @@ def bulk_delete_peserta_praktikum(request):
     return redirect(f'{redirect_url}?matkul={matkul_id}' if matkul_id else redirect_url)
 
 
+@require_POST
+def delete_all_peserta_praktikum(request, matkul_pk):
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not can_manage_lab_operations(pengguna):
+        messages.error(request, 'Hanya laboran yang dapat menghapus peserta praktikum.')
+        return redirect('asleb:praktikum_mahasiswa_list')
+    matkul = get_object_or_404(get_praktikum_matkul_queryset(pengguna), pk=matkul_pk)
+    peserta_qs = matkul.peserta_praktikum.all()
+    total = peserta_qs.count()
+    with transaction.atomic():
+        peserta_with_history = peserta_qs.filter(hasil_praktikum__isnull=False).distinct()
+        peserta_with_history.update(aktif=False)
+        peserta_qs.filter(hasil_praktikum__isnull=True).delete()
+    messages.success(request, f'{total} peserta praktikum berhasil dihapus dari daftar. Riwayat nilai tetap disimpan.')
+    return redirect(f'{reverse_lazy("asleb:praktikum_mahasiswa_list")}?matkul={matkul.pk}')
+
+
 class NilaiAbsensiMahasiswaView(PraktikumMahasiswaAccessMixin, TemplateView):
     template_name = 'asleb/nilai_absensi_mahasiswa.html'
 
@@ -859,6 +919,7 @@ def export_nilai_praktikum_excel(request):
 
     matkul_qs = get_praktikum_matkul_queryset(pengguna)
     matkul_id = request.GET.get('matkul', '').strip()
+    matkul_list = list(matkul_qs.order_by('nama', 'kelas'))
     hasil_qs = (
         HasilPraktikumMahasiswa.objects
         .select_related('peserta', 'modul', 'modul__matkul', 'dicatat_oleh')
@@ -867,7 +928,109 @@ def export_nilai_praktikum_excel(request):
     )
     if matkul_id:
         hasil_qs = hasil_qs.filter(modul__matkul_id=matkul_id)
+        matkul_list = [item for item in matkul_list if str(item.pk) == matkul_id]
     hasil_list = list(hasil_qs)
+
+    zip_buffer = BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as archive:
+        used_names = set()
+        for matkul in matkul_list:
+            matkul_results = [hasil for hasil in hasil_list if hasil.modul.matkul_id == matkul.pk]
+            rekap = build_rekap_nilai_matkul(matkul, matkul_results)
+            rows = build_rekap_nilai_excel_rows(matkul, rekap)
+            base_filename = slugify(f'{matkul.nama}-{matkul.kelas}') or f'rekap-nilai-{matkul.pk}'
+            filename = base_filename
+            if filename in used_names:
+                filename = f'{base_filename}-{matkul.pk}'
+            used_names.add(filename)
+            archive.writestr(f'{filename}.xlsx', build_simple_xlsx(rows, sheet_name='Rekap Nilai'))
+    response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
+    zip_suffix = ''
+    if len(matkul_list) == 1:
+        zip_suffix = '-' + (slugify(f'{matkul_list[0].nama}-{matkul_list[0].kelas}') or str(matkul_list[0].pk))
+    response['Content-Disposition'] = f'attachment; filename="rekap-nilai-per-mata-kuliah{zip_suffix}.zip"'
+    return response
+
+
+def build_rekap_nilai_matkul(matkul, hasil_list):
+    if not matkul:
+        return {'modules': [], 'rows': [], 'total_mahasiswa': 0, 'nilai_terisi': 0, 'nilai_target': 0, 'kelengkapan': 0}
+
+    modules = list(ModulPraktikum.objects.filter(matkul=matkul).order_by('nomor', 'pk'))
+    peserta_map = {}
+    for peserta in matkul.peserta_praktikum.filter(aktif=True).order_by('nama', 'nim'):
+        peserta_map[peserta.nim] = {
+            'nim': peserta.nim,
+            'nama': peserta.nama,
+            'kelas': matkul.kelas,
+            'matkul': matkul.nama,
+            'module_scores': {},
+        }
+
+    for hasil in hasil_list:
+        nim = hasil.peserta.nim if hasil.peserta_id else hasil.peserta_nim
+        if not nim:
+            continue
+        peserta_map.setdefault(nim, {
+            'nim': nim,
+            'nama': hasil.peserta.nama if hasil.peserta_id else hasil.peserta_nama,
+            'kelas': matkul.kelas,
+            'matkul': matkul.nama,
+            'module_scores': {},
+        })
+        score = hasil.hitung_nilai_rata_rata()
+        if score is not None:
+            peserta_map[nim]['module_scores'][hasil.modul.nomor] = score
+
+    rows = []
+    nilai_terisi = 0
+    for index, row in enumerate(sorted(peserta_map.values(), key=lambda item: (item['nama'], item['nim'])), start=1):
+        scores = [row['module_scores'].get(module.nomor) for module in modules]
+        filled_scores = [score for score in scores if score is not None]
+        total = sum(filled_scores, Decimal('0')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP) if filled_scores else None
+        average = (total / Decimal(len(filled_scores))).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP) if filled_scores else None
+        nilai_terisi += len(filled_scores)
+        row.update({
+            'no': index,
+            'scores': scores,
+            'total': total,
+            'average': average,
+            'keterangan': 'Lengkap' if modules and len(filled_scores) == len(modules) else 'Belum lengkap',
+        })
+        rows.append(row)
+
+    nilai_target = len(rows) * len(modules)
+    kelengkapan = round((nilai_terisi / nilai_target) * 100) if nilai_target else 0
+    return {
+        'modules': modules,
+        'rows': rows,
+        'total_mahasiswa': len(rows),
+        'nilai_terisi': nilai_terisi,
+        'nilai_target': nilai_target,
+        'kelengkapan': kelengkapan,
+    }
+
+
+def build_rekap_nilai_excel_rows(matkul, rekap):
+    headers = ['No', 'NIM', 'Nama Mahasiswa', 'Kelas', 'Mata Kuliah']
+    headers.extend([f'Modul {module.nomor}' for module in rekap['modules']])
+    headers.extend(['Total Nilai', 'Rata-rata Nilai', 'Keterangan'])
+    rows = [headers]
+    for row in rekap['rows']:
+        values = [row['no'], row['nim'], row['nama'], row['kelas'], row['matkul']]
+        values.extend('' if score is None else f'{score:.2f}' for score in row['scores'])
+        values.extend([
+            '' if row['total'] is None else f'{row["total"]:.2f}',
+            '' if row['average'] is None else f'{row["average"]:.2f}',
+            row['keterangan'],
+        ])
+        rows.append(values)
+    if len(rows) == 1 and matkul:
+        rows.append(['', '', 'Belum ada data nilai', matkul.kelas, matkul.nama] + [''] * (len(headers) - 5))
+    return rows
+
+
+def build_nilai_praktikum_rows(hasil_list):
     nilai_by_nim = {}
     for hasil in hasil_list:
         nim = hasil.peserta.nim if hasil.peserta_id else hasil.peserta_nim
@@ -915,14 +1078,7 @@ def export_nilai_praktikum_excel(request):
             hasil.catatan,
             hasil.dicatat_oleh.nama_pengguna if hasil.dicatat_oleh_id else '',
         ])
-
-    workbook_bytes = build_simple_xlsx(rows, sheet_name='Rekap Nilai')
-    response = HttpResponse(
-        workbook_bytes,
-        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    )
-    response['Content-Disposition'] = 'attachment; filename="rekap-nilai-praktikum.xlsx"'
-    return response
+    return rows
 
 
 def build_simple_xlsx(rows, sheet_name='Sheet1'):
@@ -933,20 +1089,34 @@ def build_simple_xlsx(rows, sheet_name='Sheet1'):
             name = chr(65 + remainder) + name
         return name
 
+    column_widths = []
+    for col_index in range(1, (len(rows[0]) if rows else 1) + 1):
+        max_length = max((len(str(row[col_index - 1])) for row in rows if len(row) >= col_index), default=10)
+        column_widths.append(min(max(max_length + 4, 12), 34))
+    cols = ''.join(
+        f'<col min="{index}" max="{index}" width="{width}" customWidth="1"/>'
+        for index, width in enumerate(column_widths, start=1)
+    )
+
     sheet_rows = []
     for row_index, row in enumerate(rows, start=1):
         cells = []
         for col_index, value in enumerate(row, start=1):
             coordinate = f'{col_name(col_index)}{row_index}'
             safe_value = escape(str(value or ''))
-            cells.append(f'<c r="{coordinate}" t="inlineStr"><is><t>{safe_value}</t></is></c>')
+            style = ' s="1"' if row_index == 1 else ' s="2"'
+            cells.append(f'<c r="{coordinate}"{style} t="inlineStr"><is><t>{safe_value}</t></is></c>')
         sheet_rows.append(f'<row r="{row_index}">{"".join(cells)}</row>')
 
+    last_col = col_name(len(rows[0])) if rows and rows[0] else 'A'
+    last_row = max(len(rows), 1)
     worksheet = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <sheetViews><sheetView workbookViewId="0"/></sheetViews>
+  <sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
   <sheetFormatPr defaultRowHeight="15"/>
+  <cols>{cols}</cols>
   <sheetData>{''.join(sheet_rows)}</sheetData>
+  <autoFilter ref="A1:{last_col}{last_row}"/>
 </worksheet>'''
     workbook = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
@@ -958,6 +1128,7 @@ def build_simple_xlsx(rows, sheet_name='Sheet1'):
   <Default Extension="xml" ContentType="application/xml"/>
   <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
   <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
 </Types>'''
     root_rels = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
@@ -966,7 +1137,31 @@ def build_simple_xlsx(rows, sheet_name='Sheet1'):
     workbook_rels = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
 </Relationships>'''
+    styles = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts count="2">
+    <font><sz val="11"/><name val="Calibri"/></font>
+    <font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Calibri"/></font>
+  </fonts>
+  <fills count="3">
+    <fill><patternFill patternType="none"/></fill>
+    <fill><patternFill patternType="gray125"/></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF0F766E"/><bgColor indexed="64"/></patternFill></fill>
+  </fills>
+  <borders count="2">
+    <border><left/><right/><top/><bottom/><diagonal/></border>
+    <border><left style="thin"><color rgb="FFE2E8F0"/></left><right style="thin"><color rgb="FFE2E8F0"/></right><top style="thin"><color rgb="FFE2E8F0"/></top><bottom style="thin"><color rgb="FFE2E8F0"/></bottom><diagonal/></border>
+  </borders>
+  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+  <cellXfs count="3">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+    <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
+  </cellXfs>
+  <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>'''
 
     output = BytesIO()
     with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as archive:
@@ -975,6 +1170,7 @@ def build_simple_xlsx(rows, sheet_name='Sheet1'):
         archive.writestr('xl/workbook.xml', workbook)
         archive.writestr('xl/_rels/workbook.xml.rels', workbook_rels)
         archive.writestr('xl/worksheets/sheet1.xml', worksheet)
+        archive.writestr('xl/styles.xml', styles)
     return output.getvalue()
 
 

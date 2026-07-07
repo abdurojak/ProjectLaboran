@@ -17,7 +17,7 @@ from apps.kalender.models import KegiatanKalender
 from apps.core.permissions import LABORAN_ROLE, can_manage_lab_operations
 from apps.peminjaman.models import PeminjamanAlat
 from apps.peminjaman.notifications import send_peminjaman_status_notification
-from apps.pendaftaran_asleb.models import PendaftaranAsleb, PengaturanPendaftaranAsleb
+from apps.pendaftaran_asleb.models import PendaftaranAsleb, PengaturanPendaftaranAsleb, RiwayatAsleb
 from apps.pendaftaran_asleb.services import is_registration_open
 from apps.pendaftaran_asleb.utils import get_public_registration_url
 
@@ -74,6 +74,34 @@ class DashboardView(TemplateView):
 
     def format_rupiah(self, value):
         return f'Rp {value:,.0f}'.replace(',', '.')
+
+    def get_asisten_lab_matkul_labels(self, pengguna):
+        if not pengguna or pengguna.role != 'asisten_lab':
+            return []
+
+        matkul_values = PendaftaranAsleb.objects.filter(
+            nim=pengguna.nim_nik,
+            status__in=['diterima', 'digenerate'],
+        ).select_related('matkul').values_list(
+            'matkul__nama',
+            'matkul__dosen',
+            'matkul__kelas',
+        )
+        labels = [f'{nama} - {dosen} - {kelas}' for nama, dosen, kelas in matkul_values]
+
+        history_values = RiwayatAsleb.objects.filter(nim=pengguna.nim_nik).values_list(
+            'matkul__nama',
+            'matkul__dosen',
+            'matkul__kelas',
+        )
+        labels.extend(f'{nama} - {dosen} - {kelas}' for nama, dosen, kelas in history_values)
+
+        labels.extend(
+            Asleb.objects.filter(nim=pengguna.nim_nik, status='aktif')
+            .exclude(matkul='')
+            .values_list('matkul', flat=True)
+        )
+        return list(dict.fromkeys(labels))
 
     def get_grouped_peminjaman(self, queryset, limit=6):
         grouped = []
@@ -157,10 +185,14 @@ class DashboardView(TemplateView):
             context['peringatan_peminjaman_saya'] = peringatan_peminjaman_saya
             context['has_peringatan_peminjaman_saya'] = bool(peringatan_peminjaman_saya)
             context['riwayat_honor_saya'] = riwayat_honor_saya
-            context['jadwal_hari_ini'] = jadwal_qs.filter(
+            jadwal_hari_ini = jadwal_qs.filter(
                 hari=hari_ini,
                 status=JadwalPraktikum.STATUS_DITERIMA,
-            )[:6] if hari_ini else jadwal_qs.none()
+            ) if hari_ini else jadwal_qs.none()
+            if is_asisten_lab:
+                matkul_labels = self.get_asisten_lab_matkul_labels(pengguna)
+                jadwal_hari_ini = jadwal_hari_ini.filter(mata_kuliah__in=matkul_labels) if matkul_labels else jadwal_qs.none()
+            context['jadwal_hari_ini'] = jadwal_hari_ini[:6]
             context['pendaftaran_asleb_dibuka'] = is_mahasiswa and is_registration_open()
             context['kegiatan_kalender_mahasiswa'] = kegiatan_qs.filter(tanggal__gte=context['today'])[:6]
             context['public_registration_url'] = get_public_registration_url()
