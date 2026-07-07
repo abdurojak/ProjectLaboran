@@ -340,6 +340,84 @@ class BantuanTests(TestCase):
         log.refresh_from_db()
         self.assertEqual(log.ditangani_oleh, laboran_awal)
 
+    def test_laboran_dapat_menyelesaikan_bug_error_yang_dia_tangani(self):
+        laboran = Pengguna.objects.create(
+            nama_pengguna='Laboran Penyelesai',
+            nim_nik='LAB-SELESAI',
+            email='laboran-selesai@example.com',
+            password='rahasia123',
+            no_hp='081234567870',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='laboran',
+        )
+        log = BugErrorLog.objects.create(
+            judul='Bug sudah diperbaiki',
+            kategori='bug',
+            prioritas='sedang',
+            lokasi='/pengaturan/bug-error/',
+            deskripsi='Bug ini sedang ditangani laboran.',
+            ditangani_oleh=laboran,
+            status=BugErrorLog.STATUS_DIPROSES,
+        )
+        self.login_as(laboran)
+
+        response = self.client.post(reverse('core:bug_error_list'), {
+            'action': 'complete',
+            'log_id': log.pk,
+        })
+
+        self.assertRedirects(response, f"{reverse('core:bug_error_list')}?log={log.pk}")
+        log.refresh_from_db()
+        self.assertEqual(log.status, BugErrorLog.STATUS_SELESAI)
+
+    def test_laboran_tidak_dapat_menyelesaikan_bug_error_milik_laboran_lain(self):
+        laboran_awal = Pengguna.objects.create(
+            nama_pengguna='Laboran Pemilik',
+            nim_nik='LAB-PEMILIK',
+            email='laboran-pemilik@example.com',
+            password='rahasia123',
+            no_hp='081234567869',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='laboran',
+        )
+        laboran_lain = Pengguna.objects.create(
+            nama_pengguna='Laboran Bukan Pemilik',
+            nim_nik='LAB-BUKAN-PEMILIK',
+            email='laboran-bukan-pemilik@example.com',
+            password='rahasia123',
+            no_hp='081234567868',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='laboran',
+        )
+        log = BugErrorLog.objects.create(
+            judul='Bug milik laboran lain',
+            kategori='bug',
+            prioritas='tinggi',
+            lokasi='/dashboard/',
+            deskripsi='Bug ini tidak boleh diselesaikan laboran lain.',
+            ditangani_oleh=laboran_awal,
+            status=BugErrorLog.STATUS_DIPROSES,
+        )
+        self.login_as(laboran_lain)
+
+        response = self.client.post(reverse('core:bug_error_list'), {
+            'action': 'complete',
+            'log_id': log.pk,
+        })
+
+        self.assertRedirects(response, f"{reverse('core:bug_error_list')}?log={log.pk}")
+        log.refresh_from_db()
+        self.assertEqual(log.status, BugErrorLog.STATUS_DIPROSES)
+
     def test_admin_menambahkan_bug_error_manual(self):
         admin = Pengguna.objects.create(
             nama_pengguna='Admin Manual Bug',

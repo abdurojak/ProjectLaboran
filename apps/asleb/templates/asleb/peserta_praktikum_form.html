@@ -1,11 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Input Peserta Praktikum{% endblock %}
+{% block title %}{% if form.metode_input %}Input Peserta Praktikum{% else %}Edit Peserta Praktikum{% endif %}{% endblock %}
 {% block content %}
 <section class="mx-auto max-w-3xl space-y-6">
-    <div><p class="text-sm font-black uppercase tracking-[0.2em] text-brand-700">Peserta Praktikum</p><h2 class="mt-2 text-3xl font-black text-slate-900">Input Mahasiswa</h2><p class="mt-2 text-sm text-slate-500">Pilih input manual atau import CSV. Data peserta otomatis terhubung ke akun mahasiswa jika NIM cocok.</p></div>
+    <div><p class="text-sm font-black uppercase tracking-[0.2em] text-brand-700">Peserta Praktikum</p><h2 class="mt-2 text-3xl font-black text-slate-900">{% if form.metode_input %}Input Mahasiswa{% else %}Edit Mahasiswa{% endif %}</h2><p class="mt-2 text-sm text-slate-500">{% if form.metode_input %}Pilih input manual atau import CSV. Data peserta otomatis terhubung ke akun mahasiswa jika NIM cocok.{% else %}Perbarui data peserta praktikum dan status keaktifannya.{% endif %}</p></div>
     <form method="post" enctype="multipart/form-data" class="surface-card space-y-5 p-6 md:p-8">{% csrf_token %}
         {% if form.non_field_errors %}<div class="rounded-2xl bg-rose-50 p-4 text-sm font-bold text-rose-700">{{ form.non_field_errors }}</div>{% endif %}
         <div>{{ form.matkul.label_tag }}{{ form.matkul }}{% for error in form.matkul.errors %}<p class="mt-2 text-sm font-bold text-rose-600">{{ error }}</p>{% endfor %}</div>
+        {% if form.metode_input %}
         <div>
             <label class="mb-3 block">Metode input</label>
             <div class="grid gap-3 sm:grid-cols-2">
@@ -27,9 +28,18 @@
             <p class="mt-2 text-xs font-semibold text-slate-500">Gunakan file CSV. Contoh kolom yang didukung: <strong>Student ID</strong> dan <strong>Student Name</strong>, atau <strong>NIM</strong> dan <strong>Nama</strong>.</p>
             {% for error in form.file_csv.errors %}<p class="mt-2 text-sm font-bold text-rose-600">{{ error }}</p>{% endfor %}
         </div>
+        {% else %}
+        <div>{{ form.nim.label_tag }}{{ form.nim }}{% for error in form.nim.errors %}<p class="mt-2 text-sm font-bold text-rose-600">{{ error }}</p>{% endfor %}</div>
+        <div>{{ form.nama.label_tag }}{{ form.nama }}{% for error in form.nama.errors %}<p class="mt-2 text-sm font-bold text-rose-600">{{ error }}</p>{% endfor %}</div>
+        <label class="flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm font-bold text-slate-700 transition hover:border-brand-300">
+            {{ form.aktif }}<span>Peserta aktif</span>
+        </label>
+        {% for error in form.aktif.errors %}<p class="mt-2 text-sm font-bold text-rose-600">{{ error }}</p>{% endfor %}
+        {% endif %}
         <div class="flex flex-wrap gap-3"><button class="btn-primary gap-2" type="submit"><i data-lucide="save" class="h-4 w-4"></i>Simpan Peserta</button><a class="btn-secondary" href="{% url 'asleb:praktikum_mahasiswa_list' %}">Batal</a></div>
     </form>
 </section>
+{% if form.metode_input %}
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const manual = document.querySelector('[data-manual-section]');
@@ -44,4 +54,5 @@ document.addEventListener('DOMContentLoaded', () => {
     sync();
 });
 </script>
+{% endif %}
 {% endblock %}

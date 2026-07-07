@@ -176,7 +176,20 @@ class PendaftaranAslebPublicCreateView(View):
     def get(self, request, *args, **kwargs):
         if request.GET.get('reset') == '1':
             self.clear_wizard(request)
+        profile_redirect = self.ensure_public_profile_ready(request)
+        if profile_redirect:
+            return profile_redirect
         return self.render_current_step(request)
+
+    def ensure_public_profile_ready(self, request):
+        current_pengguna = getattr(request, 'current_pengguna', None) or get_session_pengguna(request)
+        if not current_pengguna:
+            messages.warning(request, 'Silakan login terlebih dahulu sebelum mendaftar sebagai aslab.')
+            return redirect('pengguna:login')
+        if has_complete_asleb_profile(current_pengguna):
+            return None
+        messages.warning(request, 'Lengkapi data diri, foto, dan minimal satu pengalaman pada profil sebelum mendaftar sebagai aslab.')
+        return redirect('pengguna:detail', pk=current_pengguna.pk)
 
     def post(self, request, *args, **kwargs):
         action = request.POST.get('action', '')

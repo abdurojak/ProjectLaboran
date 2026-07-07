@@ -33,6 +33,7 @@ from .forms import (
     HasilPraktikumMahasiswaForm,
     ModulPraktikumForm,
     PesertaPraktikumBulkForm,
+    PesertaPraktikumForm,
     SuratHonorAslebGenerateForm,
     get_asleb_matkul,
 )
@@ -654,6 +655,24 @@ class PesertaPraktikumManageMixin:
 class PraktikumMahasiswaListView(PraktikumMahasiswaAccessMixin, TemplateView):
     template_name = 'asleb/praktikum_mahasiswa_list.html'
 
+    def attach_participant_summaries(self, peserta_list):
+        if not peserta_list:
+            return
+        nilai_summary = {
+            item['peserta_id']: item
+            for item in HasilPraktikumMahasiswa.objects.filter(
+                peserta__in=peserta_list,
+                nilai__isnull=False,
+            ).values('peserta_id').annotate(
+                rata_rata=Avg('nilai'),
+                jumlah_nilai=Count('id'),
+            )
+        }
+        for peserta in peserta_list:
+            summary = nilai_summary.get(peserta.pk, {})
+            peserta.rata_rata_nilai = summary.get('rata_rata')
+            peserta.jumlah_nilai = summary.get('jumlah_nilai', 0)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         pengguna = self.request.current_pengguna
@@ -665,35 +684,12 @@ class PraktikumMahasiswaListView(PraktikumMahasiswaAccessMixin, TemplateView):
         for matkul in matkul_list:
             matkul.jumlah_peserta = matkul.peserta_praktikum.filter(aktif=True).count()
             matkul.modul_tersedia = list(matkul.modul_praktikum.all())
-
-        selected_id = self.request.GET.get('matkul', '').strip()
-        selected_matkul = next((item for item in matkul_list if str(item.pk) == selected_id), None)
-        if not selected_matkul and len(matkul_list) == 1:
-            selected_matkul = matkul_list[0]
-        peserta_list = (
-            list(selected_matkul.peserta_praktikum.select_related('pengguna').all())
-            if selected_matkul else []
-        )
-        if peserta_list:
-            nilai_summary = {
-                item['peserta_id']: item
-                for item in HasilPraktikumMahasiswa.objects.filter(
-                    peserta__in=peserta_list,
-                    nilai__isnull=False,
-                ).values('peserta_id').annotate(
-                    rata_rata=Avg('nilai'),
-                    jumlah_nilai=Count('id'),
-                )
-            }
-            for peserta in peserta_list:
-                summary = nilai_summary.get(peserta.pk, {})
-                peserta.rata_rata_nilai = summary.get('rata_rata')
-                peserta.jumlah_nilai = summary.get('jumlah_nilai', 0)
+            matkul.peserta_modal_list = list(matkul.peserta_praktikum.select_related('pengguna').all())
+            self.attach_participant_summaries(matkul.peserta_modal_list)
 
         context.update({
             'matkul_list': matkul_list,
-            'selected_matkul': selected_matkul,
-            'peserta_list': peserta_list,
+            'selected_matkul_id': self.request.GET.get('matkul', '').strip(),
             'can_manage_peserta': pengguna.role == LABORAN_ROLE,
             'is_asisten_lab': pengguna.role == ASISTEN_LAB_ROLE,
         })
@@ -728,6 +724,30 @@ class PesertaPraktikumBulkCreateView(PesertaPraktikumManageMixin, FormView):
         return redirect(f'{self.success_url}?matkul={matkul.pk}')
 
 
+class PesertaPraktikumUpdateView(PesertaPraktikumManageMixin, UpdateView):
+    model = PesertaPraktikum
+    form_class = PesertaPraktikumForm
+    template_name = 'asleb/peserta_praktikum_form.html'
+
+    def form_valid(self, form):
+        account = Pengguna.objects.filter(nim_nik=form.cleaned_data['nim']).first()
+        form.instance.pengguna = account
+        messages.success(self.request, 'Data peserta praktikum berhasil diperbarui.')
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return f'{reverse_lazy("asleb:praktikum_mahasiswa_list")}?matkul={self.object.matkul_id}'
+
+
+def delete_participant(peserta):
+    if peserta.hasil_praktikum.exists():
+        peserta.aktif = False
+        peserta.save(update_fields=['aktif', 'diperbarui_pada'])
+        return 'deactivated'
+    peserta.delete()
+    return 'deleted'
+
+
 @require_POST
 def delete_peserta_praktikum(request, pk):
     pengguna = getattr(request, 'current_pengguna', None)
@@ -736,14 +756,37 @@ def delete_peserta_praktikum(request, pk):
         return redirect('asleb:praktikum_mahasiswa_list')
     peserta = get_object_or_404(PesertaPraktikum.objects.select_related('matkul'), pk=pk)
     matkul_id = peserta.matkul_id
-    if peserta.hasil_praktikum.exists():
-        peserta.aktif = False
-        peserta.save(update_fields=['aktif', 'diperbarui_pada'])
+    result = delete_participant(peserta)
+    if result == 'deactivated':
         messages.success(request, 'Peserta dinonaktifkan agar riwayat nilai dan absensi tetap tersimpan.')
     else:
-        peserta.delete()
         messages.success(request, 'Peserta praktikum berhasil dihapus.')
     return redirect(f'{reverse_lazy("asleb:praktikum_mahasiswa_list")}?matkul={matkul_id}')
+
+
+@require_POST
+def bulk_delete_peserta_praktikum(request):
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not can_manage_lab_operations(pengguna):
+        messages.error(request, 'Hanya laboran yang dapat menghapus peserta praktikum.')
+        return redirect('asleb:praktikum_mahasiswa_list')
+    participant_ids = request.POST.getlist('peserta_ids')
+    matkul_id = request.POST.get('matkul_id', '').strip()
+    peserta_queryset = PesertaPraktikum.objects.filter(pk__in=participant_ids)
+    if matkul_id:
+        peserta_queryset = peserta_queryset.filter(matkul_id=matkul_id)
+    deleted = 0
+    deactivated = 0
+    for peserta in peserta_queryset:
+        result = delete_participant(peserta)
+        deleted += int(result == 'deleted')
+        deactivated += int(result == 'deactivated')
+    if deleted or deactivated:
+        messages.success(request, f'{deleted} peserta dihapus dan {deactivated} peserta dinonaktifkan.')
+    else:
+        messages.error(request, 'Pilih minimal satu peserta untuk dihapus.')
+    redirect_url = reverse_lazy('asleb:praktikum_mahasiswa_list')
+    return redirect(f'{redirect_url}?matkul={matkul_id}' if matkul_id else redirect_url)
 
 
 class NilaiAbsensiMahasiswaView(PraktikumMahasiswaAccessMixin, TemplateView):
