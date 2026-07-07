@@ -139,12 +139,18 @@ class JadwalPraktikumForm(forms.ModelForm):
         participant_count = matkul.peserta_praktikum.filter(aktif=True).count() if matkul else 0
         if matkul and self.current_pengguna and self.current_pengguna.role == 'asisten_lab' and not participant_count:
             self.add_error('ruangan', 'Laboran harus menginput mahasiswa mata kuliah ini sebelum Asisten Lab memilih laboratorium.')
-        if matkul and ruangan:
-            if participant_count and (ruangan.kapasitas or 0) < participant_count:
-                self.add_error('ruangan', f'Kapasitas lab hanya {ruangan.kapasitas or 0}, sedangkan peserta aktif berjumlah {participant_count}.')
         if tambahan and ruangan:
             if not GrupRuanganGabungan.get_active_pair(ruangan, tambahan):
                 self.add_error('ruangan_tambahan', 'Ruangan tambahan hanya berlaku untuk lab dalam grup ruangan gabungan aktif.')
+        if matkul and ruangan and participant_count:
+            total_capacity = (ruangan.kapasitas or 0)
+            if tambahan and GrupRuanganGabungan.get_active_pair(ruangan, tambahan):
+                total_capacity += tambahan.kapasitas or 0
+            if total_capacity < participant_count:
+                self.add_error(
+                    'ruangan',
+                    f'Kapasitas lab hanya {total_capacity}, sedangkan peserta aktif berjumlah {participant_count}.',
+                )
         return cleaned_data
 
     def save(self, commit=True):

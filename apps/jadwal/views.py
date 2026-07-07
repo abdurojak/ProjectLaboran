@@ -392,11 +392,22 @@ def available_rooms(request):
     participant_count = matkul.peserta_praktikum.filter(aktif=True).count()
     rooms = RuanganLab.objects.filter(aktif=True, kapasitas__isnull=False).order_by('kapasitas', 'nama')
     pengguna = getattr(request, 'current_pengguna', None)
+    groups = GrupRuanganGabungan.objects.filter(aktif=True).prefetch_related('ruangan')
     if not participant_count and pengguna and pengguna.role == 'asisten_lab':
         rooms = rooms.none()
     elif participant_count:
-        rooms = rooms.filter(kapasitas__gte=participant_count)
-    groups = GrupRuanganGabungan.objects.filter(aktif=True).prefetch_related('ruangan')
+        eligible_room_ids = []
+        for room in rooms:
+            if (room.kapasitas or 0) >= participant_count:
+                eligible_room_ids.append(room.pk)
+                continue
+            for group in groups:
+                grouped_rooms = [grouped_room for grouped_room in group.ruangan.all() if grouped_room.aktif]
+                group_capacity = sum((grouped_room.kapasitas or 0) for grouped_room in grouped_rooms)
+                if room in grouped_rooms and group_capacity >= participant_count:
+                    eligible_room_ids.append(room.pk)
+                    break
+        rooms = rooms.filter(pk__in=eligible_room_ids)
     combinable_rooms = {}
     for group in groups:
         grouped_rooms = [room for room in group.ruangan.all() if room.aktif]

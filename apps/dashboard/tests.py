@@ -40,6 +40,8 @@ class DashboardViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'LabHub')
+        self.assertContains(response, f'href="{reverse("dashboard:home")}" class="flex min-w-0 items-center gap-4')
+        self.assertContains(response, 'aria-label="Kembali ke dashboard"')
         self.assertContains(response, 'dashboard-page')
         self.assertContains(response, 'dashboard-table-card')
         self.assertContains(response, 'dashboard-table-scroll')

@@ -2,8 +2,240 @@
 
 {% block title %}Detail Pengguna{% endblock %}
 
+{% block extra_head %}
+<style>
+    html[data-theme="dark"] .profile-page .surface-card {
+        border-color: rgba(148, 163, 184, 0.18) !important;
+        background: rgba(15, 23, 42, 0.72) !important;
+        box-shadow: 0 22px 70px rgba(0, 0, 0, 0.28) !important;
+    }
+
+    html[data-theme="dark"] .profile-page .bg-white,
+    html[data-theme="dark"] .profile-page .bg-slate-50,
+    html[data-theme="dark"] .profile-page .bg-slate-100 {
+        background-color: rgba(30, 41, 59, 0.62) !important;
+    }
+
+    html[data-theme="dark"] .profile-page .border-white {
+        border-color: rgba(15, 23, 42, 0.9) !important;
+    }
+
+    html[data-theme="dark"] .profile-page .border-slate-100,
+    html[data-theme="dark"] .profile-page .border-slate-200 {
+        border-color: rgba(148, 163, 184, 0.16) !important;
+    }
+
+    html[data-theme="dark"] .profile-page .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+        border-color: rgba(148, 163, 184, 0.14) !important;
+    }
+
+    html[data-theme="dark"] .profile-page .text-slate-950,
+    html[data-theme="dark"] .profile-page .text-slate-900,
+    html[data-theme="dark"] .profile-page .text-slate-800 {
+        color: #f8fafc !important;
+    }
+
+    html[data-theme="dark"] .profile-page .text-slate-700,
+    html[data-theme="dark"] .profile-page .text-slate-600 {
+        color: #cbd5e1 !important;
+    }
+
+    html[data-theme="dark"] .profile-page .text-slate-500,
+    html[data-theme="dark"] .profile-page .text-slate-400 {
+        color: #94a3b8 !important;
+    }
+
+    html[data-theme="dark"] .profile-page .text-brand-700 {
+        color: #67e8f9 !important;
+    }
+
+    html[data-theme="dark"] .profile-page .bg-brand-50,
+    html[data-theme="dark"] .profile-page .bg-blue-50,
+    html[data-theme="dark"] .profile-page .bg-emerald-50,
+    html[data-theme="dark"] .profile-page .bg-violet-50,
+    html[data-theme="dark"] .profile-page .bg-amber-50 {
+        background-color: rgba(20, 184, 166, 0.14) !important;
+    }
+
+    html[data-theme="dark"] .profile-page .text-blue-700,
+    html[data-theme="dark"] .profile-page .text-emerald-700,
+    html[data-theme="dark"] .profile-page .text-violet-700,
+    html[data-theme="dark"] .profile-page .text-amber-700 {
+        color: #7dd3fc !important;
+    }
+
+    html[data-theme="dark"] .profile-page .hover\:bg-slate-100:hover,
+    html[data-theme="dark"] .profile-page .hover\:bg-brand-50:hover,
+    html[data-theme="dark"] .profile-page .hover\:bg-amber-50:hover,
+    html[data-theme="dark"] .profile-page .hover\:bg-rose-50:hover {
+        background-color: rgba(51, 65, 85, 0.72) !important;
+    }
+
+    html[data-theme="dark"] [data-profile-modal] > div,
+    html[data-theme="dark"] [data-password-modal] > div {
+        border-color: rgba(148, 163, 184, 0.2) !important;
+        background: rgba(15, 23, 42, 0.96) !important;
+        color: #e2e8f0 !important;
+    }
+
+    html[data-theme="dark"] [data-profile-modal] .border-slate-200,
+    html[data-theme="dark"] [data-password-modal] .border-slate-200 {
+        border-color: rgba(148, 163, 184, 0.18) !important;
+    }
+
+    html[data-theme="dark"] [data-profile-modal] .text-slate-900,
+    html[data-theme="dark"] [data-password-modal] .text-slate-900 {
+        color: #f8fafc !important;
+    }
+
+    html[data-theme="dark"] [data-profile-modal] .text-slate-500,
+    html[data-theme="dark"] [data-password-modal] .text-slate-500 {
+        color: #94a3b8 !important;
+    }
+
+    html[data-theme="dark"] [data-profile-modal] .bg-white,
+    html[data-theme="dark"] [data-password-modal] .bg-white {
+        background-color: rgba(30, 41, 59, 0.78) !important;
+    }
+
+    html[data-theme="dark"] [data-profile-modal] label,
+    html[data-theme="dark"] [data-password-modal] label {
+        color: #cbd5e1 !important;
+    }
+
+    html[data-theme="dark"] [data-profile-modal] input,
+    html[data-theme="dark"] [data-profile-modal] select,
+    html[data-theme="dark"] [data-profile-modal] textarea,
+    html[data-theme="dark"] [data-password-modal] input {
+        border-color: rgba(148, 163, 184, 0.22) !important;
+        background-color: rgba(15, 23, 42, 0.72) !important;
+        color: #f8fafc !important;
+        box-shadow: none !important;
+    }
+
+    html[data-theme="dark"] [data-profile-modal] input:focus,
+    html[data-theme="dark"] [data-profile-modal] select:focus,
+    html[data-theme="dark"] [data-profile-modal] textarea:focus,
+    html[data-theme="dark"] [data-password-modal] input:focus {
+        border-color: rgba(103, 232, 249, 0.72) !important;
+        box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.12) !important;
+    }
+
+    html[data-theme="dark"] [data-profile-modal] input::placeholder,
+    html[data-theme="dark"] [data-profile-modal] textarea::placeholder,
+    html[data-theme="dark"] [data-password-modal] input::placeholder {
+        color: #64748b !important;
+    }
+
+    html[data-theme="dark"] [data-profile-modal] [data-file-upload] > div:not(.sr-only) {
+        border-color: rgba(34, 211, 238, 0.2) !important;
+        background-color: rgba(8, 47, 73, 0.24) !important;
+    }
+
+    html[data-theme="dark"] [data-profile-modal] [data-file-upload] .btn-secondary,
+    html[data-theme="dark"] [data-profile-modal] [data-delete-button],
+    html[data-theme="dark"] [data-profile-modal] [data-profile-modal-close],
+    html[data-theme="dark"] [data-password-modal] [data-password-modal-close] {
+        border-color: rgba(148, 163, 184, 0.22) !important;
+        background-color: rgba(30, 41, 59, 0.72) !important;
+        color: #e2e8f0 !important;
+    }
+
+    html[data-theme="dark"] [data-profile-modal] [data-file-upload] .btn-secondary:hover,
+    html[data-theme="dark"] [data-profile-modal] [data-delete-button]:hover,
+    html[data-theme="dark"] [data-profile-modal] [data-profile-modal-close]:hover,
+    html[data-theme="dark"] [data-password-modal] [data-password-modal-close]:hover {
+        background-color: rgba(51, 65, 85, 0.86) !important;
+    }
+
+    html[data-theme="dark"] [data-profile-modal] [data-file-upload] .text-slate-800,
+    html[data-theme="dark"] [data-profile-modal] [data-file-upload] .text-slate-700 {
+        color: #e2e8f0 !important;
+    }
+
+    html[data-theme="dark"] [data-profile-modal] [data-file-upload] .text-slate-500 {
+        color: #94a3b8 !important;
+    }
+
+    html[data-theme="dark"] [data-profile-modal] [data-preview-image] {
+        border: 1px solid rgba(148, 163, 184, 0.22) !important;
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.24);
+        --tw-ring-color: rgba(148, 163, 184, 0.22) !important;
+    }
+
+    html[data-theme="dark"] [data-profile-modal] .text-brand-700,
+    html[data-theme="dark"] [data-password-modal] .text-brand-700 {
+        color: #67e8f9 !important;
+    }
+
+    html[data-theme="dark"] [data-profile-modal] .text-rose-600,
+    html[data-theme="dark"] [data-profile-modal] .text-rose-700 {
+        color: #fda4af !important;
+    }
+
+    html[data-theme="dark"] [data-experience-modal] > div {
+        border-color: rgba(148, 163, 184, 0.2) !important;
+        background: rgba(15, 23, 42, 0.96) !important;
+        color: #e2e8f0 !important;
+    }
+
+    html[data-theme="dark"] [data-experience-modal] .surface-card,
+    html[data-theme="dark"] [data-experience-modal] .bg-white,
+    html[data-theme="dark"] [data-experience-modal] .bg-brand-50\/60 {
+        border-color: rgba(148, 163, 184, 0.18) !important;
+        background-color: rgba(30, 41, 59, 0.72) !important;
+    }
+
+    html[data-theme="dark"] [data-experience-modal] input,
+    html[data-theme="dark"] [data-experience-modal] select,
+    html[data-theme="dark"] [data-experience-modal] textarea {
+        border-color: rgba(148, 163, 184, 0.22) !important;
+        background-color: rgba(15, 23, 42, 0.72) !important;
+        color: #f8fafc !important;
+    }
+
+    html[data-theme="dark"] [data-experience-modal] input:focus,
+    html[data-theme="dark"] [data-experience-modal] select:focus,
+    html[data-theme="dark"] [data-experience-modal] textarea:focus {
+        border-color: rgba(103, 232, 249, 0.72) !important;
+        box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.12) !important;
+    }
+
+    html[data-theme="dark"] [data-experience-modal] input[type="date"]::-webkit-calendar-picker-indicator {
+        cursor: pointer;
+        filter: invert(1) brightness(1.35) contrast(0.92);
+        opacity: 0.78;
+    }
+
+    html[data-theme="dark"] [data-experience-modal] input[type="date"]::-webkit-calendar-picker-indicator:hover {
+        opacity: 1;
+    }
+
+    html[data-theme="dark"] [data-experience-modal] .text-slate-900,
+    html[data-theme="dark"] [data-experience-modal] .text-slate-800 {
+        color: #f8fafc !important;
+    }
+
+    html[data-theme="dark"] [data-experience-modal] .text-slate-700,
+    html[data-theme="dark"] [data-experience-modal] .text-slate-600 {
+        color: #cbd5e1 !important;
+    }
+
+    html[data-theme="dark"] [data-experience-modal] .text-slate-500,
+    html[data-theme="dark"] [data-experience-modal] .text-slate-400 {
+        color: #94a3b8 !important;
+    }
+
+    html[data-theme="dark"] [data-experience-modal] .text-brand-700 {
+        color: #67e8f9 !important;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-{% include "pengguna/profile_professional.html" %}
+<div class="profile-page">
+    {% include "pengguna/profile_professional.html" %}
+</div>
 {% if False %}
 <section class="mx-auto max-w-4xl space-y-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
@@ -175,7 +407,7 @@
 </section>
 {% endif %}
 
-<div data-profile-modal class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-950/55 p-3 backdrop-blur-sm md:p-6">
+<div data-profile-modal class="profile-edit-modal fixed inset-0 z-[100] hidden items-center justify-center bg-slate-950/55 p-3 backdrop-blur-sm md:p-6">
     <div class="max-h-[94vh] w-full max-w-4xl overflow-y-auto rounded-[28px] border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-950/20 md:p-6">
         <div class="flex items-start justify-between gap-4">
             <div>
@@ -217,6 +449,75 @@
                 </button>
             </div>
         </form>
+    </div>
+</div>
+
+<div data-experience-modal class="experience-profile-modal fixed inset-0 z-[100] hidden items-center justify-center bg-slate-950/55 p-3 backdrop-blur-sm md:p-6">
+    <div class="max-h-[94vh] w-full max-w-5xl overflow-y-auto rounded-[28px] border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-950/20 md:p-6">
+        <div class="flex items-start justify-between gap-4">
+            <div>
+                <p class="text-xs font-extrabold uppercase tracking-[0.18em] text-brand-700">Profil Profesional</p>
+                <h3 class="mt-2 text-2xl font-black tracking-tight text-slate-900" data-experience-modal-title>Kelola Profil Profesional</h3>
+                <p class="mt-2 text-sm leading-6 text-slate-500">Tambahkan atau ubah pendidikan, pengalaman, organisasi, proyek, dan sertifikasi tanpa meninggalkan halaman profil.</p>
+            </div>
+            <button type="button" data-experience-modal-close class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 text-slate-500 transition hover:bg-slate-50">
+                <i data-lucide="x" class="h-4 w-4"></i>
+            </button>
+        </div>
+
+        <div id="experience-category-panel" data-experience-panel data-experience-title="Tambah Profil Profesional" class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {% for category in riwayat_category_forms %}
+            <button type="button" data-experience-switch="experience-create-{{ category.key }}" class="surface-card group flex min-h-40 flex-col justify-between p-5 text-left transition hover:-translate-y-1 hover:border-brand-300">
+                <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-700"><i data-lucide="{{ category.icon }}" class="h-5 w-5"></i></span>
+                <span class="mt-5 block"><span class="block text-lg font-black text-slate-900">{{ category.label }}</span><span class="mt-2 block text-sm leading-6 text-slate-500">{{ category.description }}</span></span>
+            </button>
+            {% endfor %}
+        </div>
+
+        {% for category in riwayat_category_forms %}
+        <section id="experience-create-{{ category.key }}" data-experience-panel data-experience-title="Tambah {{ category.label }}" class="mt-6 hidden">
+            <form method="post" action="{% url 'pengguna:experience_create' pengguna.pk %}?kategori={{ category.key }}" enctype="multipart/form-data" class="grid gap-5 md:grid-cols-2">
+                {% csrf_token %}
+                {% for field in category.form %}
+                <div class="{% if field.name == 'deskripsi' or field.name == 'teknologi' or field.name == 'tautan' or field.name == 'file_sertifikat' or field.name == 'masih_berjalan' %}md:col-span-2{% endif %}"{% if field.name == 'tanggal_selesai' %} data-end-date-wrap{% endif %}>
+                    {% if field.name == 'masih_berjalan' %}
+                    <label class="flex cursor-pointer items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 p-4">{{ field }}<span class="mb-0 font-bold text-slate-800">{{ field.label }}</span></label>
+                    {% else %}{{ field.label_tag }}{{ field }}{% endif %}
+                    {% if field.help_text %}<p class="mt-2 text-xs text-slate-500">{{ field.help_text }}</p>{% endif %}
+                    {% for error in field.errors %}<p class="mt-2 text-sm font-bold text-rose-600">{{ error }}</p>{% endfor %}
+                </div>
+                {% endfor %}
+                <div class="flex flex-wrap justify-between gap-3 md:col-span-2">
+                    <button type="button" class="btn-secondary" data-experience-switch="experience-category-panel"><i data-lucide="layout-grid" class="mr-2 h-4 w-4"></i>Pilih Kategori Lain</button>
+                    <div class="flex flex-wrap gap-3">
+                        <button type="button" data-experience-modal-close class="btn-secondary">Batal</button>
+                        <button class="btn-primary" type="submit"><i data-lucide="save" class="mr-2 h-4 w-4"></i>Simpan {{ category.label }}</button>
+                    </div>
+                </div>
+            </form>
+        </section>
+        {% endfor %}
+
+        {% for item_form in riwayat_edit_forms %}
+        <section id="experience-edit-{{ item_form.item.pk }}" data-experience-panel data-experience-title="Edit {{ item_form.category_meta.label }}" class="mt-6 hidden">
+            <form method="post" action="{% url 'pengguna:experience_update' pengguna.pk item_form.item.pk %}" enctype="multipart/form-data" class="grid gap-5 md:grid-cols-2">
+                {% csrf_token %}
+                {% for field in item_form.form %}
+                <div class="{% if field.name == 'deskripsi' or field.name == 'teknologi' or field.name == 'tautan' or field.name == 'file_sertifikat' or field.name == 'masih_berjalan' %}md:col-span-2{% endif %}"{% if field.name == 'tanggal_selesai' %} data-end-date-wrap{% endif %}>
+                    {% if field.name == 'masih_berjalan' %}
+                    <label class="flex cursor-pointer items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 p-4">{{ field }}<span class="mb-0 font-bold text-slate-800">{{ field.label }}</span></label>
+                    {% else %}{{ field.label_tag }}{{ field }}{% endif %}
+                    {% if field.help_text %}<p class="mt-2 text-xs text-slate-500">{{ field.help_text }}</p>{% endif %}
+                    {% for error in field.errors %}<p class="mt-2 text-sm font-bold text-rose-600">{{ error }}</p>{% endfor %}
+                </div>
+                {% endfor %}
+                <div class="flex flex-wrap justify-end gap-3 md:col-span-2">
+                    <button type="button" data-experience-modal-close class="btn-secondary">Batal</button>
+                    <button class="btn-primary" type="submit"><i data-lucide="save" class="mr-2 h-4 w-4"></i>Simpan {{ item_form.category_meta.label }}</button>
+                </div>
+            </form>
+        </section>
+        {% endfor %}
     </div>
 </div>
 
@@ -264,6 +565,12 @@
         const modal = document.querySelector('[data-password-modal]');
         const openButtons = document.querySelectorAll('[data-password-modal-open]');
         const closeButtons = document.querySelectorAll('[data-password-modal-close]');
+        const experienceModal = document.querySelector('[data-experience-modal]');
+        const experienceOpenButtons = document.querySelectorAll('[data-experience-modal-open]');
+        const experienceCloseButtons = document.querySelectorAll('[data-experience-modal-close]');
+        const experienceSwitchButtons = document.querySelectorAll('[data-experience-switch]');
+        const experiencePanels = document.querySelectorAll('[data-experience-panel]');
+        const experienceTitle = document.querySelector('[data-experience-modal-title]');
 
         // Move dialogs outside the scrollable main container so they always sit above the navbar.
         if (profileModal) {
@@ -272,10 +579,14 @@
         if (modal) {
             document.body.appendChild(modal);
         }
+        if (experienceModal) {
+            document.body.appendChild(experienceModal);
+        }
 
         function updateBodyLock() {
             const dialogOpen = (profileModal && !profileModal.classList.contains('hidden')) ||
-                (modal && !modal.classList.contains('hidden'));
+                (modal && !modal.classList.contains('hidden')) ||
+                (experienceModal && !experienceModal.classList.contains('hidden'));
             document.body.classList.toggle('overflow-hidden', Boolean(dialogOpen));
         }
 
@@ -294,6 +605,32 @@
             }
             modal.classList.toggle('hidden', !isOpen);
             modal.classList.toggle('flex', isOpen);
+            updateBodyLock();
+        }
+
+        function showExperiencePanel(targetId) {
+            const fallbackId = 'experience-category-panel';
+            let activePanel = document.getElementById(targetId || fallbackId);
+            if (!activePanel) {
+                activePanel = document.getElementById(fallbackId);
+            }
+            experiencePanels.forEach(function (panel) {
+                panel.classList.toggle('hidden', panel !== activePanel);
+            });
+            if (experienceTitle && activePanel) {
+                experienceTitle.textContent = activePanel.dataset.experienceTitle || 'Kelola Profil Profesional';
+            }
+        }
+
+        function setExperienceOpen(isOpen, targetId) {
+            if (!experienceModal) {
+                return;
+            }
+            if (isOpen) {
+                showExperiencePanel(targetId);
+            }
+            experienceModal.classList.toggle('hidden', !isOpen);
+            experienceModal.classList.toggle('flex', isOpen);
             updateBodyLock();
         }
 
@@ -329,6 +666,32 @@
             });
         });
 
+        experienceOpenButtons.forEach(function (button) {
+            button.addEventListener('click', function () {
+                setExperienceOpen(true, button.dataset.experienceTarget);
+            });
+        });
+
+        experienceSwitchButtons.forEach(function (button) {
+            button.addEventListener('click', function () {
+                showExperiencePanel(button.dataset.experienceSwitch);
+            });
+        });
+
+        experienceCloseButtons.forEach(function (button) {
+            button.addEventListener('click', function () {
+                setExperienceOpen(false);
+            });
+        });
+
+        if (experienceModal) {
+            experienceModal.addEventListener('click', function (event) {
+                if (event.target === experienceModal) {
+                    setExperienceOpen(false);
+                }
+            });
+        }
+
         if (modal) {
             modal.addEventListener('click', function (event) {
                 if (event.target === modal) {
@@ -341,7 +704,22 @@
             if (event.key === 'Escape') {
                 setProfileOpen(false);
                 setOpen(false);
+                setExperienceOpen(false);
             }
+        });
+
+        document.querySelectorAll('[data-experience-modal] form').forEach(function (form) {
+            const checkbox = form.querySelector('input[name="masih_berjalan"]');
+            const endWrap = form.querySelector('[data-end-date-wrap]');
+            const endInput = form.querySelector('input[name="tanggal_selesai"]');
+            if (!checkbox || !endWrap || !endInput) return;
+            function syncEndDate() {
+                endWrap.classList.toggle('hidden', checkbox.checked);
+                endInput.disabled = checkbox.checked;
+                if (checkbox.checked) endInput.value = '';
+            }
+            checkbox.addEventListener('change', syncEndDate);
+            syncEndDate();
         });
     });
 
