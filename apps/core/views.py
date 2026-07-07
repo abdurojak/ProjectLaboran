@@ -305,6 +305,11 @@ class BugErrorListView(TemplateView):
             return redirect(f"{reverse('core:bug_error_list')}?log={log.pk}")
 
         log = get_object_or_404(BugErrorLog, pk=request.POST.get('log_id'))
+        if request.POST.get('action') == 'delete':
+            log.delete()
+            messages.success(request, 'Bug/error berhasil dihapus.')
+            return redirect('core:bug_error_list')
+
         status = request.POST.get('status', '').strip()
         if status in dict(BugErrorLog.STATUS_CHOICES):
             log.status = status

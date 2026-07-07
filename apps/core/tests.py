@@ -253,6 +253,9 @@ class BantuanTests(TestCase):
         self.assertContains(response, 'Upload foto profil gagal')
         self.assertContains(response, 'Folder media tidak ditemukan')
         self.assertContains(response, 'Tambah Bug/Error')
+        self.assertContains(response, 'bug-error-page')
+        self.assertContains(response, 'html[data-theme="dark"] .bug-error-page .bug-error-card')
+        self.assertContains(response, 'html[data-theme="dark"] .bug-error-page .bug-error-danger')
 
     def test_non_admin_tidak_dapat_membuka_bug_error_list(self):
         response = self.client.get(reverse('core:bug_error_list'))
@@ -290,6 +293,37 @@ class BantuanTests(TestCase):
         self.assertRedirects(response, f"{reverse('core:bug_error_list')}?log={log.pk}")
         self.assertEqual(log.dilaporkan_oleh, admin)
         self.assertEqual(log.kategori, 'ui')
+
+    def test_admin_dapat_menghapus_bug_error_manual(self):
+        admin = Pengguna.objects.create(
+            nama_pengguna='Admin Hapus Bug',
+            nim_nik='ADM-HAPUS-BUG',
+            email='admin-hapus-bug@example.com',
+            password='rahasia123',
+            no_hp='081234567873',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='admin',
+        )
+        log = BugErrorLog.objects.create(
+            judul='Catatan bug duplikat',
+            kategori='bug',
+            prioritas='rendah',
+            lokasi='/pengaturan/bug-error/',
+            deskripsi='Catatan ini perlu dihapus.',
+            dilaporkan_oleh=admin,
+        )
+        self.login_as(admin)
+
+        response = self.client.post(reverse('core:bug_error_list'), {
+            'action': 'delete',
+            'log_id': log.pk,
+        })
+
+        self.assertRedirects(response, reverse('core:bug_error_list'))
+        self.assertFalse(BugErrorLog.objects.filter(pk=log.pk).exists())
 
     def test_settings_tidak_menampilkan_kartu_pendaftaran_aslab(self):
         laboran = Pengguna.objects.create(
