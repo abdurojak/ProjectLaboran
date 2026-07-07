@@ -4,6 +4,18 @@ import django.core.validators
 from django.db import migrations, models
 
 
+def copy_legacy_nilai_to_components(apps, schema_editor):
+    HasilPraktikumMahasiswa = apps.get_model('asleb', 'HasilPraktikumMahasiswa')
+    HasilPraktikumMahasiswa.objects.filter(
+        nilai__isnull=False,
+        nilai_realtime__isnull=True,
+        nilai_laporan__isnull=True,
+    ).update(
+        nilai_realtime=models.F('nilai'),
+        nilai_laporan=models.F('nilai'),
+    )
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -21,4 +33,5 @@ class Migration(migrations.Migration):
             name='nilai_realtime',
             field=models.DecimalField(blank=True, decimal_places=2, max_digits=5, null=True, validators=[django.core.validators.MinValueValidator(0), django.core.validators.MaxValueValidator(100)], verbose_name='Nilai realtime'),
         ),
+        migrations.RunPython(copy_legacy_nilai_to_components, migrations.RunPython.noop),
     ]

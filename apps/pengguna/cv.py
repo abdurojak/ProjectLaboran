@@ -2,66 +2,128 @@ from io import BytesIO
 from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 
 def build_cv_pdf(pengguna):
     def safe(value):
-        return escape(str(value or '-'))
+        return escape(str(value or ''))
+
+    def date_label(item):
+        mulai = item.tanggal_mulai.strftime('%b %Y')
+        selesai = 'Sekarang' if item.masih_berjalan else (item.tanggal_selesai.strftime('%b %Y') if item.tanggal_selesai else '-')
+        return f'{mulai} - {selesai}'
+
+    def split_lines(value):
+        text = str(value or '').replace('\r\n', '\n')
+        lines = []
+        for raw_line in text.split('\n'):
+            for piece in raw_line.split(chr(8226)):
+                piece = piece.strip(' -\t')
+                if piece:
+                    lines.append(piece)
+        return lines
+
+    def add_section(title):
+        story.extend([
+            Spacer(1, 7),
+            Paragraph(title, section),
+            HRFlowable(width='100%', thickness=0.7, color=colors.HexColor('#111827'), spaceBefore=1, spaceAfter=5),
+        ])
+
+    def add_entry(item):
+        organisation = safe(item.organisasi)
+        location = safe(item.lokasi)
+        left_title = organisation if not location else f'{organisation} - {location}'
+        header = Table(
+            [[Paragraph(f'<b>{left_title}</b>', body), Paragraph(date_label(item), date_style)]],
+            colWidths=[122 * mm, 38 * mm],
+            style=TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+            ]),
+        )
+        story.append(header)
+        subtitle_bits = [safe(item.jabatan)]
+        if item.bidang_studi:
+            subtitle_bits.append(safe(item.bidang_studi))
+        story.append(Paragraph('<b>{}</b>'.format(' - '.join(subtitle_bits)), body))
+        if item.teknologi:
+            story.append(Paragraph(f'Tools: {safe(item.teknologi)}', small))
+        if item.tautan:
+            story.append(Paragraph(f'Link: {safe(item.tautan)}', small))
+        if item.nomor_kredensial:
+            story.append(Paragraph(f'Credential: {safe(item.nomor_kredensial)}', small))
+        for line in split_lines(item.deskripsi):
+            story.append(Paragraph(f'- {safe(line)}', bullet))
+        story.append(Spacer(1, 5))
 
     buffer = BytesIO()
     styles = getSampleStyleSheet()
-    title = ParagraphStyle('CvTitle', parent=styles['Title'], alignment=TA_CENTER, textColor=colors.HexColor('#0f5f66'))
-    section = ParagraphStyle('CvSection', parent=styles['Heading2'], textColor=colors.HexColor('#0f5f66'), spaceBefore=10)
-    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=18 * mm, leftMargin=18 * mm, topMargin=16 * mm, bottomMargin=16 * mm)
+    title = ParagraphStyle(
+        'CvTitle',
+        parent=styles['Title'],
+        alignment=TA_CENTER,
+        fontName='Helvetica-Bold',
+        fontSize=18,
+        leading=22,
+        textColor=colors.HexColor('#111827'),
+        spaceAfter=3,
+    )
+    contact = ParagraphStyle('CvContact', parent=styles['BodyText'], alignment=TA_CENTER, fontSize=8.5, leading=11, textColor=colors.HexColor('#1f2937'))
+    body = ParagraphStyle('CvBody', parent=styles['BodyText'], alignment=TA_LEFT, fontSize=9, leading=11.5, textColor=colors.HexColor('#111827'))
+    small = ParagraphStyle('CvSmall', parent=body, fontSize=8.3, leading=10.5, textColor=colors.HexColor('#374151'))
+    bullet = ParagraphStyle('CvBullet', parent=body, leftIndent=4 * mm, firstLineIndent=-2 * mm, spaceBefore=1)
+    date_style = ParagraphStyle('CvDate', parent=small, alignment=TA_RIGHT)
+    section = ParagraphStyle('CvSection', parent=styles['Heading2'], fontName='Helvetica-Bold', fontSize=11, leading=13, textColor=colors.HexColor('#111827'), spaceBefore=0, spaceAfter=0)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=18 * mm, leftMargin=18 * mm, topMargin=14 * mm, bottomMargin=14 * mm)
+
+    contact_parts = [
+        safe(pengguna.no_hp),
+        safe(pengguna.email),
+        safe(pengguna.alamat),
+        safe(pengguna.prodi),
+    ]
     story = [
-        Paragraph(safe(pengguna.nama_pengguna), title),
-        Paragraph(f'{safe(pengguna.email)} | {safe(pengguna.no_hp)} | {safe(pengguna.prodi)}, {safe(pengguna.fakultas)}', styles['BodyText']),
-        Spacer(1, 10),
-        Paragraph('Profil', section),
-        Table([
-            ['NIM/NIK', safe(pengguna.nim_nik)],
-            ['Program Studi', safe(pengguna.prodi)],
-            ['Fakultas', safe(pengguna.fakultas)],
-            ['Alamat', safe(pengguna.alamat)],
-        ], colWidths=[35 * mm, 120 * mm], style=TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#475569')),
-            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ])),
+        Paragraph(safe(pengguna.nama_pengguna).upper(), title),
+        Paragraph(' | '.join(part for part in contact_parts if part), contact),
+        Spacer(1, 8),
     ]
     if pengguna.ringkasan_profesional:
-        story.extend([
-            Paragraph('Tentang', section),
-            Paragraph(safe(pengguna.ringkasan_profesional), styles['BodyText']),
-        ])
-    if pengguna.keahlian:
-        story.extend([
-            Paragraph('Keahlian', section),
-            Paragraph(safe(pengguna.keahlian), styles['BodyText']),
-        ])
+        story.extend([Paragraph(safe(pengguna.ringkasan_profesional), body), Spacer(1, 4)])
+
     experiences = pengguna.pengalaman.all()
-    if not experiences:
-        story.extend([Paragraph('Riwayat Profil', section), Paragraph('Belum ada riwayat yang dicantumkan.', styles['BodyText'])])
-    for category, label in pengguna.pengalaman.model.KATEGORI_CHOICES:
+    section_map = [
+        ('pengalaman', 'Work Experiences'),
+        ('pendidikan', 'Education Level'),
+        ('organisasi', 'Organisational Experience'),
+        ('proyek', 'Projects'),
+        ('sertifikasi', 'Skills, Achievements & Other Experience'),
+    ]
+    has_history = False
+    for category, label in section_map:
         category_items = experiences.filter(kategori=category)
-        if category_items:
-            story.append(Paragraph(label, section))
+        if not category_items:
+            continue
+        has_history = True
+        add_section(label)
         for item in category_items:
-            end_label = 'Sekarang' if item.masih_berjalan else (item.tanggal_selesai.strftime('%b %Y') if item.tanggal_selesai else '-')
-            details = ' | '.join(filter(None, [item.bidang_studi, item.lokasi]))
-            story.extend([
-                Paragraph(f'<b>{safe(item.jabatan)}</b> - {safe(item.organisasi)}', styles['BodyText']),
-                Paragraph(f'{item.tanggal_mulai.strftime("%b %Y")} - {end_label}', styles['Italic']),
-            ])
-            if details:
-                story.append(Paragraph(safe(details), styles['BodyText']))
-            story.extend([Paragraph(safe(item.deskripsi), styles['BodyText']), Spacer(1, 8)])
+            add_entry(item)
+
+    if pengguna.keahlian:
+        add_section('Skills')
+        story.append(Paragraph(safe(pengguna.keahlian), body))
+
+    if not has_history and not pengguna.keahlian:
+        add_section('Profile History')
+        story.append(Paragraph('Belum ada riwayat yang dicantumkan.', body))
+
     doc.build(story)
     return buffer.getvalue()
 
