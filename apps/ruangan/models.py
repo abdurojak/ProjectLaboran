@@ -28,6 +28,23 @@ class RuanganLab(models.Model):
         return f'{self.kode} - {self.nama}'
 
 
+class FotoRuanganLab(models.Model):
+    ruangan = models.ForeignKey(RuanganLab, on_delete=models.CASCADE, related_name='foto_lab')
+    gambar = models.ImageField(upload_to='ruangan_lab/')
+    judul = models.CharField(max_length=120, blank=True)
+    urutan = models.PositiveSmallIntegerField(default=0)
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+    diperbarui_pada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['urutan', '-dibuat_pada']
+        verbose_name = 'Foto Ruangan Lab'
+        verbose_name_plural = 'Foto Ruangan Lab'
+
+    def __str__(self):
+        return self.judul or f'Foto {self.ruangan.nama}'
+
+
 class GrupRuanganGabungan(models.Model):
     nama = models.CharField(max_length=150)
     ruangan = models.ManyToManyField(RuanganLab, related_name='grup_gabungan')

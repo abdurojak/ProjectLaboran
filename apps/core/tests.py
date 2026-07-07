@@ -53,6 +53,15 @@ class GlobalBackgroundTests(TestCase):
         self.assertContains(response, 'background: rgba(15, 23, 42, 0.34) !important;')
         self.assertContains(response, '-webkit-backdrop-filter: blur(18px) saturate(1.16);')
 
+    def test_custom_background_memakai_adaptive_contrast(self):
+        response = self.client.get(reverse('pengguna:login'))
+
+        self.assertContains(response, 'html[data-bg="custom"] .surface-card')
+        self.assertContains(response, 'background: rgba(255, 255, 255, 0.88) !important;')
+        self.assertContains(response, 'html[data-theme="dark"][data-bg="custom"] .surface-card')
+        self.assertContains(response, 'background: rgba(15, 23, 42, 0.78) !important;')
+        self.assertContains(response, 'html[data-theme="dark"] main .text-slate-900')
+
     def test_sidebar_dark_mode_border_tidak_terlalu_terang(self):
         response = self.client.get(reverse('pengguna:login'))
 
@@ -160,6 +169,26 @@ class BantuanTests(TestCase):
         conversation = PercakapanBantuan.objects.get(pengguna=self.mahasiswa)
         self.assertEqual(conversation.status, 'bot')
         self.assertTrue(conversation.pesan.filter(pengirim='bot', isi__icontains='transkrip').exists())
+
+    def test_bot_memahami_nilai_absensi_mahasiswa(self):
+        self.client.post(reverse('core:bantuan'), {'pesan': 'Nilai realtime dan laporan itu gimana?'})
+
+        conversation = PercakapanBantuan.objects.get(pengguna=self.mahasiswa)
+        self.assertTrue(conversation.pesan.filter(pengirim='bot', isi__icontains='Nilai Realtime').exists())
+        self.assertTrue(conversation.pesan.filter(pengirim='bot', isi__icontains='rata-rata').exists())
+
+    def test_bot_memahami_import_peserta_csv(self):
+        self.client.post(reverse('core:bantuan'), {'pesan': 'Peserta praktikum bisa import CSV?'})
+
+        conversation = PercakapanBantuan.objects.get(pengguna=self.mahasiswa)
+        self.assertTrue(conversation.pesan.filter(pengirim='bot', isi__icontains='import CSV').exists())
+        self.assertTrue(conversation.pesan.filter(pengirim='bot', isi__icontains='NIM').exists())
+
+    def test_bot_menampilkan_panduan_umum_web(self):
+        self.client.post(reverse('core:bantuan'), {'pesan': 'Panduan fitur web LabHub apa saja?'})
+
+        conversation = PercakapanBantuan.objects.get(pengguna=self.mahasiswa)
+        self.assertTrue(conversation.pesan.filter(pengirim='bot', isi__icontains='Topik yang bisa saya bantu').exists())
 
     def test_pengguna_dapat_meneruskan_chat_ke_admin(self):
         self.client.get(reverse('core:bantuan'))

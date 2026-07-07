@@ -92,7 +92,7 @@ SIDEBAR_LINKS = [
                 'icon': 'clipboard-pen-line',
                 'url': 'asleb:praktikum_mahasiswa_list',
                 'namespace': 'asleb',
-                'url_names': {'praktikum_mahasiswa_list', 'praktikum_peserta_create', 'praktikum_peserta_delete', 'praktikum_nilai'},
+                'url_names': {'praktikum_mahasiswa_list', 'praktikum_peserta_create', 'praktikum_peserta_delete', 'praktikum_peserta_delete_all', 'praktikum_nilai'},
                 'roles': {LABORAN_ROLE, ASISTEN_LAB_ROLE},
             },
             {
