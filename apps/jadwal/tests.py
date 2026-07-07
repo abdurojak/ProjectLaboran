@@ -499,19 +499,40 @@ class JadwalViewTests(TestCase):
     def test_ruangan_difilter_ke_semua_kapasitas_yang_mencukupi_peserta(self):
         PesertaPraktikum.objects.bulk_create([
             PesertaPraktikum(matkul=self.matkul_lain, nim=f'064{i:07d}', nama=f'Mahasiswa {i}')
-            for i in range(20)
+            for i in range(30)
         ])
 
         response = self.client.get(reverse('jadwal:ruangan_tersedia'), {'matkul': self.matkul_lain.pk})
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload['participant_count'], 20)
+        self.assertEqual(payload['participant_count'], 30)
         self.assertTrue(payload['rooms'])
-        self.assertTrue(all(room['capacity'] >= 20 or str(room['id']) in payload['combinable_rooms'] for room in payload['rooms']))
-        self.assertTrue(any(room['capacity'] > 20 for room in payload['rooms']))
+        self.assertTrue(all(room['capacity'] >= 30 or str(room['id']) in payload['combinable_rooms'] for room in payload['rooms']))
         self.assertIn(str(self.lab_rpl.pk), payload['combinable_rooms'])
         self.assertIn(str(self.lab_ski.pk), payload['combinable_rooms'])
+        self.assertIn(self.lab_rpl.pk, [room['id'] for room in payload['rooms']])
+        self.assertIn(self.lab_ski.pk, [room['id'] for room in payload['rooms']])
+
+    def test_jadwal_kelas_besar_boleh_memakai_kapasitas_gabungan_lab(self):
+        PesertaPraktikum.objects.bulk_create([
+            PesertaPraktikum(matkul=self.matkul_lain, nim=f'065{i:07d}', nama=f'Mahasiswa Gabungan {i}')
+            for i in range(30)
+        ])
+
+        response = self.client.post(reverse('jadwal:jadwal_create'), {
+            'matkul': self.matkul_lain.pk,
+            'ruangan': self.lab_rpl.pk,
+            'ruangan_tambahan': self.lab_ski.pk,
+            'hari': 'rabu',
+            'waktu_mulai': '13:00',
+            'waktu_selesai': '15:00',
+            'catatan': 'Kelas besar memakai dua lab',
+        })
+
+        self.assertRedirects(response, reverse('jadwal:jadwal_list'))
+        jadwal = JadwalPraktikum.objects.get(hari='rabu', mata_kuliah=str(self.matkul_lain))
+        self.assertEqual(jadwal.get_display_ruangan_kapasitas(), 38)
 
     def test_aslab_tidak_dapat_memilih_lab_sebelum_peserta_diinput_laboran(self):
         aslab = self.login_as_asisten_lab()

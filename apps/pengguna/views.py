@@ -239,6 +239,22 @@ class PenggunaDetailView(DetailView):
             (key, label, riwayat.filter(kategori=key))
             for key, label in PengalamanPengguna.KATEGORI_CHOICES
         ]
+        context['riwayat_category_forms'] = [
+            {
+                'key': key,
+                **RIWAYAT_CATEGORY_META[key],
+                'form': form_class(),
+            }
+            for key, form_class in RIWAYAT_FORM_CLASSES.items()
+        ]
+        context['riwayat_edit_forms'] = [
+            {
+                'item': item,
+                'category_meta': RIWAYAT_CATEGORY_META[item.kategori],
+                'form': RIWAYAT_FORM_CLASSES[item.kategori](instance=item),
+            }
+            for item in riwayat.filter(otomatis=False)
+        ]
         return context
 
 
