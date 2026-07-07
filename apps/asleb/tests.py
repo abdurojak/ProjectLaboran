@@ -294,6 +294,23 @@ class AslebViewTests(TestCase):
         self.assertEqual(akun_asleb.role, 'mahasiswa')
         self.assertEqual(self.asleb.status, 'nonaktif')
 
+    def test_data_aslab_tidak_menampilkan_tombol_edit_dan_hapus(self):
+        response = self.client.get(reverse('asleb:asleb_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse('asleb:asleb_detail', args=[self.asleb.pk]))
+        self.assertNotContains(response, reverse('asleb:asleb_update', args=[self.asleb.pk]))
+        self.assertNotContains(response, reverse('asleb:asleb_delete', args=[self.asleb.pk]))
+        self.assertNotContains(response, '<span>Edit</span>', html=False)
+        self.assertNotContains(response, '<span>Hapus</span>', html=False)
+
+    def test_detail_aslab_tidak_menampilkan_tombol_edit(self):
+        response = self.client.get(reverse('asleb:asleb_detail', args=[self.asleb.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, reverse('asleb:asleb_update', args=[self.asleb.pk]))
+        self.assertNotContains(response, '<span>Edit</span>', html=False)
+
     def test_input_peserta_otomatis_mencocokkan_nim_dengan_akun(self):
         mahasiswa = Pengguna.objects.create(
             nama_pengguna='Mahasiswa Terhubung', nim_nik='0640020099',
@@ -333,6 +350,50 @@ class AslebViewTests(TestCase):
         self.assertRedirects(response, f'{reverse("asleb:praktikum_mahasiswa_list")}?matkul={self.matkul.pk}')
         self.assertTrue(PesertaPraktikum.objects.filter(matkul=self.matkul, nim='64102500001', nama='NAUFAL FAHREZI MAULANA').exists())
         self.assertTrue(PesertaPraktikum.objects.filter(matkul=self.matkul, nim='64102500004', nama='RAJA PANGLIMA ISLAM').exists())
+
+    def test_daftar_peserta_praktikum_muncul_dalam_modal(self):
+        peserta = PesertaPraktikum.objects.create(matkul=self.matkul, nim='0640020099', nama='Mahasiswa Modal')
+
+        response = self.client.get(reverse('asleb:praktikum_mahasiswa_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-participant-modal-open')
+        self.assertContains(response, f'id="participants-{self.matkul.pk}"')
+        self.assertContains(response, 'data-participant-search')
+        self.assertContains(response, 'data-select-all')
+        self.assertContains(response, 'Hapus Terpilih')
+        self.assertContains(response, 'document.body.appendChild(modal)')
+        self.assertContains(response, 'html[data-theme="dark"] .participant-modal')
+        self.assertContains(response, 'participant-table-action')
+        self.assertContains(response, reverse('asleb:praktikum_peserta_update', args=[peserta.pk]))
+        self.assertNotContains(response, 'href="?matkul=')
+
+    def test_laboran_dapat_menghapus_banyak_peserta_praktikum(self):
+        peserta_pertama = PesertaPraktikum.objects.create(matkul=self.matkul, nim='0640020099', nama='Mahasiswa Satu')
+        peserta_kedua = PesertaPraktikum.objects.create(matkul=self.matkul, nim='0640020088', nama='Mahasiswa Dua')
+
+        response = self.client.post(reverse('asleb:praktikum_peserta_bulk_delete'), {
+            'matkul_id': self.matkul.pk,
+            'peserta_ids': [peserta_pertama.pk, peserta_kedua.pk],
+        })
+
+        self.assertRedirects(response, f'{reverse("asleb:praktikum_mahasiswa_list")}?matkul={self.matkul.pk}')
+        self.assertFalse(PesertaPraktikum.objects.filter(pk__in=[peserta_pertama.pk, peserta_kedua.pk]).exists())
+
+    def test_laboran_dapat_mengedit_peserta_praktikum(self):
+        peserta = PesertaPraktikum.objects.create(matkul=self.matkul, nim='0640020099', nama='Mahasiswa Lama')
+
+        response = self.client.post(reverse('asleb:praktikum_peserta_update', args=[peserta.pk]), {
+            'matkul': self.matkul.pk,
+            'nim': '0640020098',
+            'nama': 'Mahasiswa Baru',
+            'aktif': 'on',
+        })
+
+        self.assertRedirects(response, f'{reverse("asleb:praktikum_mahasiswa_list")}?matkul={self.matkul.pk}')
+        peserta.refresh_from_db()
+        self.assertEqual(peserta.nim, '0640020098')
+        self.assertEqual(peserta.nama, 'Mahasiswa Baru')
 
     def test_export_nilai_praktikum_excel(self):
         peserta = PesertaPraktikum.objects.create(matkul=self.matkul, nim='0640020099', nama='Mahasiswa Nilai')

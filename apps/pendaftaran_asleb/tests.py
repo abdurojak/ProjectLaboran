@@ -155,6 +155,16 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Pendaftaran sedang ditutup')
 
+    def test_public_form_mengarahkan_ke_login_jika_belum_login(self):
+        pengaturan = PengaturanPendaftaranAsleb.get_solo()
+        pengaturan.dibuka = True
+        pengaturan.save(update_fields=['dibuka'])
+        self.client.session.flush()
+
+        response = self.client.get(reverse('pendaftaran_asleb:pendaftaran_public'))
+
+        self.assertRedirects(response, reverse('pengguna:login'))
+
     def test_qr_pendaftaran_dibuat_lokal_oleh_django(self):
         response = self.client.get(reverse('pendaftaran_asleb:registration_qr'))
 
@@ -242,6 +252,32 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertEqual(pendaftaran.program_studi, mahasiswa.prodi)
         self.assertTrue(pendaftaran.tanda_tangan)
         self.assertTrue(pendaftaran.cv.name.endswith('.pdf'))
+
+    def test_public_form_langsung_mengarahkan_ke_profil_jika_data_belum_lengkap(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Profil Belum Lengkap',
+            nim_nik='2201003',
+            email='belum-lengkap@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081111111112',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+            is_verified=True,
+        )
+        pengaturan = PengaturanPendaftaranAsleb.get_solo()
+        pengaturan.dibuka = True
+        pengaturan.save(update_fields=['dibuka'])
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+
+        response = self.client.get(reverse('pendaftaran_asleb:pendaftaran_public'))
+
+        self.assertRedirects(response, reverse('pengguna:detail', args=[mahasiswa.pk]))
+        self.assertFalse(PendaftaranAsleb.objects.filter(nim=mahasiswa.nim_nik).exists())
 
     def test_pilih_matkul_ditolak_jika_profil_belum_lengkap(self):
         mahasiswa = Pengguna.objects.create(

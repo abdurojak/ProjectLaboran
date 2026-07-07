@@ -3,6 +3,101 @@
 {% block title %}Nilai & Absensi Mahasiswa{% endblock %}
 
 {% block content %}
+<style>
+    .participant-modal {
+        bottom: 0;
+        height: 100dvh;
+        left: 0;
+        right: 0;
+        top: 0;
+        width: 100dvw;
+    }
+
+    .participant-modal[aria-hidden="true"] { display: none; }
+
+    .participant-modal .participant-table-action {
+        background: rgba(255, 255, 255, 0.82);
+    }
+
+    html[data-theme="dark"] .participant-modal {
+        background: rgba(2, 6, 23, 0.72) !important;
+    }
+
+    html[data-theme="dark"] .participant-modal-panel,
+    html[data-theme="dark"] .participant-filter-control {
+        border-color: rgba(148, 163, 184, 0.16) !important;
+        background: rgba(15, 23, 42, 0.92) !important;
+        color: #e5e7eb !important;
+    }
+
+    html[data-theme="dark"] .participant-modal .border-slate-200 {
+        border-color: rgba(148, 163, 184, 0.14) !important;
+    }
+
+    html[data-theme="dark"] .participant-modal thead {
+        background: rgba(15, 23, 42, 0.70) !important;
+    }
+
+    html[data-theme="dark"] .participant-modal tbody tr {
+        background: rgba(15, 23, 42, 0.18) !important;
+    }
+
+    html[data-theme="dark"] .participant-modal tbody tr:hover {
+        background: rgba(20, 184, 166, 0.09) !important;
+    }
+
+    html[data-theme="dark"] .participant-modal th,
+    html[data-theme="dark"] .participant-modal td {
+        border-color: rgba(148, 163, 184, 0.12) !important;
+    }
+
+    html[data-theme="dark"] .participant-modal .participant-table-action {
+        border-color: rgba(148, 163, 184, 0.16) !important;
+        background: rgba(15, 23, 42, 0.44) !important;
+        color: #cbd5e1 !important;
+    }
+
+    html[data-theme="dark"] .participant-modal .participant-table-action:hover {
+        border-color: rgba(94, 234, 212, 0.28) !important;
+        background: rgba(20, 184, 166, 0.10) !important;
+        color: #99f6e4 !important;
+    }
+
+    html[data-theme="dark"] .participant-modal .participant-danger-action {
+        border-color: rgba(251, 113, 133, 0.24) !important;
+        color: #fda4af !important;
+    }
+
+    html[data-theme="dark"] .participant-modal .participant-danger-action:hover {
+        background: rgba(127, 29, 29, 0.18) !important;
+    }
+
+    html[data-theme="dark"] .participant-modal [data-participant-modal-close] {
+        border-color: rgba(148, 163, 184, 0.16) !important;
+        background: rgba(15, 23, 42, 0.42) !important;
+        color: #cbd5e1 !important;
+    }
+
+    html[data-theme="dark"] .participant-modal [data-bulk-delete-button] {
+        border-color: rgba(251, 113, 133, 0.24) !important;
+        background: rgba(127, 29, 29, 0.16) !important;
+        color: #fda4af !important;
+    }
+
+    html[data-theme="dark"] .participant-modal [data-bulk-delete-button]:not(:disabled):hover {
+        background: rgba(127, 29, 29, 0.28) !important;
+    }
+
+    html[data-theme="dark"] .participant-filter-control option {
+        background: #0f172a;
+        color: #e5e7eb;
+    }
+
+    html[data-theme="dark"] .participant-filter-control::placeholder {
+        color: rgba(203, 213, 225, 0.52) !important;
+    }
+</style>
+
 <section class="min-w-0 space-y-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -12,7 +107,7 @@
         </div>
         {% if can_manage_peserta %}
         <div class="flex flex-wrap gap-2">
-            <a class="btn-secondary gap-2" href="{% url 'asleb:praktikum_nilai_export' %}{% if selected_matkul %}?matkul={{ selected_matkul.pk }}{% endif %}">
+            <a class="btn-secondary gap-2" href="{% url 'asleb:praktikum_nilai_export' %}{% if selected_matkul_id %}?matkul={{ selected_matkul_id }}{% endif %}">
                 <i data-lucide="file-spreadsheet" class="h-4 w-4"></i><span>Download Excel Nilai</span>
             </a>
             <a class="btn-primary gap-2" href="{% url 'asleb:praktikum_peserta_create' %}">
@@ -29,7 +124,7 @@
                 <div>
                     <p class="text-xs font-black uppercase tracking-[0.16em] text-brand-700">{{ item.kode_mk|default:item.kode }}</p>
                     <h3 class="mt-2 text-xl font-black text-slate-900">{{ item.nama }}</h3>
-                    <p class="mt-1 text-sm text-slate-500">{{ item.kelas|default:"Tanpa kelas" }} · {{ item.dosen }}</p>
+                    <p class="mt-1 text-sm text-slate-500">{{ item.kelas|default:"Tanpa kelas" }} - {{ item.dosen }}</p>
                 </div>
                 <span class="rounded-full bg-brand-50 px-3 py-1 text-xs font-black text-brand-800">{{ item.jumlah_peserta }} peserta</span>
             </div>
@@ -43,7 +138,9 @@
                 {% endfor %}
             </div>
             {% if can_manage_peserta %}
-            <a class="mt-4 inline-flex text-sm font-bold text-brand-700" href="?matkul={{ item.pk }}">Lihat daftar peserta</a>
+            <button type="button" class="mt-4 inline-flex items-center gap-2 text-sm font-bold text-brand-700" data-participant-modal-open="participants-{{ item.pk }}">
+                <i data-lucide="list" class="h-4 w-4"></i>Lihat daftar peserta
+            </button>
             {% endif %}
         </article>
         {% empty %}
@@ -51,28 +148,193 @@
         {% endfor %}
     </div>
 
-    {% if selected_matkul and can_manage_peserta %}
-    <div class="surface-card overflow-hidden">
-        <div class="border-b border-slate-200 p-5">
-            <h3 class="text-xl font-black text-slate-900">Peserta {{ selected_matkul.nama }} · {{ selected_matkul.kelas }}</h3>
+    {% if can_manage_peserta %}
+        {% for item in matkul_list %}
+        <div class="participant-modal fixed z-50 bg-slate-950/60 p-4 backdrop-blur-sm" id="participants-{{ item.pk }}" aria-hidden="true" role="dialog" aria-modal="true">
+            <div class="mx-auto flex h-full max-w-6xl items-center justify-center">
+                <div class="participant-modal-panel flex max-h-[92vh] w-full flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl shadow-slate-950/30">
+                    <div class="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 p-5">
+                        <div>
+                            <p class="text-xs font-black uppercase tracking-[0.18em] text-brand-700">Daftar Peserta</p>
+                            <h3 class="mt-2 text-2xl font-black text-slate-900">{{ item.nama }}{% if item.kelas %} - {{ item.kelas }}{% endif %}</h3>
+                            <p class="mt-1 text-sm text-slate-500">{{ item.jumlah_peserta }} peserta aktif</p>
+                        </div>
+                        <button type="button" class="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 text-slate-500 transition hover:bg-slate-50" data-participant-modal-close aria-label="Tutup modal">
+                            <i data-lucide="x" class="h-5 w-5"></i>
+                        </button>
+                    </div>
+
+                    <form method="post" action="{% url 'asleb:praktikum_peserta_bulk_delete' %}" class="flex min-h-0 flex-1 flex-col" data-participant-form>
+                        {% csrf_token %}
+                        <input type="hidden" name="matkul_id" value="{{ item.pk }}">
+                        <div class="grid gap-3 border-b border-slate-200 p-4 lg:grid-cols-[minmax(0,1fr)_180px_180px_auto] lg:items-end">
+                            <div>
+                                <label for="participant-search-{{ item.pk }}">Cari peserta</label>
+                                <input id="participant-search-{{ item.pk }}" class="participant-filter-control" type="search" placeholder="Cari NIM atau nama" data-participant-search>
+                            </div>
+                            <div>
+                                <label for="participant-status-{{ item.pk }}">Status</label>
+                                <select id="participant-status-{{ item.pk }}" class="participant-filter-control" data-participant-status>
+                                    <option value="">Semua status</option>
+                                    <option value="aktif">Aktif</option>
+                                    <option value="nonaktif">Nonaktif</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="participant-account-{{ item.pk }}">Akun</label>
+                                <select id="participant-account-{{ item.pk }}" class="participant-filter-control" data-participant-account>
+                                    <option value="">Semua akun</option>
+                                    <option value="terhubung">Terhubung</option>
+                                    <option value="belum">Belum terhubung</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-45" data-bulk-delete-button disabled onclick="return confirm('Hapus peserta yang dipilih? Peserta yang sudah memiliki riwayat nilai akan dinonaktifkan.');">
+                                <i data-lucide="trash-2" class="mr-2 h-4 w-4"></i>Hapus Terpilih
+                            </button>
+                        </div>
+
+                        <div class="min-h-0 flex-1 overflow-auto">
+                            <table class="min-w-[920px]">
+                                <thead>
+                                    <tr>
+                                        <th class="w-12"><input type="checkbox" data-select-all aria-label="Pilih semua peserta"></th>
+                                        <th>NIM</th>
+                                        <th>Nama</th>
+                                        <th>Akun</th>
+                                        <th>Rata-rata Nilai</th>
+                                        <th>Status</th>
+                                        <th>Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for peserta in item.peserta_modal_list %}
+                                    <tr data-participant-row data-search="{{ peserta.nim|lower }} {{ peserta.nama|lower }}" data-status="{% if peserta.aktif %}aktif{% else %}nonaktif{% endif %}" data-account="{% if peserta.pengguna %}terhubung{% else %}belum{% endif %}">
+                                        <td><input type="checkbox" name="peserta_ids" value="{{ peserta.pk }}" data-participant-checkbox aria-label="Pilih {{ peserta.nama }}"></td>
+                                        <td class="font-bold">{{ peserta.nim }}</td>
+                                        <td>{{ peserta.nama }}</td>
+                                        <td>{% if peserta.pengguna %}<span class="font-bold text-emerald-700">Terhubung</span>{% else %}<span class="text-slate-500">Belum terhubung</span>{% endif %}</td>
+                                        <td>{% if peserta.rata_rata_nilai %}<span class="font-black text-brand-700">{{ peserta.rata_rata_nilai|floatformat:2 }}</span><span class="ml-1 text-xs text-slate-400">({{ peserta.jumlah_nilai }} modul)</span>{% else %}<span class="text-slate-400">Belum ada nilai</span>{% endif %}</td>
+                                        <td>{% if peserta.aktif %}<span class="text-emerald-700">Aktif</span>{% else %}<span class="text-slate-500">Nonaktif</span>{% endif %}</td>
+                                        <td>
+                                            <div class="flex flex-wrap gap-2">
+                                                <a class="participant-table-action inline-flex items-center justify-center rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-700 transition hover:border-brand-300 hover:text-brand-800" href="{% url 'asleb:praktikum_peserta_update' peserta.pk %}">
+                                                    <i data-lucide="pencil" class="mr-1.5 h-3.5 w-3.5"></i>Edit
+                                                </a>
+                                                <button class="participant-table-action participant-danger-action inline-flex items-center justify-center rounded-xl border border-rose-200 px-3 py-2 text-xs font-black text-rose-700 transition hover:bg-rose-50" type="submit" formaction="{% url 'asleb:praktikum_peserta_delete' peserta.pk %}" onclick="return confirm('Hapus peserta {{ peserta.nama }}?');">
+                                                    <i data-lucide="trash-2" class="mr-1.5 h-3.5 w-3.5"></i>Hapus
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr data-empty-row><td colspan="7" class="py-10 text-center text-slate-500">Belum ada peserta.</td></tr>
+                                    {% endfor %}
+                                    <tr class="hidden" data-no-result-row><td colspan="7" class="py-10 text-center text-slate-500">Tidak ada peserta yang sesuai filter.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
-        <div class="overflow-x-auto">
-            <table class="min-w-[720px]">
-                <thead><tr><th>NIM</th><th>Nama</th><th>Akun</th><th>Rata-rata Nilai</th><th>Status</th><th>Aksi</th></tr></thead>
-                <tbody>
-                    {% for peserta in peserta_list %}
-                    <tr>
-                        <td class="font-bold">{{ peserta.nim }}</td><td>{{ peserta.nama }}</td>
-                        <td>{% if peserta.pengguna %}Terhubung{% else %}Belum terhubung{% endif %}</td>
-                        <td>{% if peserta.rata_rata_nilai %}<span class="font-black text-brand-700">{{ peserta.rata_rata_nilai|floatformat:2 }}</span><span class="ml-1 text-xs text-slate-400">({{ peserta.jumlah_nilai }} modul)</span>{% else %}<span class="text-slate-400">Belum ada nilai</span>{% endif %}</td>
-                        <td>{% if peserta.aktif %}<span class="text-emerald-700">Aktif</span>{% else %}<span class="text-slate-500">Nonaktif</span>{% endif %}</td>
-                        <td><form method="post" action="{% url 'asleb:praktikum_peserta_delete' peserta.pk %}">{% csrf_token %}<button class="font-bold text-rose-600" type="submit">Hapus</button></form></td>
-                    </tr>
-                    {% empty %}<tr><td colspan="6" class="py-10 text-center text-slate-500">Belum ada peserta.</td></tr>{% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
+        {% endfor %}
     {% endif %}
 </section>
+
+<script>
+    (() => {
+        document.querySelectorAll('.participant-modal').forEach((modal) => {
+            document.body.appendChild(modal);
+        });
+
+        const openModal = (modal) => {
+            modal.setAttribute('aria-hidden', 'false');
+            document.documentElement.classList.add('overflow-hidden');
+            document.body.classList.add('overflow-hidden');
+            modal.querySelector('[data-participant-search]')?.focus();
+        };
+
+        const closeModal = (modal) => {
+            modal.setAttribute('aria-hidden', 'true');
+            document.documentElement.classList.remove('overflow-hidden');
+            document.body.classList.remove('overflow-hidden');
+        };
+
+        const updateBulkState = (form) => {
+            const visibleRows = [...form.querySelectorAll('[data-participant-row]')].filter((row) => !row.classList.contains('hidden'));
+            const visibleChecks = visibleRows.map((row) => row.querySelector('[data-participant-checkbox]')).filter(Boolean);
+            const checkedVisible = visibleChecks.filter((checkbox) => checkbox.checked);
+            const selectAll = form.querySelector('[data-select-all]');
+            const bulkButton = form.querySelector('[data-bulk-delete-button]');
+            if (selectAll) {
+                selectAll.checked = visibleChecks.length > 0 && checkedVisible.length === visibleChecks.length;
+                selectAll.indeterminate = checkedVisible.length > 0 && checkedVisible.length < visibleChecks.length;
+            }
+            if (bulkButton) bulkButton.disabled = checkedVisible.length === 0;
+        };
+
+        const applyFilters = (form) => {
+            const search = (form.querySelector('[data-participant-search]')?.value || '').trim().toLowerCase();
+            const status = form.querySelector('[data-participant-status]')?.value || '';
+            const account = form.querySelector('[data-participant-account]')?.value || '';
+            let shown = 0;
+            form.querySelectorAll('[data-participant-row]').forEach((row) => {
+                const matchesSearch = !search || row.dataset.search.includes(search);
+                const matchesStatus = !status || row.dataset.status === status;
+                const matchesAccount = !account || row.dataset.account === account;
+                const visible = matchesSearch && matchesStatus && matchesAccount;
+                row.classList.toggle('hidden', !visible);
+                if (!visible) row.querySelector('[data-participant-checkbox]').checked = false;
+                shown += visible ? 1 : 0;
+            });
+            form.querySelector('[data-no-result-row]')?.classList.toggle('hidden', shown !== 0);
+            updateBulkState(form);
+        };
+
+        document.querySelectorAll('[data-participant-modal-open]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const modal = document.getElementById(button.dataset.participantModalOpen);
+                if (modal) openModal(modal);
+            });
+        });
+
+        document.querySelectorAll('.participant-modal').forEach((modal) => {
+            modal.addEventListener('click', (event) => {
+                if (event.target === modal) closeModal(modal);
+            });
+            modal.querySelectorAll('[data-participant-modal-close]').forEach((button) => {
+                button.addEventListener('click', () => closeModal(modal));
+            });
+        });
+
+        document.querySelectorAll('[data-participant-form]').forEach((form) => {
+            form.querySelectorAll('[data-participant-search], [data-participant-status], [data-participant-account]').forEach((control) => {
+                control.addEventListener('input', () => applyFilters(form));
+                control.addEventListener('change', () => applyFilters(form));
+            });
+            form.querySelector('[data-select-all]')?.addEventListener('change', (event) => {
+                form.querySelectorAll('[data-participant-row]:not(.hidden) [data-participant-checkbox]').forEach((checkbox) => {
+                    checkbox.checked = event.target.checked;
+                });
+                updateBulkState(form);
+            });
+            form.querySelectorAll('[data-participant-checkbox]').forEach((checkbox) => {
+                checkbox.addEventListener('change', () => updateBulkState(form));
+            });
+            applyFilters(form);
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                document.querySelectorAll('.participant-modal[aria-hidden="false"]').forEach(closeModal);
+            }
+        });
+
+        const selectedMatkul = '{{ selected_matkul_id|escapejs }}';
+        if (selectedMatkul) {
+            const modal = document.getElementById(`participants-${selectedMatkul}`);
+            if (modal) openModal(modal);
+        }
+    })();
+</script>
 {% endblock %}

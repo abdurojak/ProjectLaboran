@@ -15,6 +15,7 @@ from .models import (
     HasilPraktikumMahasiswa,
     HonorAsleb,
     ModulPraktikum,
+    PesertaPraktikum,
     SuratHonorAsleb,
 )
 
@@ -455,6 +456,39 @@ class PesertaPraktikumBulkForm(forms.Form):
         if not rows:
             raise forms.ValidationError('CSV tidak berisi data peserta.')
         return rows
+
+
+class PesertaPraktikumForm(forms.ModelForm):
+    class Meta:
+        model = PesertaPraktikum
+        fields = ['matkul', 'nim', 'nama', 'aktif']
+        widgets = {
+            'nim': forms.TextInput(attrs={'placeholder': 'NIM mahasiswa'}),
+            'nama': forms.TextInput(attrs={'placeholder': 'Nama mahasiswa'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.pendaftaran_asleb.models import MataKuliahAsleb
+        self.fields['matkul'].queryset = MataKuliahAsleb.objects.filter(aktif=True).order_by('nama', 'kelas')
+
+    def clean_nim(self):
+        nim = self.cleaned_data['nim'].strip()
+        if not nim.isdigit():
+            raise forms.ValidationError('NIM hanya boleh berisi angka.')
+        return nim
+
+    def clean(self):
+        cleaned_data = super().clean()
+        matkul = cleaned_data.get('matkul')
+        nim = cleaned_data.get('nim')
+        if matkul and nim:
+            duplicate = PesertaPraktikum.objects.filter(matkul=matkul, nim=nim)
+            if self.instance.pk:
+                duplicate = duplicate.exclude(pk=self.instance.pk)
+            if duplicate.exists():
+                self.add_error('nim', 'NIM ini sudah terdaftar pada mata kuliah tersebut.')
+        return cleaned_data
 
 
 class HasilPraktikumMahasiswaForm(forms.ModelForm):

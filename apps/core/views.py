@@ -286,6 +286,12 @@ class BugErrorListView(TemplateView):
         context['current_q'] = self.request.GET.get('q', '').strip()
         context['bug_error_list'] = queryset[:80]
         context['selected_log'] = self.get_selected(queryset)
+        context['can_complete_selected_bug_error'] = (
+            self.request.current_pengguna.role == 'laboran'
+            and context['selected_log']
+            and context['selected_log'].ditangani_oleh_id == self.request.current_pengguna.pk
+            and context['selected_log'].status != BugErrorLog.STATUS_SELESAI
+        )
         context['summary'] = {
             'baru': BugErrorLog.objects.filter(status=BugErrorLog.STATUS_BARU).count(),
             'diproses': BugErrorLog.objects.filter(status=BugErrorLog.STATUS_DIPROSES).count(),
@@ -311,6 +317,23 @@ class BugErrorListView(TemplateView):
                 messages.success(request, 'Bug/error berhasil diambil dan status diubah menjadi Diproses.')
             else:
                 messages.error(request, 'Bug/error ini sudah diambil oleh laboran lain.')
+            return redirect(f"{reverse('core:bug_error_list')}?log={log.pk}")
+
+        if action == 'complete':
+            if not pengguna or pengguna.role != 'laboran':
+                messages.error(request, 'Hanya laboran yang menangani bug/error ini yang dapat menyelesaikannya.')
+                return redirect('core:bug_error_list')
+            log = get_object_or_404(BugErrorLog, pk=request.POST.get('log_id'))
+            updated = BugErrorLog.objects.filter(pk=log.pk, ditangani_oleh=pengguna).exclude(
+                status=BugErrorLog.STATUS_SELESAI,
+            ).update(
+                status=BugErrorLog.STATUS_SELESAI,
+                diperbarui_pada=timezone.now(),
+            )
+            if updated:
+                messages.success(request, 'Bug/error berhasil ditandai selesai.')
+            else:
+                messages.error(request, 'Bug/error ini hanya dapat diselesaikan oleh laboran yang sedang menanganinya.')
             return redirect(f"{reverse('core:bug_error_list')}?log={log.pk}")
 
         if not pengguna or pengguna.role != 'admin':
