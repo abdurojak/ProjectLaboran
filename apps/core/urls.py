@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import AdminBantuanView, BantuanView, EskalasiBantuanView, SettingsView
+from .views import AdminBantuanView, BantuanView, BugErrorListView, EskalasiBantuanView, SettingsView
 
 
 app_name = 'core'
@@ -10,4 +10,5 @@ urlpatterns = [
     path('bantuan/', BantuanView.as_view(), name='bantuan'),
     path('bantuan/hubungi-admin/', EskalasiBantuanView.as_view(), name='bantuan_escalate'),
     path('bantuan/admin/', AdminBantuanView.as_view(), name='bantuan_admin'),
+    path('bug-error/', BugErrorListView.as_view(), name='bug_error_list'),
 ]

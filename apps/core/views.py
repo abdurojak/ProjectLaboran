@@ -1,4 +1,5 @@
 from django.contrib import messages
+from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views import View
@@ -6,7 +7,7 @@ from django.views.generic import TemplateView
 
 from apps.pengguna.forms import PenggunaAppearanceForm
 
-from .models import PercakapanBantuan, PesanBantuan
+from .models import BugErrorLog, PercakapanBantuan, PesanBantuan
 from .realtime import broadcast_help_message, broadcast_help_status
 
 
@@ -123,6 +124,13 @@ class SettingsView(TemplateView):
                     'icon': 'messages-square',
                 },
                 {
+                    'title': 'Bug & Error List',
+                    'description': 'Catat dan pantau daftar bug/error aplikasi secara manual.',
+                    'url': 'core:bug_error_list',
+                    'args': [],
+                    'icon': 'bug',
+                },
+                {
                     'title': 'Master Akademik',
                     'description': 'Kelola fakultas dan prodi yang muncul pada registrasi.',
                     'url': 'pengguna:master_akademik',
@@ -224,3 +232,85 @@ class AdminBantuanView(TemplateView):
             conversation.save(update_fields=['diperbarui_pada'])
             broadcast_help_message(admin_message)
         return redirect(f"{reverse('core:bantuan_admin')}?percakapan={conversation.pk}")
+
+
+class BugErrorListView(TemplateView):
+    template_name = 'core/bug_error_list.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        pengguna = getattr(request, 'current_pengguna', None)
+        if not pengguna or pengguna.role != 'admin':
+            messages.error(request, 'Hanya admin yang dapat membuka Bug & Error List.')
+            return redirect('dashboard:home')
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        queryset = BugErrorLog.objects.select_related('dilaporkan_oleh')
+        status = self.request.GET.get('status', '').strip()
+        q = self.request.GET.get('q', '').strip()
+        if status in dict(BugErrorLog.STATUS_CHOICES):
+            queryset = queryset.filter(status=status)
+        if q:
+            queryset = queryset.filter(
+                Q(judul__icontains=q) |
+                Q(lokasi__icontains=q) |
+                Q(deskripsi__icontains=q)
+            )
+        return queryset.order_by('-dibuat_pada')
+
+    def get_selected(self, queryset):
+        selected_id = self.request.GET.get('log')
+        if selected_id:
+            return get_object_or_404(queryset, pk=selected_id)
+        return queryset.first()
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        queryset = self.get_queryset()
+        context['status_choices'] = BugErrorLog.STATUS_CHOICES
+        context['kategori_choices'] = BugErrorLog.KATEGORI_CHOICES
+        context['prioritas_choices'] = BugErrorLog.PRIORITAS_CHOICES
+        context['current_status'] = self.request.GET.get('status', '').strip()
+        context['current_q'] = self.request.GET.get('q', '').strip()
+        context['bug_error_list'] = queryset[:80]
+        context['selected_log'] = self.get_selected(queryset)
+        context['summary'] = {
+            'baru': BugErrorLog.objects.filter(status=BugErrorLog.STATUS_BARU).count(),
+            'diproses': BugErrorLog.objects.filter(status=BugErrorLog.STATUS_DIPROSES).count(),
+            'selesai': BugErrorLog.objects.filter(status=BugErrorLog.STATUS_SELESAI).count(),
+        }
+        return context
+
+    def post(self, request, *args, **kwargs):
+        if request.POST.get('action') == 'create':
+            title = request.POST.get('judul', '').strip()
+            description = request.POST.get('deskripsi', '').strip()
+            if not title or not description:
+                messages.error(request, 'Judul dan deskripsi wajib diisi.')
+                return redirect('core:bug_error_list')
+            category = request.POST.get('kategori', BugErrorLog.KATEGORI_BUG)
+            priority = request.POST.get('prioritas', BugErrorLog.PRIORITAS_SEDANG)
+            log = BugErrorLog.objects.create(
+                judul=title,
+                kategori=category if category in dict(BugErrorLog.KATEGORI_CHOICES) else BugErrorLog.KATEGORI_BUG,
+                prioritas=priority if priority in dict(BugErrorLog.PRIORITAS_CHOICES) else BugErrorLog.PRIORITAS_SEDANG,
+                lokasi=request.POST.get('lokasi', '').strip(),
+                deskripsi=description,
+                langkah_reproduksi=request.POST.get('langkah_reproduksi', '').strip(),
+                ekspektasi=request.POST.get('ekspektasi', '').strip(),
+                hasil_aktual=request.POST.get('hasil_aktual', '').strip(),
+                dilaporkan_oleh=getattr(request, 'current_pengguna', None),
+            )
+            messages.success(request, 'Bug/error berhasil ditambahkan.')
+            return redirect(f"{reverse('core:bug_error_list')}?log={log.pk}")
+
+        log = get_object_or_404(BugErrorLog, pk=request.POST.get('log_id'))
+        status = request.POST.get('status', '').strip()
+        if status in dict(BugErrorLog.STATUS_CHOICES):
+            log.status = status
+            log.catatan_admin = request.POST.get('catatan_admin', '').strip()
+            log.save(update_fields=['status', 'catatan_admin', 'diperbarui_pada'])
+            messages.success(request, 'Status bug/error berhasil diperbarui.')
+        else:
+            messages.error(request, 'Status bug/error tidak valid.')
+        return redirect(f"{reverse('core:bug_error_list')}?log={log.pk}")

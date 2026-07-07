@@ -133,6 +133,7 @@ SIDEBAR_LINKS = [
     },
     {'title': 'Ruangan', 'icon': 'door-open', 'url': 'ruangan:ruangan_list', 'namespace': 'ruangan', 'roles': {LABORAN_ROLE, ASISTEN_LAB_ROLE, MAHASISWA_ROLE}},
     {'title': 'Surat Laboran', 'icon': 'mails', 'url': 'surat:list', 'namespace': 'surat', 'roles': {LABORAN_ROLE}},
+    {'title': 'Bug & Error List', 'icon': 'bug', 'url': 'core:bug_error_list', 'namespace': 'core', 'url_names': {'bug_error_list'}, 'roles': {ADMIN_ROLE}},
     {'title': 'Pengaturan', 'icon': 'settings', 'url': 'core:settings', 'namespace': 'core', 'url_names': {'settings'}},
 ]
 
