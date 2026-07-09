@@ -347,6 +347,54 @@ class KalenderViewsTests(TestCase):
         self.assertNotContains(response, 'Agenda Pribadi Pemilik')
         self.assertContains(response, 'Pengumuman Untuk Mahasiswa')
 
+    def test_asisten_lab_tidak_melihat_kegiatan_pribadi_asisten_lab_lain(self):
+        pemilik = Pengguna.objects.create(
+            nama_pengguna='Aslab Pemilik',
+            nim_nik='2203010',
+            email='aslab-pemilik@example.com',
+            password='rahasia123',
+            no_hp='081333333310',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='asisten_lab',
+        )
+        penonton = Pengguna.objects.create(
+            nama_pengguna='Aslab Penonton',
+            nim_nik='2203011',
+            email='aslab-penonton@example.com',
+            password='rahasia123',
+            no_hp='081333333311',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='asisten_lab',
+        )
+        KegiatanKalender.objects.create(
+            judul='Catatan Praktikum Pribadi',
+            tanggal=date.today() + timedelta(days=4),
+            waktu_mulai=time(14, 0),
+            dibuat_oleh=pemilik,
+            target_role='asisten_lab',
+        )
+        KegiatanKalender.objects.create(
+            judul='Briefing Untuk Semua Aslab',
+            tanggal=date.today() + timedelta(days=4),
+            waktu_mulai=time(15, 0),
+            dibuat_oleh=self.laboran,
+            target_role='asisten_lab',
+        )
+        session = self.client.session
+        session['pengguna_id'] = penonton.pk
+        session.save()
+
+        response = self.client.get(reverse('kalender:kegiatan_list'))
+
+        self.assertNotContains(response, 'Catatan Praktikum Pribadi')
+        self.assertContains(response, 'Briefing Untuk Semua Aslab')
+
     def test_jadwal_praktikum_asisten_lab_tidak_muncul_di_menu_kalender(self):
         asisten = Pengguna.objects.create(
             nama_pengguna='Asisten SDA',

@@ -154,6 +154,7 @@ def dashboard_sidebar(request):
     current_namespace = getattr(request.resolver_match, 'namespace', '')
     current_url_name = getattr(request.resolver_match, 'url_name', '')
     links = []
+    active_sidebar = None
 
     for link in SIDEBAR_LINKS:
         current_pengguna = getattr(request, 'current_pengguna', None)
@@ -167,6 +168,8 @@ def dashboard_sidebar(request):
                 child = child_link.copy()
                 child['active'] = _set_active(child, current_namespace, current_url_name)
                 child.update(TONES['teal'] if child['active'] else TONES['gray'])
+                if child['active']:
+                    active_sidebar = child
                 children.append(child)
             if not children:
                 continue
@@ -194,9 +197,13 @@ def dashboard_sidebar(request):
         item = link.copy()
         item['active'] = _set_active(item, current_namespace, current_url_name)
         item.update(TONES['teal'] if item['active'] else TONES['gray'])
+        if item['active']:
+            active_sidebar = item
         links.append(item)
 
     return {
         'sidebar_links': links,
+        'active_sidebar_title': active_sidebar['title'] if active_sidebar else 'Dashboard',
+        'active_sidebar_icon': active_sidebar['icon'] if active_sidebar else 'layout-dashboard',
         'today': timezone.localdate(),
     }

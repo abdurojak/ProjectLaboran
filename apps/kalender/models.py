@@ -68,7 +68,12 @@ class KegiatanKalender(models.Model):
         if not self.dibuat_oleh_id and not self.target_role:
             return True
 
-        return pengguna.role in self.target_role_list
+        return (
+            self.dibuat_oleh_id
+            and self.dibuat_oleh
+            and self.dibuat_oleh.role in {'admin', 'laboran'}
+            and pengguna.role in self.target_role_list
+        )
 
     def __str__(self):
         return self.judul

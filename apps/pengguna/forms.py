@@ -272,15 +272,22 @@ class PendidikanPenggunaForm(RiwayatProfilFormBase):
 
     class Meta:
         model = PengalamanPengguna
-        fields = ['organisasi', 'jabatan', 'bidang_studi', 'tanggal_mulai', 'tanggal_selesai', 'masih_berjalan', 'deskripsi']
+        fields = ['organisasi', 'bidang_studi', 'tanggal_mulai', 'tanggal_selesai', 'masih_berjalan', 'deskripsi']
         labels = {
             'organisasi': 'Nama Sekolah/Kampus',
-            'jabatan': 'Jenjang Pendidikan',
             'bidang_studi': 'Jurusan/Program Studi',
             'masih_berjalan': 'Masih menempuh pendidikan',
             'deskripsi': 'Deskripsi tambahan',
         }
         widgets = RiwayatProfilFormBase.Meta.widgets
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        instance.jabatan = self.cleaned_data.get('bidang_studi') or self.cleaned_data.get('organisasi')
+        if commit:
+            instance.save()
+            self.save_m2m()
+        return instance
 
 
 class OrganisasiPenggunaForm(RiwayatProfilFormBase):

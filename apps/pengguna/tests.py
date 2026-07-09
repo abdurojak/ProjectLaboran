@@ -399,12 +399,22 @@ class PenggunaViewTests(TestCase):
         self.assertNotContains(response, 'Nama Sekolah/Kampus')
         self.assertNotContains(response, 'Nomor Kredensial')
 
+    def test_form_pendidikan_profile_tidak_menampilkan_field_jenjang(self):
+        response = self.client.get(
+            f'{reverse("pengguna:experience_create", args=[self.pengguna.pk])}?kategori=pendidikan'
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Nama Sekolah/Kampus')
+        self.assertContains(response, 'Jurusan/Program Studi')
+        self.assertNotContains(response, 'Jenjang Pendidikan')
+        self.assertNotContains(response, 'name="jabatan"', html=False)
+
     def test_tambah_pendidikan_profile_menyimpan_kategori_dan_membersihkan_tanggal_selesai(self):
         response = self.client.post(
             f'{reverse("pengguna:experience_create", args=[self.pengguna.pk])}?kategori=pendidikan',
             {
                 'organisasi': 'Universitas Trisakti',
-                'jabatan': 'S1',
                 'bidang_studi': 'Informatika',
                 'tanggal_mulai': '2024-09-01',
                 'tanggal_selesai': '2026-01-01',
@@ -417,7 +427,7 @@ class PenggunaViewTests(TestCase):
         riwayat = PengalamanPengguna.objects.get(pengguna=self.pengguna)
         self.assertEqual(riwayat.kategori, 'pendidikan')
         self.assertEqual(riwayat.organisasi, 'Universitas Trisakti')
-        self.assertEqual(riwayat.jabatan, 'S1')
+        self.assertEqual(riwayat.jabatan, 'Informatika')
         self.assertIsNone(riwayat.tanggal_selesai)
         self.assertTrue(riwayat.masih_berjalan)
 
