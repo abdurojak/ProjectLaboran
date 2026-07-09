@@ -1,19 +1,22 @@
-<div class="h-fit w-0 shrink-0 transition-all duration-300 md:w-28 xl:w-[280px]" data-dashboard-sidebar-shell>
-<aside id="dashboard-sidebar" class="fixed inset-y-0 left-0 z-20 flex h-screen w-[300px] -translate-x-full flex-col overflow-x-hidden border-r border-slate-200 bg-white shadow-soft transition-all duration-300 md:w-28 md:translate-x-0 xl:w-[280px]" data-dashboard-sidebar>
-    <div class="relative flex min-h-[98px] items-center justify-end border-b border-slate-200 bg-white px-4" data-sidebar-brand-shell>
-        <button id="dashboard-sidebar-toggle" type="button" class="absolute right-3 top-1/2 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-2xl border border-slate-200 bg-white p-0 text-brand-800 shadow-sm transition hover:border-brand-200 hover:bg-brand-50" aria-label="Tutup menu dashboard" title="Tutup menu" aria-expanded="true">
+<div class="h-fit w-0 shrink-0 transition-all duration-300 md:w-[76px] xl:w-[76px]" data-dashboard-sidebar-shell>
+<aside id="dashboard-sidebar" class="fixed inset-y-0 left-0 z-[90] flex h-screen w-[300px] -translate-x-full flex-col overflow-x-hidden border-r border-slate-200 bg-white shadow-soft transition-all duration-300 md:w-[76px] md:translate-x-0 xl:w-[76px]" data-dashboard-sidebar>
+    <div class="relative flex min-h-[90px] items-start justify-center border-b border-slate-200 bg-white px-4 pt-4" data-sidebar-brand-shell>
+        <button id="dashboard-sidebar-toggle" type="button" class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white p-0 text-brand-800 shadow-sm transition hover:border-brand-200 hover:bg-brand-50" aria-label="Tutup menu dashboard" title="Tutup menu" aria-expanded="true">
             <i data-lucide="panel-left-close" class="h-4 w-4"></i>
         </button>
     </div>
 
-    <div class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-4 py-5">
+    <div class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-5" data-sidebar-scroll>
         <nav class="grid gap-2">
             {% for link in sidebar_links %}
                 {% if link.children %}
                 <details data-sidebar-group class="group rounded-2xl" {% if link.expanded %}open{% endif %}>
                     <summary data-sidebar-summary data-active="{% if link.active %}true{% else %}false{% endif %}" class="{% if link.active %}bg-brand-50 text-brand-800 ring-1 ring-brand-100{% else %}text-slate-700 hover:bg-slate-50{% endif %} flex h-14 cursor-pointer list-none items-center gap-4 rounded-2xl px-3 font-semibold transition [&::-webkit-details-marker]:hidden" title="{{ link.title }}">
-                        <span data-sidebar-icon class="{{ link.icon_bg }} {{ link.icon_text }} flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl">
+                        <span data-sidebar-icon class="{{ link.icon_bg }} {{ link.icon_text }} relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl">
                             <i data-lucide="{{ link.icon }}" class="h-5 w-5"></i>
+                            <span data-sidebar-chevron class="absolute -right-0.5 top-1/2 flex h-3.5 w-3.5 -translate-y-1/2 items-center justify-center rounded-full bg-white/12 text-[9px] text-white/75">
+                                <i data-lucide="chevron-right" class="h-2.5 w-2.5 transition group-open:rotate-90"></i>
+                            </span>
                         </span>
                         <span data-sidebar-label class="hidden min-w-0 flex-1 truncate">{{ link.title }}</span>
                         <i data-sidebar-label data-lucide="chevron-down" class="hidden h-4 w-4 shrink-0 transition group-open:rotate-180"></i>
@@ -54,6 +57,12 @@
             </div>
         </div>
     </div>
+    <form method="post" action="{% url 'pengguna:logout' %}" class="px-3 pb-5" data-sidebar-rail-logout>
+        {% csrf_token %}
+        <button type="submit" class="flex h-11 w-11 items-center justify-center rounded-full text-white/80 transition hover:bg-white/15 hover:text-white" aria-label="Logout" title="Logout">
+            <i data-lucide="log-out" class="h-4 w-4"></i>
+        </button>
+    </form>
 </aside>
 </div>
 
@@ -63,7 +72,7 @@
         const desktopToggle = document.getElementById('dashboard-sidebar-toggle');
         const mobileToggle = document.getElementById('dashboard-sidebar-mobile-toggle');
 
-        if (!sidebar || !desktopToggle || !mobileToggle) {
+        if (!sidebar || !desktopToggle) {
             return;
         }
 
@@ -71,13 +80,130 @@
         const submenus = sidebar.querySelectorAll('[data-sidebar-submenu]');
         const profile = sidebar.querySelector('[data-sidebar-profile]');
         const shell = sidebar.closest('[data-dashboard-sidebar-shell]');
-        const header = document.querySelector('body > header');
         const mediumQuery = window.matchMedia('(min-width: 768px)');
         const desktopQuery = window.matchMedia('(min-width: 1280px)');
         const brandShell = sidebar.querySelector('[data-sidebar-brand-shell]');
-        const toggles = [desktopToggle, mobileToggle];
+        const railLogout = sidebar.querySelector('[data-sidebar-rail-logout]');
+        const toggles = [desktopToggle, mobileToggle].filter(Boolean);
         const groupSummaries = sidebar.querySelectorAll('[data-sidebar-group] > summary');
+        const sidebarLinks = sidebar.querySelectorAll('[data-sidebar-link], [data-sidebar-child]');
+        let floatingMenu = null;
         let isCollapsed = true;
+
+        function navigateWithTransition(href) {
+            const appContent = document.querySelector('[data-app-content]');
+            if (appContent && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                appContent.classList.add('is-leaving');
+                window.setTimeout(function () {
+                    window.location.href = href;
+                }, 120);
+                return;
+            }
+            window.location.href = href;
+        }
+
+        function markActiveLink(href) {
+            let targetHref;
+            try {
+                targetHref = new URL(href, window.location.href).href;
+            } catch (error) {
+                targetHref = href;
+            }
+
+            sidebar.querySelectorAll('[data-sidebar-summary]').forEach(function (summary) {
+                summary.dataset.active = 'false';
+            });
+
+            sidebarLinks.forEach(function (link) {
+                const isActive = link.href === targetHref;
+                link.dataset.active = isActive ? 'true' : 'false';
+                if (isActive) {
+                    const group = link.closest('[data-sidebar-group]');
+                    const summary = group ? group.querySelector('[data-sidebar-summary]') : null;
+                    if (summary) {
+                        summary.dataset.active = 'true';
+                    }
+                }
+            });
+        }
+
+        function ensureFloatingMenu() {
+            if (floatingMenu) {
+                return floatingMenu;
+            }
+
+            floatingMenu = document.createElement('div');
+            floatingMenu.setAttribute('data-sidebar-floating-menu', '');
+            floatingMenu.setAttribute('aria-hidden', 'true');
+            floatingMenu.className = 'pointer-events-none fixed z-[140] min-w-[14rem] -translate-y-1 scale-95 rounded-[1.35rem] border p-2 opacity-0 shadow-2xl transition duration-150';
+            document.body.appendChild(floatingMenu);
+
+            floatingMenu.addEventListener('click', function (event) {
+                const link = event.target.closest('a[href]');
+                if (!link) {
+                    return;
+                }
+                event.preventDefault();
+                markActiveLink(link.href);
+                closeFloatingMenu();
+                navigateWithTransition(link.href);
+            });
+
+            return floatingMenu;
+        }
+
+        function closeFloatingMenu() {
+            if (!floatingMenu) {
+                return;
+            }
+            floatingMenu.classList.add('pointer-events-none', 'opacity-0', 'scale-95', '-translate-y-1');
+            floatingMenu.classList.remove('pointer-events-auto', 'opacity-100', 'scale-100', 'translate-y-0');
+            floatingMenu.setAttribute('aria-hidden', 'true');
+        }
+
+        function openFloatingMenu(summary) {
+            const group = summary.closest('[data-sidebar-group]');
+            const submenu = group ? group.querySelector('[data-sidebar-submenu]') : null;
+            const children = submenu ? Array.from(submenu.querySelectorAll('[data-sidebar-child]')) : [];
+            if (!children.length) {
+                return;
+            }
+
+            const menu = ensureFloatingMenu();
+            const title = summary.getAttribute('title') || summary.textContent.trim();
+            menu.innerHTML = [
+                '<div class="px-3 pb-2 pt-1 text-[0.68rem] font-black uppercase tracking-[0.22em]" data-sidebar-floating-title>' + title + '</div>',
+                children.map(function (child) {
+                    const icon = child.querySelector('i') ? child.querySelector('i').getAttribute('data-lucide') : 'circle';
+                    const active = child.dataset.active === 'true' ? 'true' : 'false';
+                    return '<a href="' + child.href + '" data-active="' + active + '" class="flex min-h-11 items-center gap-3 rounded-2xl px-3 py-2 text-sm font-bold transition">' +
+                        '<i data-lucide="' + icon + '" class="h-4 w-4 shrink-0"></i>' +
+                        '<span class="min-w-0 flex-1 truncate">' + child.textContent.trim() + '</span>' +
+                    '</a>';
+                }).join('')
+            ].join('');
+
+            menu.style.visibility = 'hidden';
+            menu.classList.remove('pointer-events-none');
+            menu.setAttribute('aria-hidden', 'false');
+
+            const summaryRect = summary.getBoundingClientRect();
+            const menuRect = menu.getBoundingClientRect();
+            const left = Math.min(summaryRect.right + 12, window.innerWidth - menuRect.width - 12);
+            const top = Math.min(
+                Math.max(summaryRect.top - 8, 12),
+                Math.max(window.innerHeight - menuRect.height - 12, 12)
+            );
+            menu.style.left = left + 'px';
+            menu.style.top = top + 'px';
+            menu.style.visibility = 'visible';
+            menu.classList.add('pointer-events-auto', 'opacity-100', 'scale-100', 'translate-y-0');
+            menu.classList.remove('pointer-events-none', 'opacity-0', 'scale-95', '-translate-y-1');
+
+            if (window.lucide) {
+                window.lucide.createIcons();
+            }
+        }
 
         function setToggleIcon(iconName) {
             toggles.forEach(function (toggle) {
@@ -91,34 +217,27 @@
         function setCollapsed(collapsed) {
             const isMedium = mediumQuery.matches;
             isCollapsed = collapsed;
+            closeFloatingMenu();
+            sidebar.dataset.collapsed = collapsed ? 'true' : 'false';
+            sidebar.classList.toggle('is-collapsed', collapsed);
+            document.body.classList.toggle('dashboard-sidebar-expanded', isMedium && !collapsed);
 
             sidebar.classList.toggle('-translate-x-full', collapsed && !isMedium);
             sidebar.classList.toggle('translate-x-0', !collapsed || isMedium);
             sidebar.classList.toggle('w-[300px]', !collapsed && !isMedium);
             sidebar.classList.toggle('md:w-[300px]', isMedium && !collapsed && !desktopQuery.matches);
-            sidebar.classList.toggle('w-28', collapsed || (isMedium && !desktopQuery.matches));
-            sidebar.classList.toggle('md:w-28', collapsed || desktopQuery.matches);
+            sidebar.classList.toggle('w-[76px]', collapsed);
+            sidebar.classList.toggle('md:w-[76px]', collapsed || (isMedium && desktopQuery.matches));
             sidebar.classList.toggle('xl:w-[280px]', !collapsed && desktopQuery.matches);
-            sidebar.classList.toggle('xl:w-28', collapsed && desktopQuery.matches);
+            sidebar.classList.toggle('xl:w-[76px]', collapsed && desktopQuery.matches);
             if (shell) {
                 shell.classList.toggle('w-0', !isMedium);
                 shell.classList.toggle('w-[300px]', isMedium && !collapsed && !desktopQuery.matches);
                 shell.classList.toggle('md:w-[300px]', isMedium && !collapsed && !desktopQuery.matches);
-                shell.classList.toggle('w-28', isMedium && (collapsed || !desktopQuery.matches));
-                shell.classList.toggle('md:w-28', isMedium && (collapsed || desktopQuery.matches));
+                shell.classList.toggle('w-[76px]', isMedium && collapsed);
+                shell.classList.toggle('md:w-[76px]', isMedium && (collapsed || desktopQuery.matches));
                 shell.classList.toggle('xl:w-[280px]', isMedium && !collapsed && desktopQuery.matches);
-                shell.classList.toggle('xl:w-28', isMedium && collapsed && desktopQuery.matches);
-            }
-
-            if (header) {
-                if (!isMedium) {
-                    header.style.marginLeft = '0px';
-                    header.style.width = '100%';
-                } else {
-                    const sidebarWidth = collapsed ? '112px' : (desktopQuery.matches ? '280px' : '300px');
-                    header.style.marginLeft = sidebarWidth;
-                    header.style.width = 'calc(100% - ' + sidebarWidth + ')';
-                }
+                shell.classList.toggle('xl:w-[76px]', isMedium && collapsed && desktopQuery.matches);
             }
 
             toggles.forEach(function (toggle) {
@@ -149,35 +268,74 @@
                 profile.classList.toggle('block', !collapsed);
             }
 
+            if (railLogout) {
+                railLogout.classList.toggle('hidden', !collapsed);
+                railLogout.classList.toggle('block', collapsed);
+            }
+
             setToggleIcon(collapsed ? 'menu' : 'x');
         }
 
-        setCollapsed(!desktopQuery.matches);
+        setCollapsed(true);
 
         groupSummaries.forEach(function (summary) {
             summary.addEventListener('click', function (event) {
                 if (!isCollapsed) {
+                    closeFloatingMenu();
                     return;
                 }
                 event.preventDefault();
-                setCollapsed(false);
-                summary.parentElement.open = true;
+                event.stopPropagation();
+                summary.parentElement.open = false;
+                openFloatingMenu(summary);
             });
         });
 
-        function handleToggleClick() {
-            const isExpanded = mobileToggle.getAttribute('aria-expanded') === 'true';
-            setCollapsed(isExpanded);
+        sidebarLinks.forEach(function (link) {
+            link.addEventListener('click', function () {
+                markActiveLink(link.href);
+                closeFloatingMenu();
+            });
+        });
+
+        document.addEventListener('click', function (event) {
+            if (!floatingMenu) {
+                return;
+            }
+            if (sidebar.contains(event.target) || floatingMenu.contains(event.target)) {
+                return;
+            }
+            closeFloatingMenu();
+        });
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') {
+                closeFloatingMenu();
+            }
+        });
+
+        window.addEventListener('resize', closeFloatingMenu);
+        window.addEventListener('scroll', closeFloatingMenu, true);
+
+        function handleToggleClick(event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            const nextCollapsed = sidebar.dataset.collapsed !== 'true';
+            setCollapsed(nextCollapsed);
         }
 
         desktopToggle.addEventListener('click', handleToggleClick);
-        mobileToggle.addEventListener('click', handleToggleClick);
+        if (mobileToggle) {
+            mobileToggle.addEventListener('click', handleToggleClick);
+        }
 
-        desktopQuery.addEventListener('change', function (event) {
-            setCollapsed(!event.matches);
+        desktopQuery.addEventListener('change', function () {
+            setCollapsed(true);
         });
         mediumQuery.addEventListener('change', function () {
-            setCollapsed(!desktopQuery.matches);
+            setCollapsed(true);
         });
     });
 </script>

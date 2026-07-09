@@ -752,7 +752,7 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertEqual(period.mulai, start)
         self.assertEqual(period.selesai, end)
 
-    def test_laboran_dapat_mengakhiri_periode_dan_menonaktifkan_asleb(self):
+    def test_laboran_dapat_mengakhiri_periode_dan_mereset_jadwal_praktikum_asleb(self):
         period = PeriodeAsleb.get_for_date(timezone.localdate())
         akun_asleb = Pengguna.objects.create(
             nama_pengguna='Aslab Akhir Periode', nim_nik='0640020999',
@@ -768,10 +768,15 @@ class PendaftaranAslebViewTests(TestCase):
         room, _ = RuanganLab.objects.get_or_create(
             kode='LAB-PERIODE-TEST', defaults={'nama': 'Lab Periode Test', 'kapasitas': 30}
         )
-        jadwal = JadwalPraktikum.objects.create(
+        jadwal_diajukan = JadwalPraktikum.objects.create(
             mata_kuliah=str(self.matkul), kelas=self.matkul.kelas, ruangan=room,
             pengampu=self.matkul.dosen, hari='senin', waktu_mulai='09:00',
             waktu_selesai='11:00', status=JadwalPraktikum.STATUS_DIAJUKAN,
+        )
+        jadwal_diterima = JadwalPraktikum.objects.create(
+            mata_kuliah=str(self.matkul), kelas=f'{self.matkul.kelas}-B', ruangan=room,
+            pengampu=self.matkul.dosen, hari='selasa', waktu_mulai='13:00',
+            waktu_selesai='15:00', status=JadwalPraktikum.STATUS_DITERIMA,
         )
 
         response = self.client.post(reverse('pendaftaran_asleb:periode_end', args=[period.pk]), {
@@ -783,12 +788,14 @@ class PendaftaranAslebViewTests(TestCase):
         period.refresh_from_db()
         akun_asleb.refresh_from_db()
         asleb.refresh_from_db()
-        jadwal.refresh_from_db()
+        jadwal_diajukan.refresh_from_db()
+        jadwal_diterima.refresh_from_db()
         self.assertEqual(period.diakhiri_oleh, self.laboran)
         self.assertIsNotNone(period.diakhiri_pada)
         self.assertEqual(akun_asleb.role, 'mahasiswa')
         self.assertEqual(asleb.status, 'nonaktif')
-        self.assertEqual(jadwal.status, JadwalPraktikum.STATUS_DITOLAK)
+        self.assertEqual(jadwal_diajukan.status, JadwalPraktikum.STATUS_DITOLAK)
+        self.assertEqual(jadwal_diterima.status, JadwalPraktikum.STATUS_DITOLAK)
 
     def test_admin_tidak_dapat_mengakhiri_periode_asleb(self):
         period = PeriodeAsleb.get_for_date(timezone.localdate())

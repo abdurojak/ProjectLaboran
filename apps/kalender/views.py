@@ -23,7 +23,10 @@ def get_visible_kegiatan_queryset(pengguna):
 
     return queryset.filter(
         Q(dibuat_oleh=pengguna) |
-        Q(target_role__contains=pengguna.role) |
+        Q(
+            dibuat_oleh__role__in=['admin', 'laboran'],
+            target_role__contains=pengguna.role,
+        ) |
         Q(dibuat_oleh__isnull=True, target_role='')
     )
 

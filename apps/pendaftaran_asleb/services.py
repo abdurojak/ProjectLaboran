@@ -64,7 +64,10 @@ def sync_expired_asleb_periods(value=None):
         from apps.jadwal.models import JadwalPraktikum, PermintaanPerubahanJadwal
         JadwalPraktikum.objects.filter(
             mata_kuliah__in=affected_matkul,
-            status=JadwalPraktikum.STATUS_DIAJUKAN,
+            status__in=[
+                JadwalPraktikum.STATUS_DIAJUKAN,
+                JadwalPraktikum.STATUS_DITERIMA,
+            ],
         ).update(status=JadwalPraktikum.STATUS_DITOLAK)
         PermintaanPerubahanJadwal.objects.filter(
             diajukan_oleh__nim_nik__in=expired_nims,

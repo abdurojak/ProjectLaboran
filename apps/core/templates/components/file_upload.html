@@ -3,6 +3,9 @@
     data-file-upload
     data-empty-label="{{ empty_label|default:'Belum ada file dipilih' }}"
     data-delete-label="{{ delete_label|default:'File akan dihapus saat disimpan' }}"
+    data-initial-file-name="{% if current_file %}{{ current_file.name }}{% else %}{{ empty_label|default:'Belum ada file dipilih' }}{% endif %}"
+    data-initial-preview-src="{% if current_file %}{{ current_file.url }}{% endif %}"
+    data-has-initial-preview="{% if current_file %}true{% else %}false{% endif %}"
 >
     <div class="sr-only">{{ field }}</div>
     <div class="mt-3 rounded-[24px] border border-dashed border-brand-200 bg-brand-50/40 p-5">

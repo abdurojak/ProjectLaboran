@@ -1,81 +1,249 @@
 {% load static %}
 
-<header class="sticky top-0 z-20 bg-gradient-to-r from-brand-900 via-brand-800 to-brand-700 text-white shadow-lg shadow-brand-900/20 backdrop-blur">
-    <div class="mx-auto grid max-w-[1500px] gap-3 px-5 py-4 lg:px-7">
-        <div class="flex items-center border-b border-white/15 pb-3 md:hidden">
-            <button id="dashboard-sidebar-mobile-toggle" type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/15 bg-white/15 p-0 text-white shadow-sm backdrop-blur transition hover:bg-white/20" aria-label="Buka menu dashboard" title="Buka menu" aria-expanded="false">
+<style>
+    body {
+        --labhub-page-padding: 1rem;
+        --labhub-shell-width: 0rem;
+        --labhub-main-gap: 0rem;
+    }
+
+    body > header.labhub-topbar {
+        background: transparent !important;
+        border-bottom: 0 !important;
+        color: var(--topbar-action-text, #ffffff) !important;
+        box-shadow: none !important;
+        overflow: visible;
+        padding-inline: 0;
+        pointer-events: none;
+        transition: color 180ms ease;
+    }
+
+    .labhub-topbar [data-labhub-topbar-inner] {
+        position: relative;
+        isolation: isolate;
+        width: auto;
+        margin-left: calc(var(--labhub-page-padding) + var(--labhub-shell-width) + var(--labhub-main-gap));
+        margin-right: var(--labhub-page-padding);
+        pointer-events: auto;
+        transition: transform 180ms ease;
+    }
+
+    .labhub-topbar [data-labhub-topbar-inner]::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: 2rem;
+        background: var(--topbar-panel-bg, rgba(15, 23, 42, 0.82));
+        border: 1px solid var(--topbar-panel-border, rgba(148, 163, 184, 0.14));
+        box-shadow: var(--topbar-panel-shadow, 0 18px 44px rgba(2, 6, 23, 0.18));
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+        opacity: 0;
+        transform: translateY(-8px) scale(0.995);
+        transform-origin: 50% 0%;
+        pointer-events: none;
+        transition: opacity 180ms ease, transform 180ms ease;
+        z-index: -1;
+    }
+
+    .labhub-topbar.is-scrolled [data-labhub-topbar-inner]::before {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+
+    .labhub-topbar .labhub-topbar-brand {
+        position: relative;
+        background: var(--topbar-brand-bg, rgba(15, 23, 42, 0.30)) !important;
+        border-color: var(--topbar-brand-border, rgba(255, 255, 255, 0.08)) !important;
+        box-shadow: var(--topbar-panel-shadow, 0 14px 34px rgba(2, 6, 23, 0.12)) !important;
+        color: var(--topbar-title, #ffffff) !important;
+        padding: 0.55rem 0.9rem !important;
+    }
+
+    .labhub-topbar .labhub-topbar-logo {
+        background: var(--topbar-logo-bg, rgba(255, 255, 255, 0.08)) !important;
+        border: 1px solid var(--topbar-logo-border, rgba(255, 255, 255, 0.12)) !important;
+        box-shadow: var(--topbar-panel-shadow, 0 12px 28px rgba(2, 6, 23, 0.20)) !important;
+    }
+
+    .labhub-topbar .labhub-topbar-title {
+        color: var(--topbar-title, #ffffff) !important;
+        text-shadow: 0 1px 0 rgba(2, 6, 23, 0.18);
+    }
+
+    .labhub-topbar .labhub-topbar-subtitle {
+        color: var(--topbar-subtitle, rgba(224, 242, 254, 0.78)) !important;
+    }
+
+    .labhub-topbar .labhub-topbar-profile {
+        background: transparent !important;
+        border-color: transparent !important;
+        box-shadow: none !important;
+        color: var(--topbar-action-text, #ffffff) !important;
+    }
+
+    .labhub-topbar .labhub-topbar-profile-name {
+        color: var(--topbar-title, #ffffff) !important;
+    }
+
+    .labhub-topbar .labhub-topbar-profile-role {
+        color: var(--topbar-subtitle, rgba(224, 242, 254, 0.62)) !important;
+    }
+
+    .labhub-topbar [data-profile-menu-toggle],
+    .labhub-topbar [aria-label="Buka notifikasi"],
+    .labhub-topbar #dashboard-sidebar-mobile-toggle {
+        background: var(--topbar-action-bg, rgba(255, 255, 255, 0.10)) !important;
+        border-color: var(--topbar-action-border, rgba(255, 255, 255, 0.15)) !important;
+        color: var(--topbar-action-text, #ffffff) !important;
+        --tw-ring-color: var(--topbar-action-border, rgba(255, 255, 255, 0.15)) !important;
+    }
+
+    .labhub-topbar [data-profile-menu-toggle]:hover,
+    .labhub-topbar [aria-label="Buka notifikasi"]:hover,
+    .labhub-topbar #dashboard-sidebar-mobile-toggle:hover {
+        filter: brightness(1.04);
+    }
+
+    .labhub-topbar [data-profile-menu] {
+        background: var(--topbar-menu-bg, rgba(255, 255, 255, 0.96)) !important;
+        border-color: var(--topbar-menu-border, rgba(226, 232, 240, 0.96)) !important;
+        color: var(--topbar-menu-text, #0f172a) !important;
+    }
+
+    .labhub-topbar [data-profile-menu] .text-slate-900,
+    .labhub-topbar [data-profile-menu] .text-slate-700 {
+        color: var(--topbar-menu-text, #0f172a) !important;
+    }
+
+    .labhub-topbar [data-profile-menu] .text-slate-500 {
+        color: var(--topbar-menu-muted, #64748b) !important;
+    }
+
+    .labhub-topbar [data-profile-menu] a:hover,
+    .labhub-topbar [data-profile-menu] button:hover {
+        background: var(--hover-bg, rgba(32, 164, 171, 0.10)) !important;
+    }
+
+    .labhub-topbar [data-realtime-notification-count] {
+        --tw-ring-color: var(--topbar-badge-ring, rgba(255, 255, 255, 0.92)) !important;
+    }
+
+    @media (min-width: 768px) {
+        body {
+            --labhub-page-padding: 1rem;
+            --labhub-shell-width: 4rem;
+            --labhub-main-gap: 1.5rem;
+        }
+
+        body.dashboard-sidebar-expanded {
+            --labhub-shell-width: 18.75rem;
+        }
+    }
+
+    @media (min-width: 1280px) {
+        body {
+            --labhub-page-padding: 1.75rem;
+            --labhub-shell-width: 4rem;
+            --labhub-main-gap: 1.5rem;
+        }
+
+        body.dashboard-sidebar-expanded {
+            --labhub-shell-width: 17.5rem;
+        }
+    }
+
+    @media (max-width: 767px) {
+        .labhub-topbar [data-labhub-topbar-inner]::before {
+            border-radius: 1.5rem;
+        }
+    }
+
+</style>
+
+<header class="labhub-topbar sticky top-0 z-20">
+    <div class="relative flex min-h-[84px] items-center gap-4 px-5 py-4 lg:px-7" data-labhub-topbar-inner>
+        <div class="flex items-center md:hidden">
+            <button id="dashboard-sidebar-mobile-toggle" type="button" class="inline-flex h-12 w-12 items-center justify-center rounded-full border p-0 shadow-lg shadow-slate-950/20 transition" aria-label="Buka menu dashboard" title="Buka menu" aria-expanded="false">
                 <i data-lucide="menu" class="h-4 w-4"></i>
             </button>
         </div>
 
-        <div class="flex min-w-0 items-center gap-4">
-            <a href="{% url 'dashboard:home' %}" class="flex min-w-0 items-center gap-4 rounded-2xl transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/50" aria-label="Kembali ke dashboard">
-                <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15 backdrop-blur">
-                    <img src="{% static 'core/img/labhub-logo.png' %}" alt="LabHub" class="h-11 w-11 object-contain">
+        <div class="flex min-w-0 flex-1 items-center justify-between gap-4">
+            <a href="{% url 'dashboard:home' %}" class="labhub-topbar-brand flex min-w-0 items-center gap-3 rounded-[24px] border px-4 py-3 shadow-xl shadow-slate-950/10 backdrop-blur-xl transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-cyan-200/60" aria-label="Kembali ke dashboard">
+                <div class="labhub-topbar-logo flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl shadow-lg shadow-slate-950/20 ring-1 ring-white/10">
+                    <img src="{% static 'core/img/labhub-logo.png' %}" alt="LabHub" class="h-8 w-8 object-contain">
                 </div>
                 <div class="min-w-0">
-                    <h1 class="truncate text-2xl font-bold tracking-tight">LabHub</h1>
-                    <p class="truncate text-sm text-white/75">Portal operasional lab JTIF Usakti</p>
+                    <h1 class="labhub-topbar-title truncate text-lg font-black leading-tight tracking-tight">LabHub</h1>
+                    <p class="labhub-topbar-subtitle truncate text-xs font-semibold">Portal operasional lab JTIF Usakti</p>
                 </div>
             </a>
 
-            <div class="relative ml-auto flex shrink-0 items-center gap-3" data-profile-menu-root>
-                <button type="button" class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/15 text-lg font-black backdrop-blur transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/60" data-profile-menu-toggle aria-label="Buka menu profil" aria-expanded="false">
-                    {% if current_pengguna and current_pengguna.foto %}
-                    <img src="{{ current_pengguna.foto.url }}" alt="{{ current_pengguna.nama_pengguna }}" class="h-full w-full object-cover">
-                    {% else %}
-                    <i data-lucide="circle-user-round" class="h-7 w-7"></i>
-                    {% endif %}
-                </button>
-                <div class="hidden xl:block">
-                    {% if current_pengguna %}
-                    <div class="font-semibold">{{ current_pengguna.nama_pengguna }}</div>
-                    <div class="text-sm text-white/75">{{ current_pengguna.get_role_display }}</div>
-                    {% else %}
-                    <a href="{% url 'pengguna:login' %}" class="font-semibold hover:text-white">Login</a>
-                    <div class="text-sm text-white/75">Belum masuk</div>
-                    {% endif %}
-                </div>
+            <div class="ml-auto flex shrink-0 items-center gap-4">
+                <a href="{% url 'kalender:notifikasi_list' %}" class="relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full ring-2 shadow-md shadow-slate-950/15 transition focus:outline-none focus:ring-2 focus:ring-cyan-200/60" aria-label="Buka notifikasi" title="Notifikasi">
+                    <i data-lucide="bell" class="h-5 w-5"></i>
+                    <span data-realtime-notification-count class="absolute -right-1 -top-1 {% if not unread_notification_count %}hidden {% endif %}flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[10px] font-black leading-none text-white ring-2">{{ unread_notification_count|default:0 }}</span>
+                </a>
 
-                <div class="absolute right-0 top-full z-50 mt-3 hidden w-64 overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-xl shadow-slate-900/15" data-profile-menu>
-                    {% if current_pengguna %}
-                    <div class="border-b border-slate-100 px-4 py-3">
-                        <div class="truncate font-semibold text-slate-900">{{ current_pengguna.nama_pengguna }}</div>
-                        <div class="truncate text-sm text-slate-500">{{ current_pengguna.get_role_display }}</div>
-                    </div>
-                    <div class="grid p-2 text-sm font-semibold">
-                        {% if request.resolver_match.namespace == "pengguna" and request.resolver_match.url_name in "register forgot_password reset_password verify_register" %}
-                        <a href="{% url 'dashboard:home' %}" class="flex items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-slate-50">
-                            <i data-lucide="arrow-left" class="h-4 w-4 text-brand-700"></i>
-                            <span>Kembali</span>
-                        </a>
+                <div class="labhub-topbar-profile relative flex shrink-0 items-center gap-3 rounded-full border px-2 py-2 shadow-xl shadow-slate-950/10 backdrop-blur-xl" data-profile-menu-root>
+                    <button type="button" class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full text-lg font-black ring-2 shadow-md shadow-slate-950/15 transition focus:outline-none focus:ring-2 focus:ring-cyan-200/60" data-profile-menu-toggle aria-label="Buka menu profil" aria-expanded="false">
+                        {% if current_pengguna and current_pengguna.foto %}
+                        <img src="{{ current_pengguna.foto.url }}" alt="{{ current_pengguna.nama_pengguna }}" class="h-full w-full object-cover">
                         {% else %}
-                        <a href="{% url 'pengguna:detail' current_pengguna.pk %}" class="flex items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-slate-50">
-                            <i data-lucide="user-round" class="h-4 w-4 text-brand-700"></i>
-                            <span>Profil Saya</span>
-                        </a>
-                        <a href="{% url 'kalender:notifikasi_list' %}" class="flex items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-slate-50">
-                            <i data-lucide="bell" class="h-4 w-4 text-brand-700"></i>
-                            <span>Notifikasi</span>
-                            <span data-realtime-notification-count class="ml-auto {% if not unread_notification_count %}hidden {% endif %}flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-50 px-1.5 text-xs font-bold text-rose-700">{{ unread_notification_count|default:0 }}</span>
-                        </a>
-                        <form method="post" action="{% url 'pengguna:logout' %}">
-                            {% csrf_token %}
-                            <button type="submit" class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-rose-600 transition hover:bg-rose-50">
-                                <i data-lucide="log-out" class="h-4 w-4"></i>
-                                <span>Logout</span>
-                            </button>
-                        </form>
+                        <i data-lucide="circle-user-round" class="h-7 w-7"></i>
+                        {% endif %}
+                    </button>
+                    <div class="hidden xl:block">
+                        {% if current_pengguna %}
+                        <div class="labhub-topbar-profile-name max-w-48 truncate font-bold">{{ current_pengguna.nama_pengguna }}</div>
+                        <div class="labhub-topbar-profile-role text-xs font-semibold">{{ current_pengguna.get_role_display }}</div>
+                        {% else %}
+                        <a href="{% url 'pengguna:login' %}" class="font-semibold">Login</a>
+                        <div class="labhub-topbar-profile-role text-sm">Belum masuk</div>
                         {% endif %}
                     </div>
-                    {% else %}
-                    <div class="grid p-2 text-sm font-semibold">
-                        <a href="{% url 'pengguna:login' %}" class="flex items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-slate-50">
-                            <i data-lucide="log-in" class="h-4 w-4 text-brand-700"></i>
-                            <span>Login</span>
-                        </a>
+
+                    <div class="absolute right-0 top-full z-50 mt-3 hidden w-64 overflow-hidden rounded-2xl border shadow-xl shadow-slate-900/15" data-profile-menu>
+                        {% if current_pengguna %}
+                        <div class="border-b border-slate-100 px-4 py-3">
+                            <div class="truncate font-semibold text-slate-900">{{ current_pengguna.nama_pengguna }}</div>
+                            <div class="truncate text-sm text-slate-500">{{ current_pengguna.get_role_display }}</div>
+                        </div>
+                        <div class="grid p-2 text-sm font-semibold">
+                            {% if request.resolver_match.namespace == "pengguna" and request.resolver_match.url_name in "register forgot_password reset_password verify_register" %}
+                            <a href="{% url 'dashboard:home' %}" class="flex items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-slate-50">
+                                <i data-lucide="arrow-left" class="h-4 w-4 text-brand-700"></i>
+                                <span>Kembali</span>
+                            </a>
+                            {% else %}
+                            <a href="{% url 'pengguna:detail' current_pengguna.pk %}" class="flex items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-slate-50">
+                                <i data-lucide="user-round" class="h-4 w-4 text-brand-700"></i>
+                                <span>Profil Saya</span>
+                            </a>
+                            <a href="{% url 'kalender:notifikasi_list' %}" class="flex items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-slate-50">
+                                <i data-lucide="bell" class="h-4 w-4 text-brand-700"></i>
+                                <span>Notifikasi</span>
+                                <span data-realtime-notification-count class="ml-auto {% if not unread_notification_count %}hidden {% endif %}flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-50 px-1.5 text-xs font-bold text-rose-700">{{ unread_notification_count|default:0 }}</span>
+                            </a>
+                            <form method="post" action="{% url 'pengguna:logout' %}">
+                                {% csrf_token %}
+                                <button type="submit" class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-rose-600 transition hover:bg-rose-50">
+                                    <i data-lucide="log-out" class="h-4 w-4"></i>
+                                    <span>Logout</span>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                        {% else %}
+                        <div class="grid p-2 text-sm font-semibold">
+                            <a href="{% url 'pengguna:login' %}" class="flex items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-slate-50">
+                                <i data-lucide="log-in" class="h-4 w-4 text-brand-700"></i>
+                                <span>Login</span>
+                            </a>
+                        </div>
+                        {% endif %}
                     </div>
-                    {% endif %}
                 </div>
             </div>
         </div>
@@ -85,6 +253,15 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        const topbar = document.querySelector('.labhub-topbar');
+        if (topbar) {
+            const syncTopbarState = function () {
+                topbar.classList.toggle('is-scrolled', window.scrollY > 12);
+            };
+            syncTopbarState();
+            window.addEventListener('scroll', syncTopbarState, { passive: true });
+        }
+
         const root = document.querySelector('[data-profile-menu-root]');
         if (!root) {
             return;

@@ -590,9 +590,79 @@
             document.body.classList.toggle('overflow-hidden', Boolean(dialogOpen));
         }
 
+        function resetFileUploadComponent(component) {
+            if (!component) {
+                return;
+            }
+
+            const fileName = component.querySelector('[data-file-name]');
+            const previewWrapper = component.querySelector('[data-preview-wrapper]');
+            const previewImage = component.querySelector('[data-preview-image]');
+            const fileInput = component.querySelector('input[type="file"]');
+            const initialFileName = component.dataset.initialFileName || component.dataset.emptyLabel || 'Belum ada file dipilih';
+            const initialPreviewSrc = component.dataset.initialPreviewSrc || '';
+            const hasInitialPreview = component.dataset.hasInitialPreview === 'true';
+
+            if (fileInput) {
+                fileInput.value = '';
+            }
+
+            if (fileName) {
+                fileName.textContent = initialFileName;
+            }
+
+            if (previewImage) {
+                if (hasInitialPreview && initialPreviewSrc) {
+                    previewImage.src = initialPreviewSrc;
+                } else {
+                    previewImage.removeAttribute('src');
+                }
+            }
+
+            if (previewWrapper) {
+                previewWrapper.classList.toggle('hidden', !hasInitialPreview);
+            }
+        }
+
+        function syncExperienceFormState(form) {
+            if (!form) {
+                return;
+            }
+            const checkbox = form.querySelector('input[name="masih_berjalan"]');
+            const endWrap = form.querySelector('[data-end-date-wrap]');
+            const endInput = form.querySelector('input[name="tanggal_selesai"]');
+
+            if (checkbox && endWrap && endInput) {
+                endWrap.classList.toggle('hidden', checkbox.checked);
+                endInput.disabled = checkbox.checked;
+                if (checkbox.checked) {
+                    endInput.value = '';
+                }
+            }
+        }
+
+        function resetModalForms(modalElement) {
+            if (!modalElement) {
+                return;
+            }
+
+            modalElement.querySelectorAll('form').forEach(function (form) {
+                form.reset();
+                form.querySelectorAll('[data-file-upload]').forEach(resetFileUploadComponent);
+                syncExperienceFormState(form);
+            });
+
+            modalElement.querySelectorAll('input[type="hidden"][name="hapus_foto"]').forEach(function (input) {
+                input.value = '0';
+            });
+        }
+
         function setProfileOpen(isOpen) {
             if (!profileModal) {
                 return;
+            }
+            if (!isOpen) {
+                resetModalForms(profileModal);
             }
             profileModal.classList.toggle('hidden', !isOpen);
             profileModal.classList.toggle('flex', isOpen);
@@ -602,6 +672,9 @@
         function setOpen(isOpen) {
             if (!modal) {
                 return;
+            }
+            if (!isOpen) {
+                resetModalForms(modal);
             }
             modal.classList.toggle('hidden', !isOpen);
             modal.classList.toggle('flex', isOpen);
@@ -628,6 +701,9 @@
             }
             if (isOpen) {
                 showExperiencePanel(targetId);
+            } else {
+                resetModalForms(experienceModal);
+                showExperiencePanel('experience-category-panel');
             }
             experienceModal.classList.toggle('hidden', !isOpen);
             experienceModal.classList.toggle('flex', isOpen);
@@ -710,16 +786,11 @@
 
         document.querySelectorAll('[data-experience-modal] form').forEach(function (form) {
             const checkbox = form.querySelector('input[name="masih_berjalan"]');
-            const endWrap = form.querySelector('[data-end-date-wrap]');
-            const endInput = form.querySelector('input[name="tanggal_selesai"]');
-            if (!checkbox || !endWrap || !endInput) return;
-            function syncEndDate() {
-                endWrap.classList.toggle('hidden', checkbox.checked);
-                endInput.disabled = checkbox.checked;
-                if (checkbox.checked) endInput.value = '';
-            }
-            checkbox.addEventListener('change', syncEndDate);
-            syncEndDate();
+            if (!checkbox) return;
+            checkbox.addEventListener('change', function () {
+                syncExperienceFormState(form);
+            });
+            syncExperienceFormState(form);
         });
     });
 
