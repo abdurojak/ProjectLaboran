@@ -352,7 +352,7 @@ class AbsensiAsleb(models.Model):
     )
     modul_praktikum = models.ForeignKey(
         ModulPraktikum,
-        on_delete=models.PROTECT,
+        on_delete=models.SET_NULL,
         related_name='absensi',
         blank=True,
         null=True,
@@ -475,7 +475,15 @@ class HasilPraktikumMahasiswa(models.Model):
     ]
 
     peserta = models.ForeignKey(PesertaPraktikum, on_delete=models.SET_NULL, blank=True, null=True, related_name='hasil_praktikum')
-    modul = models.ForeignKey(ModulPraktikum, on_delete=models.PROTECT, related_name='hasil_mahasiswa')
+    modul = models.ForeignKey(
+        ModulPraktikum,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='hasil_mahasiswa',
+    )
+    modul_nomor = models.PositiveSmallIntegerField('Nomor modul', blank=True, null=True)
+    modul_judul = models.CharField('Judul modul', max_length=200, blank=True)
     peserta_nim = models.CharField('NIM peserta', max_length=40, blank=True)
     peserta_nama = models.CharField('Nama peserta', max_length=150, blank=True)
     matkul_label = models.CharField('Mata kuliah', max_length=250, blank=True)
@@ -516,7 +524,7 @@ class HasilPraktikumMahasiswa(models.Model):
     diperbarui_pada = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['modul__nomor', 'peserta__nama']
+        ordering = ['modul_nomor', 'peserta__nama']
         constraints = [
             models.UniqueConstraint(fields=['peserta', 'modul'], name='unique_hasil_peserta_per_modul'),
         ]
@@ -530,6 +538,9 @@ class HasilPraktikumMahasiswa(models.Model):
             raise ValidationError({'modul': 'Modul harus berasal dari mata kuliah peserta.'})
 
     def save(self, *args, **kwargs):
+        if self.modul_id:
+            self.modul_nomor = self.modul.nomor
+            self.modul_judul = self.modul.judul
         if self.peserta_id:
             self.peserta_nim = self.peserta.nim
             self.peserta_nama = self.peserta.nama
@@ -558,7 +569,8 @@ class HasilPraktikumMahasiswa(models.Model):
 
     def __str__(self):
         nama = self.peserta.nama if self.peserta_id else self.peserta_nama
-        return f'{nama} - {self.modul} - {self.get_status_absensi_display()}'
+        modul_label = self.modul or f'Modul {self.modul_nomor or "-"}'
+        return f'{nama} - {modul_label} - {self.get_status_absensi_display()}'
 
 
 class PengingatAbsensiAsleb(models.Model):

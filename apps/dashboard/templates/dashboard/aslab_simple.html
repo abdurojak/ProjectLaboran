@@ -71,28 +71,28 @@
         </div>
     </section>
 
-    <section class="grid gap-6 xl:grid-cols-3">
-        <div class="surface-card p-5 md:p-6">
+    <section class="grid min-w-0 gap-6 xl:grid-cols-[repeat(3,minmax(0,1fr))]">
+        <div class="surface-card min-w-0 overflow-hidden p-5 md:p-6">
             <div><p class="text-xs font-black uppercase tracking-[0.2em] text-emerald-700">Modul</p><h3 class="mt-2 text-xl font-black text-slate-900">Modul Terbaru</h3></div>
             <div class="mt-5 grid gap-3">
                 {% for modul in modul_terbaru %}
-                <a href="{% url 'asleb:modul_download' modul.pk %}" class="dashboard-list-item flex items-center gap-4 rounded-3xl border border-slate-200 px-4 py-3 transition hover:bg-emerald-50/40">
+                <a href="{% url 'asleb:modul_download' modul.pk %}" class="dashboard-list-item flex min-w-0 items-center gap-4 overflow-hidden rounded-3xl border border-slate-200 px-4 py-3 transition hover:bg-emerald-50/40">
                     <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700"><i data-lucide="file-text" class="h-5 w-5"></i></span>
-                    <div class="min-w-0 flex-1"><p class="truncate font-black text-slate-900">Modul {{ modul.nomor }} · {{ modul.judul }}</p><p class="mt-1 truncate text-xs font-semibold text-slate-500">{{ modul.matkul.kelas }}</p></div>
+                    <div class="min-w-0 flex-1 overflow-hidden"><p class="truncate font-black text-slate-900">Modul {{ modul.nomor }} · {{ modul.judul }}</p><p class="mt-1 truncate text-xs font-semibold text-slate-500">{{ modul.matkul.kelas }}</p></div>
                 </a>
                 {% empty %}<div class="rounded-3xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">Belum ada modul terbaru.</div>{% endfor %}
             </div>
         </div>
 
-        <div class="surface-card p-5 md:p-6">
+        <div class="surface-card min-w-0 overflow-hidden p-5 md:p-6">
             <div><p class="text-xs font-black uppercase tracking-[0.2em] text-cyan-700">Absensi</p><h3 class="mt-2 text-xl font-black text-slate-900">Catatan Terbaru</h3></div>
             <div class="mt-5 grid gap-3">
                 {% for hasil in hasil_absensi_terbaru %}
-                <article class="dashboard-list-item flex items-center gap-4 rounded-3xl border border-slate-200 px-4 py-3">
+                <article class="dashboard-list-item flex min-w-0 items-center gap-4 overflow-hidden rounded-3xl border border-slate-200 px-4 py-3">
                     <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-cyan-50 text-cyan-700"><i data-lucide="clipboard-check" class="h-5 w-5"></i></span>
-                    <div class="min-w-0 flex-1">
+                    <div class="min-w-0 flex-1 overflow-hidden">
                         <p class="truncate font-black text-slate-900">{% if hasil.peserta_nama %}{{ hasil.peserta_nama }}{% elif hasil.peserta %}{{ hasil.peserta.nama }}{% else %}Peserta tidak tersedia{% endif %}</p>
-                        <p class="mt-1 truncate text-xs font-semibold text-slate-500">Modul {{ hasil.modul.nomor }} · {{ hasil.matkul_label|default:hasil.modul.matkul }} · {{ hasil.tanggal_praktikum|date:"d M Y" }}</p>
+                        <p class="mt-1 truncate text-xs font-semibold text-slate-500">Modul {{ hasil.modul_nomor|default:hasil.modul.nomor|default:"-" }} · {{ hasil.matkul_label|default:hasil.modul.matkul|default:"Arsip modul" }} · {{ hasil.tanggal_praktikum|date:"d M Y" }}</p>
                     </div>
                     <span class="rounded-full bg-cyan-100 px-3 py-1 text-xs font-black text-cyan-700">{{ hasil.get_status_absensi_display }}</span>
                 </article>
@@ -100,13 +100,13 @@
             </div>
         </div>
 
-        <div class="surface-card p-5 md:p-6">
+        <div class="surface-card min-w-0 overflow-hidden p-5 md:p-6">
             <div><p class="text-xs font-black uppercase tracking-[0.2em] text-violet-700">Notifikasi</p><h3 class="mt-2 text-xl font-black text-slate-900">Info dari Laboran</h3></div>
             <div class="mt-5 grid gap-3">
                 {% for notif in notifikasi_terbaru %}
-                <a href="{{ notif.url|default:'#' }}" class="dashboard-list-item flex items-center gap-4 rounded-3xl border border-slate-200 px-4 py-3 transition hover:bg-violet-50/40">
+                <a href="{{ notif.url|default:'#' }}" class="dashboard-list-item flex min-w-0 items-center gap-4 overflow-hidden rounded-3xl border border-slate-200 px-4 py-3 transition hover:bg-violet-50/40">
                     <span class="{{ notif.icon_class }} flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl"><i data-lucide="{{ notif.icon }}" class="h-5 w-5"></i></span>
-                    <div class="min-w-0 flex-1"><p class="truncate font-black text-slate-900">{{ notif.judul }}</p><p class="mt-1 truncate text-xs font-semibold text-slate-500">{{ notif.deskripsi|default:notif.tanggal }}</p></div>
+                    <div class="min-w-0 flex-1 overflow-hidden"><p class="truncate font-black text-slate-900">{{ notif.judul }}</p><p class="mt-1 truncate text-xs font-semibold text-slate-500">{{ notif.deskripsi|default:notif.tanggal }}</p></div>
                     <span class="rounded-full {% if notif.is_read %}bg-slate-100 text-slate-500{% else %}bg-violet-100 text-violet-700{% endif %} px-3 py-1 text-xs font-black">{% if notif.is_read %}Dibaca{% else %}Baru{% endif %}</span>
                 </a>
                 {% empty %}<div class="rounded-3xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">Tidak ada notifikasi baru.</div>{% endfor %}

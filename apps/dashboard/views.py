@@ -12,7 +12,7 @@ from django.views.generic import TemplateView
 
 from apps.asleb.models import AbsensiAsleb, Asleb, HonorAsleb, HasilPraktikumMahasiswa, ModulPraktikum, PesertaPraktikum
 from apps.inventaris.models import ACTIVE_PEMINJAMAN_STATUSES, Barang, InventarisBarang
-from apps.jadwal.models import JadwalPraktikum
+from apps.jadwal.models import JadwalPraktikum, PermintaanPerubahanJadwal
 from apps.jadwal.notifications import send_jadwal_status_notification
 from apps.kalender.realtime import (
     send_peminjaman_rejected_update,
@@ -378,6 +378,9 @@ class DashboardView(TemplateView):
         context['jadwal_diajukan'] = JadwalPraktikum.objects.select_related('ruangan').filter(
             status=JadwalPraktikum.STATUS_DIAJUKAN,
         ).order_by('hari', 'waktu_mulai')[:8]
+        context['permintaan_perubahan_jadwal'] = PermintaanPerubahanJadwal.objects.select_related(
+            'jadwal', 'matkul', 'ruangan', 'ruangan_tambahan', 'diajukan_oleh'
+        ).filter(status='diajukan')[:8]
         context['today'] = timezone.localdate()
         hari_ini = self.WEEKDAY_TO_HARI.get(context['today'].weekday())
         context['stats_cards'] = self._decorate_items([
