@@ -317,6 +317,8 @@ class ModulPraktikum(models.Model):
     nomor = models.PositiveSmallIntegerField()
     judul = models.CharField(max_length=200)
     file = models.FileField(upload_to='modul_praktikum/')
+    file_type = models.CharField(max_length=20, blank=True)
+    file_size = models.PositiveBigIntegerField(blank=True, null=True)
     diunggah_oleh = models.ForeignKey(
         'pengguna.Pengguna',
         on_delete=models.SET_NULL,
@@ -337,6 +339,27 @@ class ModulPraktikum(models.Model):
 
     def __str__(self):
         return f'Modul {self.nomor} - {self.judul}'
+
+    @property
+    def file_extension(self):
+        name = (self.file.name or '').lower()
+        return name.rsplit('.', 1)[-1] if '.' in name else ''
+
+    @property
+    def is_pdf(self):
+        return self.file_extension == 'pdf'
+
+    def save(self, *args, **kwargs):
+        filename = (self.file.name or '').lower()
+        if filename.endswith('.pdf'):
+            self.file_type = 'pdf'
+        elif filename.endswith('.doc'):
+            self.file_type = 'doc'
+        elif filename.endswith('.docx'):
+            self.file_type = 'docx'
+        if self.file and hasattr(self.file, 'size'):
+            self.file_size = self.file.size
+        super().save(*args, **kwargs)
 
 
 class AbsensiAsleb(models.Model):
