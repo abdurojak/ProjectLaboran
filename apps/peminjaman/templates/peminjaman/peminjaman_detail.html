@@ -3,7 +3,7 @@
 {% block title %}Detail Peminjaman{% endblock %}
 
 {% block content %}
-<section class="mx-auto max-w-4xl space-y-6">
+<section id="peminjaman-detail-content" class="mx-auto max-w-4xl space-y-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
             <p class="text-sm font-bold uppercase tracking-[0.2em] text-amber-600">Peminjaman</p>
@@ -26,7 +26,14 @@
                                     </button>
                                  </form>
             {% endif %}
-            <a class="btn-secondary" href="{% url 'peminjaman:peminjaman_list' %}">
+            <a class="btn-secondary"
+               href="{% url 'peminjaman:peminjaman_list' %}"
+               data-no-page-transition="true"
+               hx-get="{% url 'peminjaman:peminjaman_list' %}"
+               hx-target="[data-app-content]"
+               hx-select="[data-app-content] > *"
+               hx-swap="innerHTML"
+               hx-push-url="true">
                 <i data-lucide="arrow-left" class="h-4 w-4"></i>
                 <span>Kembali</span>
             </a>
@@ -35,25 +42,18 @@
 
     <div class="surface-card grid gap-5 p-6 md:grid-cols-2 md:p-8">
         <div class="rounded-3xl bg-slate-50 p-5 md:col-span-2">
-            <div class="text-sm font-semibold text-slate-500">Foto Barang</div>
-            {% if peminjaman.barang.foto %}
-            <img src="{{ peminjaman.barang.foto.url }}" alt="Foto {{ peminjaman.barang.nama }}" class="mt-3 max-h-80 w-full rounded-2xl border border-slate-200 bg-white object-contain">
-            {% elif peminjaman.barang.inventaris and peminjaman.barang.inventaris.foto %}
-            <img src="{{ peminjaman.barang.inventaris.foto.url }}" alt="Foto {{ peminjaman.barang.inventaris.nama }}" class="mt-3 max-h-80 w-full rounded-2xl border border-slate-200 bg-white object-contain">
+            <div class="text-sm font-semibold text-slate-500">Foto Peminjam</div>
+            {% if peminjam_foto_url %}
+            <img src="{{ peminjam_foto_url }}" alt="Foto {{ peminjaman.nama_peminjam }}" class="mt-3 max-h-80 w-full rounded-2xl border border-slate-200 bg-white object-contain">
             {% else %}
             <div class="mt-3 rounded-2xl border border-dashed border-slate-200 bg-white px-5 py-12 text-center text-sm font-semibold text-slate-500">
-                Foto barang belum tersedia.
+                Foto peminjam belum tersedia.
             </div>
             {% endif %}
         </div>
         <div class="rounded-3xl bg-slate-50 p-5">
             <div class="text-sm font-semibold text-slate-500">Kode Pinjam</div>
             <div class="mt-2 text-xl font-bold text-slate-900">{{ peminjaman.kode_pinjam }}</div>
-        </div>
-        <div class="rounded-3xl bg-slate-50 p-5">
-            <div class="text-sm font-semibold text-slate-500">Barang</div>
-            <div class="mt-2 text-xl font-bold text-slate-900">{{ peminjaman.barang.nama }}</div>
-            <div class="mt-1 text-sm text-slate-500">{{ peminjaman.barang.kode_barang }}</div>
         </div>
         {% if peminjaman.paket %}
         <div class="rounded-3xl bg-brand-50 p-5">
@@ -92,19 +92,26 @@
             <p class="mt-1 text-sm text-slate-500">Semua barang yang tergabung dalam kode peminjaman ini.</p>
         </div>
         {% if is_manager %}
-        <form method="post" action="{% url 'peminjaman:peminjaman_detail_status_update' peminjaman.pk %}" class="border-b border-slate-100 px-6 py-4">
+        <form method="post" action="{% url 'peminjaman:peminjaman_detail_status_update' peminjaman.pk %}" class="space-y-5 border-b border-slate-100 px-6 py-4"
+              data-requires-selection
+              data-selection-name="detail_ids"
+              data-confirm-message="Lanjutkan perubahan status untuk detail barang yang dipilih? Status detail peminjaman terpilih akan ikut diperbarui."
+              hx-post="{% url 'peminjaman:peminjaman_detail_status_update' peminjaman.pk %}"
+              hx-target="#peminjaman-detail-content"
+              hx-select="#peminjaman-detail-content"
+              hx-swap="outerHTML">
             {% csrf_token %}
             <div class="flex flex-wrap items-end gap-3">
                 <div class="min-w-[220px] flex-1">
                     <label for="id_detail_status">Ubah status detail terpilih</label>
-                    <select id="id_detail_status" name="status">
+                    <select id="id_detail_status" name="status" required>
                         <option value="">Pilih status</option>
                         {% for value, label in detail_status_choices %}
                         <option value="{{ value }}">{{ label }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                <button type="submit" class="btn-primary gap-2 bg-amber-500 shadow-amber-500/20 hover:bg-amber-600">
+                <button type="submit" class="btn-primary gap-2 bg-amber-500 shadow-amber-500/20 hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-45" data-selection-submit disabled>
                     <i data-lucide="save" class="h-4 w-4"></i>
                     <span>Simpan</span>
                 </button>
@@ -119,6 +126,7 @@
                         <th>Kode Barang</th>
                         <th>Lokasi</th>
                         <th>Status</th>
+                        <th>Foto</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -133,6 +141,11 @@
                         <td>{{ detail.barang.kode_barang }}</td>
                         <td>{% if detail.barang.lokasi %}{{ detail.barang.lokasi.nama_lokasi }}{% else %}-{% endif %}</td>
                         <td>{{ detail.get_status_display }}</td>
+                        <td>
+                            <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-brand-700 transition hover:bg-brand-50" data-detail-photo-preview data-photo-title="{{ detail.barang.kode_barang }} - {{ detail.barang.nama }}" data-photo-url="{{ detail.barang_photo_url }}" aria-label="Lihat foto {{ detail.barang.kode_barang }}">
+                                <i data-lucide="eye" class="h-4 w-4"></i>
+                            </button>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -142,9 +155,123 @@
         </form>
         {% endif %}
     </div>
+
+    <div class="fixed inset-0 z-[60] hidden items-center justify-center bg-slate-950/50 px-4 py-8 backdrop-blur-sm" data-detail-photo-modal>
+        <div class="surface-card w-full max-w-2xl overflow-hidden">
+            <div class="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
+                <div>
+                    <h3 class="text-xl font-bold text-slate-900" data-detail-photo-heading>Foto Barang</h3>
+                    <p class="mt-1 text-sm text-slate-500">Preview foto barang yang dipinjam.</p>
+                </div>
+                <button type="button" class="btn-secondary h-11 w-11 p-0" data-detail-photo-close aria-label="Tutup preview foto">
+                    <i data-lucide="x" class="h-4 w-4"></i>
+                </button>
+            </div>
+            <div class="bg-slate-50 p-5">
+                <img src="" alt="" class="hidden max-h-[60vh] w-full rounded-2xl object-contain" data-detail-photo-image>
+                <div class="rounded-2xl border border-dashed border-slate-200 bg-white px-5 py-12 text-center text-sm font-semibold text-slate-500" data-detail-photo-empty>
+                    Foto barang belum tersedia.
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+    function initPeminjamanDetail(root) {
+        root = root || document;
+        root.querySelectorAll('[data-requires-selection]').forEach(function (form) {
+            if (form.dataset.selectionBound === 'true') {
+                return;
+            }
+            form.dataset.selectionBound = 'true';
+            const submitButton = form.querySelector('[data-selection-submit]');
+            const selectionName = form.dataset.selectionName;
+            const statusField = form.querySelector('select[name="status"]');
+            if (!submitButton || !selectionName) {
+                return;
+            }
+
+            function syncSelectionState() {
+                const hasSelection = form.querySelectorAll('input[name="' + selectionName + '"]:checked').length > 0;
+                const hasStatus = !statusField || Boolean(statusField.value);
+                submitButton.disabled = !(hasSelection && hasStatus);
+            }
+
+            form.querySelectorAll('input[name="' + selectionName + '"]').forEach(function (checkbox) {
+                checkbox.addEventListener('change', syncSelectionState);
+            });
+            if (statusField) {
+                statusField.addEventListener('change', syncSelectionState);
+            }
+            syncSelectionState();
+        });
+
+        const modal = root.querySelector('[data-detail-photo-modal]');
+        const closeButton = root.querySelector('[data-detail-photo-close]');
+        const heading = root.querySelector('[data-detail-photo-heading]');
+        const image = root.querySelector('[data-detail-photo-image]');
+        const empty = root.querySelector('[data-detail-photo-empty]');
+        if (modal && modal.parentElement !== document.body) {
+            document.body.appendChild(modal);
+        }
+        if (modal && modal.dataset.detailPhotoBound !== 'true') {
+            modal.dataset.detailPhotoBound = 'true';
+            function closePhotoModal() {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
+
+            closeButton.addEventListener('click', closePhotoModal);
+            modal.addEventListener('click', function (event) {
+                if (event.target === modal) {
+                    closePhotoModal();
+                }
+            });
+        }
+
+        root.querySelectorAll('[data-detail-photo-preview]').forEach(function (button) {
+            if (button.dataset.detailPhotoBound === 'true') {
+                return;
+            }
+            button.dataset.detailPhotoBound = 'true';
+            button.addEventListener('click', function () {
+                if (!modal || !heading || !image || !empty) {
+                    return;
+                }
+                heading.textContent = button.dataset.photoTitle || 'Foto Barang';
+                if (button.dataset.photoUrl) {
+                    image.src = button.dataset.photoUrl;
+                    image.alt = button.dataset.photoTitle || 'Foto barang';
+                    image.classList.remove('hidden');
+                    empty.classList.add('hidden');
+                } else {
+                    image.removeAttribute('src');
+                    image.alt = '';
+                    image.classList.add('hidden');
+                    empty.classList.remove('hidden');
+                }
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            });
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function () {
+            initPeminjamanDetail(document);
+        });
+    } else {
+        initPeminjamanDetail(document);
+    }
+    document.body.addEventListener('htmx:afterSwap', function (event) {
+        initPeminjamanDetail(event.target);
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+    });
+</script>
 </section>
 {% endblock %}
 
 {% block extra_script %}
-{% include "components/confirmation_modal.html" with title="Konfirmasi Hapus Peminjaman" confirm_label="Lanjutkan" confirm_icon="arrow-right" %}
+{% include "components/confirmation_modal.html" with title="Konfirmasi Peminjaman" confirm_label="Lanjutkan" confirm_icon="arrow-right" %}
 {% endblock %}

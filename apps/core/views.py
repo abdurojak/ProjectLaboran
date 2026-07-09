@@ -242,6 +242,7 @@ class AdminBantuanView(TemplateView):
 
 class BugErrorListView(TemplateView):
     template_name = 'core/bug_error_list.html'
+    partial_template_name = 'core/partials/bug_error_content.html'
 
     def dispatch(self, request, *args, **kwargs):
         pengguna = getattr(request, 'current_pengguna', None)
@@ -249,6 +250,11 @@ class BugErrorListView(TemplateView):
             messages.error(request, 'Hanya admin dan laboran yang dapat membuka Bug & Error List.')
             return redirect('dashboard:home')
         return super().dispatch(request, *args, **kwargs)
+
+    def get_template_names(self):
+        if self.request.headers.get('HX-Request') == 'true':
+            return [self.partial_template_name]
+        return [self.template_name]
 
     def get_queryset(self):
         queryset = BugErrorLog.objects.select_related('dilaporkan_oleh', 'ditangani_oleh')

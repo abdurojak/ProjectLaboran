@@ -95,6 +95,62 @@ class GlobalBackgroundTests(TestCase):
         self.assertContains(response, 'html[data-theme="dark"] tbody tr:hover td')
         self.assertContains(response, 'html[data-theme="dark"] tbody tr:hover .text-slate-900')
 
+    def test_date_input_calendar_icon_dark_mode_terlihat(self):
+        response = self.client.get(reverse('pengguna:login'))
+
+        self.assertContains(response, 'html[data-theme="dark"] main input[type="date"]')
+        self.assertContains(response, 'color-scheme: dark !important;')
+        self.assertContains(response, '::-webkit-calendar-picker-indicator')
+        self.assertContains(response, 'filter: invert(1) brightness(1.8) contrast(0.9) !important;')
+        self.assertContains(response, 'dateInput.showPicker();')
+
+    def test_confirmation_modal_mencegah_submit_sebelum_disetujui(self):
+        response = self.client.get(reverse('pengguna:login'))
+
+        self.assertContains(response, "event.stopImmediatePropagation();")
+        self.assertContains(response, "}, true);")
+        self.assertContains(response, "const confirmedElement = pendingElement;")
+        self.assertContains(response, "closeModal();")
+        self.assertContains(response, "confirmedElement.requestSubmit();")
+
+    def test_global_loading_overlay_untuk_request_async(self):
+        response = self.client.get(reverse('pengguna:login'))
+
+        self.assertContains(response, 'data-global-loading')
+        self.assertContains(response, 'data-global-loading-core')
+        self.assertContains(response, 'labhub-loading-spin')
+        self.assertContains(response, 'labhub-loading-float')
+        self.assertContains(response, 'function shouldSkipGlobalLoading(event)')
+        self.assertContains(response, 'data-no-global-loading="true"')
+        self.assertContains(response, "document.body.addEventListener('htmx:beforeRequest', showGlobalLoading);")
+        self.assertContains(response, "document.body.addEventListener('htmx:afterRequest', hideGlobalLoading);")
+        self.assertContains(response, "document.addEventListener('submit', function (event) {")
+        self.assertContains(response, "showGlobalLoading(event);")
+
+    def test_logo_navbar_menyatu_dengan_panel_saat_scroll(self):
+        pengguna = Pengguna.objects.create(
+            nama_pengguna='User Navbar',
+            nim_nik='0642201067',
+            email='navbar@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081234567867',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+        )
+        session = self.client.session
+        session['pengguna_id'] = pengguna.pk
+        session.save()
+
+        response = self.client.get(reverse('dashboard:home'))
+
+        self.assertContains(response, '.labhub-topbar.is-scrolled .labhub-topbar-brand')
+        self.assertContains(response, 'background: transparent !important;')
+        self.assertContains(response, 'border-color: transparent !important;')
+        self.assertContains(response, '.labhub-topbar.is-scrolled .labhub-topbar-logo')
+
 from apps.pengguna.models import Pengguna
 
 from project_laboran.asgi import application
@@ -285,6 +341,42 @@ class BantuanTests(TestCase):
         self.assertContains(response, 'bug-error-page')
         self.assertContains(response, 'html[data-theme="dark"] .bug-error-page .bug-error-card')
         self.assertContains(response, 'html[data-theme="dark"] .bug-error-page .bug-error-danger')
+        self.assertContains(response, 'htmx.org')
+        self.assertContains(response, 'data-confirmation-modal')
+        self.assertContains(response, 'data-confirm-message="Hapus bug/error Upload foto profil gagal? Data yang dihapus tidak dapat dikembalikan."')
+        self.assertNotContains(response, 'hx-confirm')
+
+    def test_bug_error_list_htmx_mengembalikan_partial(self):
+        admin = Pengguna.objects.create(
+            nama_pengguna='Admin Bug Async',
+            nim_nik='ADM-BUG-ASYNC',
+            email='admin-bug-async@example.com',
+            password='rahasia123',
+            no_hp='081234567867',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='admin',
+        )
+        BugErrorLog.objects.create(
+            judul='Filter bug async',
+            kategori='bug',
+            prioritas='sedang',
+            lokasi='/pengaturan/bug-error/',
+            deskripsi='Daftar bug/error harus dapat diperbarui tanpa memuat ulang halaman penuh.',
+            dilaporkan_oleh=admin,
+        )
+        self.login_as(admin)
+
+        response = self.client.get(reverse('core:bug_error_list'), HTTP_HX_REQUEST='true')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="bug-error-page-content"', html=False)
+        self.assertContains(response, 'hx-get=')
+        self.assertContains(response, 'hx-post=')
+        self.assertContains(response, 'Filter bug async')
+        self.assertNotContains(response, '<html')
 
     def test_non_admin_tidak_dapat_membuka_bug_error_list(self):
         response = self.client.get(reverse('core:bug_error_list'))

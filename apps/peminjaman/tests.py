@@ -91,15 +91,74 @@ class PeminjamanViewsTests(TestCase):
 
         self.assertContains(response, 'hover:bg-slate-50/70')
 
+    def test_list_page_highlight_peminjaman_terlambat(self):
+        self.peminjaman.tanggal_kembali = date(2026, 1, 1)
+        self.peminjaman.status = 'dipinjam'
+        self.peminjaman.save(update_fields=['tanggal_kembali', 'status'])
+
+        response = self.client.get(reverse('peminjaman:peminjaman_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'peminjaman-row-overdue')
+        self.assertContains(response, 'Terlambat')
+        self.assertContains(response, 'html[data-theme="dark"] .peminjaman-row-overdue td')
+        self.assertContains(response, 'html[data-theme="dark"] .peminjaman-overdue-badge')
+        self.assertContains(response, 'rgba(244, 63, 94, 0.08)')
+
     def test_filter_peminjaman_otomatis_responsif_tanpa_tombol_filter(self):
         response = self.client.get(reverse('peminjaman:peminjaman_list'))
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-auto-filter-form')
+        self.assertContains(response, 'data-no-global-loading="true"')
+        self.assertContains(response, 'data-filter-loading')
+        self.assertContains(response, '<span>Memuat</span>')
         self.assertContains(response, 'grid min-w-0 gap-4 md:grid-cols-2 lg:grid-cols-4')
         self.assertContains(response, 'Semua status')
-        self.assertContains(response, 'submitFilter()')
+        self.assertContains(response, "event.key !== 'Enter'")
+        self.assertContains(response, "field.addEventListener('blur'")
+        self.assertContains(response, 'submitFilter(250);')
+        self.assertContains(response, 'setFilterLoading(true);')
         self.assertNotContains(response, '<span>Filter</span>')
+
+    def test_list_peminjaman_memakai_htmx_untuk_interaksi_async(self):
+        self.peminjaman.status = 'diajukan'
+        self.peminjaman.save(update_fields=['status'])
+
+        response = self.client.get(reverse('peminjaman:peminjaman_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'htmx.org')
+        self.assertContains(response, 'id="peminjaman-list-content"', html=False)
+        self.assertContains(response, 'hx-get="/peminjaman/')
+        self.assertContains(response, 'hx-target="#peminjaman-list-content"')
+        self.assertContains(response, 'hx-select="#peminjaman-list-content"')
+        self.assertContains(response, 'hx-push-url="true"')
+        self.assertContains(response, 'hx-target="[data-app-content]"')
+        self.assertContains(response, 'hx-select="[data-app-content] &gt; *"', html=False)
+        self.assertContains(response, 'hx-post="/peminjaman/bulk-update-status/"')
+        self.assertContains(response, f'hx-post="{reverse("peminjaman:peminjaman_delete", args=[self.peminjaman.pk])}"')
+        self.assertContains(response, "document.body.addEventListener('htmx:afterSwap'")
+        self.assertNotContains(response, f'hx-get="{reverse("peminjaman:peminjaman_create")}"')
+
+    def test_bulk_status_halaman_utama_memakai_konfirmasi(self):
+        response = self.client.get(reverse('peminjaman:peminjaman_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="peminjaman-bulk-status-form"')
+        self.assertContains(response, 'data-confirm-message="Lanjutkan perubahan status untuk semua peminjaman yang dipilih? Status setiap detail barang dalam transaksi terpilih akan ikut diperbarui."')
+        self.assertContains(response, 'Konfirmasi Peminjaman')
+
+    def test_bulk_status_halaman_utama_tombol_simpan_disabled_sampai_ada_pilihan(self):
+        response = self.client.get(reverse('peminjaman:peminjaman_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-requires-selection')
+        self.assertContains(response, 'data-selection-name="transaksi_ids"')
+        self.assertContains(response, 'data-selection-submit disabled')
+        self.assertContains(response, 'bindPeminjamanSelectionSubmit')
+        self.assertContains(response, 'select id="id_bulk_status" name="status" required')
+        self.assertContains(response, 'const hasStatus = !statusField || Boolean(statusField.value);')
 
     def test_list_page_memakai_modal_konfirmasi_hapus(self):
         self.peminjaman.status = 'diajukan'
@@ -130,6 +189,28 @@ class PeminjamanViewsTests(TestCase):
         self.assertContains(response, 'data-confirm-message="Yakin ingin menghapus peminjaman Andi Pratama?"')
         self.assertContains(response, 'method="post"')
 
+    def test_detail_status_memakai_konfirmasi_dan_spasi_tabel(self):
+        response = self.client.get(reverse('peminjaman:peminjaman_detail', args=[self.peminjaman.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'space-y-5 border-b border-slate-100 px-6 py-4')
+        self.assertContains(response, 'data-confirm-message="Lanjutkan perubahan status untuk detail barang yang dipilih? Status detail peminjaman terpilih akan ikut diperbarui."')
+        self.assertContains(response, 'Konfirmasi Peminjaman')
+        self.assertContains(response, f'hx-post="{reverse("peminjaman:peminjaman_detail_status_update", args=[self.peminjaman.pk])}"')
+        self.assertContains(response, 'hx-target="#peminjaman-detail-content"')
+        self.assertContains(response, 'hx-select="#peminjaman-detail-content"')
+
+    def test_detail_status_tombol_simpan_disabled_sampai_ada_pilihan(self):
+        response = self.client.get(reverse('peminjaman:peminjaman_detail', args=[self.peminjaman.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-requires-selection')
+        self.assertContains(response, 'data-selection-name="detail_ids"')
+        self.assertContains(response, 'data-selection-submit disabled')
+        self.assertContains(response, 'syncSelectionState')
+        self.assertContains(response, 'select id="id_detail_status" name="status" required')
+        self.assertContains(response, 'const hasStatus = !statusField || Boolean(statusField.value);')
+
     def test_create_menolak_detail_barang_rusak_berat(self):
         response = self.client.post(
             reverse('peminjaman:peminjaman_create'),
@@ -157,6 +238,13 @@ class PeminjamanViewsTests(TestCase):
         self.assertContains(response, 'data-selected-barang-list')
         self.assertContains(response, 'data-selected-barang-empty')
         self.assertContains(response, 'data-barang-picker-open')
+        self.assertContains(response, 'id="peminjaman-form-content"', html=False)
+        self.assertContains(response, 'htmx.org')
+        self.assertContains(response, 'hx-post="')
+        self.assertContains(response, 'hx-target="#peminjaman-form-content"')
+        self.assertContains(response, 'hx-select="#peminjaman-form-content"')
+        self.assertNotContains(response, 'hx-get="/peminjaman/"')
+        self.assertContains(response, 'initPeminjamanForm(event.target)')
         self.assertContains(response, 'name="selected_barang_ids"')
         self.assertContains(response, 'data-barang-picker-done')
         self.assertContains(response, '<th>Jumlah</th>')
@@ -175,6 +263,9 @@ class PeminjamanViewsTests(TestCase):
         self.assertContains(response, 'scrollbar-color: rgba(71, 85, 105, 0.82) rgba(15, 23, 42, 0.72);')
         self.assertContains(response, '::-webkit-scrollbar-thumb')
         self.assertContains(response, 'border-color: rgba(71, 85, 105, 0.42) !important;')
+        self.assertContains(response, 'peminjaman-form-page')
+        self.assertContains(response, 'html[data-theme="dark"] .peminjaman-form-page input[type="date"]::-webkit-calendar-picker-indicator')
+        self.assertContains(response, 'filter: invert(1) brightness(1.8) contrast(0.9) !important;')
         self.assertContains(response, "input.inputMode = 'numeric'")
         self.assertContains(response, 'availableItems.some')
         self.assertContains(response, 'clearGroupSelection(group)')
@@ -188,6 +279,25 @@ class PeminjamanViewsTests(TestCase):
         self.assertNotContains(response, '<select name="barang"')
         self.assertNotContains(response, 'id="id_barang_display"')
         self.assertNotContains(response, 'badge.innerHTML')
+
+    def test_form_peminjaman_success_htmx_mengarahkan_ke_daftar(self):
+        response = self.client.post(
+            reverse('peminjaman:peminjaman_create'),
+            {
+                'selected_barang_ids': str(self.barang_tersedia_lain.pk),
+                'nama_peminjam': 'Async Submit',
+                'nim': '2201999',
+                'no_hp': '081111119999',
+                'tanggal_pinjam': '2026-06-21',
+                'tanggal_kembali': '2026-06-22',
+                'status': 'diajukan',
+                'catatan': '',
+            },
+            HTTP_HX_REQUEST='true',
+        )
+
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(response.headers.get('HX-Redirect'), reverse('peminjaman:peminjaman_list'))
 
     def test_filter_tanggal_invalid_tidak_menyebabkan_server_error(self):
         response = self.client.get(
@@ -249,12 +359,36 @@ class PeminjamanViewsTests(TestCase):
         self.assertContains(semua_response, 'id="id_semua_filter"')
         self.assertContains(semua_response, 'checked')
 
-    def test_detail_page_menampilkan_foto_barang(self):
+    def test_detail_page_menampilkan_foto_peminjam_dan_preview_foto_barang(self):
         response = self.client.get(reverse('peminjaman:peminjaman_detail', args=[self.peminjaman.pk]))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Foto Barang')
-        self.assertContains(response, 'Foto barang belum tersedia.')
+        self.assertContains(response, 'Foto Peminjam')
+        self.assertContains(response, 'Foto peminjam belum tersedia.')
+        self.assertContains(response, 'data-detail-photo-preview')
+        self.assertContains(response, 'data-detail-photo-modal')
+        self.assertContains(response, 'initPeminjamanDetail')
+        self.assertNotContains(response, '<div class="text-sm font-semibold text-slate-500">Barang</div>', html=False)
+
+    def test_detail_page_memakai_foto_pengguna_jika_ada(self):
+        pengguna = Pengguna.objects.create(
+            nama_pengguna='Andi Pratama',
+            nim_nik='2201001',
+            email='andi-foto@example.com',
+            password='rahasia123',
+            no_hp='081234567890',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+            foto='pengguna/andi.jpg',
+        )
+
+        response = self.client.get(reverse('peminjaman:peminjaman_detail', args=[self.peminjaman.pk]))
+
+        self.assertContains(response, pengguna.foto.url)
+        self.assertContains(response, 'alt="Foto Andi Pratama"')
 
     def test_preview_dan_detail_memakai_foto_parent_inventaris(self):
         inventaris = InventarisBarang.objects.create(
@@ -281,7 +415,8 @@ class PeminjamanViewsTests(TestCase):
         detail_response = self.client.get(reverse('peminjaman:peminjaman_detail', args=[peminjaman.pk]))
 
         self.assertEqual(options_response.json()['results'][0]['photo_url'], '/media/barang/kamera-parent.jpg')
-        self.assertContains(detail_response, '/media/barang/kamera-parent.jpg')
+        self.assertContains(detail_response, 'data-detail-photo-preview')
+        self.assertContains(detail_response, 'data-photo-url="/media/barang/kamera-parent.jpg"')
 
     def test_form_edit_menampilkan_detail_barang_terpilih_sebagai_badge(self):
         response = self.client.get(reverse('peminjaman:peminjaman_update', args=[self.peminjaman.pk]))
@@ -793,6 +928,89 @@ class PeminjamanMahasiswaTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, '<option value="ditolak">Ditolak</option>', html=True)
+        self.assertNotContains(response, '<option value="dikembalikan">Dikembalikan</option>', html=True)
+        self.assertNotContains(response, '<option value="digantikan">Digantikan</option>', html=True)
+        self.assertContains(response, '<option value="selesai">Selesai</option>', html=True)
+
+    def test_admin_bulk_status_selesai_memetakan_status_berdasarkan_status_sebelumnya(self):
+        dipinjam = PeminjamanAlat.objects.create(
+            barang=self.barang_lain,
+            nama_peminjam='Status Dipinjam',
+            tanggal_pinjam=date(2026, 7, 1),
+            tanggal_kembali=date(2026, 7, 2),
+            status='dipinjam',
+        )
+        hilang = PeminjamanAlat.objects.create(
+            barang=self.barang_tersedia_lain,
+            nama_peminjam='Status Hilang',
+            tanggal_pinjam=date(2026, 7, 1),
+            tanggal_kembali=date(2026, 7, 2),
+            status='hilang',
+        )
+        diajukan = PeminjamanAlat.objects.create(
+            barang=self.barang_rusak,
+            nama_peminjam='Status Diajukan',
+            tanggal_pinjam=date(2026, 7, 1),
+            tanggal_kembali=date(2026, 7, 2),
+            status='diajukan',
+        )
+
+        response = self.client.post(reverse('peminjaman:peminjaman_bulk_update'), {
+            'transaksi_ids': [str(dipinjam.transaksi_id), str(hilang.transaksi_id), str(diajukan.transaksi_id)],
+            'status': 'selesai',
+        })
+
+        self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
+        dipinjam.refresh_from_db()
+        hilang.refresh_from_db()
+        diajukan.refresh_from_db()
+        self.assertEqual(dipinjam.status, 'dikembalikan')
+        self.assertEqual(hilang.status, 'digantikan')
+        self.assertEqual(diajukan.status, 'diajukan')
+
+    def test_admin_detail_status_selesai_memetakan_status_berdasarkan_status_sebelumnya(self):
+        transaksi = PeminjamanTransaksi.objects.create(
+            nama_peminjam='Detail Selesai',
+            tanggal_pinjam=date(2026, 7, 1),
+            tanggal_kembali=date(2026, 7, 2),
+        )
+        dipinjam = PeminjamanAlat.objects.create(
+            transaksi=transaksi,
+            barang=self.barang_lain,
+            nama_peminjam='Detail Dipinjam',
+            tanggal_pinjam=date(2026, 7, 1),
+            tanggal_kembali=date(2026, 7, 2),
+            status='dipinjam',
+        )
+        rusak = PeminjamanAlat.objects.create(
+            transaksi=transaksi,
+            barang=self.barang_tersedia_lain,
+            nama_peminjam='Detail Rusak',
+            tanggal_pinjam=date(2026, 7, 1),
+            tanggal_kembali=date(2026, 7, 2),
+            status='rusak',
+        )
+        diajukan = PeminjamanAlat.objects.create(
+            transaksi=transaksi,
+            barang=self.barang_rusak,
+            nama_peminjam='Detail Diajukan',
+            tanggal_pinjam=date(2026, 7, 1),
+            tanggal_kembali=date(2026, 7, 2),
+            status='diajukan',
+        )
+
+        response = self.client.post(
+            reverse('peminjaman:peminjaman_detail_status_update', args=[dipinjam.pk]),
+            {'detail_ids': [str(dipinjam.pk), str(rusak.pk), str(diajukan.pk)], 'status': 'selesai'},
+        )
+
+        self.assertRedirects(response, reverse('peminjaman:peminjaman_detail', args=[dipinjam.pk]))
+        dipinjam.refresh_from_db()
+        rusak.refresh_from_db()
+        diajukan.refresh_from_db()
+        self.assertEqual(dipinjam.status, 'dikembalikan')
+        self.assertEqual(rusak.status, 'digantikan')
+        self.assertEqual(diajukan.status, 'diajukan')
 
     def test_admin_melihat_aksi_edit_dan_hapus_pengajuan_di_tabel(self):
         peminjaman = PeminjamanAlat.objects.create(

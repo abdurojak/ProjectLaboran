@@ -1,0 +1,278 @@
+<section id="bug-error-page-content" class="bug-error-page grid gap-6">
+    {% if messages %}
+    <div class="grid gap-2">
+        {% for message in messages %}
+        <div class="surface-card border-l-4 {% if message.tags == 'success' %}border-emerald-500{% elif message.tags == 'error' %}border-rose-500{% else %}border-blue-500{% endif %} px-4 py-3 text-sm font-bold text-slate-700">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <p class="text-sm font-bold uppercase tracking-[0.2em] text-rose-700">Monitoring</p>
+            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Bug & Error List</h2>
+            <p class="mt-2 text-sm text-slate-500">Catatan manual untuk bug, error, dan kendala tampilan yang perlu ditindaklanjuti.</p>
+        </div>
+        <div class="grid grid-cols-3 gap-3 text-center">
+            <div class="surface-card px-4 py-3"><div class="text-xs font-bold text-slate-500">Baru</div><div class="mt-1 text-2xl font-black text-rose-600">{{ summary.baru }}</div></div>
+            <div class="surface-card px-4 py-3"><div class="text-xs font-bold text-slate-500">Diproses</div><div class="mt-1 text-2xl font-black text-amber-600">{{ summary.diproses }}</div></div>
+            <div class="surface-card px-4 py-3"><div class="text-xs font-bold text-slate-500">Selesai</div><div class="mt-1 text-2xl font-black text-emerald-600">{{ summary.selesai }}</div></div>
+        </div>
+    </div>
+
+    <form method="get" class="surface-card grid gap-4 p-5 md:grid-cols-[minmax(0,1fr)_220px_auto] md:items-end"
+          hx-get="{% url 'core:bug_error_list' %}"
+          hx-target="#bug-error-page-content"
+          hx-swap="outerHTML"
+          hx-push-url="true">
+        <div>
+            <label for="id_q">Cari bug/error</label>
+            <input id="id_q" name="q" value="{{ current_q }}" placeholder="Judul, halaman/URL, atau deskripsi">
+        </div>
+        <div>
+            <label for="id_status">Status</label>
+            <select id="id_status" name="status">
+                <option value="">Semua status</option>
+                {% for value, label in status_choices %}
+                <option value="{{ value }}" {% if current_status == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button class="btn-primary" type="submit"><i data-lucide="search" class="mr-2 h-4 w-4"></i>Filter</button>
+    </form>
+
+    {% if can_manage_bug_error %}
+    <details class="surface-card overflow-hidden">
+        <summary class="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 font-black text-slate-900 [&::-webkit-details-marker]:hidden">
+            <span class="inline-flex items-center gap-3"><i data-lucide="plus-circle" class="h-5 w-5 text-rose-700"></i>Tambah Bug/Error</span>
+            <i data-lucide="chevron-down" class="h-4 w-4"></i>
+        </summary>
+        <form method="post" class="bug-error-divider grid gap-5 border-t border-slate-200 p-5 md:grid-cols-2"
+              hx-post="{% url 'core:bug_error_list' %}"
+              hx-target="#bug-error-page-content"
+              hx-swap="outerHTML">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="create">
+            <div>
+                <label for="id_judul">Judul</label>
+                <input id="id_judul" name="judul" required placeholder="Contoh: Upload foto profil gagal">
+            </div>
+            <div>
+                <label for="id_lokasi">Halaman/URL</label>
+                <input id="id_lokasi" name="lokasi" placeholder="Contoh: /pengguna/1/edit-profil/">
+            </div>
+            <div>
+                <label for="id_kategori">Kategori</label>
+                <select id="id_kategori" name="kategori">
+                    {% for value, label in kategori_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="id_prioritas">Prioritas</label>
+                <select id="id_prioritas" name="prioritas">
+                    {% for value, label in prioritas_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="md:col-span-2">
+                <label for="id_deskripsi">Deskripsi</label>
+                <textarea id="id_deskripsi" name="deskripsi" rows="4" required placeholder="Jelaskan bug/error yang ditemukan."></textarea>
+            </div>
+            <div>
+                <label for="id_langkah_reproduksi">Langkah Reproduksi</label>
+                <textarea id="id_langkah_reproduksi" name="langkah_reproduksi" rows="4" placeholder="Langkah untuk memunculkan bug/error."></textarea>
+            </div>
+            <div>
+                <label for="id_hasil_aktual">Hasil Aktual</label>
+                <textarea id="id_hasil_aktual" name="hasil_aktual" rows="4" placeholder="Apa yang terjadi sekarang?"></textarea>
+            </div>
+            <div class="md:col-span-2">
+                <label for="id_ekspektasi">Ekspektasi</label>
+                <textarea id="id_ekspektasi" name="ekspektasi" rows="3" placeholder="Seharusnya sistem berperilaku seperti apa?"></textarea>
+            </div>
+            <div class="md:col-span-2">
+                <button class="btn-primary" type="submit"><i data-lucide="save" class="mr-2 h-4 w-4"></i>Simpan Bug/Error</button>
+            </div>
+        </form>
+    </details>
+    {% endif %}
+
+    <div class="grid gap-5 xl:grid-cols-[420px_minmax(0,1fr)]">
+        <aside class="surface-card min-h-[420px] overflow-hidden">
+            <div class="bug-error-divider border-b border-slate-200 px-5 py-4">
+                <h3 class="text-lg font-black text-slate-900">Daftar Bug/Error</h3>
+                <p class="mt-1 text-xs text-slate-500">Menampilkan maksimal 80 data terbaru sesuai filter.</p>
+            </div>
+            <div class="max-h-[680px] overflow-y-auto p-3">
+                {% for item in bug_error_list %}
+                <a href="{% url 'core:bug_error_list' %}?log={{ item.pk }}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_q %}&q={{ current_q|urlencode }}{% endif %}"
+                   data-no-page-transition="true"
+                   hx-get="{% url 'core:bug_error_list' %}?log={{ item.pk }}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_q %}&q={{ current_q|urlencode }}{% endif %}"
+                   hx-target="#bug-error-page-content"
+                   hx-swap="outerHTML"
+                   hx-push-url="true"
+                   class="bug-error-card {% if selected_log.pk == item.pk %}is-selected border-rose-300 bg-rose-50{% else %}border-slate-200 bg-white hover:border-rose-200 hover:bg-rose-50/40{% endif %} mb-3 block rounded-2xl border p-4 transition">
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <div class="truncate text-sm font-black text-slate-900">{{ item.judul }}</div>
+                            <div class="mt-1 truncate text-xs font-semibold text-slate-500">{{ item.get_kategori_display }}{% if item.lokasi %} - {{ item.lokasi }}{% endif %}</div>
+                        </div>
+                        <span class="{% if item.status == 'baru' %}bug-error-status-new bg-rose-100 text-rose-700{% elif item.status == 'diproses' %}bug-error-status-progress bg-amber-100 text-amber-700{% else %}bug-error-status-done bg-emerald-100 text-emerald-700{% endif %} rounded-full px-2.5 py-1 text-[11px] font-black">{{ item.get_status_display }}</span>
+                    </div>
+                    <p class="mt-3 line-clamp-2 text-xs leading-5 text-slate-500">{{ item.deskripsi }}</p>
+                    <div class="mt-3">
+                        {% if item.ditangani_oleh %}
+                        <span class="inline-flex max-w-full items-center gap-1.5 rounded-full bg-teal-50 px-2.5 py-1 text-[11px] font-black text-teal-700">
+                            <i data-lucide="user-check" class="h-3.5 w-3.5 shrink-0"></i>
+                            <span class="truncate">Ditangani {{ item.ditangani_oleh.nama_pengguna }}</span>
+                        </span>
+                        {% else %}
+                        <span class="inline-flex max-w-full items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-700">
+                            <i data-lucide="clock-3" class="h-3.5 w-3.5 shrink-0"></i>
+                            <span>Belum diambil laboran</span>
+                        </span>
+                        {% endif %}
+                    </div>
+                    <div class="mt-3 text-[11px] font-bold text-slate-400">{{ item.dibuat_pada|date:"d M Y H:i" }}{% if item.dilaporkan_oleh %} oleh {{ item.dilaporkan_oleh.nama_pengguna }}{% endif %}</div>
+                </a>
+                {% empty %}
+                <div class="px-4 py-12 text-center text-sm text-slate-500">Belum ada bug/error tercatat.</div>
+                {% endfor %}
+            </div>
+        </aside>
+
+        <article class="surface-card min-w-0 overflow-hidden">
+            {% if selected_log %}
+            <div class="bug-error-divider border-b border-slate-200 px-6 py-5">
+                <div class="flex flex-wrap items-start justify-between gap-4">
+                    <div class="min-w-0">
+                        <p class="text-xs font-black uppercase tracking-[0.18em] text-rose-700">{{ selected_log.get_kategori_display }} - {{ selected_log.get_prioritas_display }}</p>
+                        <h3 class="mt-2 break-words text-2xl font-black text-slate-900">{{ selected_log.judul }}</h3>
+                        <p class="mt-2 text-sm text-slate-500">{{ selected_log.lokasi|default:"Lokasi belum dicatat" }}</p>
+                    </div>
+                    <span class="{% if selected_log.status == 'baru' %}bug-error-status-new bg-rose-100 text-rose-700{% elif selected_log.status == 'diproses' %}bug-error-status-progress bg-amber-100 text-amber-700{% else %}bug-error-status-done bg-emerald-100 text-emerald-700{% endif %} rounded-full px-3 py-1.5 text-xs font-black">{{ selected_log.get_status_display }}</span>
+                </div>
+            </div>
+
+            <div class="grid gap-5 p-6">
+                <div class="bug-error-section rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div class="text-xs font-black uppercase tracking-wide text-slate-500">Deskripsi</div>
+                    <p class="mt-2 whitespace-pre-wrap break-words text-sm font-semibold leading-6 text-slate-700">{{ selected_log.deskripsi }}</p>
+                </div>
+
+                <div class="grid gap-4 md:grid-cols-2">
+                    <div class="bug-error-section rounded-2xl border border-slate-200 p-4"><div class="text-xs font-black uppercase tracking-wide text-slate-500">Dilaporkan Oleh</div><div class="mt-2 font-bold text-slate-900">{{ selected_log.dilaporkan_oleh.nama_pengguna|default:"Tidak diketahui" }}</div></div>
+                    <div class="bug-error-section rounded-2xl border border-slate-200 p-4"><div class="text-xs font-black uppercase tracking-wide text-slate-500">Waktu</div><div class="mt-2 font-bold text-slate-900">{{ selected_log.dibuat_pada|date:"d M Y H:i:s" }}</div></div>
+                    <div class="bug-error-section rounded-2xl border border-slate-200 p-4 md:col-span-2">
+                        <div class="text-xs font-black uppercase tracking-wide text-slate-500">Ditangani Oleh</div>
+                        <div class="mt-3">
+                            {% if selected_log.ditangani_oleh %}
+                            <span class="inline-flex max-w-full items-center gap-2 rounded-2xl bg-teal-50 px-3 py-2 text-sm font-black text-teal-700">
+                                <i data-lucide="user-check" class="h-4 w-4 shrink-0"></i>
+                                <span class="truncate">{{ selected_log.ditangani_oleh.nama_pengguna }}</span>
+                            </span>
+                            {% else %}
+                            <span class="inline-flex max-w-full items-center gap-2 rounded-2xl bg-amber-50 px-3 py-2 text-sm font-black text-amber-700">
+                                <i data-lucide="clock-3" class="h-4 w-4 shrink-0"></i>
+                                <span>Belum diambil laboran</span>
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                {% if can_claim_bug_error and not selected_log.ditangani_oleh %}
+                <form method="post" class="bug-error-section rounded-2xl border border-slate-200 p-4"
+                      hx-post="{% url 'core:bug_error_list' %}"
+                      hx-target="#bug-error-page-content"
+                      hx-swap="outerHTML">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="claim">
+                    <input type="hidden" name="log_id" value="{{ selected_log.pk }}">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <div class="text-sm font-black text-slate-900">Ambil Penanganan</div>
+                            <p class="mt-1 text-xs font-semibold text-slate-500">Setelah diambil, bug/error ini tidak dapat diambil laboran lain.</p>
+                        </div>
+                        <button class="btn-primary" type="submit"><i data-lucide="hand" class="mr-2 h-4 w-4"></i>Ambil Bug/Error</button>
+                    </div>
+                </form>
+                {% endif %}
+
+                {% if can_complete_selected_bug_error %}
+                <form method="post" class="bug-error-section rounded-2xl border border-slate-200 p-4"
+                      hx-post="{% url 'core:bug_error_list' %}"
+                      hx-target="#bug-error-page-content"
+                      hx-swap="outerHTML">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="complete">
+                    <input type="hidden" name="log_id" value="{{ selected_log.pk }}">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <div class="text-sm font-black text-slate-900">Selesaikan Penanganan</div>
+                            <p class="mt-1 text-xs font-semibold text-slate-500">Tandai bug/error ini selesai setelah perbaikan sudah ditangani.</p>
+                        </div>
+                        <button class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-300" type="submit">
+                            <i data-lucide="check-circle-2" class="mr-2 h-4 w-4"></i>Tandai Selesai
+                        </button>
+                    </div>
+                </form>
+                {% endif %}
+
+                {% if can_manage_bug_error %}
+                <form method="post" class="bug-error-section grid gap-4 rounded-2xl border border-slate-200 p-4"
+                      hx-post="{% url 'core:bug_error_list' %}"
+                      hx-target="#bug-error-page-content"
+                      hx-swap="outerHTML">
+                    {% csrf_token %}
+                    <input type="hidden" name="log_id" value="{{ selected_log.pk }}">
+                    <div class="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
+                        <div>
+                            <label for="id_log_status">Status</label>
+                            <select id="id_log_status" name="status">
+                                {% for value, label in status_choices %}
+                                <option value="{{ value }}" {% if selected_log.status == value %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label for="id_catatan_admin">Catatan Admin</label>
+                            <textarea id="id_catatan_admin" name="catatan_admin" rows="3" placeholder="Catatan penanganan bug/error">{{ selected_log.catatan_admin }}</textarea>
+                        </div>
+                    </div>
+                    <div><button class="btn-primary" type="submit"><i data-lucide="save" class="mr-2 h-4 w-4"></i>Simpan Status</button></div>
+                </form>
+
+                <form method="post" class="bug-error-danger rounded-2xl border border-rose-200 bg-rose-50/70 p-4"
+                      hx-post="{% url 'core:bug_error_list' %}"
+                      hx-target="#bug-error-page-content"
+                      hx-swap="outerHTML"
+                      data-confirm-message="Hapus bug/error {{ selected_log.judul }}? Data yang dihapus tidak dapat dikembalikan.">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="delete">
+                    <input type="hidden" name="log_id" value="{{ selected_log.pk }}">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <div class="text-sm font-black text-rose-800">Hapus Bug/Error</div>
+                            <p class="mt-1 text-xs font-semibold text-rose-700">Gunakan hanya jika catatan ini tidak diperlukan lagi.</p>
+                        </div>
+                        <button class="inline-flex items-center justify-center rounded-2xl bg-rose-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-rose-600/20 transition hover:bg-rose-700 focus:outline-none focus:ring-4 focus:ring-rose-300" type="submit">
+                            <i data-lucide="trash-2" class="mr-2 h-4 w-4"></i>Hapus
+                        </button>
+                    </div>
+                </form>
+                {% endif %}
+
+                <div class="grid gap-4 lg:grid-cols-3">
+                    <div class="bug-error-section rounded-2xl border border-slate-200 p-4"><div class="text-xs font-black uppercase tracking-wide text-slate-500">Langkah Reproduksi</div><p class="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{{ selected_log.langkah_reproduksi|default:"-" }}</p></div>
+                    <div class="bug-error-section rounded-2xl border border-slate-200 p-4"><div class="text-xs font-black uppercase tracking-wide text-slate-500">Hasil Aktual</div><p class="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{{ selected_log.hasil_aktual|default:"-" }}</p></div>
+                    <div class="bug-error-section rounded-2xl border border-slate-200 p-4"><div class="text-xs font-black uppercase tracking-wide text-slate-500">Ekspektasi</div><p class="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{{ selected_log.ekspektasi|default:"-" }}</p></div>
+                </div>
+            </div>
+            {% else %}
+            <div class="flex min-h-[420px] items-center justify-center p-8 text-center text-slate-500">Pilih bug/error untuk melihat detail.</div>
+            {% endif %}
+        </article>
+    </div>
+</section>
