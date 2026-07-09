@@ -1748,6 +1748,18 @@
         </section>
     </main>
     {% if current_pengguna %}
+    {% if current_pengguna.role == 'admin' %}
+    <div class="fixed bottom-24 right-4 z-40 md:bottom-8 md:right-8" data-admin-chat-floating data-summary-url="{% url 'core:bantuan_admin_summary' %}">
+        <a href="{% url 'core:bantuan_admin' %}" class="group relative inline-flex h-14 items-center gap-3 rounded-2xl bg-brand-700 px-4 text-white shadow-xl shadow-brand-900/20 transition hover:-translate-y-0.5 hover:bg-brand-800" aria-label="Buka chat bantuan masuk" title="Chat Bantuan Masuk">
+            <span class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/15">
+                <i data-lucide="messages-square" class="h-5 w-5"></i>
+            </span>
+            <span class="hidden text-sm font-black sm:inline">Chat</span>
+            <span class="absolute -right-2 -top-2 hidden min-w-8 rounded-full border-2 border-white bg-rose-600 px-2 py-1 text-center text-xs font-black text-white shadow-lg" data-admin-help-count>0</span>
+            <span class="absolute -bottom-2 right-3 hidden rounded-full border border-brand-100 bg-white px-2.5 py-1 text-[11px] font-black text-brand-800 shadow-lg sm:block" data-admin-help-label>Memuat</span>
+        </a>
+    </div>
+    {% else %}
     <div class="fixed bottom-24 right-4 z-40 md:bottom-8 md:right-8" data-help-floating>
         <button type="button" class="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-700 text-white shadow-xl shadow-brand-900/20 transition hover:-translate-y-0.5 hover:bg-brand-800" data-help-dialog-open aria-label="Buka chat bantuan" title="Chat Bantuan">
             <i data-lucide="message-circle-question" class="h-6 w-6"></i>
@@ -1768,16 +1780,23 @@
             </div>
 
             <div class="space-y-4 overflow-y-auto p-5">
-                <div class="rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">
+                <div class="max-h-72 space-y-3 overflow-y-auto pr-1" data-help-message-list aria-live="polite">
+                <div class="rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-600" data-help-message="bot">
                     <div class="mb-1 text-xs font-black uppercase tracking-wide text-slate-500">Bot Bantuan</div>
                     Silakan tulis pertanyaan Anda. Jika jawaban bot belum cukup, Anda tetap bisa meneruskan percakapan ke admin dari halaman bantuan.
                 </div>
+                </div>
 
-                <form method="post" action="{% url 'core:bantuan' %}" class="space-y-3">
+                <div class="hidden rounded-2xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm font-bold text-brand-800" data-help-loading>
+                    Bot sedang menjawab...
+                </div>
+                <div class="hidden rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700" data-help-error></div>
+
+                <form method="post" action="{% url 'core:bantuan' %}" class="space-y-3" data-help-form data-no-global-loading="true" data-async-url="{% url 'core:bantuan_async_message' %}">
                     {% csrf_token %}
                     <label for="id_floating_help_message" class="sr-only">Tulis pertanyaan</label>
-                    <textarea id="id_floating_help_message" name="pesan" rows="4" maxlength="1000" required class="min-h-28 resize-none" placeholder="Contoh: Bagaimana cara mengisi absensi aslab?"></textarea>
-                    <button type="submit" class="btn-primary w-full justify-center gap-2">
+                    <textarea id="id_floating_help_message" name="pesan" rows="3" maxlength="1000" required class="min-h-24 resize-none" placeholder="Contoh: Bagaimana cara mengisi absensi aslab?"></textarea>
+                    <button type="submit" class="btn-primary w-full justify-center gap-2" data-help-submit>
                         <i data-lucide="send" class="h-4 w-4"></i>
                         <span>Kirim Pertanyaan</span>
                     </button>
@@ -1806,6 +1825,7 @@
             </div>
         </div>
     </div>
+    {% endif %}
     {% include "kalender/realtime_client.html" %}
     {% endif %}
     {% block extra_script %}{% endblock %}
@@ -1872,19 +1892,19 @@
 
             const appContent = document.querySelector('[data-app-content]');
             if (appContent && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-                document.querySelectorAll('a[href]:not([target]):not([href^="#"]):not([href^="mailto:"]):not([href^="tel:"])').forEach(function (link) {
-                    link.addEventListener('click', function (event) {
-                        const href = link.getAttribute('href');
-                        if (!href || link.dataset.noPageTransition === 'true' || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-                        if (link.closest('[data-no-global-loading="true"]')) return;
-                        if (new URL(href, window.location.href).origin !== window.location.origin) return;
-                        event.preventDefault();
-                        showGlobalLoading(event);
-                        appContent.classList.add('is-leaving');
-                        window.setTimeout(function () {
-                            window.location.href = href;
-                        }, 150);
-                    });
+                document.addEventListener('click', function (event) {
+                    const link = event.target.closest('a[href]:not([target]):not([href^="#"]):not([href^="mailto:"]):not([href^="tel:"])');
+                    if (!link) return;
+                    const href = link.getAttribute('href');
+                    if (!href || link.dataset.noPageTransition === 'true' || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+                    if (link.closest('[data-no-global-loading="true"]')) return;
+                    if (new URL(href, window.location.href).origin !== window.location.origin) return;
+                    event.preventDefault();
+                    showGlobalLoading(event);
+                    appContent.classList.add('is-leaving');
+                    window.setTimeout(function () {
+                        window.location.href = href;
+                    }, 150);
                 });
             }
 
@@ -1892,8 +1912,97 @@
             const helpOpen = document.querySelector('[data-help-dialog-open]');
             const helpClose = document.querySelector('[data-help-dialog-close]');
             const helpTextarea = document.getElementById('id_floating_help_message');
+            const helpForm = document.querySelector('[data-help-form]');
+            const helpMessages = document.querySelector('[data-help-message-list]');
+            const helpLoading = document.querySelector('[data-help-loading]');
+            const helpError = document.querySelector('[data-help-error]');
+            const helpSubmit = document.querySelector('[data-help-submit]');
+            const adminChatFloating = document.querySelector('[data-admin-chat-floating]');
+
+            if (adminChatFloating) {
+                const countBadge = adminChatFloating.querySelector('[data-admin-help-count]');
+                const labelBadge = adminChatFloating.querySelector('[data-admin-help-label]');
+                const summaryUrl = adminChatFloating.dataset.summaryUrl;
+
+                function updateAdminHelpSummary() {
+                    if (!summaryUrl || !window.fetch) return;
+                    fetch(summaryUrl, {
+                        headers: {'X-Requested-With': 'XMLHttpRequest'},
+                    })
+                        .then(function (response) {
+                            if (!response.ok) throw new Error('Ringkasan bantuan belum tersedia.');
+                            return response.json();
+                        })
+                        .then(function (payload) {
+                            const count = Number(payload.waiting_count || 0);
+                            if (countBadge) {
+                                countBadge.textContent = String(count);
+                                countBadge.classList.toggle('hidden', count <= 0);
+                            }
+                            if (labelBadge) {
+                                labelBadge.textContent = count > 0 ? payload.label : 'Tidak ada antrean';
+                            }
+                        })
+                        .catch(function () {
+                            if (labelBadge) {
+                                labelBadge.textContent = 'Chat bantuan';
+                            }
+                        });
+                }
+
+                updateAdminHelpSummary();
+                window.setInterval(updateAdminHelpSummary, 5000);
+            }
 
             if (helpDialog && helpOpen && helpClose) {
+                function setHelpLoading(isLoading) {
+                    if (helpLoading) {
+                        helpLoading.classList.toggle('hidden', !isLoading);
+                    }
+                    if (helpSubmit) {
+                        helpSubmit.disabled = isLoading;
+                        helpSubmit.classList.toggle('opacity-70', isLoading);
+                    }
+                }
+
+                function setHelpError(message) {
+                    if (!helpError) return;
+                    helpError.textContent = message || '';
+                    helpError.classList.toggle('hidden', !message);
+                }
+
+                function appendHelpMessage(sender, content, time) {
+                    if (!helpMessages || !content) return;
+                    const isUser = sender === 'pengguna';
+                    const wrapper = document.createElement('div');
+                    wrapper.className = isUser
+                        ? 'ml-auto max-w-[85%] rounded-2xl bg-brand-700 p-4 text-sm leading-6 text-white'
+                        : 'max-w-[85%] rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-600';
+
+                    const label = document.createElement('div');
+                    label.className = isUser
+                        ? 'mb-1 text-xs font-black uppercase tracking-wide text-white/75'
+                        : 'mb-1 text-xs font-black uppercase tracking-wide text-slate-500';
+                    label.textContent = isUser ? 'Anda' : 'Bot Bantuan';
+
+                    const body = document.createElement('div');
+                    body.textContent = content;
+                    body.style.whiteSpace = 'pre-line';
+
+                    wrapper.appendChild(label);
+                    wrapper.appendChild(body);
+
+                    if (time) {
+                        const meta = document.createElement('div');
+                        meta.className = isUser ? 'mt-2 text-right text-[11px] font-bold text-white/65' : 'mt-2 text-[11px] font-bold text-slate-400';
+                        meta.textContent = time;
+                        wrapper.appendChild(meta);
+                    }
+
+                    helpMessages.appendChild(wrapper);
+                    helpMessages.scrollTop = helpMessages.scrollHeight;
+                }
+
                 function openHelpDialog() {
                     helpDialog.classList.remove('hidden');
                     helpDialog.classList.add('flex');
@@ -1919,6 +2028,70 @@
                         closeHelpDialog();
                     }
                 });
+
+                if (helpTextarea) {
+                    helpTextarea.addEventListener('keydown', function (event) {
+                        if (event.key !== 'Enter' || event.shiftKey) return;
+                        event.preventDefault();
+                        if (helpForm) {
+                            helpForm.requestSubmit();
+                        }
+                    });
+                }
+
+                if (helpForm) {
+                    helpForm.addEventListener('submit', function (event) {
+                        const asyncUrl = helpForm.dataset.asyncUrl;
+                        if (!asyncUrl || !window.fetch) {
+                            return;
+                        }
+                        event.preventDefault();
+                        const formData = new FormData(helpForm);
+                        const message = (formData.get('pesan') || '').toString().trim();
+                        if (!message) {
+                            setHelpError('Tulis pertanyaan terlebih dahulu.');
+                            if (helpTextarea) helpTextarea.focus();
+                            return;
+                        }
+
+                        setHelpError('');
+                        setHelpLoading(true);
+                        appendHelpMessage('pengguna', message, '');
+                        if (helpTextarea) {
+                            helpTextarea.value = '';
+                            helpTextarea.focus();
+                        }
+
+                        fetch(asyncUrl, {
+                            method: 'POST',
+                            body: formData,
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                        })
+                            .then(function (response) {
+                                return response.json().then(function (payload) {
+                                    if (!response.ok) {
+                                        throw new Error(payload.error || 'Pesan belum dapat dikirim.');
+                                    }
+                                    return payload;
+                                });
+                            })
+                            .then(function (payload) {
+                                if (payload.bot_message) {
+                                    appendHelpMessage('bot', payload.bot_message.content, payload.bot_message.created_at);
+                                } else if (payload.notice) {
+                                    appendHelpMessage('bot', payload.notice, '');
+                                }
+                            })
+                            .catch(function (error) {
+                                setHelpError(error.message || 'Pesan belum dapat dikirim.');
+                            })
+                            .finally(function () {
+                                setHelpLoading(false);
+                            });
+                    });
+                }
             }
         });
         window.applyLabHubTheme = function (theme, bg, customBg) {

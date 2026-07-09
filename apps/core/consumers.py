@@ -38,6 +38,30 @@ class BantuanChatConsumer(AsyncWebsocketConsumer):
             return
 
         action = payload.get('action', 'message')
+        if action == 'typing':
+            await self.channel_layer.group_send(
+                self.group_name,
+                {
+                    'type': 'chat.typing',
+                    'sender_role': self.pengguna.role,
+                    'sender_id': self.pengguna.pk,
+                    'is_typing': bool(payload.get('is_typing')),
+                },
+            )
+            return
+
+        if action == 'presence':
+            await self.channel_layer.group_send(
+                self.group_name,
+                {
+                    'type': 'chat.presence',
+                    'sender_role': self.pengguna.role,
+                    'sender_id': self.pengguna.pk,
+                    'state': payload.get('state') or 'online',
+                },
+            )
+            return
+
         if action == 'selesai':
             finished = await self.finish_conversation()
             if finished:
@@ -76,6 +100,24 @@ class BantuanChatConsumer(AsyncWebsocketConsumer):
             'type': 'status',
             'status': event['status'],
             'status_label': event['status_label'],
+        }))
+
+    async def chat_typing(self, event):
+        if event.get('sender_id') == getattr(self.pengguna, 'pk', None):
+            return
+        await self.send(text_data=json.dumps({
+            'type': 'typing',
+            'sender_role': event.get('sender_role'),
+            'is_typing': event.get('is_typing', False),
+        }))
+
+    async def chat_presence(self, event):
+        if event.get('sender_id') == getattr(self.pengguna, 'pk', None):
+            return
+        await self.send(text_data=json.dumps({
+            'type': 'presence',
+            'sender_role': event.get('sender_role'),
+            'state': event.get('state') or 'online',
         }))
 
     @database_sync_to_async

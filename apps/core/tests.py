@@ -125,7 +125,17 @@ class GlobalBackgroundTests(TestCase):
         self.assertContains(response, "document.body.addEventListener('htmx:beforeRequest', showGlobalLoading);")
         self.assertContains(response, "document.body.addEventListener('htmx:afterRequest', hideGlobalLoading);")
         self.assertContains(response, "document.addEventListener('submit', function (event) {")
+        self.assertContains(response, "document.addEventListener('click', function (event) {")
+        self.assertContains(response, "event.target.closest('a[href]:not([target])")
         self.assertContains(response, "showGlobalLoading(event);")
+
+    def test_navbar_notifikasi_merespons_event_realtime(self):
+        response = self.client.get(reverse('pengguna:login'))
+
+        self.assertContains(response, 'data-realtime-notification-trigger')
+        self.assertContains(response, 'has-realtime-update')
+        self.assertContains(response, "document.addEventListener('labhub:realtime'")
+        self.assertContains(response, 'if (payload.silent) return;')
 
     def test_logo_navbar_menyatu_dengan_panel_saat_scroll(self):
         pengguna = Pengguna.objects.create(
@@ -209,6 +219,12 @@ class BantuanTests(TestCase):
         self.assertContains(response, 'data-help-floating')
         self.assertContains(response, 'data-help-dialog')
         self.assertContains(response, reverse('core:bantuan'))
+        self.assertContains(response, reverse('core:bantuan_async_message'))
+        self.assertContains(response, 'data-help-message-list')
+        self.assertContains(response, 'data-help-form')
+        self.assertContains(response, 'data-help-loading')
+        self.assertContains(response, "event.key !== 'Enter' || event.shiftKey")
+        self.assertContains(response, "fetch(asyncUrl")
         self.assertContains(response, 'Chat Bantuan')
 
     def test_floating_chat_bantuan_tidak_muncul_untuk_guest(self):
@@ -218,6 +234,55 @@ class BantuanTests(TestCase):
 
         self.assertNotContains(response, 'data-help-floating')
 
+    def test_admin_mendapat_floating_chat_dengan_jumlah_antrean(self):
+        admin = Pengguna.objects.create(
+            nama_pengguna='Admin Floating Chat',
+            nim_nik='ADM-FLOATING-CHAT',
+            email='admin-floating-chat@example.com',
+            password='rahasia123',
+            no_hp='081234567812',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='admin',
+        )
+        PercakapanBantuan.objects.create(pengguna=self.mahasiswa, status='admin')
+        self.login_as(admin)
+
+        response = self.client.get(reverse('dashboard:home'))
+
+        self.assertContains(response, 'data-admin-chat-floating')
+        self.assertContains(response, reverse('core:bantuan_admin'))
+        self.assertContains(response, reverse('core:bantuan_admin_summary'))
+        self.assertContains(response, 'data-admin-help-count')
+        self.assertContains(response, 'updateAdminHelpSummary')
+        self.assertNotContains(response, 'data-help-floating')
+        self.assertNotContains(response, 'data-help-dialog')
+
+    def test_admin_bantuan_summary_mengembalikan_jumlah_antrean(self):
+        admin = Pengguna.objects.create(
+            nama_pengguna='Admin Summary Chat',
+            nim_nik='ADM-SUMMARY-CHAT',
+            email='admin-summary-chat@example.com',
+            password='rahasia123',
+            no_hp='081234567813',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='admin',
+        )
+        PercakapanBantuan.objects.create(pengguna=self.mahasiswa, status='admin')
+        PercakapanBantuan.objects.create(pengguna=self.mahasiswa, status='selesai')
+        self.login_as(admin)
+
+        response = self.client.get(reverse('core:bantuan_admin_summary'), HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['waiting_count'], 1)
+        self.assertEqual(response.json()['label'], '1 mahasiswa bertanya')
+
     def test_bot_menjawab_pertanyaan_sederhana(self):
         response = self.client.post(reverse('core:bantuan'), {'pesan': 'Bagaimana cara daftar aslab?'})
 
@@ -225,6 +290,35 @@ class BantuanTests(TestCase):
         conversation = PercakapanBantuan.objects.get(pengguna=self.mahasiswa)
         self.assertEqual(conversation.status, 'bot')
         self.assertTrue(conversation.pesan.filter(pengirim='bot', isi__icontains='transkrip').exists())
+
+    def test_floating_chat_async_menjawab_tanpa_redirect(self):
+        response = self.client.post(
+            reverse('core:bantuan_async_message'),
+            {'pesan': 'Bagaimana cara daftar aslab?'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        conversation = PercakapanBantuan.objects.get(pengguna=self.mahasiswa)
+        self.assertEqual(conversation.status, 'bot')
+        self.assertEqual(payload['conversation_status'], 'bot')
+        self.assertEqual(payload['user_message']['content'], 'Bagaimana cara daftar aslab?')
+        self.assertIn('transkrip', payload['bot_message']['content'])
+        self.assertEqual(payload['help_url'], reverse('core:bantuan'))
+
+    def test_halaman_bantuan_memakai_realtime_tanpa_full_loading(self):
+        self.client.get(reverse('core:bantuan'))
+        response = self.client.get(reverse('core:bantuan'))
+
+        self.assertContains(response, 'data-chat-form')
+        self.assertContains(response, 'data-no-global-loading="true"')
+        self.assertContains(response, 'data-chat-loading')
+        self.assertContains(response, 'data-chat-finished-notice')
+        self.assertContains(response, "sendWithFetch(content)")
+        self.assertContains(response, "event.key !== 'Enter' || event.shiftKey")
+        self.assertContains(response, "payload.status === 'selesai'")
+        self.assertContains(response, "switchToBotMode()")
 
     def test_bot_memahami_nilai_absensi_mahasiswa(self):
         self.client.post(reverse('core:bantuan'), {'pesan': 'Nilai realtime dan laporan itu gimana?'})
@@ -285,6 +379,36 @@ class BantuanTests(TestCase):
 
         self.assertRedirects(response, f"{reverse('core:bantuan_admin')}?percakapan={conversation.pk}")
         self.assertTrue(conversation.pesan.filter(pengirim='admin', isi__icontains='lengkapi CV').exists())
+
+    def test_halaman_admin_bantuan_selesai_memakai_websocket(self):
+        self.client.get(reverse('core:bantuan'))
+        self.client.post(reverse('core:bantuan_escalate'))
+        conversation = PercakapanBantuan.objects.get(pengguna=self.mahasiswa)
+        admin = Pengguna.objects.create(
+            nama_pengguna='Admin Async Bantuan',
+            nim_nik='ADM-ASYNC-BANTUAN',
+            email='admin-async-bantuan@example.com',
+            password='rahasia123',
+            no_hp='081234567811',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='admin',
+        )
+        self.login_as(admin)
+
+        response = self.client.get(f"{reverse('core:bantuan_admin')}?percakapan={conversation.pk}")
+
+        self.assertContains(response, 'data-chat-finish')
+        self.assertContains(response, "chatSocket.send(JSON.stringify({action: 'selesai'}));")
+        self.assertContains(response, 'data-chat-finished-notice')
+        self.assertContains(response, 'data-no-global-loading="true"')
+        self.assertContains(response, 'help-admin-shell')
+        self.assertContains(response, 'html[data-theme="dark"] .help-admin-shell')
+        self.assertContains(response, 'data-chat-typing')
+        self.assertContains(response, "action: 'typing'")
+        self.assertContains(response, "action: 'presence'")
 
     def test_admin_settings_tidak_menampilkan_kartu_bantuan(self):
         admin = Pengguna.objects.create(
@@ -712,6 +836,77 @@ class BantuanWebSocketTests(TransactionTestCase):
 
         async_to_sync(scenario)()
         self.assertTrue(PesanBantuan.objects.filter(percakapan=self.conversation, pengirim='admin').exists())
+
+    def test_admin_menyelesaikan_percakapan_via_websocket(self):
+        user_headers = self.session_headers(self.mahasiswa)
+        admin_headers = self.session_headers(self.admin)
+
+        async def scenario():
+            user_socket = WebsocketCommunicator(
+                application,
+                f'/ws/bantuan/{self.conversation.pk}/',
+                headers=user_headers,
+            )
+            admin_socket = WebsocketCommunicator(
+                application,
+                f'/ws/bantuan/{self.conversation.pk}/',
+                headers=admin_headers,
+            )
+            user_connected, _ = await user_socket.connect()
+            admin_connected, _ = await admin_socket.connect()
+            self.assertTrue(user_connected)
+            self.assertTrue(admin_connected)
+
+            await admin_socket.send_json_to({'action': 'selesai'})
+            payload = await user_socket.receive_json_from()
+
+            self.assertEqual(payload['type'], 'status')
+            self.assertEqual(payload['status'], 'selesai')
+            self.assertEqual(payload['status_label'], 'Selesai')
+
+            await user_socket.disconnect()
+            await admin_socket.disconnect()
+
+        async_to_sync(scenario)()
+        self.conversation.refresh_from_db()
+        self.assertEqual(self.conversation.status, 'selesai')
+
+    def test_typing_dan_presence_dikirim_via_websocket(self):
+        user_headers = self.session_headers(self.mahasiswa)
+        admin_headers = self.session_headers(self.admin)
+
+        async def scenario():
+            user_socket = WebsocketCommunicator(
+                application,
+                f'/ws/bantuan/{self.conversation.pk}/',
+                headers=user_headers,
+            )
+            admin_socket = WebsocketCommunicator(
+                application,
+                f'/ws/bantuan/{self.conversation.pk}/',
+                headers=admin_headers,
+            )
+            user_connected, _ = await user_socket.connect()
+            admin_connected, _ = await admin_socket.connect()
+            self.assertTrue(user_connected)
+            self.assertTrue(admin_connected)
+
+            await admin_socket.send_json_to({'action': 'presence', 'state': 'online'})
+            presence_payload = await user_socket.receive_json_from()
+            self.assertEqual(presence_payload['type'], 'presence')
+            self.assertEqual(presence_payload['sender_role'], 'admin')
+            self.assertEqual(presence_payload['state'], 'online')
+
+            await user_socket.send_json_to({'action': 'typing', 'is_typing': True})
+            typing_payload = await admin_socket.receive_json_from()
+            self.assertEqual(typing_payload['type'], 'typing')
+            self.assertEqual(typing_payload['sender_role'], 'mahasiswa')
+            self.assertTrue(typing_payload['is_typing'])
+
+            await user_socket.disconnect()
+            await admin_socket.disconnect()
+
+        async_to_sync(scenario)()
 
     def test_pengguna_tidak_bisa_membuka_percakapan_orang_lain(self):
         pengguna_lain = Pengguna.objects.create(

@@ -221,6 +221,11 @@ class BarangListViewTests(TestCase):
         self.assertNotContains(response, 'name="kondisi"')
         self.assertNotContains(response, 'name="lokasi"')
 
+    def test_daftar_barang_filter_memakai_request_submit_agar_loading_global_muncul(self):
+        response = self.client.get(reverse('inventaris:barang_list'))
+
+        self.assertContains(response, 'form.requestSubmit();')
+
     def test_daftar_barang_memiliki_tombol_kelola_lokasi(self):
         response = self.client.get(reverse('inventaris:barang_list'))
 
@@ -257,6 +262,11 @@ class BarangListViewTests(TestCase):
         )
 
         self.assertEqual(list(response.context['detail_barang_list']), [self.keyboard_cadangan])
+
+    def test_detail_inventaris_filter_memakai_request_submit_agar_loading_global_muncul(self):
+        response = self.client.get(reverse('inventaris:inventaris_detail', args=[self.keyboard_inventaris.pk]))
+
+        self.assertContains(response, 'form.requestSubmit();')
 
     def test_daftar_barang_menampilkan_stok_operasional(self):
         PeminjamanAlat.objects.create(

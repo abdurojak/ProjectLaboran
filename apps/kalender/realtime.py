@@ -175,3 +175,49 @@ def send_attendance_update(absensi):
     for pengguna in users_for_nim(absensi.asleb.nim):
         send_user_notification(pengguna.pk, payload)
     send_role_notification('laboran', payload)
+
+
+def send_peminjaman_request_update(peminjaman):
+    payload = {
+        'event': 'peminjaman.request.created',
+        'source_key': f'peminjaman-admin:{peminjaman.pk}:diajukan',
+        'title': f'Pengajuan peminjaman baru: {peminjaman.barang.nama}',
+        'message': f'{peminjaman.nama_peminjam} mengajukan peminjaman alat dan menunggu persetujuan.',
+        'notification_type': 'diajukan',
+        'related_object_id': peminjaman.pk,
+        'related_url': reverse('peminjaman:peminjaman_detail', kwargs={'pk': peminjaman.pk}),
+        'refresh_paths': ['/peminjaman/', '/kalender/notifikasi/', '/'],
+        'icon': 'clipboard-list',
+        'icon_class': 'bg-amber-50 text-amber-700',
+    }
+    send_role_notification('laboran', payload)
+
+
+def send_peminjaman_status_update(peminjaman):
+    status_label = peminjaman.get_status_display()
+    status_meta = {
+        'ditolak': ('Peminjaman ditolak', 'Pengajuan peminjaman Anda belum dapat disetujui.', 'x-circle', 'bg-rose-50 text-rose-700'),
+        'dipinjam': ('Peminjaman disetujui', 'Pengajuan peminjaman alat Anda telah disetujui.', 'check-circle-2', 'bg-blue-50 text-blue-700'),
+        'dikembalikan': ('Peminjaman selesai', 'Barang telah dicatat kembali ke laboratorium.', 'undo-2', 'bg-emerald-50 text-emerald-700'),
+        'hilang': ('Barang ditandai hilang', 'Barang pada peminjaman Anda ditandai hilang dan perlu ditindaklanjuti.', 'circle-alert', 'bg-rose-50 text-rose-700'),
+        'rusak': ('Barang ditandai rusak', 'Barang pada peminjaman Anda ditandai rusak dan perlu ditindaklanjuti.', 'wrench', 'bg-orange-50 text-orange-700'),
+        'digantikan': ('Penggantian barang tercatat', 'Penggantian barang pada peminjaman Anda telah dicatat.', 'refresh-cw', 'bg-brand-50 text-brand-700'),
+    }
+    title, message, icon, icon_class = status_meta.get(
+        peminjaman.status,
+        ('Status peminjaman diperbarui', 'Status peminjaman alat Anda telah diperbarui.', 'bell-ring', 'bg-brand-50 text-brand-700'),
+    )
+    payload = {
+        'event': 'peminjaman.status.updated',
+        'source_key': f'peminjaman:{peminjaman.pk}:{peminjaman.status}',
+        'title': title,
+        'message': f'{message} Barang: {peminjaman.barang.nama}.',
+        'notification_type': status_label,
+        'related_object_id': peminjaman.pk,
+        'related_url': reverse('peminjaman:peminjaman_detail', kwargs={'pk': peminjaman.pk}),
+        'refresh_paths': ['/peminjaman/', '/kalender/notifikasi/', '/'],
+        'icon': icon,
+        'icon_class': icon_class,
+    }
+    for pengguna in users_for_nim(peminjaman.nim):
+        send_user_notification(pengguna.pk, payload)

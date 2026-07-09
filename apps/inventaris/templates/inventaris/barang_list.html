@@ -108,7 +108,7 @@
             searchInput.addEventListener('input', function () {
                 clearTimeout(searchTimer);
                 searchTimer = setTimeout(function () {
-                    form.submit();
+                    form.requestSubmit();
                 }, 350);
             });
         }
