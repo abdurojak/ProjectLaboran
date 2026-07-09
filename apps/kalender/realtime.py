@@ -186,7 +186,7 @@ def send_peminjaman_request_update(peminjaman):
         'notification_type': 'diajukan',
         'related_object_id': peminjaman.pk,
         'related_url': reverse('peminjaman:peminjaman_detail', kwargs={'pk': peminjaman.pk}),
-        'refresh_paths': ['/peminjaman/', '/kalender/notifikasi/', '/'],
+        'refresh_paths': [],
         'icon': 'clipboard-list',
         'icon_class': 'bg-amber-50 text-amber-700',
     }
@@ -215,9 +215,26 @@ def send_peminjaman_status_update(peminjaman):
         'notification_type': status_label,
         'related_object_id': peminjaman.pk,
         'related_url': reverse('peminjaman:peminjaman_detail', kwargs={'pk': peminjaman.pk}),
-        'refresh_paths': ['/peminjaman/', '/kalender/notifikasi/', '/'],
+        'refresh_paths': [],
         'icon': icon,
         'icon_class': icon_class,
+    }
+    for pengguna in users_for_nim(peminjaman.nim):
+        send_user_notification(pengguna.pk, payload)
+
+
+def send_peminjaman_rejected_update(peminjaman):
+    payload = {
+        'event': 'peminjaman.status.rejected',
+        'source_key': f'peminjaman:{peminjaman.pk}:ditolak',
+        'title': 'Peminjaman ditolak',
+        'message': f'Pengajuan peminjaman {peminjaman.barang.nama} belum dapat disetujui oleh laboratorium.',
+        'notification_type': 'Ditolak',
+        'related_object_id': peminjaman.pk,
+        'related_url': reverse('peminjaman:peminjaman_list'),
+        'refresh_paths': [],
+        'icon': 'x-circle',
+        'icon_class': 'bg-rose-50 text-rose-700',
     }
     for pengguna in users_for_nim(peminjaman.nim):
         send_user_notification(pengguna.pk, payload)

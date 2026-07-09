@@ -19,7 +19,7 @@ from apps.jadwal.models import JadwalPraktikum
 from apps.ruangan.models import RuanganLab
 
 from .models import KegiatanKalender, Notifikasi
-from .realtime import send_user_notification, user_group_name
+from .realtime import send_peminjaman_status_update, send_user_notification, user_group_name
 from .utils import get_perayaan_notifications
 from project_laboran.asgi import application
 
@@ -127,6 +127,44 @@ class NotificationRealtimeTests(TransactionTestCase):
         )
         self.assertEqual(notification.judul, 'Notifikasi tersimpan')
         self.assertIsNone(notification.dibaca_pada)
+
+    def test_notifikasi_status_peminjaman_tidak_memicu_reload_halamaan(self):
+        barang = Barang.objects.create(nama='Kamera Realtime', jumlah=1)
+        peminjaman = PeminjamanAlat.objects.create(
+            barang=barang,
+            nama_peminjam=self.mahasiswa.nama_pengguna,
+            nim=self.mahasiswa.nim_nik,
+            tanggal_pinjam=date.today(),
+            tanggal_kembali=date.today(),
+            status='dipinjam',
+        )
+
+        send_peminjaman_status_update(peminjaman)
+
+        notification = Notifikasi.objects.get(
+            pengguna=self.mahasiswa,
+            source_key=f'peminjaman:{peminjaman.pk}:dipinjam',
+        )
+        self.assertEqual(notification.judul, 'Peminjaman disetujui')
+
+    def test_ringkasan_notifikasi_mengembalikan_jumlah_unread(self):
+        Notifikasi.objects.create(
+            pengguna=self.mahasiswa,
+            source_key='summary-unread',
+            judul='Ringkasan belum dibaca',
+            tanggal=date.today(),
+            source_updated_at=timezone.now(),
+        )
+        session = self.client.session
+        session['pengguna_id'] = self.mahasiswa.pk
+        session.save()
+
+        response = self.client.get(reverse('kalender:notifikasi_summary'), HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['unread_count'], 1)
+        self.assertEqual(payload['latest_title'], 'Ringkasan belum dibaca')
 
 
 class KalenderViewsTests(TestCase):

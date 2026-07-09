@@ -177,7 +177,7 @@
                     <tr class="{% if peminjaman.is_overdue %}peminjaman-row-overdue{% else %}hover:bg-slate-50/70{% endif %}">
                         {% if is_manager %}
                         <td>
-                            <input type="checkbox" name="transaksi_ids" value="{{ peminjaman.pk }}" form="peminjaman-bulk-status-form" aria-label="Pilih {{ peminjaman.kode_pinjam }}">
+                            <input type="checkbox" name="transaksi_ids" value="{{ peminjaman.pk }}" form="peminjaman-bulk-status-form" aria-label="{% if peminjaman.has_actionable_details %}Pilih {{ peminjaman.kode_pinjam }}{% else %}{{ peminjaman.kode_pinjam }} sudah selesai{% endif %}"{% if not peminjaman.has_actionable_details %} disabled title="Semua detail sudah selesai"{% endif %}>
                         </td>
                         {% endif %}
                         <td class="font-semibold text-slate-600">{{ peminjaman.kode_pinjam }}</td>

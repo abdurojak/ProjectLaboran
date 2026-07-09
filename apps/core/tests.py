@@ -130,12 +130,35 @@ class GlobalBackgroundTests(TestCase):
         self.assertContains(response, "showGlobalLoading(event);")
 
     def test_navbar_notifikasi_merespons_event_realtime(self):
-        response = self.client.get(reverse('pengguna:login'))
+        pengguna = Pengguna.objects.create(
+            nama_pengguna='User Notifikasi',
+            nim_nik='0642201099',
+            email='notifikasi@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081234567899',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+        )
+        session = self.client.session
+        session['pengguna_id'] = pengguna.pk
+        session.save()
+
+        response = self.client.get(reverse('dashboard:home'))
 
         self.assertContains(response, 'data-realtime-notification-trigger')
         self.assertContains(response, 'has-realtime-update')
         self.assertContains(response, "document.addEventListener('labhub:realtime'")
         self.assertContains(response, 'if (payload.silent) return;')
+        self.assertContains(response, reverse('kalender:notifikasi_summary'))
+        self.assertContains(response, 'syncNotificationSummary')
+        self.assertContains(response, 'window.setInterval')
+        self.assertContains(response, 'html[data-theme="dark"] .labhub-realtime-toast')
+        self.assertContains(response, 'labhub-realtime-toast-title')
+        self.assertContains(response, "window.addEventListener('focus', syncNotificationSummary);")
+        self.assertContains(response, '}, 5000);')
 
     def test_logo_navbar_menyatu_dengan_panel_saat_scroll(self):
         pengguna = Pengguna.objects.create(

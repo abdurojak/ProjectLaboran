@@ -12,7 +12,11 @@ from apps.asleb.models import AbsensiAsleb, Asleb, HonorAsleb
 from apps.inventaris.models import ACTIVE_PEMINJAMAN_STATUSES, Barang, InventarisBarang
 from apps.jadwal.models import JadwalPraktikum
 from apps.jadwal.notifications import send_jadwal_status_notification
-from apps.kalender.realtime import send_schedule_update
+from apps.kalender.realtime import (
+    send_peminjaman_rejected_update,
+    send_peminjaman_status_update,
+    send_schedule_update,
+)
 from apps.kalender.models import KegiatanKalender
 from apps.core.permissions import LABORAN_ROLE, can_manage_lab_operations
 from apps.peminjaman.models import PeminjamanAlat
@@ -528,6 +532,9 @@ def accept_peminjaman(request, pk):
             item.status = 'dipinjam'
             item.save(update_fields=['status', 'diperbarui_pada'])
             send_peminjaman_status_notification(item)
+            transaction.on_commit(lambda item_id=item.pk: send_peminjaman_status_update(
+                PeminjamanAlat.objects.select_related('barang').get(pk=item_id)
+            ))
         messages.success(request, 'Pengajuan peminjaman diterima.')
 
     return redirect('dashboard:home')
@@ -541,7 +548,7 @@ def reject_peminjaman(request, pk):
 
     with transaction.atomic():
         peminjaman = get_object_or_404(
-            PeminjamanAlat.objects.select_for_update().select_related('transaksi'),
+            PeminjamanAlat.objects.select_for_update().select_related('barang', 'transaksi'),
             pk=pk,
             status='diajukan',
         )
@@ -551,9 +558,13 @@ def reject_peminjaman(request, pk):
             return redirect('dashboard:home')
 
         transaksi = peminjaman.transaksi
+        rejected_items = list(group.select_related('barang'))
         group.delete()
         if transaksi and not transaksi.detail.exists():
             transaksi.delete()
+
+        for item in rejected_items:
+            transaction.on_commit(lambda rejected=item: send_peminjaman_rejected_update(rejected))
 
     messages.success(request, 'Pengajuan peminjaman ditolak dan dihapus dari daftar.')
     return redirect('dashboard:home')
