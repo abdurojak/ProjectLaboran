@@ -3,14 +3,18 @@
 {% block title %}Form Peminjaman{% endblock %}
 
 {% block content %}
-<section class="mx-auto max-w-4xl space-y-6">
+<section id="peminjaman-form-content" class="peminjaman-form-page mx-auto max-w-4xl space-y-6">
     <div>
         <p class="text-sm font-bold uppercase tracking-[0.2em] text-amber-600">Peminjaman</p>
         <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Form Peminjaman Alat</h2>
         <p class="mt-2 text-sm text-slate-500">Isi data peminjaman alat untuk mencatat barang yang keluar dari inventaris.</p>
     </div>
 
-    <form method="post" class="surface-card space-y-5 p-6 md:p-8">
+    <form method="post" class="surface-card space-y-5 p-6 md:p-8"
+          hx-post="{{ request.path }}"
+          hx-target="#peminjaman-form-content"
+          hx-select="#peminjaman-form-content"
+          hx-swap="outerHTML">
         {% csrf_token %}
         {{ form.non_field_errors }}
         {{ form.barang }}
@@ -155,7 +159,8 @@
 </div>
 {% endblock %}
 
-{% block extra_head %}
+{% block extra_head %}{{ block.super }}
+<script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
 <style>
     html[data-theme="dark"] [data-barang-picker-modal],
     html[data-theme="dark"] [data-barang-photo-modal] {
@@ -236,31 +241,45 @@
     html[data-theme="dark"] [data-barang-picker-modal] .overflow-y-auto::-webkit-scrollbar-thumb:hover {
         background: rgba(100, 116, 139, 0.9);
     }
+
+    html[data-theme="dark"] .peminjaman-form-page input[type="date"] {
+        color-scheme: dark !important;
+    }
+
+    html[data-theme="dark"] .peminjaman-form-page input[type="date"]::-webkit-calendar-picker-indicator {
+        opacity: 1 !important;
+        filter: invert(1) brightness(1.8) contrast(0.9) !important;
+    }
 </style>
 {% endblock %}
 
 {% block extra_script %}
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const modal = document.querySelector('[data-barang-picker-modal]');
-        const openButton = document.querySelector('[data-barang-picker-open]');
-        const closeButtons = document.querySelectorAll('[data-barang-picker-close]');
-        const searchInput = document.querySelector('[data-barang-picker-search]');
-        const hiddenInput = document.getElementById('id_barang');
-        const selectedInput = document.getElementById('id_selected_barang_ids');
-        const selectedList = document.querySelector('[data-selected-barang-list]');
-        const emptyState = document.querySelector('[data-selected-barang-empty]');
+    function initPeminjamanForm(root) {
+        root = root || document;
+        const modal = root.querySelector('[data-barang-picker-modal]');
+        const openButton = root.querySelector('[data-barang-picker-open]');
+        const closeButtons = root.querySelectorAll('[data-barang-picker-close]');
+        const searchInput = root.querySelector('[data-barang-picker-search]');
+        const hiddenInput = root.querySelector('#id_barang');
+        const selectedInput = root.querySelector('#id_selected_barang_ids');
+        const selectedList = root.querySelector('[data-selected-barang-list]');
+        const emptyState = root.querySelector('[data-selected-barang-empty]');
         const optionsUrl = "{% url 'peminjaman:barang_options' %}";
-        const pickerBody = document.querySelector('[data-barang-picker-body]');
-        const pagePrevious = document.querySelector('[data-barang-page-prev]');
-        const pageNext = document.querySelector('[data-barang-page-next]');
-        const pageLabel = document.querySelector('[data-barang-page-label]');
-        const doneButton = document.querySelector('[data-barang-picker-done]');
-        const photoModal = document.querySelector('[data-barang-photo-modal]');
-        const photoTitle = document.querySelector('[data-barang-photo-heading]');
-        const photoImage = document.querySelector('[data-barang-photo-image]');
-        const photoEmpty = document.querySelector('[data-barang-photo-empty]');
-        const photoCloseButton = document.querySelector('[data-barang-photo-close]');
+        const pickerBody = root.querySelector('[data-barang-picker-body]');
+        const pagePrevious = root.querySelector('[data-barang-page-prev]');
+        const pageNext = root.querySelector('[data-barang-page-next]');
+        const pageLabel = root.querySelector('[data-barang-page-label]');
+        const doneButton = root.querySelector('[data-barang-picker-done]');
+        const photoModal = root.querySelector('[data-barang-photo-modal]');
+        const photoTitle = root.querySelector('[data-barang-photo-heading]');
+        const photoImage = root.querySelector('[data-barang-photo-image]');
+        const photoEmpty = root.querySelector('[data-barang-photo-empty]');
+        const photoCloseButton = root.querySelector('[data-barang-photo-close]');
+        if (!modal || modal.dataset.peminjamanPickerBound === 'true' || !openButton || !searchInput || !hiddenInput || !selectedInput || !selectedList || !emptyState || !pickerBody || !pagePrevious || !pageNext || !pageLabel || !doneButton || !photoModal || !photoTitle || !photoImage || !photoEmpty || !photoCloseButton) {
+            return;
+        }
+        modal.dataset.peminjamanPickerBound = 'true';
         [modal, photoModal].forEach(function (dialog) {
             if (dialog && dialog.parentElement !== document.body) {
                 document.body.appendChild(dialog);
@@ -330,7 +349,7 @@
             hiddenInput.value = Array.from(selectedItems.keys())[0] || '';
             emptyState.classList.toggle('hidden', selectedItems.size > 0);
 
-            document.querySelectorAll('[data-barang-picker-choice]').forEach(function (choice) {
+            modal.querySelectorAll('[data-barang-picker-choice]').forEach(function (choice) {
                 choice.checked = hasSelectedItemInGroup(choice.dataset.barangGroup);
             });
             updateVisibleQuantityFields();
@@ -407,7 +426,7 @@
         }
 
         function updateVisibleQuantityFields() {
-            document.querySelectorAll('[data-barang-quantity]').forEach(function (input) {
+            modal.querySelectorAll('[data-barang-quantity]').forEach(function (input) {
                 const group = input.dataset.barangGroup;
                 const availableItems = groupItems.get(group) || [];
                 const selectedCount = availableItems.filter(function (item) {
@@ -607,6 +626,16 @@
         });
 
         renderSelectedBadges();
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        initPeminjamanForm(document);
+        document.body.addEventListener('htmx:afterSwap', function (event) {
+            initPeminjamanForm(event.target);
+            if (window.lucide) {
+                window.lucide.createIcons();
+            }
+        });
     });
 </script>
 {% endblock %}

@@ -333,7 +333,7 @@ class DashboardViewTests(TestCase):
         self.assertRedirects(response, reverse('dashboard:home'))
         self.assertEqual(jadwal.status, JadwalPraktikum.STATUS_DITOLAK)
 
-    def test_dashboard_menyembunyikan_panel_penggantian_barang(self):
+    def test_dashboard_laboran_menampilkan_panel_penggantian_barang(self):
         PeminjamanAlat.objects.create(
             barang=self.barang,
             nama_peminjam='Budi',
@@ -344,11 +344,13 @@ class DashboardViewTests(TestCase):
 
         response = self.client.get(reverse('dashboard:home'))
 
-        self.assertNotContains(response, 'Peminjaman Perlu Diganti')
+        self.assertContains(response, 'Barang Perlu Diganti')
+        self.assertContains(response, 'Digantikan')
+        self.assertContains(response, reverse('dashboard:peminjaman_replaced', args=[PeminjamanAlat.objects.get(nama_peminjam='Budi').pk]))
         self.assertContains(response, reverse('peminjaman:peminjaman_list'))
 
-    def test_dashboard_menyembunyikan_panel_barang_dipinjam(self):
-        PeminjamanAlat.objects.create(
+    def test_dashboard_laboran_menampilkan_panel_barang_dipinjam(self):
+        peminjaman = PeminjamanAlat.objects.create(
             barang=self.barang,
             nama_peminjam='Siti',
             tanggal_pinjam=timezone.localdate(),
@@ -358,10 +360,17 @@ class DashboardViewTests(TestCase):
 
         response = self.client.get(reverse('dashboard:home'))
 
-        self.assertNotContains(response, 'Barang Yang Dipinjam')
-        self.assertNotContains(response, 'Dikembalikan')
+        self.assertContains(response, 'Barang Sedang Dipinjam')
+        self.assertContains(response, 'Dikembalikan')
+        self.assertContains(response, 'Hilang')
+        self.assertContains(response, 'Rusak')
+        self.assertContains(response, reverse('dashboard:peminjaman_returned', args=[peminjaman.pk]))
+        self.assertContains(response, reverse('dashboard:peminjaman_lost', args=[peminjaman.pk]))
+        self.assertContains(response, reverse('dashboard:peminjaman_broken', args=[peminjaman.pk]))
 
-    def test_dashboard_ringkas_tidak_memuat_aksi_status_peminjaman(self):
+    def test_admin_dashboard_tidak_memuat_aksi_status_peminjaman_laboran(self):
+        self.pengguna.role = 'admin'
+        self.pengguna.save(update_fields=['role'])
         PeminjamanAlat.objects.create(
             barang=self.barang,
             nama_peminjam='Siti',
@@ -379,9 +388,29 @@ class DashboardViewTests(TestCase):
 
         response = self.client.get(reverse('dashboard:home'))
 
-        self.assertNotContains(response, 'data-confirm-message="')
-        self.assertContains(response, 'data-confirmation-modal')
+        self.assertNotContains(response, 'Barang Sedang Dipinjam')
+        self.assertNotContains(response, 'Barang Perlu Diganti')
+        self.assertNotContains(response, 'Dikembalikan')
+        self.assertNotContains(response, 'Digantikan')
         self.assertNotContains(response, 'window.confirm')
+
+    def test_admin_ditolak_mengubah_status_peminjaman_dari_dashboard(self):
+        self.pengguna.role = 'admin'
+        self.pengguna.save(update_fields=['role'])
+        peminjaman = PeminjamanAlat.objects.create(
+            barang=self.barang,
+            nama_peminjam='Siti',
+            tanggal_pinjam=timezone.localdate(),
+            tanggal_kembali=timezone.localdate(),
+            status='dipinjam',
+        )
+
+        response = self.client.post(reverse('dashboard:peminjaman_returned', args=[peminjaman.pk]), follow=True)
+        peminjaman.refresh_from_db()
+
+        self.assertRedirects(response, reverse('dashboard:home'))
+        self.assertEqual(peminjaman.status, 'dipinjam')
+        self.assertContains(response, 'Anda tidak memiliki akses untuk mengubah status peminjaman.')
 
     def test_mark_borrowed_as_returned_changes_status_to_dikembalikan(self):
         peminjaman = PeminjamanAlat.objects.create(

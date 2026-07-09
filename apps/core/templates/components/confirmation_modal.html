@@ -27,6 +27,11 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        if (window.LabHubConfirmationModalInitialized) {
+            return;
+        }
+        window.LabHubConfirmationModalInitialized = true;
+
         const modal = document.querySelector('[data-confirmation-modal]');
         if (!modal) {
             return;
@@ -52,16 +57,33 @@
             modal.classList.add('flex');
         }
 
-        document.querySelectorAll('[data-confirm-message]').forEach(function (element) {
-            element.addEventListener(element.tagName === 'FORM' ? 'submit' : 'click', function (event) {
-                if (element.dataset.confirmed === 'true') {
-                    element.dataset.confirmed = 'false';
-                    return;
-                }
+        document.addEventListener('submit', function (event) {
+            const element = event.target;
+            if (!element.matches('[data-confirm-message]')) {
+                return;
+            }
+            if (element.dataset.confirmed === 'true') {
+                element.dataset.confirmed = 'false';
+                return;
+            }
 
-                event.preventDefault();
-                openModal(element);
-            });
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            openModal(element);
+        }, true);
+
+        document.addEventListener('click', function (event) {
+            const element = event.target.closest('a[data-confirm-message], button[data-confirm-message]');
+            if (!element) {
+                return;
+            }
+            if (element.dataset.confirmed === 'true') {
+                element.dataset.confirmed = 'false';
+                return;
+            }
+
+            event.preventDefault();
+            openModal(element);
         });
 
         cancelButton.addEventListener('click', closeModal);
@@ -78,12 +100,14 @@
             }
 
             pendingElement.dataset.confirmed = 'true';
-            if (pendingElement.tagName === 'FORM') {
-                pendingElement.requestSubmit();
+            const confirmedElement = pendingElement;
+            closeModal();
+            if (confirmedElement.tagName === 'FORM') {
+                confirmedElement.requestSubmit();
                 return;
             }
 
-            window.location.href = pendingElement.href;
+            window.location.href = confirmedElement.href;
         });
     });
 </script>

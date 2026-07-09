@@ -2,8 +2,55 @@
 
 {% block title %}Peminjaman Alat{% endblock %}
 
+{% block extra_head %}{{ block.super }}
+<script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+<style>
+    .peminjaman-row-overdue td {
+        background: rgba(255, 241, 242, 0.74) !important;
+        border-color: rgba(251, 113, 133, 0.22) !important;
+    }
+
+    .peminjaman-row-overdue:hover td {
+        background: rgba(255, 228, 230, 0.86) !important;
+    }
+
+    .peminjaman-row-overdue td:first-child {
+        box-shadow: inset 4px 0 0 rgba(225, 29, 72, 0.68);
+    }
+
+    html[data-theme="dark"] .peminjaman-row-overdue td {
+        background: rgba(244, 63, 94, 0.08) !important;
+        border-color: rgba(148, 163, 184, 0.14) !important;
+    }
+
+    html[data-theme="dark"] .peminjaman-row-overdue:hover td {
+        background: rgba(244, 63, 94, 0.13) !important;
+    }
+
+    html[data-theme="dark"] .peminjaman-row-overdue td:first-child {
+        box-shadow: inset 4px 0 0 rgba(251, 113, 133, 0.62);
+    }
+
+    html[data-theme="dark"] .peminjaman-overdue-badge {
+        border: 1px solid rgba(251, 113, 133, 0.28);
+        background: rgba(127, 29, 29, 0.34) !important;
+        color: #fecdd3 !important;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<section class="min-w-0 max-w-full space-y-6 overflow-x-hidden">
+<section id="peminjaman-list-content" class="min-w-0 max-w-full space-y-6 overflow-x-hidden">
+    {% if messages %}
+    <div class="grid gap-3">
+        {% for message in messages %}
+        <div class="{% if message.tags == 'success' %}border-emerald-200 bg-emerald-50 text-emerald-800{% elif message.tags == 'error' %}border-rose-200 bg-rose-50 text-rose-800{% elif message.tags == 'warning' %}border-amber-200 bg-amber-50 text-amber-800{% else %}border-slate-200 bg-white text-slate-700{% endif %} rounded-2xl border px-4 py-3 text-sm font-semibold">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
             <p class="text-sm font-bold uppercase tracking-[0.2em] text-amber-600">Peminjaman</p>
@@ -16,7 +63,13 @@
         </a>
     </div>
 
-    <form method="get" class="surface-card min-w-0 max-w-full p-5" data-auto-filter-form>
+    <form method="get" class="surface-card min-w-0 max-w-full p-5" data-auto-filter-form
+          data-no-global-loading="true"
+          hx-get="{% url 'peminjaman:peminjaman_list' %}"
+          hx-target="#peminjaman-list-content"
+          hx-select="#peminjaman-list-content"
+          hx-swap="outerHTML"
+          hx-push-url="true">
         <div class="grid min-w-0 gap-4 md:grid-cols-2 lg:grid-cols-4">
             <div>
                 <label for="id_barang_filter">Nama barang</label>
@@ -56,7 +109,19 @@
             </div>
             {% endif %}
             <div class="flex w-full flex-wrap justify-end gap-3 sm:w-auto">
-                <a class="btn-secondary flex-1 gap-2 sm:flex-none" href="{% url 'peminjaman:peminjaman_list' %}">
+                <div class="hidden items-center gap-2 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-black text-amber-700" data-filter-loading>
+                    <span class="h-3 w-3 animate-spin rounded-full border-2 border-amber-200 border-t-amber-600"></span>
+                    <span>Memuat</span>
+                </div>
+                <a class="btn-secondary flex-1 gap-2 sm:flex-none"
+                   href="{% url 'peminjaman:peminjaman_list' %}"
+                   data-no-page-transition="true"
+                   data-no-global-loading="true"
+                   hx-get="{% url 'peminjaman:peminjaman_list' %}"
+                   hx-target="#peminjaman-list-content"
+                   hx-select="#peminjaman-list-content"
+                   hx-swap="outerHTML"
+                   hx-push-url="true">
                     <i data-lucide="rotate-ccw" class="h-4 w-4"></i>
                     <span>Reset</span>
                 </a>
@@ -65,19 +130,26 @@
     </form>
 
     {% if is_manager %}
-    <form id="peminjaman-bulk-status-form" method="post" action="{% url 'peminjaman:peminjaman_bulk_update' %}" class="surface-card space-y-4 p-5">
+    <form id="peminjaman-bulk-status-form" method="post" action="{% url 'peminjaman:peminjaman_bulk_update' %}" class="surface-card space-y-4 p-5"
+          data-requires-selection
+          data-selection-name="transaksi_ids"
+          data-confirm-message="Lanjutkan perubahan status untuk semua peminjaman yang dipilih? Status setiap detail barang dalam transaksi terpilih akan ikut diperbarui."
+          hx-post="{% url 'peminjaman:peminjaman_bulk_update' %}"
+          hx-target="#peminjaman-list-content"
+          hx-select="#peminjaman-list-content"
+          hx-swap="outerHTML">
         {% csrf_token %}
         <div class="flex flex-wrap items-end gap-3">
             <div class="min-w-[220px] flex-1">
                 <label for="id_bulk_status">Ubah status terpilih</label>
-                <select id="id_bulk_status" name="status">
+                <select id="id_bulk_status" name="status" required>
                     <option value="">Pilih status</option>
                     {% for value, label in bulk_status_choices %}
                     <option value="{{ value }}">{{ label }}</option>
                     {% endfor %}
                 </select>
             </div>
-            <button type="submit" class="btn-primary gap-2 bg-amber-500 shadow-amber-500/20 hover:bg-amber-600">
+            <button type="submit" class="btn-primary gap-2 bg-amber-500 shadow-amber-500/20 hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-45" data-selection-submit disabled>
                 <i data-lucide="save" class="h-4 w-4"></i>
                 <span>Simpan</span>
             </button>
@@ -102,7 +174,7 @@
                 </thead>
                 <tbody>
                     {% for peminjaman in peminjaman_list %}
-                    <tr class="hover:bg-slate-50/70">
+                    <tr class="{% if peminjaman.is_overdue %}peminjaman-row-overdue{% else %}hover:bg-slate-50/70{% endif %}">
                         {% if is_manager %}
                         <td>
                             <input type="checkbox" name="transaksi_ids" value="{{ peminjaman.pk }}" form="peminjaman-bulk-status-form" aria-label="Pilih {{ peminjaman.kode_pinjam }}">
@@ -127,7 +199,12 @@
                             <div class="text-xs text-slate-500">No HP: {{ peminjaman.no_hp|default:"-" }}</div>
                         </td>
                         <td>{{ peminjaman.tanggal_pinjam|date:"d M Y" }}</td>
-                        <td>{{ peminjaman.tanggal_kembali|date:"d M Y" }}</td>
+                        <td>
+                            <div>{{ peminjaman.tanggal_kembali|date:"d M Y" }}</div>
+                            {% if peminjaman.is_overdue %}
+                            <span class="peminjaman-overdue-badge mt-1 inline-flex rounded-full bg-rose-100 px-2.5 py-1 text-[11px] font-black text-rose-700">Terlambat</span>
+                            {% endif %}
+                        </td>
                         <td>
                             <span class="
                                 {% if peminjaman.status == 'dipinjam' %}bg-amber-100 text-amber-700
@@ -142,7 +219,14 @@
                         </td>
                         <td>
                             <div class="flex flex-wrap gap-3 text-sm font-semibold">
-                                <a class="inline-flex items-center gap-1 text-brand-700 hover:text-brand-800" href="{% if is_manager and peminjaman.first_detail %}{% url 'peminjaman:peminjaman_detail' peminjaman.first_detail.pk %}{% else %}{% url 'peminjaman:peminjaman_detail' peminjaman.pk %}{% endif %}">
+                                <a class="inline-flex items-center gap-1 text-brand-700 hover:text-brand-800"
+                                   href="{% if is_manager and peminjaman.first_detail %}{% url 'peminjaman:peminjaman_detail' peminjaman.first_detail.pk %}{% else %}{% url 'peminjaman:peminjaman_detail' peminjaman.pk %}{% endif %}"
+                                   data-no-page-transition="true"
+                                   hx-get="{% if is_manager and peminjaman.first_detail %}{% url 'peminjaman:peminjaman_detail' peminjaman.first_detail.pk %}{% else %}{% url 'peminjaman:peminjaman_detail' peminjaman.pk %}{% endif %}"
+                                   hx-target="[data-app-content]"
+                                   hx-select="[data-app-content] > *"
+                                   hx-swap="innerHTML"
+                                   hx-push-url="true">
                                     <i data-lucide="eye" class="h-4 w-4"></i>
                                     <span>Detail</span>
                                 </a>
@@ -153,7 +237,11 @@
                                 </a>
                                 {% endif %}
                                 {% if peminjaman.can_current_pengguna_delete %}
-                                <form method="post" action="{% if is_manager and peminjaman.first_detail %}{% url 'peminjaman:peminjaman_delete' peminjaman.first_detail.pk %}{% else %}{% url 'peminjaman:peminjaman_delete' peminjaman.pk %}{% endif %}" data-confirm-message="Yakin ingin menghapus peminjaman {{ peminjaman.nama_peminjam }}?" class="inline">
+                                <form method="post" action="{% if is_manager and peminjaman.first_detail %}{% url 'peminjaman:peminjaman_delete' peminjaman.first_detail.pk %}{% else %}{% url 'peminjaman:peminjaman_delete' peminjaman.pk %}{% endif %}" data-confirm-message="Yakin ingin menghapus peminjaman {{ peminjaman.nama_peminjam }}?" class="inline"
+                                      hx-post="{% if is_manager and peminjaman.first_detail %}{% url 'peminjaman:peminjaman_delete' peminjaman.first_detail.pk %}{% else %}{% url 'peminjaman:peminjaman_delete' peminjaman.pk %}{% endif %}"
+                                      hx-target="#peminjaman-list-content"
+                                      hx-select="#peminjaman-list-content"
+                                      hx-swap="outerHTML">
                                     {% csrf_token %}
                                     <button type="submit" class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700">
                                         <i data-lucide="trash-2" class="h-4 w-4"></i>
@@ -179,10 +267,24 @@
         <p class="text-sm font-semibold text-slate-500">Halaman {{ page_obj.number }} dari {{ paginator.num_pages }}</p>
         <div class="flex gap-2">
             {% if page_obj.has_previous %}
-            <a class="btn-secondary" href="?page={{ page_obj.previous_page_number }}&barang={{ filter_barang|urlencode }}&tanggal_mulai={{ filter_tanggal_mulai|urlencode }}&tanggal_selesai={{ filter_tanggal_selesai|urlencode }}&status={{ filter_status|urlencode }}{% if filter_semua %}&semua=1{% endif %}">Sebelumnya</a>
+            <a class="btn-secondary"
+               href="?page={{ page_obj.previous_page_number }}&barang={{ filter_barang|urlencode }}&tanggal_mulai={{ filter_tanggal_mulai|urlencode }}&tanggal_selesai={{ filter_tanggal_selesai|urlencode }}&status={{ filter_status|urlencode }}{% if filter_semua %}&semua=1{% endif %}"
+               data-no-page-transition="true"
+               hx-get="?page={{ page_obj.previous_page_number }}&barang={{ filter_barang|urlencode }}&tanggal_mulai={{ filter_tanggal_mulai|urlencode }}&tanggal_selesai={{ filter_tanggal_selesai|urlencode }}&status={{ filter_status|urlencode }}{% if filter_semua %}&semua=1{% endif %}"
+               hx-target="#peminjaman-list-content"
+               hx-select="#peminjaman-list-content"
+               hx-swap="outerHTML"
+               hx-push-url="true">Sebelumnya</a>
             {% endif %}
             {% if page_obj.has_next %}
-            <a class="btn-secondary" href="?page={{ page_obj.next_page_number }}&barang={{ filter_barang|urlencode }}&tanggal_mulai={{ filter_tanggal_mulai|urlencode }}&tanggal_selesai={{ filter_tanggal_selesai|urlencode }}&status={{ filter_status|urlencode }}{% if filter_semua %}&semua=1{% endif %}">Berikutnya</a>
+            <a class="btn-secondary"
+               href="?page={{ page_obj.next_page_number }}&barang={{ filter_barang|urlencode }}&tanggal_mulai={{ filter_tanggal_mulai|urlencode }}&tanggal_selesai={{ filter_tanggal_selesai|urlencode }}&status={{ filter_status|urlencode }}{% if filter_semua %}&semua=1{% endif %}"
+               data-no-page-transition="true"
+               hx-get="?page={{ page_obj.next_page_number }}&barang={{ filter_barang|urlencode }}&tanggal_mulai={{ filter_tanggal_mulai|urlencode }}&tanggal_selesai={{ filter_tanggal_selesai|urlencode }}&status={{ filter_status|urlencode }}{% if filter_semua %}&semua=1{% endif %}"
+               hx-target="#peminjaman-list-content"
+               hx-select="#peminjaman-list-content"
+               hx-swap="outerHTML"
+               hx-push-url="true">Berikutnya</a>
             {% endif %}
         </div>
     </nav>
@@ -191,25 +293,114 @@
 {% endblock %}
 
 {% block extra_script %}
-{% include "components/confirmation_modal.html" with title="Konfirmasi Hapus Peminjaman" confirm_label="Lanjutkan" confirm_icon="arrow-right" %}
+{% include "components/confirmation_modal.html" with title="Konfirmasi Peminjaman" confirm_label="Lanjutkan" confirm_icon="arrow-right" %}
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const form = document.querySelector('[data-auto-filter-form]');
+    function bindPeminjamanAutoFilter(root) {
+        const form = (root || document).querySelector('[data-auto-filter-form]');
         if (!form) {
             return;
         }
+        if (form.dataset.autoFilterBound === 'true') {
+            return;
+        }
+        form.dataset.autoFilterBound = 'true';
 
+        const filterLoading = form.querySelector('[data-filter-loading]');
         let filterTimer = null;
-        function submitFilter() {
-            window.clearTimeout(filterTimer);
-            filterTimer = window.setTimeout(function () {
-                form.requestSubmit();
-            }, 350);
+
+        function setFilterLoading(isLoading) {
+            if (!filterLoading) {
+                return;
+            }
+            filterLoading.classList.toggle('hidden', !isLoading);
+            filterLoading.classList.toggle('inline-flex', isLoading);
         }
 
+        function submitFilter(delay) {
+            window.clearTimeout(filterTimer);
+            filterTimer = window.setTimeout(function () {
+                setFilterLoading(true);
+                form.requestSubmit();
+            }, delay);
+        }
+
+        form.addEventListener('htmx:beforeRequest', function () {
+            setFilterLoading(true);
+        });
+        form.addEventListener('htmx:afterRequest', function () {
+            setFilterLoading(false);
+        });
+        form.addEventListener('htmx:responseError', function () {
+            setFilterLoading(false);
+        });
+        form.addEventListener('htmx:sendError', function () {
+            setFilterLoading(false);
+        });
+
         form.querySelectorAll('input, select').forEach(function (field) {
-            const eventName = field.type === 'text' ? 'input' : 'change';
-            field.addEventListener(eventName, submitFilter);
+            if (field.type === 'text') {
+                let lastSubmittedValue = field.value;
+                field.addEventListener('keydown', function (event) {
+                    if (event.key !== 'Enter') {
+                        return;
+                    }
+                    event.preventDefault();
+                    lastSubmittedValue = field.value;
+                    submitFilter(0);
+                });
+                field.addEventListener('blur', function () {
+                    if (field.value === lastSubmittedValue) {
+                        return;
+                    }
+                    lastSubmittedValue = field.value;
+                    submitFilter(0);
+                });
+                return;
+            }
+            field.addEventListener('change', function () {
+                submitFilter(250);
+            });
+        });
+    }
+
+    function bindPeminjamanSelectionSubmit(root) {
+        (root || document).querySelectorAll('[data-requires-selection]').forEach(function (form) {
+            if (form.dataset.selectionBound === 'true') {
+                return;
+            }
+            form.dataset.selectionBound = 'true';
+            const submitButton = form.querySelector('[data-selection-submit]');
+            const selectionName = form.dataset.selectionName;
+            const statusField = form.querySelector('select[name="status"]');
+            if (!submitButton || !selectionName) {
+                return;
+            }
+
+            function syncSelectionState() {
+                const hasSelection = document.querySelectorAll('input[name="' + selectionName + '"]:checked').length > 0;
+                const hasStatus = !statusField || Boolean(statusField.value);
+                submitButton.disabled = !(hasSelection && hasStatus);
+            }
+
+            document.querySelectorAll('input[name="' + selectionName + '"]').forEach(function (checkbox) {
+                checkbox.addEventListener('change', syncSelectionState);
+            });
+            if (statusField) {
+                statusField.addEventListener('change', syncSelectionState);
+            }
+            syncSelectionState();
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        bindPeminjamanAutoFilter(document);
+        bindPeminjamanSelectionSubmit(document);
+        document.body.addEventListener('htmx:afterSwap', function (event) {
+            bindPeminjamanAutoFilter(event.target);
+            bindPeminjamanSelectionSubmit(event.target);
+            if (window.lucide) {
+                window.lucide.createIcons();
+            }
         });
     });
 </script>

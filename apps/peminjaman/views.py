@@ -2,9 +2,10 @@ from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Exists, OuterRef, Q
-from django.http import JsonResponse
-from django.urls import reverse_lazy
+from django.http import HttpResponse, JsonResponse
+from django.urls import reverse, reverse_lazy
 from django.shortcuts import get_object_or_404, redirect
+from django.utils import timezone
 from django.utils.text import slugify
 from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_GET, require_POST
@@ -13,13 +14,20 @@ from django.views.generic import CreateView, DeleteView, DetailView, ListView, U
 from apps.core.views import PostOnlyDeleteMixin
 from apps.core.permissions import BORROWER_ROLES, LABORAN_ROLE
 from apps.inventaris.models import ACTIVE_PEMINJAMAN_STATUSES, Barang, PaketBarang
+from apps.pengguna.models import Pengguna
 from .forms import PeminjamanAlatForm
 from .models import PeminjamanAlat, PeminjamanTransaksi
 from .notifications import send_peminjaman_request_notifications, send_peminjaman_status_notification
 
 
 MANAGER_ROLES = {LABORAN_ROLE}
-BULK_STATUS_CHOICES = {'dipinjam', 'dikembalikan', 'hilang', 'rusak', 'digantikan'}
+BULK_STATUS_CHOICES = {'dipinjam', 'hilang', 'rusak', 'selesai'}
+BULK_STATUS_UI_CHOICES = [
+    ('dipinjam', 'Dipinjam'),
+    ('hilang', 'Hilang'),
+    ('rusak', 'Rusak'),
+    ('selesai', 'Selesai'),
+]
 ARCHIVED_STATUS_CHOICES = {'ditolak', 'digantikan', 'dikembalikan'}
 
 
@@ -44,6 +52,16 @@ def _get_peminjaman_group(peminjaman, for_update=False):
 
 def _get_peminjaman_group_for_update(peminjaman):
     return _get_peminjaman_group(peminjaman, for_update=True)
+
+
+def resolve_bulk_status(current_status, requested_status):
+    if requested_status != 'selesai':
+        return requested_status
+    if current_status == 'dipinjam':
+        return 'dikembalikan'
+    if current_status in {'hilang', 'rusak'}:
+        return 'digantikan'
+    return current_status
 
 
 @require_GET
@@ -164,12 +182,18 @@ def bulk_update_status(request):
             .filter(transaksi_id__in=transaksi_ids)
         )
         for peminjaman in detail_list:
-            peminjaman.status = status
+            next_status = resolve_bulk_status(peminjaman.status, status)
+            if next_status == peminjaman.status:
+                continue
+            peminjaman.status = next_status
             peminjaman.save(update_fields=['status', 'diperbarui_pada'])
             send_peminjaman_status_notification(peminjaman)
             updated_count += 1
 
-    messages.success(request, f'{updated_count} detail peminjaman berhasil diperbarui.')
+    if updated_count:
+        messages.success(request, f'{updated_count} detail peminjaman berhasil diperbarui.')
+    else:
+        messages.info(request, 'Tidak ada detail peminjaman yang perlu diperbarui.')
     return redirect('peminjaman:peminjaman_list')
 
 
@@ -197,12 +221,22 @@ def update_detail_status(request, pk):
         anchor = get_object_or_404(PeminjamanAlat.objects.select_for_update(), pk=pk)
         detail_queryset = _get_peminjaman_group_for_update(anchor).filter(pk__in=detail_ids)
         for peminjaman in detail_queryset:
-            peminjaman.status = status
+            next_status = resolve_bulk_status(peminjaman.status, status)
+            if next_status == peminjaman.status:
+                continue
+            peminjaman.status = next_status
             peminjaman.save(update_fields=['status', 'diperbarui_pada'])
             send_peminjaman_status_notification(peminjaman)
             updated_count += 1
 
-    messages.success(request, f'{updated_count} detail peminjaman berhasil diperbarui.')
+    if updated_count:
+        messages.success(request, f'{updated_count} detail peminjaman berhasil diperbarui.')
+    else:
+        messages.info(request, 'Tidak ada detail peminjaman yang perlu diperbarui.')
+    if request.headers.get('HX-Request') == 'true':
+        response = redirect('peminjaman:peminjaman_detail', pk=pk)
+        response['HX-Push-Url'] = reverse('peminjaman:peminjaman_detail', kwargs={'pk': pk})
+        return response
     return redirect('peminjaman:peminjaman_detail', pk=pk)
 
 
@@ -243,6 +277,7 @@ class PeminjamanAlatListView(ListView):
             queryset = queryset.exclude(status__in=ARCHIVED_STATUS_CHOICES)
 
         if pengguna and pengguna.role in MANAGER_ROLES:
+            today = timezone.localdate()
             transaksi_ids = list(
                 queryset.exclude(transaksi__isnull=True)
                 .values_list('transaksi_id', flat=True)
@@ -262,6 +297,11 @@ class PeminjamanAlatListView(ListView):
                 transaksi.status_display = (
                     dict(PeminjamanAlat.STATUS_CHOICES).get(transaksi.status, 'Campuran')
                 )
+                transaksi.is_overdue = any(
+                    detail.tanggal_kembali < today
+                    and detail.status not in ARCHIVED_STATUS_CHOICES
+                    for detail in detail_list
+                )
                 transaksi.can_current_pengguna_edit = (
                     detail_list and all(detail.status == 'diajukan' for detail in detail_list)
                 )
@@ -271,7 +311,12 @@ class PeminjamanAlatListView(ListView):
             return transaksi_list
 
         peminjaman_list = list(queryset)
+        today = timezone.localdate()
         for peminjaman in peminjaman_list:
+            peminjaman.is_overdue = (
+                peminjaman.tanggal_kembali < today
+                and peminjaman.status not in ARCHIVED_STATUS_CHOICES
+            )
             peminjaman.can_current_pengguna_edit = (
                 pengguna.role in MANAGER_ROLES
                 or (peminjaman.nim == pengguna.nim_nik and peminjaman.status == 'diajukan')
@@ -297,10 +342,7 @@ class PeminjamanAlatListView(ListView):
             choice for choice in PeminjamanAlat.STATUS_CHOICES
             if choice[0] != 'ditolak'
         ]
-        context['bulk_status_choices'] = [
-            choice for choice in PeminjamanAlat.STATUS_CHOICES
-            if choice[0] in BULK_STATUS_CHOICES
-        ]
+        context['bulk_status_choices'] = BULK_STATUS_UI_CHOICES
         context['current_pengguna'] = getattr(self.request, 'current_pengguna', None)
         context['is_borrower'] = bool(
             context['current_pengguna'] and context['current_pengguna'].role in BORROWER_ROLES
@@ -328,6 +370,17 @@ class PeminjamanAlatDetailView(DetailView):
             )
         else:
             context['detail_transaksi'] = [self.object]
+        peminjam_pengguna = Pengguna.objects.filter(nim_nik=self.object.nim).first()
+        context['peminjam_pengguna'] = peminjam_pengguna
+        context['peminjam_foto_url'] = peminjam_pengguna.foto.url if peminjam_pengguna and peminjam_pengguna.foto else ''
+        for detail in context['detail_transaksi']:
+            detail.barang_photo_url = ''
+            detail.barang_photo_label = detail.barang.nama
+            if detail.barang.foto:
+                detail.barang_photo_url = detail.barang.foto.url
+            elif detail.barang.inventaris_id and detail.barang.inventaris.foto:
+                detail.barang_photo_url = detail.barang.inventaris.foto.url
+                detail.barang_photo_label = detail.barang.inventaris.nama
         context['can_edit'] = bool(
             pengguna and (
                 pengguna.role in MANAGER_ROLES
@@ -340,10 +393,7 @@ class PeminjamanAlatDetailView(DetailView):
             and (pengguna.role in MANAGER_ROLES or self.object.nim == pengguna.nim_nik)
         )
         context['is_manager'] = bool(pengguna and pengguna.role in MANAGER_ROLES)
-        context['detail_status_choices'] = [
-            choice for choice in PeminjamanAlat.STATUS_CHOICES
-            if choice[0] in BULK_STATUS_CHOICES
-        ]
+        context['detail_status_choices'] = BULK_STATUS_UI_CHOICES
         return context
 
 
@@ -429,6 +479,10 @@ class PeminjamanAlatCreateView(CreateView):
             if peminjaman.status == 'diajukan':
                 send_peminjaman_request_notifications(peminjaman)
 
+        if self.request.headers.get('HX-Request') == 'true':
+            response = HttpResponse(status=204)
+            response['HX-Redirect'] = str(self.success_url)
+            return response
         return redirect(self.success_url)
 
     def get_selectable_barang_for_paket(self, paket):
@@ -484,6 +538,10 @@ class PeminjamanAlatUpdateView(UpdateView):
             self.object = form.save(commit=False)
             self.sync_group_metadata()
             self.sync_group_details(selected_barang)
+        if self.request.headers.get('HX-Request') == 'true':
+            response = HttpResponse(status=204)
+            response['HX-Redirect'] = str(self.success_url)
+            return response
         return redirect(self.success_url)
 
     def get_selected_barang_ids(self, form):

@@ -559,6 +559,20 @@
             color: #94a3b8 !important;
         }
 
+        html[data-theme="dark"] main input[type="date"] {
+            color-scheme: dark !important;
+        }
+
+        html[data-theme="dark"] main input[type="date"]::-webkit-calendar-picker-indicator {
+            cursor: pointer;
+            opacity: 1 !important;
+            filter: invert(1) brightness(1.8) contrast(0.9) !important;
+        }
+
+        html[data-theme="dark"] main input[type="date"]::-webkit-calendar-picker-indicator:hover {
+            opacity: 1;
+        }
+
         html[data-theme="dark"] .btn-secondary {
             color: var(--text-main) !important;
         }
@@ -567,6 +581,124 @@
         html[data-theme="dark"] .text-brand-700,
         html[data-theme="dark"] .text-brand-800 {
             color: #5eead4 !important;
+        }
+
+        [data-global-loading] {
+            position: fixed;
+            inset: 0;
+            z-index: 120;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background:
+                radial-gradient(circle at 50% 42%, rgba(20, 184, 166, 0.18), transparent 18rem),
+                rgba(15, 23, 42, 0.34);
+            backdrop-filter: blur(10px) saturate(1.1);
+            -webkit-backdrop-filter: blur(10px) saturate(1.1);
+            opacity: 0;
+            transition: opacity 160ms ease;
+        }
+
+        [data-global-loading].is-visible {
+            display: flex;
+            opacity: 1;
+        }
+
+        [data-global-loading-card] {
+            position: relative;
+            display: grid;
+            place-items: center;
+            gap: 0.9rem;
+            width: min(14rem, calc(100vw - 3rem));
+            border: 1px solid rgba(255, 255, 255, 0.34);
+            border-radius: 2rem;
+            background: rgba(255, 255, 255, 0.72);
+            padding: 1.5rem;
+            box-shadow: 0 28px 80px rgba(2, 6, 23, 0.28);
+            overflow: hidden;
+        }
+
+        [data-global-loading-card]::before {
+            content: "";
+            position: absolute;
+            inset: -45%;
+            background: conic-gradient(from 0deg, transparent, rgba(20, 184, 166, 0.26), transparent 34%);
+            animation: labhub-loading-orbit 1.15s linear infinite;
+        }
+
+        [data-global-loading-core] {
+            position: relative;
+            display: grid;
+            place-items: center;
+            width: 5.4rem;
+            height: 5.4rem;
+            border-radius: 1.8rem;
+            background: rgba(15, 118, 110, 0.12);
+            box-shadow: inset 0 0 0 1px rgba(20, 184, 166, 0.22);
+        }
+
+        [data-global-loading-core]::before {
+            content: "";
+            position: absolute;
+            inset: -0.45rem;
+            border-radius: 2.2rem;
+            border: 3px solid rgba(20, 184, 166, 0.16);
+            border-top-color: rgba(20, 184, 166, 0.88);
+            border-right-color: rgba(14, 165, 233, 0.72);
+            animation: labhub-loading-spin 0.8s linear infinite;
+        }
+
+        [data-global-loading-core] img {
+            position: relative;
+            width: 3.35rem;
+            height: 3.35rem;
+            object-fit: contain;
+            animation: labhub-loading-float 1.25s ease-in-out infinite;
+            filter: drop-shadow(0 10px 18px rgba(15, 23, 42, 0.18));
+        }
+
+        [data-global-loading-text] {
+            position: relative;
+            margin: 0;
+            color: #0f172a;
+            font-size: 0.78rem;
+            font-weight: 900;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+        }
+
+        html[data-theme="dark"] [data-global-loading] {
+            background:
+                radial-gradient(circle at 50% 42%, rgba(94, 234, 212, 0.14), transparent 18rem),
+                rgba(2, 6, 23, 0.52);
+        }
+
+        html[data-theme="dark"] [data-global-loading-card] {
+            border-color: rgba(148, 163, 184, 0.20);
+            background: rgba(15, 23, 42, 0.72);
+            box-shadow: 0 32px 90px rgba(2, 6, 23, 0.54);
+        }
+
+        html[data-theme="dark"] [data-global-loading-core] {
+            background: rgba(20, 184, 166, 0.14);
+            box-shadow: inset 0 0 0 1px rgba(94, 234, 212, 0.20);
+        }
+
+        html[data-theme="dark"] [data-global-loading-text] {
+            color: #ccfbf1;
+        }
+
+        @keyframes labhub-loading-spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes labhub-loading-orbit {
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes labhub-loading-float {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-0.18rem) scale(1.035); }
         }
 
         html[data-theme="dark"] .text-teal-600,
@@ -1574,6 +1706,14 @@
 </head>
 <body>
     <div class="app-page-background" aria-hidden="true"></div>
+    <div data-global-loading aria-live="polite" aria-hidden="true">
+        <div data-global-loading-card>
+            <div data-global-loading-core>
+                <img src="{% static 'core/img/labhub-logo.png' %}" alt="">
+            </div>
+            <p data-global-loading-text>Memproses</p>
+        </div>
+    </div>
     {% if current_pengguna %}
     {% include "components/navbar.html" %}
     {% endif %}
@@ -1672,14 +1812,74 @@
     <script>
         lucide.createIcons();
         document.addEventListener('DOMContentLoaded', function () {
+            const globalLoading = document.querySelector('[data-global-loading]');
+            let loadingTimer = null;
+            let loadingCount = 0;
+
+            function shouldSkipGlobalLoading(event) {
+                const source = event && event.detail && event.detail.elt ? event.detail.elt : event && event.target;
+                return Boolean(source && source.closest && source.closest('[data-no-global-loading="true"]'));
+            }
+
+            function showGlobalLoading(event) {
+                if (shouldSkipGlobalLoading(event)) return;
+                if (!globalLoading) return;
+                loadingCount += 1;
+                window.clearTimeout(loadingTimer);
+                loadingTimer = window.setTimeout(function () {
+                    globalLoading.classList.add('is-visible');
+                    globalLoading.setAttribute('aria-hidden', 'false');
+                }, 120);
+            }
+
+            function hideGlobalLoading(event) {
+                if (shouldSkipGlobalLoading(event)) return;
+                if (!globalLoading) return;
+                loadingCount = Math.max(loadingCount - 1, 0);
+                if (loadingCount > 0) return;
+                window.clearTimeout(loadingTimer);
+                globalLoading.classList.remove('is-visible');
+                globalLoading.setAttribute('aria-hidden', 'true');
+            }
+
+            document.body.addEventListener('htmx:beforeRequest', showGlobalLoading);
+            document.body.addEventListener('htmx:afterRequest', hideGlobalLoading);
+            document.body.addEventListener('htmx:responseError', hideGlobalLoading);
+            document.body.addEventListener('htmx:sendError', hideGlobalLoading);
+
+            document.addEventListener('submit', function (event) {
+                const form = event.target;
+                if (!form || form.matches('[hx-post], [hx-get], [hx-put], [hx-delete], [hx-patch]')) {
+                    return;
+                }
+                if (form.closest('[data-no-global-loading="true"]')) {
+                    return;
+                }
+                showGlobalLoading(event);
+            });
+
+            document.addEventListener('click', function (event) {
+                const dateInput = event.target.closest('input[type="date"]');
+                if (!dateInput || typeof dateInput.showPicker !== 'function' || dateInput.disabled || dateInput.readOnly) {
+                    return;
+                }
+                try {
+                    dateInput.showPicker();
+                } catch (error) {
+                    dateInput.focus();
+                }
+            });
+
             const appContent = document.querySelector('[data-app-content]');
             if (appContent && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
                 document.querySelectorAll('a[href]:not([target]):not([href^="#"]):not([href^="mailto:"]):not([href^="tel:"])').forEach(function (link) {
                     link.addEventListener('click', function (event) {
                         const href = link.getAttribute('href');
                         if (!href || link.dataset.noPageTransition === 'true' || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+                        if (link.closest('[data-no-global-loading="true"]')) return;
                         if (new URL(href, window.location.href).origin !== window.location.origin) return;
                         event.preventDefault();
+                        showGlobalLoading(event);
                         appContent.classList.add('is-leaving');
                         window.setTimeout(function () {
                             window.location.href = href;
