@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -8,7 +10,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
-from apps.asleb.models import AbsensiAsleb, Asleb, HonorAsleb
+from apps.asleb.models import AbsensiAsleb, Asleb, HonorAsleb, HasilPraktikumMahasiswa, ModulPraktikum, PesertaPraktikum
 from apps.inventaris.models import ACTIVE_PEMINJAMAN_STATUSES, Barang, InventarisBarang
 from apps.jadwal.models import JadwalPraktikum
 from apps.jadwal.notifications import send_jadwal_status_notification
@@ -17,11 +19,11 @@ from apps.kalender.realtime import (
     send_peminjaman_status_update,
     send_schedule_update,
 )
-from apps.kalender.models import KegiatanKalender
+from apps.kalender.models import KegiatanKalender, Notifikasi
 from apps.core.permissions import LABORAN_ROLE, can_manage_lab_operations
 from apps.peminjaman.models import PeminjamanAlat
 from apps.peminjaman.notifications import send_peminjaman_status_notification
-from apps.pendaftaran_asleb.models import PendaftaranAsleb, PengaturanPendaftaranAsleb, RiwayatAsleb
+from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb, RiwayatAsleb
 from apps.pendaftaran_asleb.services import is_registration_open
 from apps.pendaftaran_asleb.utils import get_public_registration_url
 
@@ -146,6 +148,8 @@ class DashboardView(TemplateView):
             pengaturan_pendaftaran = PengaturanPendaftaranAsleb.get_solo()
             peminjaman_saya = peminjaman_qs.filter(nim=pengguna.nim_nik)
             today = timezone.localdate()
+            week_start = today - timedelta(days=today.weekday())
+            week_end = week_start + timedelta(days=6)
             peminjaman_bermasalah = peminjaman_saya.filter(
                 status__in=['dipinjam', 'rusak', 'hilang'],
             ).filter(
@@ -189,51 +193,120 @@ class DashboardView(TemplateView):
             context['peringatan_peminjaman_saya'] = peringatan_peminjaman_saya
             context['has_peringatan_peminjaman_saya'] = bool(peringatan_peminjaman_saya)
             context['riwayat_honor_saya'] = riwayat_honor_saya
+            peserta_praktikum = (
+                PesertaPraktikum.objects
+                .select_related('matkul')
+                .filter(Q(pengguna=pengguna) | Q(nim=pengguna.nim_nik), aktif=True)
+            )
+            mahasiswa_matkul_ids = list(peserta_praktikum.values_list('matkul_id', flat=True).distinct())
+            mahasiswa_matkul_labels = [str(peserta.matkul) for peserta in peserta_praktikum]
+            asisten_matkul_ids = []
+            matkul_labels = []
+            if is_asisten_lab:
+                matkul_labels = self.get_asisten_lab_matkul_labels(pengguna)
+                asisten_matkul_ids = list(
+                    MataKuliahAsleb.objects.filter(
+                        Q(pendaftaran__nim=pengguna.nim_nik, pendaftaran__status__in=['diterima', 'digenerate'])
+                        | Q(riwayat_asleb__nim=pengguna.nim_nik)
+                        | Q(nama__in=[label.split(' - ')[0] for label in matkul_labels])
+                    ).values_list('pk', flat=True).distinct()
+                )
+
+            allowed_labels = matkul_labels if is_asisten_lab else mahasiswa_matkul_labels
+            allowed_matkul_ids = asisten_matkul_ids if is_asisten_lab else mahasiswa_matkul_ids
+
             jadwal_hari_ini = jadwal_qs.filter(
                 hari=hari_ini,
                 status=JadwalPraktikum.STATUS_DITERIMA,
             ) if hari_ini else jadwal_qs.none()
-            if is_asisten_lab:
-                matkul_labels = self.get_asisten_lab_matkul_labels(pengguna)
-                jadwal_hari_ini = jadwal_hari_ini.filter(mata_kuliah__in=matkul_labels) if matkul_labels else jadwal_qs.none()
+            if allowed_labels:
+                jadwal_hari_ini = jadwal_hari_ini.filter(mata_kuliah__in=allowed_labels)
+            elif is_asisten_lab or is_mahasiswa:
+                jadwal_hari_ini = jadwal_qs.none()
+
+            jadwal_minggu_ini = jadwal_qs.filter(status=JadwalPraktikum.STATUS_DITERIMA)
+            if allowed_labels:
+                jadwal_minggu_ini = jadwal_minggu_ini.filter(mata_kuliah__in=allowed_labels)
+            else:
+                jadwal_minggu_ini = jadwal_qs.none()
+
+            modul_tersedia = ModulPraktikum.objects.select_related('matkul').filter(matkul_id__in=allowed_matkul_ids)
+            hasil_absensi_saya = HasilPraktikumMahasiswa.objects.filter(peserta__in=peserta_praktikum) if not is_asisten_lab else HasilPraktikumMahasiswa.objects.filter(modul__matkul_id__in=allowed_matkul_ids)
+            notifikasi_saya = Notifikasi.objects.filter(pengguna=pengguna).order_by('-source_updated_at', '-id')
+
             context['jadwal_hari_ini'] = jadwal_hari_ini[:6]
             context['pendaftaran_asleb_dibuka'] = is_mahasiswa and is_registration_open()
             context['kegiatan_kalender_mahasiswa'] = kegiatan_qs.filter(tanggal__gte=context['today'])[:6]
             context['public_registration_url'] = get_public_registration_url()
-            stats_cards = [
-                {
-                    'label': 'Peminjaman Saya',
-                    'value': peminjaman_saya.count(),
-                    'note': 'Semua pengajuan dan peminjaman Anda',
-                    'icon': 'clipboard-list',
-                    'tone': 'orange',
-                },
-                {
-                    'label': 'Sedang Dipinjam',
-                    'value': peminjaman_saya.filter(status='dipinjam').count(),
-                    'note': 'Alat yang masih tercatat dipinjam',
-                    'icon': 'arrow-left-right',
-                    'tone': 'blue',
-                },
-                {
-                    'label': 'Menunggu Persetujuan',
-                    'value': peminjaman_saya.filter(status='diajukan').count(),
-                    'note': 'Pengajuan yang belum diproses',
-                    'icon': 'hourglass',
-                    'tone': 'purple',
-                },
-            ]
-
             if is_asisten_lab:
-                stats_cards.insert(0, {
-                    'label': 'Honor Bulan Ini',
-                    'value': self.format_rupiah(honor_bulan_ini),
-                    'note': f'Periode {awal_bulan:%B %Y}',
-                    'icon': 'wallet-cards',
-                    'tone': 'purple',
-                })
+                stats_cards = [
+                    {
+                        'label': 'Jadwal Mengajar',
+                        'value': jadwal_minggu_ini.count(),
+                        'note': 'Jadwal praktikum aktif minggu ini',
+                        'icon': 'calendar-clock',
+                        'tone': 'blue',
+                    },
+                    {
+                        'label': 'Praktikum Hari Ini',
+                        'value': jadwal_hari_ini.count(),
+                        'note': 'Yang perlu didampingi hari ini',
+                        'icon': 'monitor-check',
+                        'tone': 'teal',
+                    },
+                    {
+                        'label': 'Kelas Diampu',
+                        'value': len(allowed_matkul_ids),
+                        'note': 'Mata kuliah/kelas aktif',
+                        'icon': 'presentation',
+                        'tone': 'green',
+                    },
+                    {
+                        'label': 'Absensi Tercatat',
+                        'value': hasil_absensi_saya.count(),
+                        'note': 'Data nilai/absensi mahasiswa terkait',
+                        'icon': 'clipboard-check',
+                        'tone': 'purple',
+                    },
+                ]
+            else:
+                stats_cards = [
+                    {
+                        'label': 'Jadwal Minggu Ini',
+                        'value': jadwal_minggu_ini.count(),
+                        'note': 'Praktikum sesuai mata kuliah Anda',
+                        'icon': 'calendar-days',
+                        'tone': 'blue',
+                    },
+                    {
+                        'label': 'Praktikum Hari Ini',
+                        'value': jadwal_hari_ini.count(),
+                        'note': 'Jadwal yang berlangsung hari ini',
+                        'icon': 'book-open-check',
+                        'tone': 'teal',
+                    },
+                    {
+                        'label': 'Modul Tersedia',
+                        'value': modul_tersedia.count(),
+                        'note': 'Modul dari kelas praktikum Anda',
+                        'icon': 'files',
+                        'tone': 'green',
+                    },
+                    {
+                        'label': 'Notifikasi Baru',
+                        'value': notifikasi_saya.filter(dibaca_pada__isnull=True).count(),
+                        'note': 'Pemberitahuan yang belum dibaca',
+                        'icon': 'bell-ring',
+                        'tone': 'purple',
+                    },
+                ]
 
             context['stats_cards'] = self._decorate_items(stats_cards)
+            context['dashboard_user_name'] = (pengguna.nama_pengguna or 'Teman').split()[0]
+            context['jadwal_minggu_ini'] = jadwal_minggu_ini[:5]
+            context['modul_terbaru'] = modul_tersedia.order_by('-dibuat_pada')[:5]
+            context['notifikasi_terbaru'] = notifikasi_saya[:5]
+            context['hasil_absensi_terbaru'] = hasil_absensi_saya.select_related('modul', 'peserta').order_by('-tanggal_praktikum', '-diperbarui_pada')[:5]
             menu_modules = [
                 {
                     'title': 'Peminjaman Alat',

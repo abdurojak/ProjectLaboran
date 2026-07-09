@@ -210,7 +210,13 @@
                         <td>{{ pendaftaran.program_studi }}</td>
                         <td>
                             <span class="{% if pendaftaran.status == 'diterima' or pendaftaran.status == 'digenerate' %}bg-emerald-100 text-emerald-700{% elif pendaftaran.status == 'ditolak' %}bg-rose-100 text-rose-700{% else %}bg-amber-100 text-amber-700{% endif %} inline-flex rounded-full px-3 py-1 text-xs font-bold">
-                                {{ pendaftaran.get_status_display }}
+                                {% if pendaftaran.status == 'diterima' %}
+                                    Diterima - Belum Digenerate
+                                {% elif pendaftaran.status == 'digenerate' %}
+                                    Aktif sebagai Asisten Lab
+                                {% else %}
+                                    {{ pendaftaran.get_status_display }}
+                                {% endif %}
                             </span>
                         </td>
                         <td>
@@ -241,6 +247,12 @@
                                 </form>
                                 {% elif pendaftaran.status == 'diterima' %}
                                 <span class="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">Siap digenerate</span>
+                                <form method="post" action="{% url 'pendaftaran_asleb:pendaftaran_generate_asleb' pendaftaran.pk %}" onsubmit="return confirm('Generate pendaftar yang sudah diterima sekarang? Role baru berubah setelah proses ini berhasil.');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="rounded-xl bg-brand-700 px-3 py-2 text-xs font-bold text-white">Generate</button>
+                                </form>
+                                {% elif pendaftaran.status == 'digenerate' %}
+                                <span class="rounded-xl bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700">Sudah digenerate</span>
                                 {% endif %}
                             </div>
                         </td>

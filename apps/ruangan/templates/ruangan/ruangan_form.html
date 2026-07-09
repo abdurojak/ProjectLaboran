@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Ruangan Lab{% endblock %}
+
+{% block content %}
+<section class="mx-auto max-w-3xl space-y-6">
+    <div>
+        <p class="text-sm font-bold uppercase tracking-[0.2em] text-amber-600">Ruangan</p>
+        <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Edit Data Lab</h2>
+        <p class="mt-2 text-sm text-slate-500">Perbarui nama lab, kepala lab, kapasitas, dan deskripsi ruangan.</p>
+    </div>
+
+    <form method="post" class="surface-card grid gap-5 p-6 md:grid-cols-2 md:p-8">
+        {% csrf_token %}
+        {% for field in form %}
+        <div class="{% if field.name == 'deskripsi' %}md:col-span-2{% endif %}">
+            {{ field.label_tag }}
+            {{ field }}
+            {% if field.errors %}<div class="mt-2 text-sm font-semibold text-rose-600">{{ field.errors|striptags }}</div>{% endif %}
+        </div>
+        {% endfor %}
+        <div class="flex flex-wrap gap-3 md:col-span-2">
+            <button type="submit" class="btn-primary gap-2"><i data-lucide="save" class="h-4 w-4"></i><span>Simpan Data</span></button>
+            <a href="{% url 'ruangan:ruangan_list' %}" class="btn-secondary gap-2"><i data-lucide="arrow-left" class="h-4 w-4"></i><span>Batal</span></a>
+        </div>
+    </form>
+</section>
+{% endblock %}
