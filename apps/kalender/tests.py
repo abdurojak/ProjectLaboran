@@ -71,6 +71,8 @@ class NotificationRealtimeTests(TransactionTestCase):
             other_connected, _ = await other_socket.connect()
             self.assertTrue(owner_connected)
             self.assertTrue(other_connected)
+            await owner_socket.receive_json_from()
+            await other_socket.receive_json_from()
 
             await get_channel_layer().group_send(user_group_name(self.mahasiswa.pk), {
                 'type': 'realtime.event',
@@ -81,6 +83,31 @@ class NotificationRealtimeTests(TransactionTestCase):
             self.assertTrue(await other_socket.receive_nothing(timeout=0.1))
             await owner_socket.disconnect()
             await other_socket.disconnect()
+
+        async_to_sync(scenario)()
+
+    def test_websocket_notifikasi_mengirim_jumlah_awal(self):
+        Notifikasi.objects.create(
+            pengguna=self.mahasiswa,
+            source_key='initial-unread',
+            judul='Belum dibaca',
+            tanggal=date.today(),
+            source_updated_at=timezone.now(),
+        )
+        headers = self.session_headers(self.mahasiswa)
+
+        async def scenario():
+            socket = WebsocketCommunicator(application, '/ws/notifikasi/', headers=headers)
+            connected, _ = await socket.connect()
+            self.assertTrue(connected)
+
+            payload = await socket.receive_json_from()
+            self.assertEqual(payload['type'], 'notification')
+            self.assertEqual(payload['payload']['event'], 'notification.sync')
+            self.assertEqual(payload['payload']['unread_count'], 1)
+            self.assertTrue(payload['payload']['silent'])
+
+            await socket.disconnect()
 
         async_to_sync(scenario)()
 

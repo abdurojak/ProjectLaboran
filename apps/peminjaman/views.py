@@ -14,6 +14,7 @@ from django.views.generic import CreateView, DeleteView, DetailView, ListView, U
 from apps.core.views import PostOnlyDeleteMixin
 from apps.core.permissions import BORROWER_ROLES, LABORAN_ROLE
 from apps.inventaris.models import ACTIVE_PEMINJAMAN_STATUSES, Barang, PaketBarang
+from apps.kalender.realtime import send_peminjaman_request_update, send_peminjaman_status_update
 from apps.pengguna.models import Pengguna
 from .forms import PeminjamanAlatForm
 from .models import PeminjamanAlat, PeminjamanTransaksi
@@ -55,6 +56,8 @@ def _get_peminjaman_group_for_update(peminjaman):
 
 
 def resolve_bulk_status(current_status, requested_status):
+    if current_status in ARCHIVED_STATUS_CHOICES:
+        return current_status
     if requested_status != 'selesai':
         return requested_status
     if current_status == 'dipinjam':
@@ -180,6 +183,7 @@ def bulk_update_status(request):
             PeminjamanAlat.objects.select_for_update()
             .select_related('transaksi')
             .filter(transaksi_id__in=transaksi_ids)
+            .exclude(status__in=ARCHIVED_STATUS_CHOICES)
         )
         for peminjaman in detail_list:
             next_status = resolve_bulk_status(peminjaman.status, status)
@@ -188,6 +192,9 @@ def bulk_update_status(request):
             peminjaman.status = next_status
             peminjaman.save(update_fields=['status', 'diperbarui_pada'])
             send_peminjaman_status_notification(peminjaman)
+            transaction.on_commit(lambda item_id=peminjaman.pk: send_peminjaman_status_update(
+                PeminjamanAlat.objects.select_related('barang').get(pk=item_id)
+            ))
             updated_count += 1
 
     if updated_count:
@@ -219,7 +226,11 @@ def update_detail_status(request, pk):
     updated_count = 0
     with transaction.atomic():
         anchor = get_object_or_404(PeminjamanAlat.objects.select_for_update(), pk=pk)
-        detail_queryset = _get_peminjaman_group_for_update(anchor).filter(pk__in=detail_ids)
+        detail_queryset = (
+            _get_peminjaman_group_for_update(anchor)
+            .filter(pk__in=detail_ids)
+            .exclude(status__in=ARCHIVED_STATUS_CHOICES)
+        )
         for peminjaman in detail_queryset:
             next_status = resolve_bulk_status(peminjaman.status, status)
             if next_status == peminjaman.status:
@@ -227,6 +238,9 @@ def update_detail_status(request, pk):
             peminjaman.status = next_status
             peminjaman.save(update_fields=['status', 'diperbarui_pada'])
             send_peminjaman_status_notification(peminjaman)
+            transaction.on_commit(lambda item_id=peminjaman.pk: send_peminjaman_status_update(
+                PeminjamanAlat.objects.select_related('barang').get(pk=item_id)
+            ))
             updated_count += 1
 
     if updated_count:
@@ -383,7 +397,7 @@ class PeminjamanAlatDetailView(DetailView):
                 detail.barang_photo_label = detail.barang.inventaris.nama
         context['can_edit'] = bool(
             pengguna and (
-                pengguna.role in MANAGER_ROLES
+                (pengguna.role in MANAGER_ROLES and self.object.status == 'diajukan')
                 or (self.object.nim == pengguna.nim_nik and self.object.status == 'diajukan')
             )
         )
@@ -393,6 +407,10 @@ class PeminjamanAlatDetailView(DetailView):
             and (pengguna.role in MANAGER_ROLES or self.object.nim == pengguna.nim_nik)
         )
         context['is_manager'] = bool(pengguna and pengguna.role in MANAGER_ROLES)
+        context['has_actionable_details'] = any(
+            detail.status not in ARCHIVED_STATUS_CHOICES
+            for detail in context['detail_transaksi']
+        )
         context['detail_status_choices'] = BULK_STATUS_UI_CHOICES
         return context
 
@@ -478,6 +496,9 @@ class PeminjamanAlatCreateView(CreateView):
         for peminjaman in created_peminjaman:
             if peminjaman.status == 'diajukan':
                 send_peminjaman_request_notifications(peminjaman)
+                transaction.on_commit(lambda item_id=peminjaman.pk: send_peminjaman_request_update(
+                    PeminjamanAlat.objects.select_related('barang').get(pk=item_id)
+                ))
 
         if self.request.headers.get('HX-Request') == 'true':
             response = HttpResponse(status=204)
@@ -521,6 +542,9 @@ class PeminjamanAlatUpdateView(UpdateView):
     def dispatch(self, request, *args, **kwargs):
         self.object = self.get_object()
         pengguna = getattr(request, 'current_pengguna', None)
+        if self.object.status != 'diajukan':
+            messages.warning(request, 'Peminjaman yang sudah diproses atau selesai tidak dapat diedit.')
+            return redirect('peminjaman:peminjaman_list')
         if pengguna and pengguna.role in BORROWER_ROLES and not self.mahasiswa_can_change(pengguna):
             messages.warning(request, 'Anda hanya bisa mengedit pengajuan milik sendiri yang masih berstatus Diajukan.')
             return redirect('peminjaman:peminjaman_list')

@@ -2,6 +2,109 @@
 
 {% block title %}Chat Bantuan Masuk{% endblock %}
 
+{% block extra_head %}{{ block.super }}
+<style>
+    html[data-theme="dark"] .help-admin-shell {
+        border-color: rgba(71, 85, 105, 0.34) !important;
+        background: rgba(15, 23, 42, 0.24) !important;
+        box-shadow: 0 28px 80px rgba(2, 6, 23, 0.32);
+    }
+
+    html[data-theme="dark"] .help-admin-sidebar,
+    html[data-theme="dark"] .help-admin-header,
+    html[data-theme="dark"] .help-admin-footer {
+        border-color: rgba(71, 85, 105, 0.32) !important;
+        background: rgba(15, 23, 42, 0.30) !important;
+    }
+
+    html[data-theme="dark"] .help-admin-link {
+        border-color: rgba(71, 85, 105, 0.34) !important;
+        background: rgba(15, 23, 42, 0.26) !important;
+    }
+
+    html[data-theme="dark"] .help-admin-link:hover,
+    html[data-theme="dark"] .help-admin-link.is-active {
+        border-color: rgba(94, 234, 212, 0.34) !important;
+        background: rgba(20, 184, 166, 0.12) !important;
+    }
+
+    .help-admin-link {
+        position: relative;
+        overflow: hidden;
+    }
+
+    .help-admin-link.is-active::before {
+        content: "";
+        position: absolute;
+        inset-block: 0;
+        left: 0;
+        width: 4px;
+        background: #0891b2;
+    }
+
+    html[data-theme="dark"] .help-admin-link.is-active::before {
+        background: #5eead4;
+    }
+
+    .help-admin-avatar {
+        display: inline-flex;
+        height: 2.5rem;
+        width: 2.5rem;
+        flex-shrink: 0;
+        align-items: center;
+        justify-content: center;
+        border-radius: 1rem;
+        background: rgba(8, 145, 178, 0.12);
+        color: #0e7490;
+        font-weight: 900;
+    }
+
+    html[data-theme="dark"] .help-admin-avatar {
+        background: rgba(94, 234, 212, 0.12);
+        color: #99f6e4;
+    }
+
+    html[data-theme="dark"] .help-admin-bubble-user {
+        background: rgba(30, 41, 59, 0.70) !important;
+        color: #e2e8f0 !important;
+    }
+
+    html[data-theme="dark"] .help-admin-bubble-bot {
+        border-color: rgba(34, 211, 238, 0.24) !important;
+        background: rgba(8, 145, 178, 0.12) !important;
+        color: #cffafe !important;
+    }
+
+    html[data-theme="dark"] .help-admin-typing {
+        border-color: rgba(71, 85, 105, 0.26) !important;
+        color: #94a3b8 !important;
+    }
+
+    .help-admin-typing span {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        border-radius: 999px;
+        background: rgba(8, 145, 178, 0.08);
+        padding: 0.35rem 0.7rem;
+    }
+
+    .help-admin-typing span::before {
+        content: "";
+        height: 0.42rem;
+        width: 0.42rem;
+        border-radius: 999px;
+        background: currentColor;
+        animation: helpTypingPulse 1s ease-in-out infinite;
+    }
+
+    @keyframes helpTypingPulse {
+        0%, 100% { opacity: 0.35; transform: scale(0.85); }
+        50% { opacity: 1; transform: scale(1); }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <section class="min-w-0 space-y-6">
     <div>
@@ -10,14 +113,17 @@
         <p class="mt-2 text-sm text-slate-500">Percakapan yang tidak terselesaikan oleh bot akan muncul di sini.</p>
     </div>
 
-    <div class="grid min-h-[580px] overflow-hidden rounded-lg border border-slate-200 bg-white lg:grid-cols-[300px_minmax(0,1fr)]">
-        <aside class="border-b border-slate-200 bg-slate-50 p-4 lg:border-b-0 lg:border-r">
+    <div class="help-admin-shell grid min-h-[580px] overflow-hidden rounded-lg border border-slate-200 bg-white lg:grid-cols-[300px_minmax(0,1fr)]">
+        <aside class="help-admin-sidebar border-b border-slate-200 bg-slate-50 p-4 lg:border-b-0 lg:border-r">
             <div class="mb-3 text-xs font-black uppercase text-slate-500">Antrean ({{ percakapan_list|length }})</div>
             <div class="space-y-2">
                 {% for item in percakapan_list %}
-                <a href="{% url 'core:bantuan_admin' %}?percakapan={{ item.pk }}" class="block rounded-lg border {% if percakapan.pk == item.pk %}border-cyan-300 bg-cyan-50{% else %}border-slate-200 bg-white{% endif %} p-3 hover:border-cyan-300">
-                    <div class="font-bold text-slate-900">{{ item.pengguna.nama_pengguna }}</div>
-                    <div class="mt-1 text-xs text-slate-500">{{ item.pengguna.get_role_display }} · {{ item.diperbarui_pada|date:"d M H:i" }}</div>
+                <a href="{% url 'core:bantuan_admin' %}?percakapan={{ item.pk }}" class="help-admin-link {% if percakapan.pk == item.pk %}is-active{% endif %} flex gap-3 rounded-2xl border {% if percakapan.pk == item.pk %}border-cyan-300 bg-cyan-50{% else %}border-slate-200 bg-white{% endif %} p-3 transition hover:border-cyan-300" data-conversation-link="{{ item.pk }}">
+                    <span class="help-admin-avatar">{{ item.pengguna.nama_pengguna|slice:":1" }}</span>
+                    <span class="min-w-0">
+                        <span class="block truncate font-bold text-slate-900">{{ item.pengguna.nama_pengguna }}</span>
+                        <span class="mt-1 block truncate text-xs text-slate-500">{{ item.pengguna.get_role_display }} &middot; {{ item.diperbarui_pada|date:"d M H:i" }}</span>
+                    </span>
                 </a>
                 {% empty %}
                 <p class="rounded-lg border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500">Tidak ada antrean.</p>
@@ -27,26 +133,38 @@
 
         <div class="flex min-w-0 flex-col">
             {% if percakapan %}
-            <div class="border-b border-slate-200 px-5 py-4">
-                <div class="font-black text-slate-900">{{ percakapan.pengguna.nama_pengguna }}</div>
-                <div class="text-sm text-slate-500">{{ percakapan.pengguna.nim_nik }} · {{ percakapan.pengguna.email }}</div>
+            <div class="help-admin-header border-b border-slate-200 px-5 py-4">
+                <div class="flex items-center gap-3">
+                    <span class="help-admin-avatar">{{ percakapan.pengguna.nama_pengguna|slice:":1" }}</span>
+                    <div class="min-w-0">
+                        <div class="truncate font-black text-slate-900">{{ percakapan.pengguna.nama_pengguna }}</div>
+                        <div class="truncate text-sm text-slate-500">{{ percakapan.pengguna.nim_nik }} &middot; {{ percakapan.pengguna.email }}</div>
+                    </div>
+                    <span class="ml-auto inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">
+                        <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+                        Aktif
+                    </span>
+                </div>
             </div>
             <div class="max-h-[430px] flex-1 space-y-3 overflow-y-auto p-5" data-chat-messages>
                 {% for pesan in percakapan.pesan.all %}
                 <div class="flex {% if pesan.pengirim == 'admin' %}justify-end{% else %}justify-start{% endif %}" data-chat-message-id="{{ pesan.pk }}">
-                    <div class="max-w-[85%] rounded-2xl {% if pesan.pengirim == 'admin' %}bg-brand-700 text-white{% elif pesan.pengirim == 'pengguna' %}bg-slate-100 text-slate-800{% else %}border border-cyan-200 bg-cyan-50 text-cyan-900{% endif %} px-4 py-3 text-sm">
+                    <div class="{% if pesan.pengirim == 'pengguna' %}help-admin-bubble-user{% elif pesan.pengirim == 'bot' %}help-admin-bubble-bot{% endif %} max-w-[85%] rounded-2xl {% if pesan.pengirim == 'admin' %}bg-brand-700 text-white{% elif pesan.pengirim == 'pengguna' %}bg-slate-100 text-slate-800{% else %}border border-cyan-200 bg-cyan-50 text-cyan-900{% endif %} px-4 py-3 text-sm">
                         <div class="text-xs font-black uppercase opacity-70">{{ pesan.get_pengirim_display }}</div>
                         <div class="mt-1 whitespace-pre-wrap break-words">{{ pesan.isi }}</div>
                     </div>
                 </div>
                 {% endfor %}
             </div>
-            <div class="border-t border-slate-200 bg-slate-50 p-4">
-                <form method="post" class="flex flex-col gap-3 sm:flex-row" data-chat-form>
+            <div class="help-admin-typing hidden border-t border-slate-100 px-5 py-2 text-xs font-bold text-slate-500" data-chat-typing></div>
+            <div class="help-admin-footer border-t border-slate-200 bg-slate-50 p-4">
+                <div class="mb-3 hidden rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800" data-chat-finished-notice>Percakapan selesai. Pengguna akan kembali ke mode chatbot.</div>
+                <div class="mb-3 hidden rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700" data-chat-error></div>
+                <form method="post" class="flex flex-col gap-3 sm:flex-row" data-chat-form data-no-global-loading="true">
                     {% csrf_token %}<input type="hidden" name="percakapan" value="{{ percakapan.pk }}">
                     <textarea name="pesan" rows="2" maxlength="1000" class="flex-1 resize-none" placeholder="Tulis balasan admin..." data-chat-input></textarea>
                     <button type="submit" class="btn-primary justify-center gap-2"><i data-lucide="send" class="h-4 w-4"></i><span>Balas</span></button>
-                    <button type="submit" name="action" value="selesai" class="btn-secondary justify-center gap-2"><i data-lucide="check" class="h-4 w-4"></i><span>Selesai</span></button>
+                    <button type="button" class="btn-secondary justify-center gap-2" data-chat-finish><i data-lucide="check" class="h-4 w-4"></i><span>Selesai</span></button>
                 </form>
             </div>
             {% else %}
@@ -63,7 +181,25 @@
         const messages = document.querySelector('[data-chat-messages]');
         const form = document.querySelector('[data-chat-form]');
         const textarea = document.querySelector('[data-chat-input]');
+        const finishButton = document.querySelector('[data-chat-finish]');
+        const finishedNotice = document.querySelector('[data-chat-finished-notice]');
+        const errorBox = document.querySelector('[data-chat-error]');
+        const typingIndicator = document.querySelector('[data-chat-typing]');
+        let typingTimer = null;
+        let lastTypingSentAt = 0;
         if (messages) messages.scrollTop = messages.scrollHeight;
+
+        function setError(message) {
+            if (!errorBox) return;
+            errorBox.textContent = message || '';
+            errorBox.classList.toggle('hidden', !message);
+        }
+
+        function setTypingIndicator(message) {
+            if (!typingIndicator) return;
+            typingIndicator.innerHTML = message ? '<span>' + message + '</span>' : '';
+            typingIndicator.classList.toggle('hidden', !message);
+        }
 
         function appendMessage(message) {
             if (!messages || document.querySelector('[data-chat-message-id="' + message.id + '"]')) {
@@ -78,7 +214,7 @@
             bubble.className = 'max-w-[85%] rounded-2xl px-4 py-3 text-sm ' + (
                 message.pengirim === 'admin'
                     ? 'bg-brand-700 text-white'
-                    : (message.pengirim === 'pengguna' ? 'bg-slate-100 text-slate-800' : 'border border-cyan-200 bg-cyan-50 text-cyan-900')
+                    : (message.pengirim === 'pengguna' ? 'help-admin-bubble-user bg-slate-100 text-slate-800' : 'help-admin-bubble-bot border border-cyan-200 bg-cyan-50 text-cyan-900')
             );
 
             const sender = document.createElement('div');
@@ -99,18 +235,25 @@
         const socketProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
         const chatSocket = new WebSocket(socketProtocol + window.location.host + '/ws/bantuan/{{ percakapan.pk }}/');
 
+        chatSocket.addEventListener('open', function () {
+            chatSocket.send(JSON.stringify({action: 'presence', state: 'online'}));
+        });
+
         chatSocket.addEventListener('message', function (event) {
             const payload = JSON.parse(event.data);
             if (payload.type === 'message') {
                 appendMessage(payload.message);
+            } else if (payload.type === 'status' && payload.status === 'selesai') {
+                if (finishedNotice) finishedNotice.classList.remove('hidden');
+                if (form) form.classList.add('hidden');
+                const activeLink = document.querySelector('[data-conversation-link="{{ percakapan.pk }}"]');
+                if (activeLink) activeLink.classList.add('opacity-60');
+            } else if (payload.type === 'typing' && payload.sender_role !== 'admin') {
+                setTypingIndicator(payload.is_typing ? 'Mahasiswa sedang mengetik...' : '');
             }
         });
 
         form.addEventListener('submit', function (event) {
-            const submitter = event.submitter;
-            if (submitter && submitter.name === 'action') {
-                return;
-            }
             if (chatSocket.readyState !== WebSocket.OPEN) {
                 return;
             }
@@ -124,6 +267,34 @@
             chatSocket.send(JSON.stringify({pesan: content}));
             textarea.value = '';
         });
+
+        textarea.addEventListener('input', function () {
+            if (chatSocket.readyState !== WebSocket.OPEN) return;
+            const now = Date.now();
+            if (now - lastTypingSentAt > 1200) {
+                chatSocket.send(JSON.stringify({action: 'typing', is_typing: true}));
+                lastTypingSentAt = now;
+            }
+            window.clearTimeout(typingTimer);
+            typingTimer = window.setTimeout(function () {
+                if (chatSocket.readyState === WebSocket.OPEN) {
+                    chatSocket.send(JSON.stringify({action: 'typing', is_typing: false}));
+                }
+            }, 2200);
+        });
+
+        if (finishButton) {
+            finishButton.addEventListener('click', function () {
+                if (chatSocket.readyState !== WebSocket.OPEN) {
+                    setError('Koneksi realtime belum siap. Coba muat ulang halaman.');
+                    return;
+                }
+                setError('');
+                finishButton.disabled = true;
+                finishButton.classList.add('opacity-70');
+                chatSocket.send(JSON.stringify({action: 'selesai'}));
+            });
+        }
         {% endif %}
     });
 </script>

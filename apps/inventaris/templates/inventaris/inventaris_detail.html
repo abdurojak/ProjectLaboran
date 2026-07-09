@@ -165,20 +165,20 @@
             searchInput.addEventListener('input', function () {
                 clearTimeout(searchTimer);
                 searchTimer = setTimeout(function () {
-                    form.submit();
+                    form.requestSubmit();
                 }, 350);
             });
         }
 
         if (kondisiSelect) {
             kondisiSelect.addEventListener('change', function () {
-                form.submit();
+                form.requestSubmit();
             });
         }
 
         if (lokasiSelect) {
             lokasiSelect.addEventListener('change', function () {
-                form.submit();
+                form.requestSubmit();
             });
         }
     });

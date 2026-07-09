@@ -91,7 +91,7 @@
             <h3 class="text-xl font-bold text-slate-900">Detail Barang Dipinjam</h3>
             <p class="mt-1 text-sm text-slate-500">Semua barang yang tergabung dalam kode peminjaman ini.</p>
         </div>
-        {% if is_manager %}
+        {% if is_manager and has_actionable_details %}
         <form method="post" action="{% url 'peminjaman:peminjaman_detail_status_update' peminjaman.pk %}" class="space-y-5 border-b border-slate-100 px-6 py-4"
               data-requires-selection
               data-selection-name="detail_ids"
@@ -116,6 +116,12 @@
                     <span>Simpan</span>
                 </button>
             </div>
+        {% elif is_manager %}
+        <div class="border-b border-slate-100 px-6 py-4">
+            <div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">
+                Semua detail peminjaman ini sudah selesai dan tidak dapat diubah lagi.
+            </div>
+        </div>
         {% endif %}
         <div class="overflow-x-auto">
             <table class="w-full min-w-[760px]">
@@ -134,7 +140,11 @@
                     <tr>
                         {% if is_manager %}
                         <td>
+                            {% if detail.status == 'dikembalikan' or detail.status == 'digantikan' or detail.status == 'ditolak' %}
+                            <input type="checkbox" name="detail_ids" value="{{ detail.pk }}" aria-label="{{ detail.barang.kode_barang }} sudah selesai" disabled title="Status final">
+                            {% else %}
                             <input type="checkbox" name="detail_ids" value="{{ detail.pk }}" aria-label="Pilih {{ detail.barang.kode_barang }}">
+                            {% endif %}
                         </td>
                         {% endif %}
                         <td class="font-semibold text-slate-900">{{ detail.barang.nama }}</td>

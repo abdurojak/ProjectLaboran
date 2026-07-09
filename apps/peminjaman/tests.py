@@ -121,6 +121,42 @@ class PeminjamanViewsTests(TestCase):
         self.assertContains(response, 'setFilterLoading(true);')
         self.assertNotContains(response, '<span>Filter</span>')
 
+    def test_status_final_tidak_bisa_diubah_lagi_dari_bulk_update(self):
+        transaksi = PeminjamanTransaksi.objects.create(
+            nama_peminjam='Final Status',
+            tanggal_pinjam=date(2026, 6, 18),
+            tanggal_kembali=date(2026, 6, 20),
+        )
+        peminjaman = PeminjamanAlat.objects.create(
+            transaksi=transaksi,
+            barang=self.barang_lain,
+            nama_peminjam='Final Status',
+            tanggal_pinjam=date(2026, 6, 18),
+            tanggal_kembali=date(2026, 6, 20),
+            status='dikembalikan',
+        )
+
+        response = self.client.post(reverse('peminjaman:peminjaman_bulk_update'), {
+            'transaksi_ids': [str(transaksi.pk)],
+            'status': 'dipinjam',
+        })
+        peminjaman.refresh_from_db()
+
+        self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
+        self.assertEqual(peminjaman.status, 'dikembalikan')
+
+    def test_status_final_tidak_bisa_dipilih_di_detail(self):
+        self.peminjaman.status = 'dikembalikan'
+        self.peminjaman.save(update_fields=['status'])
+
+        response = self.client.get(reverse('peminjaman:peminjaman_detail', args=[self.peminjaman.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Semua detail peminjaman ini sudah selesai dan tidak dapat diubah lagi.')
+        self.assertContains(response, 'value="' + str(self.peminjaman.pk) + '" aria-label="' + self.peminjaman.barang.kode_barang + ' sudah selesai" disabled')
+        self.assertNotContains(response, 'value="' + str(self.peminjaman.pk) + '" aria-label="Pilih')
+        self.assertNotContains(response, reverse('peminjaman:peminjaman_update', args=[self.peminjaman.pk]))
+
     def test_list_peminjaman_memakai_htmx_untuk_interaksi_async(self):
         self.peminjaman.status = 'diajukan'
         self.peminjaman.save(update_fields=['status'])

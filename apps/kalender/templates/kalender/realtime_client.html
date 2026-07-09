@@ -91,9 +91,11 @@
                 let message;
                 try { message = JSON.parse(event.data); } catch (error) { return; }
                 if (message.type !== 'notification' || !message.payload) return;
-                playNotificationSound();
-                showToast(message.payload);
                 if (message.payload.unread_count !== undefined) updateBadge(message.payload.unread_count);
+                if (!message.payload.silent) {
+                    playNotificationSound();
+                    showToast(message.payload);
+                }
                 document.dispatchEvent(new CustomEvent('labhub:realtime', {detail: message.payload}));
                 scheduleRefresh(message.payload);
             });

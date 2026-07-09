@@ -1,4 +1,5 @@
 from django.contrib import messages
+from django.http import JsonResponse
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
@@ -179,6 +180,42 @@ class BantuanView(TemplateView):
         return redirect('core:bantuan')
 
 
+class BantuanAsyncMessageView(View):
+    def post(self, request, *args, **kwargs):
+        pengguna = getattr(request, 'current_pengguna', None)
+        if not pengguna:
+            return JsonResponse({'error': 'Silakan login terlebih dahulu.'}, status=401)
+
+        conversation = get_active_help_conversation(pengguna)
+        content = request.POST.get('pesan', '').strip()[:1000]
+        if not content:
+            return JsonResponse({'error': 'Tulis pertanyaan terlebih dahulu.'}, status=400)
+
+        user_message = PesanBantuan.objects.create(percakapan=conversation, pengirim='pengguna', isi=content)
+        broadcast_help_message(user_message)
+        bot_message = None
+        if conversation.status == 'bot':
+            bot_message = PesanBantuan.objects.create(percakapan=conversation, pengirim='bot', isi=bot_answer(content))
+            broadcast_help_message(bot_message)
+        conversation.save(update_fields=['diperbarui_pada'])
+
+        return JsonResponse({
+            'conversation_status': conversation.status,
+            'help_url': reverse('core:bantuan'),
+            'user_message': {
+                'sender': user_message.get_pengirim_display(),
+                'content': user_message.isi,
+                'created_at': timezone.localtime(user_message.dibuat_pada).strftime('%H:%M'),
+            },
+            'bot_message': {
+                'sender': bot_message.get_pengirim_display(),
+                'content': bot_message.isi,
+                'created_at': timezone.localtime(bot_message.dibuat_pada).strftime('%H:%M'),
+            } if bot_message else None,
+            'notice': None if bot_message else 'Percakapan sudah diteruskan ke admin. Pesan Anda tersimpan di halaman bantuan.',
+        })
+
+
 class EskalasiBantuanView(View):
     def post(self, request, *args, **kwargs):
         pengguna = getattr(request, 'current_pengguna', None)
@@ -238,6 +275,18 @@ class AdminBantuanView(TemplateView):
             conversation.save(update_fields=['diperbarui_pada'])
             broadcast_help_message(admin_message)
         return redirect(f"{reverse('core:bantuan_admin')}?percakapan={conversation.pk}")
+
+
+class AdminBantuanSummaryView(View):
+    def get(self, request, *args, **kwargs):
+        pengguna = getattr(request, 'current_pengguna', None)
+        if not pengguna or pengguna.role != 'admin':
+            return JsonResponse({'error': 'Hanya admin yang dapat membuka ringkasan bantuan.'}, status=403)
+        waiting_count = PercakapanBantuan.objects.filter(status='admin').count()
+        return JsonResponse({
+            'waiting_count': waiting_count,
+            'label': f'{waiting_count} mahasiswa bertanya',
+        })
 
 
 class BugErrorListView(TemplateView):

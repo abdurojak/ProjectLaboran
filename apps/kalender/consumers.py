@@ -5,6 +5,7 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 
 from apps.pengguna.models import Pengguna
 
+from .models import Notifikasi
 from .realtime import role_group_name, user_group_name
 
 
@@ -22,6 +23,14 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         for group_name in self.groups:
             await self.channel_layer.group_add(group_name, self.channel_name)
         await self.accept()
+        await self.send(text_data=json.dumps({
+            'type': 'notification',
+            'payload': {
+                'event': 'notification.sync',
+                'unread_count': await self.get_unread_count(),
+                'silent': True,
+            },
+        }))
 
     async def disconnect(self, close_code):
         for group_name in getattr(self, 'groups', []):
@@ -39,3 +48,10 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         if not pengguna_id:
             return None
         return Pengguna.objects.filter(pk=pengguna_id, is_verified=True).first()
+
+    @database_sync_to_async
+    def get_unread_count(self):
+        return Notifikasi.objects.filter(
+            pengguna=self.pengguna,
+            dibaca_pada__isnull=True,
+        ).count()

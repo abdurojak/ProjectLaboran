@@ -139,6 +139,17 @@
         --tw-ring-color: var(--topbar-badge-ring, rgba(255, 255, 255, 0.92)) !important;
     }
 
+    .labhub-topbar [data-realtime-notification-trigger].has-realtime-update {
+        animation: labhub-notification-pulse 720ms ease both;
+    }
+
+    @keyframes labhub-notification-pulse {
+        0% { transform: translateY(0) scale(1); }
+        28% { transform: translateY(-2px) scale(1.08); }
+        56% { transform: translateY(0) scale(0.98); }
+        100% { transform: translateY(0) scale(1); }
+    }
+
     @media (min-width: 768px) {
         body {
             --labhub-page-padding: 1rem;
@@ -191,7 +202,7 @@
             </a>
 
             <div class="ml-auto flex shrink-0 items-center gap-4">
-                <a href="{% url 'kalender:notifikasi_list' %}" class="relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full ring-2 shadow-md shadow-slate-950/15 transition focus:outline-none focus:ring-2 focus:ring-cyan-200/60" aria-label="Buka notifikasi" title="Notifikasi">
+                <a href="{% url 'kalender:notifikasi_list' %}" class="relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full ring-2 shadow-md shadow-slate-950/15 transition focus:outline-none focus:ring-2 focus:ring-cyan-200/60" aria-label="Buka notifikasi" title="Notifikasi" data-realtime-notification-trigger>
                     <i data-lucide="bell" class="h-5 w-5"></i>
                     <span data-realtime-notification-count class="absolute -right-1 -top-1 {% if not unread_notification_count %}hidden {% endif %}flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[10px] font-black leading-none text-white ring-2">{{ unread_notification_count|default:0 }}</span>
                 </a>
@@ -303,6 +314,19 @@
             if (event.key === 'Escape') {
                 setOpen(false);
             }
+        });
+
+        document.addEventListener('labhub:realtime', function (event) {
+            const payload = event.detail || {};
+            if (payload.silent) return;
+            document.querySelectorAll('[data-realtime-notification-trigger]').forEach(function (trigger) {
+                trigger.classList.remove('has-realtime-update');
+                void trigger.offsetWidth;
+                trigger.classList.add('has-realtime-update');
+                if (payload.title) {
+                    trigger.setAttribute('title', 'Notifikasi baru: ' + payload.title);
+                }
+            });
         });
     });
 </script>
