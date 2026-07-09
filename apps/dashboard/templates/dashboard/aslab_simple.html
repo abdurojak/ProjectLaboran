@@ -90,7 +90,10 @@
                 {% for hasil in hasil_absensi_terbaru %}
                 <article class="dashboard-list-item flex items-center gap-4 rounded-3xl border border-slate-200 px-4 py-3">
                     <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-cyan-50 text-cyan-700"><i data-lucide="clipboard-check" class="h-5 w-5"></i></span>
-                    <div class="min-w-0 flex-1"><p class="truncate font-black text-slate-900">{{ hasil.peserta_nama|default:hasil.peserta.nama }}</p><p class="mt-1 truncate text-xs font-semibold text-slate-500">Modul {{ hasil.modul.nomor }} · {{ hasil.tanggal_praktikum|date:"d M Y" }}</p></div>
+                    <div class="min-w-0 flex-1">
+                        <p class="truncate font-black text-slate-900">{% if hasil.peserta_nama %}{{ hasil.peserta_nama }}{% elif hasil.peserta %}{{ hasil.peserta.nama }}{% else %}Peserta tidak tersedia{% endif %}</p>
+                        <p class="mt-1 truncate text-xs font-semibold text-slate-500">Modul {{ hasil.modul.nomor }} · {{ hasil.matkul_label|default:hasil.modul.matkul }} · {{ hasil.tanggal_praktikum|date:"d M Y" }}</p>
+                    </div>
                     <span class="rounded-full bg-cyan-100 px-3 py-1 text-xs font-black text-cyan-700">{{ hasil.get_status_absensi_display }}</span>
                 </article>
                 {% empty %}<div class="rounded-3xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">Belum ada absensi mahasiswa yang tercatat.</div>{% endfor %}
