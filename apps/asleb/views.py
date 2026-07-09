@@ -659,10 +659,10 @@ class ModulPraktikumDeleteView(ModulManageRequiredMixin, PostOnlyDeleteMixin, De
     success_url = reverse_lazy('asleb:absensi_list')
 
     def form_valid(self, form):
-        if self.object.absensi.exists():
-            messages.error(self.request, 'Modul yang sudah digunakan untuk absensi tidak dapat dihapus.')
-            return redirect(self.success_url)
-        messages.success(self.request, 'Modul praktikum berhasil dihapus.')
+        messages.success(
+            self.request,
+            'Modul praktikum berhasil dihapus. Riwayat absensi dan nilai lama tetap tersimpan sebagai arsip.'
+        )
         return super().form_valid(form)
 
 
@@ -977,22 +977,35 @@ def export_nilai_praktikum_excel(request):
     matkul_qs = get_praktikum_matkul_queryset(pengguna)
     matkul_id = request.GET.get('matkul', '').strip()
     matkul_list = list(matkul_qs.order_by('nama', 'kelas'))
+    matkul_labels = [str(matkul) for matkul in matkul_list]
     hasil_qs = (
         HasilPraktikumMahasiswa.objects
         .select_related('peserta', 'modul', 'modul__matkul', 'dicatat_oleh')
-        .filter(modul__matkul__in=matkul_qs)
+        .filter(Q(modul__matkul__in=matkul_qs) | Q(modul__isnull=True, matkul_label__in=matkul_labels))
         .order_by('modul__matkul__nama', 'modul__matkul__kelas', 'modul__nomor', 'peserta_nama')
     )
     if matkul_id:
         hasil_qs = hasil_qs.filter(modul__matkul_id=matkul_id)
         matkul_list = [item for item in matkul_list if str(item.pk) == matkul_id]
+        if matkul_list:
+            selected_label = str(matkul_list[0])
+            hasil_qs = (
+                HasilPraktikumMahasiswa.objects
+                .select_related('peserta', 'modul', 'modul__matkul', 'dicatat_oleh')
+                .filter(Q(modul__matkul_id=matkul_id) | Q(modul__isnull=True, matkul_label=selected_label))
+                .order_by('modul__matkul__nama', 'modul__matkul__kelas', 'modul__nomor', 'peserta_nama')
+            )
     hasil_list = list(hasil_qs)
 
     zip_buffer = BytesIO()
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as archive:
         used_names = set()
         for matkul in matkul_list:
-            matkul_results = [hasil for hasil in hasil_list if hasil.modul.matkul_id == matkul.pk]
+            matkul_label = str(matkul)
+            matkul_results = [
+                hasil for hasil in hasil_list
+                if (hasil.modul_id and hasil.modul.matkul_id == matkul.pk) or (not hasil.modul_id and hasil.matkul_label == matkul_label)
+            ]
             rekap = build_rekap_nilai_matkul(matkul, matkul_results)
             rows = build_rekap_nilai_excel_rows(matkul, rekap)
             base_filename = slugify(f'{matkul.nama}-{matkul.kelas}') or f'rekap-nilai-{matkul.pk}'
@@ -1014,6 +1027,22 @@ def build_rekap_nilai_matkul(matkul, hasil_list):
         return {'modules': [], 'rows': [], 'total_mahasiswa': 0, 'nilai_terisi': 0, 'nilai_target': 0, 'kelengkapan': 0}
 
     modules = list(ModulPraktikum.objects.filter(matkul=matkul).order_by('nomor', 'pk'))
+    module_numbers = {module.nomor for module in modules}
+    archived_modules = []
+    for hasil in hasil_list:
+        if hasil.modul_id:
+            module_number = hasil.modul.nomor
+            module_title = hasil.modul.judul
+        else:
+            module_number = hasil.modul_nomor
+            module_title = hasil.modul_judul
+        if module_number and module_number not in module_numbers:
+            archived_modules.append(type('ArchivedModule', (), {
+                'nomor': module_number,
+                'judul': module_title or f'Modul {module_number}',
+            })())
+            module_numbers.add(module_number)
+    modules.extend(sorted(archived_modules, key=lambda item: item.nomor))
     peserta_map = {}
     for peserta in matkul.peserta_praktikum.filter(aktif=True).order_by('nama', 'nim'):
         peserta_map[peserta.nim] = {
@@ -1037,7 +1066,9 @@ def build_rekap_nilai_matkul(matkul, hasil_list):
         })
         score = hasil.hitung_nilai_rata_rata()
         if score is not None:
-            peserta_map[nim]['module_scores'][hasil.modul.nomor] = score
+            module_number = hasil.modul.nomor if hasil.modul_id else hasil.modul_nomor
+            if module_number:
+                peserta_map[nim]['module_scores'][module_number] = score
 
     rows = []
     nilai_terisi = 0
@@ -1117,13 +1148,16 @@ def build_nilai_praktikum_rows(hasil_list):
         'Dicatat Oleh',
     ]]
     for hasil in hasil_list:
-        matkul = hasil.modul.matkul
+        matkul = hasil.modul.matkul if hasil.modul_id else None
         nim = hasil.peserta.nim if hasil.peserta_id else hasil.peserta_nim
+        matkul_label = hasil.matkul_label or (str(matkul) if matkul else 'Arsip mata kuliah')
+        modul_number = hasil.modul.nomor if hasil.modul_id else hasil.modul_nomor
+        modul_title = hasil.modul.judul if hasil.modul_id else hasil.modul_judul
         rows.append([
-            matkul.nama,
-            matkul.kelas,
-            matkul.dosen,
-            f'Modul {hasil.modul.nomor} - {hasil.modul.judul}',
+            matkul.nama if matkul else matkul_label,
+            matkul.kelas if matkul else '',
+            matkul.dosen if matkul else '',
+            f'Modul {modul_number or "-"} - {modul_title or "Arsip modul"}',
             hasil.tanggal_praktikum.isoformat(),
             nim,
             hasil.peserta.nama if hasil.peserta_id else hasil.peserta_nama,

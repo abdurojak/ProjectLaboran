@@ -146,6 +146,28 @@ def send_schedule_update(jadwal, event='schedule.updated', notify_managers=False
         _group_send(role_group_name(role), _normalized_payload({**payload, 'source_key': None}))
 
 
+def send_schedule_change_request_update(change_request):
+    jadwal = change_request.jadwal
+    requested_end = change_request.waktu_selesai or change_request.waktu_mulai
+    payload = {
+        'event': 'schedule.change_requested',
+        'source_key': f'jadwal-change-request:{change_request.pk}:diajukan',
+        'title': 'Pengajuan perubahan jadwal praktikum',
+        'message': (
+            f'{change_request.diajukan_oleh.nama_pengguna} mengajukan perubahan jadwal '
+            f'{jadwal.mata_kuliah} ke {change_request.get_hari_display()} '
+            f'{change_request.waktu_mulai:%H:%M}-{requested_end:%H:%M}.'
+        ),
+        'notification_type': 'diajukan',
+        'related_object_id': change_request.pk,
+        'related_url': reverse('jadwal:jadwal_list'),
+        'refresh_paths': [],
+        'icon': 'calendar-clock',
+        'icon_class': 'bg-amber-50 text-amber-700',
+    }
+    send_role_notification('laboran', payload)
+
+
 def send_honor_update(honor, event='honor.updated'):
     payload = {
         'event': event,

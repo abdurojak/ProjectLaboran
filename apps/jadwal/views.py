@@ -12,7 +12,7 @@ from django.views.generic import CreateView, DeleteView, DetailView, ListView, U
 
 from apps.core.views import PostOnlyDeleteMixin
 from apps.core.permissions import ADMIN_ROLE, ASISTEN_LAB_ROLE, LABORAN_ROLE
-from apps.kalender.realtime import send_schedule_update
+from apps.kalender.realtime import send_schedule_change_request_update, send_schedule_update
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, RiwayatAsleb
 from apps.ruangan.models import GrupRuanganGabungan, RuanganLab
 
@@ -293,7 +293,7 @@ class JadwalPraktikumUpdateView(JadwalMutationAccessMixin, UpdateView):
             if self.object.permintaan_perubahan.filter(status='diajukan').exists():
                 messages.warning(self.request, 'Masih ada permintaan perubahan jadwal yang menunggu persetujuan laboran.')
                 return redirect('jadwal:jadwal_detail', pk=self.object.pk)
-            PermintaanPerubahanJadwal.objects.create(
+            change_request = PermintaanPerubahanJadwal.objects.create(
                 jadwal=self.object,
                 matkul=form.cleaned_data['matkul'],
                 ruangan=form.cleaned_data['ruangan'],
@@ -304,10 +304,10 @@ class JadwalPraktikumUpdateView(JadwalMutationAccessMixin, UpdateView):
                 catatan=form.cleaned_data.get('catatan', ''),
                 diajukan_oleh=pengguna,
             )
-            transaction.on_commit(lambda: send_schedule_update(
-                self.object,
-                event='schedule.change_requested',
-                notify_managers=True,
+            transaction.on_commit(lambda request_id=change_request.pk: send_schedule_change_request_update(
+                PermintaanPerubahanJadwal.objects.select_related(
+                    'jadwal', 'matkul', 'ruangan', 'ruangan_tambahan', 'diajukan_oleh'
+                ).get(pk=request_id)
             ))
             messages.success(self.request, 'Permintaan perubahan jadwal dikirim dan menunggu persetujuan laboran.')
             return redirect('jadwal:jadwal_detail', pk=self.object.pk)

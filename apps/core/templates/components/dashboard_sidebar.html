@@ -87,7 +87,7 @@
         const toggles = [desktopToggle, mobileToggle].filter(Boolean);
         const groupSummaries = sidebar.querySelectorAll('[data-sidebar-group] > summary');
         const sidebarLinks = sidebar.querySelectorAll('[data-sidebar-link], [data-sidebar-child]');
-        let floatingMenu = null;
+        let compactSubmenu = null;
         let isCollapsed = true;
 
         function navigateWithTransition(href) {
@@ -127,41 +127,41 @@
             });
         }
 
-        function ensureFloatingMenu() {
-            if (floatingMenu) {
-                return floatingMenu;
+        function closeCompactSubmenu() {
+            if (!compactSubmenu) {
+                return;
+            }
+            compactSubmenu.classList.add('pointer-events-none', 'opacity-0', 'scale-95', '-translate-x-1');
+            compactSubmenu.classList.remove('pointer-events-auto', 'opacity-100', 'scale-100', 'translate-x-0');
+            compactSubmenu.setAttribute('aria-hidden', 'true');
+        }
+
+        function getCompactSubmenu() {
+            if (compactSubmenu) {
+                return compactSubmenu;
             }
 
-            floatingMenu = document.createElement('div');
-            floatingMenu.setAttribute('data-sidebar-floating-menu', '');
-            floatingMenu.setAttribute('aria-hidden', 'true');
-            floatingMenu.className = 'pointer-events-none fixed z-[140] min-w-[14rem] -translate-y-1 scale-95 rounded-[1.35rem] border p-2 opacity-0 shadow-2xl transition duration-150';
-            document.body.appendChild(floatingMenu);
+            compactSubmenu = document.createElement('div');
+            compactSubmenu.setAttribute('data-sidebar-compact-submenu', '');
+            compactSubmenu.setAttribute('aria-hidden', 'true');
+            compactSubmenu.className = 'pointer-events-none fixed z-[80] w-[min(17rem,calc(100vw-7rem))] origin-left -translate-x-1 scale-95 overflow-hidden rounded-[1.4rem] border p-2 opacity-0 shadow-2xl transition duration-150';
+            document.body.appendChild(compactSubmenu);
 
-            floatingMenu.addEventListener('click', function (event) {
+            compactSubmenu.addEventListener('click', function (event) {
                 const link = event.target.closest('a[href]');
                 if (!link) {
                     return;
                 }
                 event.preventDefault();
                 markActiveLink(link.href);
-                closeFloatingMenu();
+                closeCompactSubmenu();
                 navigateWithTransition(link.href);
             });
 
-            return floatingMenu;
+            return compactSubmenu;
         }
 
-        function closeFloatingMenu() {
-            if (!floatingMenu) {
-                return;
-            }
-            floatingMenu.classList.add('pointer-events-none', 'opacity-0', 'scale-95', '-translate-y-1');
-            floatingMenu.classList.remove('pointer-events-auto', 'opacity-100', 'scale-100', 'translate-y-0');
-            floatingMenu.setAttribute('aria-hidden', 'true');
-        }
-
-        function openFloatingMenu(summary) {
+        function openCompactSubmenu(summary) {
             const group = summary.closest('[data-sidebar-group]');
             const submenu = group ? group.querySelector('[data-sidebar-submenu]') : null;
             const children = submenu ? Array.from(submenu.querySelectorAll('[data-sidebar-child]')) : [];
@@ -169,27 +169,27 @@
                 return;
             }
 
-            const menu = ensureFloatingMenu();
-            const title = summary.getAttribute('title') || summary.textContent.trim();
-            menu.innerHTML = [
-                '<div class="px-3 pb-2 pt-1 text-[0.68rem] font-black uppercase tracking-[0.22em]" data-sidebar-floating-title>' + title + '</div>',
+            const menu = getCompactSubmenu();
+            const title = summary.getAttribute('title') || 'Submenu';
+            menu.innerHTML = '<div class="px-3 pb-2 pt-1 text-[0.67rem] font-black uppercase tracking-[0.22em]" data-compact-submenu-title></div>' +
                 children.map(function (child) {
                     const icon = child.querySelector('i') ? child.querySelector('i').getAttribute('data-lucide') : 'circle';
-                    const active = child.dataset.active === 'true' ? 'true' : 'false';
-                    return '<a href="' + child.href + '" data-active="' + active + '" class="flex min-h-11 items-center gap-3 rounded-2xl px-3 py-2 text-sm font-bold transition">' +
-                        '<i data-lucide="' + icon + '" class="h-4 w-4 shrink-0"></i>' +
+                    const active = child.dataset.active === 'true';
+                    return '<a href="' + child.href + '" data-active="' + (active ? 'true' : 'false') + '" class="flex min-h-11 min-w-0 items-center gap-3 rounded-2xl px-3 py-2 text-sm font-bold transition">' +
+                        '<span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"><i data-lucide="' + icon + '" class="h-4 w-4"></i></span>' +
                         '<span class="min-w-0 flex-1 truncate">' + child.textContent.trim() + '</span>' +
                     '</a>';
-                }).join('')
-            ].join('');
+                }).join('');
+            menu.querySelector('[data-compact-submenu-title]').textContent = title;
 
             menu.style.visibility = 'hidden';
-            menu.classList.remove('pointer-events-none');
             menu.setAttribute('aria-hidden', 'false');
+            menu.classList.remove('pointer-events-none');
 
+            const sidebarRect = sidebar.getBoundingClientRect();
             const summaryRect = summary.getBoundingClientRect();
             const menuRect = menu.getBoundingClientRect();
-            const left = Math.min(summaryRect.right + 12, window.innerWidth - menuRect.width - 12);
+            const left = Math.min(sidebarRect.right + 10, window.innerWidth - menuRect.width - 12);
             const top = Math.min(
                 Math.max(summaryRect.top - 8, 12),
                 Math.max(window.innerHeight - menuRect.height - 12, 12)
@@ -197,8 +197,8 @@
             menu.style.left = left + 'px';
             menu.style.top = top + 'px';
             menu.style.visibility = 'visible';
-            menu.classList.add('pointer-events-auto', 'opacity-100', 'scale-100', 'translate-y-0');
-            menu.classList.remove('pointer-events-none', 'opacity-0', 'scale-95', '-translate-y-1');
+            menu.classList.add('pointer-events-auto', 'opacity-100', 'scale-100', 'translate-x-0');
+            menu.classList.remove('pointer-events-none', 'opacity-0', 'scale-95', '-translate-x-1');
 
             if (window.lucide) {
                 window.lucide.createIcons();
@@ -217,7 +217,7 @@
         function setCollapsed(collapsed) {
             const isMedium = mediumQuery.matches;
             isCollapsed = collapsed;
-            closeFloatingMenu();
+            closeCompactSubmenu();
             sidebar.dataset.collapsed = collapsed ? 'true' : 'false';
             sidebar.classList.toggle('is-collapsed', collapsed);
             document.body.classList.toggle('dashboard-sidebar-expanded', isMedium && !collapsed);
@@ -256,6 +256,12 @@
                 submenu.classList.toggle('grid', !collapsed);
             });
 
+            if (collapsed) {
+                sidebar.querySelectorAll('[data-sidebar-group]').forEach(function (group) {
+                    group.open = false;
+                });
+            }
+
             if (brandShell) {
                 brandShell.classList.toggle('justify-center', collapsed);
                 brandShell.classList.toggle('justify-end', !collapsed);
@@ -281,41 +287,40 @@
         groupSummaries.forEach(function (summary) {
             summary.addEventListener('click', function (event) {
                 if (!isCollapsed) {
-                    closeFloatingMenu();
                     return;
                 }
                 event.preventDefault();
                 event.stopPropagation();
                 summary.parentElement.open = false;
-                openFloatingMenu(summary);
+                openCompactSubmenu(summary);
             });
         });
 
         sidebarLinks.forEach(function (link) {
             link.addEventListener('click', function () {
                 markActiveLink(link.href);
-                closeFloatingMenu();
+                closeCompactSubmenu();
             });
         });
 
         document.addEventListener('click', function (event) {
-            if (!floatingMenu) {
+            if (!compactSubmenu) {
                 return;
             }
-            if (sidebar.contains(event.target) || floatingMenu.contains(event.target)) {
+            if (sidebar.contains(event.target) || compactSubmenu.contains(event.target)) {
                 return;
             }
-            closeFloatingMenu();
+            closeCompactSubmenu();
         });
 
         document.addEventListener('keydown', function (event) {
             if (event.key === 'Escape') {
-                closeFloatingMenu();
+                closeCompactSubmenu();
             }
         });
 
-        window.addEventListener('resize', closeFloatingMenu);
-        window.addEventListener('scroll', closeFloatingMenu, true);
+        window.addEventListener('resize', closeCompactSubmenu);
+        window.addEventListener('scroll', closeCompactSubmenu, true);
 
         function handleToggleClick(event) {
             if (event) {
