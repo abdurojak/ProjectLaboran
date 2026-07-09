@@ -877,7 +877,7 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn('Pendaftaran Aslab Ditolak', mail.outbox[0].subject)
 
-    def test_terima_pendaftaran_mengubah_role_mahasiswa_jadi_asisten_lab(self):
+    def test_terima_pendaftaran_tidak_langsung_mengubah_role_mahasiswa(self):
         pengguna = Pengguna.objects.create(
             nama_pengguna='Rizki Pratama',
             nim_nik='2401001',
@@ -898,7 +898,8 @@ class PendaftaranAslebViewTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         pengguna.refresh_from_db()
-        self.assertEqual(pengguna.role, 'asisten_lab')
+        self.assertEqual(pengguna.role, 'mahasiswa')
+        self.assertFalse(Asleb.objects.filter(nim='2401001').exists())
 
     def test_generate_semua_diterima_masuk_ke_data_asleb(self):
         pengguna = Pengguna.objects.create(

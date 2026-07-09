@@ -4,6 +4,7 @@ from django.conf import settings
 from django.urls import reverse
 
 from apps.core.emails import send_branded_email
+from apps.kalender.realtime import send_user_notification, users_for_nim
 from apps.pengguna.models import Pengguna
 
 
@@ -49,16 +50,6 @@ def send_peminjaman_request_notifications(peminjaman):
 
 
 def send_peminjaman_status_notification(peminjaman):
-    recipient = (
-        Pengguna.objects.filter(nim_nik=peminjaman.nim)
-        .exclude(email='')
-        .values_list('email', flat=True)
-        .first()
-    )
-    if not recipient:
-        return 0
-
-    action_url = build_public_url('peminjaman:peminjaman_detail', pk=peminjaman.pk)
     status_messages = {
         'dipinjam': ('Peminjaman Alat Disetujui', 'Peminjaman disetujui', 'Pengajuan peminjaman alat Anda telah disetujui.'),
         'dikembalikan': ('Peminjaman Alat Dikembalikan', 'Peminjaman selesai', 'Barang telah dicatat kembali ke laboratorium.'),
@@ -70,6 +61,32 @@ def send_peminjaman_status_notification(peminjaman):
         peminjaman.status,
         ('Status Peminjaman Alat Diperbarui', 'Status peminjaman diperbarui', 'Status peminjaman alat Anda telah diperbarui.'),
     )
+    related_url = reverse('peminjaman:peminjaman_detail', kwargs={'pk': peminjaman.pk})
+    action_url = build_public_url('peminjaman:peminjaman_detail', pk=peminjaman.pk)
+    realtime_payload = {
+        'event': 'peminjaman.status_changed',
+        'source_key': f'peminjaman:{peminjaman.pk}:{peminjaman.status}',
+        'title': f'{title}: {peminjaman.barang.nama}',
+        'message': intro,
+        'notification_type': peminjaman.status,
+        'related_object_id': peminjaman.pk,
+        'related_url': related_url,
+        'refresh_paths': ['/peminjaman/', '/kalender/notifikasi/', '/'],
+        'icon': 'package-check' if peminjaman.status == 'dikembalikan' else 'bell-ring',
+        'icon_class': 'bg-emerald-50 text-emerald-700' if peminjaman.status == 'dikembalikan' else 'bg-amber-50 text-amber-700',
+    }
+    for pengguna in users_for_nim(peminjaman.nim):
+        send_user_notification(pengguna.pk, realtime_payload)
+
+    recipient = (
+        Pengguna.objects.filter(nim_nik=peminjaman.nim)
+        .exclude(email='')
+        .values_list('email', flat=True)
+        .first()
+    )
+    if not recipient:
+        return 0
+
     text_body = (
         f'Status peminjaman {peminjaman.barang.nama} diperbarui.\n'
         f'Kode: {peminjaman.kode_pinjam}\n'

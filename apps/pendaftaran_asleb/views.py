@@ -501,10 +501,9 @@ def accept_pendaftaran(request, pk):
     pendaftaran = get_object_or_404(PendaftaranAsleb, pk=pk)
     pendaftaran.status = 'diterima'
     pendaftaran.save(update_fields=['status', 'diperbarui_pada'])
-    promote_pengguna_to_asisten_lab(pendaftaran)
     send_pendaftaran_status_email(pendaftaran)
     transaction.on_commit(lambda: send_registration_status_update(pendaftaran))
-    messages.success(request, 'Pendaftaran aslab ditandai diterima.')
+    messages.success(request, 'Pendaftaran aslab ditandai diterima. Role akan berubah setelah proses Generate berhasil.')
     return redirect('pendaftaran_asleb:pendaftaran_list')
 
 

@@ -578,6 +578,63 @@ class ModulPraktikumCreateView(ModulManageRequiredMixin, CreateView):
     form_class = ModulPraktikumForm
     template_name = 'asleb/modul_form.html'
     success_url = reverse_lazy('asleb:absensi_list')
+    allowed_bulk_extensions = {'.pdf', '.doc', '.docx', '.ppt', '.pptx', '.zip'}
+    max_bulk_file_size = 15 * 1024 * 1024
+
+    def post(self, request, *args, **kwargs):
+        if request.POST.get('bulk_upload') == '1':
+            return self.handle_bulk_upload(request)
+        return super().post(request, *args, **kwargs)
+
+    def handle_bulk_upload(self, request):
+        from apps.pendaftaran_asleb.models import MataKuliahAsleb
+
+        matkul = get_object_or_404(MataKuliahAsleb, pk=request.POST.get('bulk_matkul'), aktif=True)
+        files = request.FILES.getlist('bulk_files')
+        titles = request.POST.getlist('bulk_judul')
+        uploader = getattr(request, 'current_pengguna', None)
+
+        if not files:
+            messages.error(request, 'Pilih minimal satu file modul terlebih dahulu.')
+            return redirect('asleb:modul_create')
+
+        errors = []
+        for uploaded in files:
+            lower_name = uploaded.name.lower()
+            extension = lower_name[lower_name.rfind('.'):] if '.' in lower_name else ''
+            if extension not in self.allowed_bulk_extensions:
+                errors.append(f'{uploaded.name}: format file tidak didukung.')
+            if uploaded.size > self.max_bulk_file_size:
+                errors.append(f'{uploaded.name}: ukuran maksimal 15 MB.')
+
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+            return redirect('asleb:modul_create')
+
+        last_number = (
+            ModulPraktikum.objects
+            .filter(matkul=matkul)
+            .order_by('-nomor')
+            .values_list('nomor', flat=True)
+            .first()
+            or 0
+        )
+
+        with transaction.atomic():
+            for index, uploaded in enumerate(files, start=1):
+                raw_title = titles[index - 1].strip() if index - 1 < len(titles) else ''
+                fallback_title = uploaded.name.rsplit('.', 1)[0].replace('-', ' ').replace('_', ' ').strip()
+                ModulPraktikum.objects.create(
+                    matkul=matkul,
+                    nomor=last_number + index,
+                    judul=raw_title or fallback_title or f'Modul {last_number + index}',
+                    file=uploaded,
+                    diunggah_oleh=uploader,
+                )
+
+        messages.success(request, f'{len(files)} modul praktikum berhasil diupload sekaligus.')
+        return redirect(self.success_url)
 
     def form_valid(self, form):
         form.instance.diunggah_oleh = getattr(self.request, 'current_pengguna', None)

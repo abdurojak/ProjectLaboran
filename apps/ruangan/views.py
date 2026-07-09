@@ -5,7 +5,7 @@ from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
 from apps.core.permissions import LABORAN_ROLE
 
-from .forms import FotoRuanganLabForm
+from .forms import FotoRuanganLabForm, RuanganLabForm
 from .models import FotoRuanganLab, GrupRuanganGabungan, RuanganLab
 
 
@@ -13,7 +13,7 @@ class LaboranRuanganRequiredMixin:
     def dispatch(self, request, *args, **kwargs):
         pengguna = getattr(request, 'current_pengguna', None)
         if not pengguna or pengguna.role != LABORAN_ROLE:
-            messages.warning(request, 'Kelola foto lab hanya tersedia untuk Laboran.')
+            messages.warning(request, 'Kelola data ruangan hanya tersedia untuk Laboran.')
             return redirect('ruangan:ruangan_list')
         return super().dispatch(request, *args, **kwargs)
 
@@ -35,6 +35,17 @@ class RuanganListView(ListView):
             .order_by('nama')
         )
         return context
+
+
+class RuanganUpdateView(LaboranRuanganRequiredMixin, UpdateView):
+    model = RuanganLab
+    form_class = RuanganLabForm
+    template_name = 'ruangan/ruangan_form.html'
+    success_url = reverse_lazy('ruangan:ruangan_list')
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Data ruangan berhasil diperbarui.')
+        return super().form_valid(form)
 
 
 class FotoRuanganCreateView(LaboranRuanganRequiredMixin, CreateView):

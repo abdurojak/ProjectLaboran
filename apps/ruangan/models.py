@@ -12,6 +12,7 @@ class RuanganLab(models.Model):
 
     nama = models.CharField(max_length=150)
     kode = models.CharField(max_length=30, unique=True)
+    kepala_lab = models.CharField('Kepala Lab', max_length=150, blank=True)
     deskripsi = models.TextField(blank=True)
     kapasitas = models.PositiveSmallIntegerField(null=True, blank=True)
     warna = models.CharField(max_length=20, choices=WARNA_CHOICES, default='teal')
