@@ -1,8 +1,10 @@
 from datetime import datetime, timedelta
 
 from django.db.models import Q
+from django.http import JsonResponse
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+from django.views.decorators.http import require_GET
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
 from apps.asleb.models import Asleb, PesertaPraktikum
@@ -14,6 +16,29 @@ from .forms import KegiatanKalenderForm
 from .models import KegiatanKalender, Notifikasi
 from .notifications import sync_user_notifications
 from .utils import build_manual_notification, get_perayaan_calendar_events, get_perayaan_notifications
+
+
+@require_GET
+def notifikasi_summary(request):
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not pengguna:
+        return JsonResponse({'unread_count': 0})
+
+    sync_user_notifications(pengguna)
+    latest = (
+        Notifikasi.objects.filter(pengguna=pengguna)
+        .order_by('-source_updated_at', '-id')
+        .first()
+    )
+    unread_count = Notifikasi.objects.filter(
+        pengguna=pengguna,
+        dibaca_pada__isnull=True,
+    ).count()
+    return JsonResponse({
+        'unread_count': unread_count,
+        'latest_id': latest.pk if latest else None,
+        'latest_title': latest.judul if latest else '',
+    })
 
 
 def get_visible_kegiatan_queryset(pengguna):

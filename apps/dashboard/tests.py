@@ -8,7 +8,7 @@ from django.utils import timezone
 from apps.asleb.models import Asleb, HonorAsleb
 from apps.inventaris.models import Barang
 from apps.jadwal.models import JadwalPraktikum
-from apps.kalender.models import KegiatanKalender
+from apps.kalender.models import KegiatanKalender, Notifikasi
 from apps.peminjaman.models import PeminjamanAlat, PeminjamanTransaksi
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb
 from apps.pendaftaran_asleb.utils import get_public_registration_url
@@ -204,6 +204,11 @@ class DashboardViewTests(TestCase):
         self.assertEqual(peminjaman.status, 'dipinjam')
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn('Peminjaman Alat Disetujui', mail.outbox[0].subject)
+        self.assertTrue(Notifikasi.objects.filter(
+            source_key=f'peminjaman:{peminjaman.pk}:dipinjam',
+            judul='Peminjaman disetujui',
+            dibaca_pada__isnull=True,
+        ).exists())
 
     def test_accept_pending_peminjaman_rejects_when_stock_is_no_longer_available(self):
         barang = Barang.objects.create(nama='Proyektor', jumlah=1)
@@ -232,9 +237,22 @@ class DashboardViewTests(TestCase):
         self.assertContains(response, 'Proyektor sedang dipinjam.')
 
     def test_reject_pending_peminjaman_deletes_history(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Budi',
+            nim_nik='2201008',
+            email='budi@example.com',
+            password='rahasia123',
+            no_hp='081234567888',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+        )
         peminjaman = PeminjamanAlat.objects.create(
             barang=self.barang,
             nama_peminjam='Budi',
+            nim=mahasiswa.nim_nik,
             tanggal_pinjam=timezone.localdate(),
             tanggal_kembali=timezone.localdate(),
             status='diajukan',
@@ -244,6 +262,12 @@ class DashboardViewTests(TestCase):
 
         self.assertRedirects(response, reverse('dashboard:home'))
         self.assertFalse(PeminjamanAlat.objects.filter(pk=peminjaman.pk).exists())
+        self.assertTrue(Notifikasi.objects.filter(
+            pengguna=mahasiswa,
+            source_key=f'peminjaman:{peminjaman.pk}:ditolak',
+            judul='Peminjaman ditolak',
+            dibaca_pada__isnull=True,
+        ).exists())
 
     def test_dashboard_shows_pending_jadwal_praktikum(self):
         ruangan = RuanganLab.objects.create(nama='Lab Dashboard', kode='LAB-DASH', kapasitas=24)

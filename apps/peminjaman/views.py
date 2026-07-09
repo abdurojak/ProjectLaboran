@@ -311,6 +311,10 @@ class PeminjamanAlatListView(ListView):
                 transaksi.status_display = (
                     dict(PeminjamanAlat.STATUS_CHOICES).get(transaksi.status, 'Campuran')
                 )
+                transaksi.has_actionable_details = any(
+                    detail.status not in ARCHIVED_STATUS_CHOICES
+                    for detail in detail_list
+                )
                 transaksi.is_overdue = any(
                     detail.tanggal_kembali < today
                     and detail.status not in ARCHIVED_STATUS_CHOICES

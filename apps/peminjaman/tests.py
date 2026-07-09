@@ -157,6 +157,26 @@ class PeminjamanViewsTests(TestCase):
         self.assertNotContains(response, 'value="' + str(self.peminjaman.pk) + '" aria-label="Pilih')
         self.assertNotContains(response, reverse('peminjaman:peminjaman_update', args=[self.peminjaman.pk]))
 
+    def test_status_final_di_tabel_utama_checkbox_disabled(self):
+        transaksi = PeminjamanTransaksi.objects.create(
+            nama_peminjam='Final List',
+            tanggal_pinjam=date(2026, 6, 18),
+            tanggal_kembali=date(2026, 6, 20),
+        )
+        PeminjamanAlat.objects.create(
+            transaksi=transaksi,
+            barang=self.barang_lain,
+            nama_peminjam='Final List',
+            tanggal_pinjam=date(2026, 6, 18),
+            tanggal_kembali=date(2026, 6, 20),
+            status='dikembalikan',
+        )
+
+        response = self.client.get(reverse('peminjaman:peminjaman_list'), {'semua': '1'})
+
+        self.assertContains(response, 'value="' + str(transaksi.pk) + '" form="peminjaman-bulk-status-form" aria-label="' + transaksi.kode_pinjam + ' sudah selesai" disabled')
+        self.assertNotContains(response, 'value="' + str(transaksi.pk) + '" form="peminjaman-bulk-status-form" aria-label="Pilih')
+
     def test_list_peminjaman_memakai_htmx_untuk_interaksi_async(self):
         self.peminjaman.status = 'diajukan'
         self.peminjaman.save(update_fields=['status'])
