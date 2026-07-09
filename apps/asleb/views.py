@@ -578,8 +578,16 @@ class ModulPraktikumCreateView(ModulManageRequiredMixin, CreateView):
     form_class = ModulPraktikumForm
     template_name = 'asleb/modul_form.html'
     success_url = reverse_lazy('asleb:absensi_list')
-    allowed_bulk_extensions = {'.pdf', '.doc', '.docx', '.ppt', '.pptx', '.zip'}
+    allowed_bulk_extensions = {'.pdf', '.doc', '.docx'}
     max_bulk_file_size = 15 * 1024 * 1024
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['existing_modules'] = (
+            ModulPraktikum.objects.select_related('matkul', 'diunggah_oleh')
+            .order_by('matkul__nama', 'matkul__kelas', 'nomor')[:18]
+        )
+        return context
 
     def post(self, request, *args, **kwargs):
         if request.POST.get('bulk_upload') == '1':
@@ -603,7 +611,7 @@ class ModulPraktikumCreateView(ModulManageRequiredMixin, CreateView):
             lower_name = uploaded.name.lower()
             extension = lower_name[lower_name.rfind('.'):] if '.' in lower_name else ''
             if extension not in self.allowed_bulk_extensions:
-                errors.append(f'{uploaded.name}: format file tidak didukung.')
+                errors.append(f'{uploaded.name}: File modul hanya boleh PDF atau Word.')
             if uploaded.size > self.max_bulk_file_size:
                 errors.append(f'{uploaded.name}: ukuran maksimal 15 MB.')
 
@@ -647,6 +655,15 @@ class ModulPraktikumUpdateView(ModulManageRequiredMixin, UpdateView):
     form_class = ModulPraktikumForm
     template_name = 'asleb/modul_form.html'
     success_url = reverse_lazy('asleb:absensi_list')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['existing_modules'] = (
+            ModulPraktikum.objects.select_related('matkul', 'diunggah_oleh')
+            .filter(matkul=self.object.matkul)
+            .order_by('nomor')
+        )
+        return context
 
     def form_valid(self, form):
         form.instance.diunggah_oleh = getattr(self.request, 'current_pengguna', None)

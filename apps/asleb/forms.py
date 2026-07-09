@@ -313,8 +313,19 @@ class ModulPraktikumForm(forms.ModelForm):
         widgets = {
             'nomor': forms.NumberInput(attrs={'min': 1}),
             'judul': forms.TextInput(attrs={'placeholder': 'Judul atau materi modul'}),
-            'file': forms.FileInput(attrs={'accept': '.pdf,.doc,.docx,.ppt,.pptx,.zip'}),
+            'file': forms.FileInput(attrs={'accept': '.pdf,.doc,.docx'}),
         }
+
+    def clean_file(self):
+        uploaded = self.cleaned_data.get('file')
+        if not uploaded:
+            return uploaded
+        lower_name = uploaded.name.lower()
+        if not lower_name.endswith(('.pdf', '.doc', '.docx')):
+            raise forms.ValidationError('File modul hanya boleh PDF atau Word.')
+        if uploaded.size > 15 * 1024 * 1024:
+            raise forms.ValidationError('Ukuran file modul maksimal 15 MB.')
+        return uploaded
 
 
 class PesertaPraktikumBulkForm(forms.Form):

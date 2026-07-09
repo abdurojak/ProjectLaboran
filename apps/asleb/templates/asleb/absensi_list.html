@@ -55,6 +55,20 @@
                     <i data-lucide="book-open" class="h-5 w-5 shrink-0 text-cyan-700"></i>
                 </div>
                 <div class="mt-4 flex flex-wrap gap-2">
+                    {% if can_manage_modul %}
+                    <button
+                        type="button"
+                        class="btn-secondary gap-2"
+                        data-open-inline-modul-preview
+                        data-preview-title="Modul {{ modul.nomor }} - {{ modul.judul }}"
+                        data-preview-url="{{ modul.file.url }}"
+                        data-preview-type="{{ modul.file_type }}"
+                        data-preview-size="{{ modul.file_size|default:0 }}"
+                        data-preview-date="{{ modul.dibuat_pada|date:'d M Y H:i' }}"
+                    >
+                        <i data-lucide="eye" class="h-4 w-4"></i><span>Preview</span>
+                    </button>
+                    {% endif %}
                     <a href="{% url 'asleb:modul_download' modul.pk %}" class="btn-secondary gap-2">
                         <i data-lucide="download" class="h-4 w-4"></i><span>Unduh</span>
                     </a>
@@ -142,6 +156,49 @@
         </div>
     </div>
 </section>
+
+<div class="fixed inset-0 z-[90] hidden items-center justify-center bg-slate-950/70 p-4" data-inline-preview-modal>
+    <div class="max-h-[92vh] w-full max-w-5xl overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+            <div class="min-w-0">
+                <h3 class="truncate text-lg font-black text-slate-900" data-inline-preview-title>Preview Modul</h3>
+                <p class="mt-1 text-sm text-slate-500" data-inline-preview-meta>Informasi file modul</p>
+            </div>
+            <button type="button" class="btn-secondary h-11 w-11 justify-center p-0" data-close-inline-preview aria-label="Tutup preview">
+                <i data-lucide="x" class="h-4 w-4"></i>
+            </button>
+        </div>
+        <div class="max-h-[calc(92vh-5rem)] overflow-auto bg-slate-50 p-5">
+            <div class="hidden aspect-[16/10] overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white" data-inline-preview-pdf-wrap>
+                <iframe title="Preview PDF modul" class="h-full w-full" src="" data-inline-preview-pdf-frame></iframe>
+            </div>
+            <div class="hidden rounded-[1.5rem] border border-slate-200 bg-white p-6" data-inline-preview-doc-wrap>
+                <div class="flex items-start gap-4">
+                    <span class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+                        <i data-lucide="file-text" class="h-7 w-7"></i>
+                    </span>
+                    <div class="min-w-0">
+                        <h4 class="text-lg font-black text-slate-900">Preview langsung belum tersedia untuk file Word</h4>
+                        <p class="mt-2 text-sm leading-6 text-slate-500">Gunakan tombol buka atau unduh untuk melihat dokumen Word tanpa keluar dari alur kerja utama.</p>
+                    </div>
+                </div>
+                <dl class="mt-6 grid gap-3 text-sm sm:grid-cols-2">
+                    <div class="rounded-2xl bg-slate-50 px-4 py-3"><dt class="font-black text-slate-500">Tipe file</dt><dd class="mt-1 font-semibold text-slate-900" data-inline-preview-doc-type>-</dd></div>
+                    <div class="rounded-2xl bg-slate-50 px-4 py-3"><dt class="font-black text-slate-500">Ukuran</dt><dd class="mt-1 font-semibold text-slate-900" data-inline-preview-doc-size>-</dd></div>
+                    <div class="rounded-2xl bg-slate-50 px-4 py-3 sm:col-span-2"><dt class="font-black text-slate-500">Tanggal upload</dt><dd class="mt-1 font-semibold text-slate-900" data-inline-preview-doc-date>-</dd></div>
+                </dl>
+            </div>
+            <div class="mt-4 flex flex-wrap gap-3">
+                <a href="#" class="btn-primary gap-2" target="_blank" rel="noreferrer" data-inline-preview-open-link>
+                    <i data-lucide="external-link" class="h-4 w-4"></i><span>Buka File</span>
+                </a>
+                <a href="#" class="btn-secondary gap-2" data-inline-preview-download-link>
+                    <i data-lucide="download" class="h-4 w-4"></i><span>Download</span>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_script %}
@@ -166,6 +223,74 @@
                 form.submit();
             });
         }
+
+        const previewModal = document.querySelector('[data-inline-preview-modal]');
+        const previewTitle = document.querySelector('[data-inline-preview-title]');
+        const previewMeta = document.querySelector('[data-inline-preview-meta]');
+        const pdfWrap = document.querySelector('[data-inline-preview-pdf-wrap]');
+        const pdfFrame = document.querySelector('[data-inline-preview-pdf-frame]');
+        const docWrap = document.querySelector('[data-inline-preview-doc-wrap]');
+        const docType = document.querySelector('[data-inline-preview-doc-type]');
+        const docSize = document.querySelector('[data-inline-preview-doc-size]');
+        const docDate = document.querySelector('[data-inline-preview-doc-date]');
+        const openLink = document.querySelector('[data-inline-preview-open-link]');
+        const downloadLink = document.querySelector('[data-inline-preview-download-link]');
+
+        function formatBytes(bytes) {
+            const size = Number(bytes || 0);
+            if (size < 1024) return size + ' B';
+            if (size < 1024 * 1024) return (size / 1024).toFixed(1) + ' KB';
+            return (size / (1024 * 1024)).toFixed(2) + ' MB';
+        }
+
+        function closePreview() {
+            if (!previewModal) return;
+            previewModal.classList.add('hidden');
+            previewModal.classList.remove('flex');
+            if (pdfFrame) pdfFrame.src = '';
+        }
+
+        document.querySelectorAll('[data-open-inline-modul-preview]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                const type = String(button.dataset.previewType || '').toLowerCase();
+                const isPdf = type === 'pdf';
+                previewTitle.textContent = button.dataset.previewTitle || 'Preview Modul';
+                previewMeta.textContent = `${String(type || 'file').toUpperCase()} · ${formatBytes(button.dataset.previewSize)} · ${button.dataset.previewDate || '-'}`;
+                openLink.href = button.dataset.previewUrl;
+                downloadLink.href = button.dataset.previewUrl;
+                if (isPdf) {
+                    pdfWrap.classList.remove('hidden');
+                    docWrap.classList.add('hidden');
+                    pdfFrame.src = button.dataset.previewUrl;
+                } else {
+                    pdfWrap.classList.add('hidden');
+                    docWrap.classList.remove('hidden');
+                    docType.textContent = String(type || 'file').toUpperCase();
+                    docSize.textContent = formatBytes(button.dataset.previewSize);
+                    docDate.textContent = button.dataset.previewDate || '-';
+                }
+                previewModal.classList.remove('hidden');
+                previewModal.classList.add('flex');
+            });
+        });
+
+        document.querySelectorAll('[data-close-inline-preview]').forEach(function (button) {
+            button.addEventListener('click', closePreview);
+        });
+
+        if (previewModal) {
+            previewModal.addEventListener('click', function (event) {
+                if (event.target === previewModal) {
+                    closePreview();
+                }
+            });
+        }
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') {
+                closePreview();
+            }
+        });
     });
 </script>
 {% endblock %}
