@@ -432,6 +432,8 @@ class BantuanTests(TestCase):
         self.assertContains(response, 'data-chat-typing')
         self.assertContains(response, "action: 'typing'")
         self.assertContains(response, "action: 'presence'")
+        self.assertContains(response, "event.key !== 'Enter' || event.shiftKey")
+        self.assertContains(response, "form.requestSubmit();")
 
     def test_admin_settings_tidak_menampilkan_kartu_bantuan(self):
         admin = Pengguna.objects.create(
