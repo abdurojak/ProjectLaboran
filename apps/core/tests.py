@@ -302,6 +302,10 @@ class BantuanTests(TestCase):
         self.assertContains(response, 'background: rgba(15, 118, 110, 0.96) !important;')
         self.assertContains(response, 'html[data-theme="dark"] [data-help-floating] button')
         self.assertContains(response, 'background: rgba(20, 184, 166, 0.94) !important;')
+        self.assertContains(response, '[data-help-dialog] > .surface-card')
+        self.assertContains(response, 'background: rgba(255, 255, 255, 0.96) !important;')
+        self.assertContains(response, 'html[data-theme="dark"] [data-help-dialog] > .surface-card')
+        self.assertContains(response, 'background: rgba(15, 23, 42, 0.94) !important;')
 
     def test_floating_chat_bantuan_tidak_muncul_untuk_guest(self):
         self.client.session.flush()
