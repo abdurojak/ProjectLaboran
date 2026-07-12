@@ -95,6 +95,43 @@ class GlobalBackgroundTests(TestCase):
         self.assertContains(response, 'html[data-theme="dark"] tbody tr:hover td')
         self.assertContains(response, 'html[data-theme="dark"] tbody tr:hover .text-slate-900')
 
+    def test_touch_device_mengurangi_repaint_blur_dan_transisi(self):
+        response = self.client.get(reverse('pengguna:login'))
+
+        self.assertContains(response, '@media (hover: none), (pointer: coarse)')
+        self.assertContains(response, 'overscroll-behavior-y: contain;')
+        self.assertContains(response, 'backface-visibility: hidden;')
+        self.assertContains(response, 'body:has([data-app-content]) #dashboard-sidebar')
+        self.assertContains(response, '[data-app-content] {')
+        self.assertContains(response, 'animation: none !important;')
+        self.assertContains(response, 'transition-duration: 0ms !important;')
+        self.assertContains(response, 'will-change: auto !important;')
+        self.assertContains(response, '[data-dashboard-sidebar-shell]')
+        self.assertContains(response, 'transition: none !important;')
+
+    def test_sidebar_touch_device_tidak_memakai_animasi_expand(self):
+        pengguna = Pengguna.objects.create(
+            nama_pengguna='User Sidebar Touch',
+            nim_nik='0642201098',
+            email='sidebar-touch@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081234567898',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+        )
+        session = self.client.session
+        session['pengguna_id'] = pengguna.pk
+        session.save()
+
+        response = self.client.get(reverse('dashboard:home'))
+
+        self.assertContains(response, "const coarsePointerQuery = window.matchMedia('(hover: none), (pointer: coarse)');")
+        self.assertContains(response, '&& !coarsePointerQuery.matches')
+        self.assertContains(response, "coarsePointerQuery.matches ? '' : ' transition duration-150'")
+
     def test_date_input_calendar_icon_dark_mode_terlihat(self):
         response = self.client.get(reverse('pengguna:login'))
 
@@ -117,9 +154,21 @@ class GlobalBackgroundTests(TestCase):
         response = self.client.get(reverse('pengguna:login'))
 
         self.assertContains(response, 'data-global-loading')
+        self.assertContains(response, 'data-initial-loading="true"')
+        self.assertContains(response, 'aria-hidden="false"')
         self.assertContains(response, 'data-global-loading-core')
         self.assertContains(response, 'labhub-loading-spin')
         self.assertContains(response, 'labhub-loading-float')
+        self.assertContains(response, '[data-global-loading][data-initial-loading="true"]')
+        self.assertContains(response, '--loading-bg-base')
+        self.assertContains(response, 'linear-gradient(135deg, var(--loading-bg-base), var(--loading-bg-deep))')
+        self.assertContains(response, '[data-global-loading]::before')
+        self.assertContains(response, '[data-global-loading]::after')
+        self.assertContains(response, 'labhub-loading-aura')
+        self.assertContains(response, 'backdrop-filter: none;')
+        self.assertNotContains(response, '[data-global-loading][data-loading-mode="action"]')
+        self.assertContains(response, 'function hideInitialLoadingWhenReady()')
+        self.assertContains(response, "window.addEventListener('load', hideInitialLoadingWhenReady, {once: true});")
         self.assertContains(response, 'function shouldSkipGlobalLoading(event)')
         self.assertContains(response, 'data-no-global-loading="true"')
         self.assertContains(response, "document.body.addEventListener('htmx:beforeRequest', showGlobalLoading);")
