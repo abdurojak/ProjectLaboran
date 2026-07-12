@@ -762,6 +762,32 @@
             background: rgba(13, 148, 136, 1) !important;
         }
 
+        [data-help-dialog] {
+            background-color: rgba(15, 23, 42, 0.62) !important;
+        }
+
+        [data-help-dialog] > .surface-card {
+            background: rgba(255, 255, 255, 0.96) !important;
+            border-color: rgba(203, 213, 225, 0.92) !important;
+            box-shadow: 0 28px 80px rgba(2, 6, 23, 0.36);
+            backdrop-filter: blur(14px) saturate(1.06);
+            -webkit-backdrop-filter: blur(14px) saturate(1.06);
+        }
+
+        html[data-theme="dark"] [data-help-dialog] {
+            background-color: rgba(2, 6, 23, 0.74) !important;
+        }
+
+        html[data-theme="dark"] [data-help-dialog] > .surface-card {
+            background: rgba(15, 23, 42, 0.94) !important;
+            border-color: rgba(71, 85, 105, 0.64) !important;
+            box-shadow: 0 30px 90px rgba(2, 6, 23, 0.68);
+        }
+
+        html[data-theme="dark"] [data-help-message="bot"] {
+            background-color: rgba(30, 41, 59, 0.86) !important;
+        }
+
         @keyframes labhub-loading-spin {
             to { transform: rotate(360deg); }
         }
