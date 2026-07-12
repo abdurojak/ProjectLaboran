@@ -82,6 +82,7 @@
         const shell = sidebar.closest('[data-dashboard-sidebar-shell]');
         const mediumQuery = window.matchMedia('(min-width: 768px)');
         const desktopQuery = window.matchMedia('(min-width: 1280px)');
+        const coarsePointerQuery = window.matchMedia('(hover: none), (pointer: coarse)');
         const brandShell = sidebar.querySelector('[data-sidebar-brand-shell]');
         const railLogout = sidebar.querySelector('[data-sidebar-rail-logout]');
         const toggles = [desktopToggle, mobileToggle].filter(Boolean);
@@ -92,7 +93,11 @@
 
         function navigateWithTransition(href) {
             const appContent = document.querySelector('[data-app-content]');
-            if (appContent && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            if (
+                appContent
+                && !coarsePointerQuery.matches
+                && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+            ) {
                 appContent.classList.add('is-leaving');
                 window.setTimeout(function () {
                     window.location.href = href;
@@ -144,7 +149,7 @@
             compactSubmenu = document.createElement('div');
             compactSubmenu.setAttribute('data-sidebar-compact-submenu', '');
             compactSubmenu.setAttribute('aria-hidden', 'true');
-            compactSubmenu.className = 'pointer-events-none fixed z-[80] w-[min(17rem,calc(100vw-7rem))] origin-left -translate-x-1 scale-95 overflow-hidden rounded-[1.4rem] border p-2 opacity-0 shadow-2xl transition duration-150';
+            compactSubmenu.className = 'pointer-events-none fixed z-[80] w-[min(17rem,calc(100vw-7rem))] origin-left -translate-x-1 scale-95 overflow-hidden rounded-[1.4rem] border p-2 opacity-0 shadow-2xl' + (coarsePointerQuery.matches ? '' : ' transition duration-150');
             document.body.appendChild(compactSubmenu);
 
             compactSubmenu.addEventListener('click', function (event) {

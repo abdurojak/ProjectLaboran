@@ -1,4 +1,4 @@
-<section class="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,.65fr)]">
+<section class="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(18rem,.65fr)]">
     <div class="surface-card min-w-0 overflow-hidden p-5 md:p-6">
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -17,7 +17,7 @@
                     <p class="mt-1 text-xs text-slate-500">{{ peminjaman.nama_peminjam }} &middot; {{ peminjaman.tanggal_pinjam|date:"d M Y" }}</p>
                     {% if peminjaman.jumlah_barang_transaksi > 1 %}<p class="mt-1 text-xs font-semibold text-slate-500">{{ peminjaman.jumlah_barang_transaksi }} barang dalam transaksi ini</p>{% endif %}
                 </div>
-                <div class="flex gap-2">
+                <div class="grid w-full grid-cols-2 gap-2 sm:w-auto">
                     <form method="post" action="{% url 'dashboard:peminjaman_accept' peminjaman.pk %}">{% csrf_token %}<button class="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white" type="submit">Terima</button></form>
                     <form method="post" action="{% url 'dashboard:peminjaman_reject' peminjaman.pk %}">{% csrf_token %}<button class="rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-700" type="submit">Tolak</button></form>
                 </div>
@@ -52,9 +52,9 @@
                     <p class="mt-1 text-xs text-slate-500">{{ peminjaman.nama_peminjam }} &middot; {{ peminjaman.get_status_display }}</p>
                     {% if peminjaman.jumlah_barang_transaksi > 1 %}<p class="mt-1 text-xs font-semibold text-slate-500">{{ peminjaman.jumlah_barang_transaksi }} barang dalam transaksi ini</p>{% endif %}
                 </div>
-                <form method="post" action="{% url 'dashboard:peminjaman_replaced' peminjaman.pk %}" data-confirm-message="Tandai barang ini sudah digantikan?">
+                <form method="post" action="{% url 'dashboard:peminjaman_replaced' peminjaman.pk %}" class="w-full sm:w-auto" data-confirm-message="Tandai barang ini sudah digantikan?">
                     {% csrf_token %}
-                    <button class="rounded-xl bg-brand-700 px-3 py-2 text-xs font-bold text-white" type="submit">Digantikan</button>
+                    <button class="w-full rounded-xl bg-brand-700 px-3 py-2 text-xs font-bold text-white" type="submit">Digantikan</button>
                 </form>
             </article>
             {% empty %}
@@ -89,7 +89,7 @@
                     <a href="{% url 'jadwal:jadwal_detail' jadwal.pk %}" class="block truncate font-bold text-slate-900 hover:text-brand-700">{{ jadwal.mata_kuliah }}</a>
                     <p class="mt-1 text-xs text-slate-500">{{ jadwal.get_hari_display }}, {{ jadwal.waktu_mulai|time:"H:i" }} &middot; {{ jadwal.get_display_ruangan_nama }}</p>
                 </div>
-                <div class="flex gap-2">
+                <div class="grid w-full grid-cols-2 gap-2 sm:w-auto">
                     <form method="post" action="{% url 'dashboard:jadwal_accept' jadwal.pk %}">{% csrf_token %}<button class="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white" type="submit">Terima</button></form>
                     <form method="post" action="{% url 'dashboard:jadwal_reject' jadwal.pk %}">{% csrf_token %}<button class="rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-700" type="submit">Tolak</button></form>
                 </div>
@@ -100,7 +100,7 @@
         </div>
     </div>
 
-    <aside class="surface-card p-5 md:p-6">
+    <aside class="surface-card min-w-0 p-5 md:p-6">
         <p class="text-xs font-black uppercase tracking-[0.2em] text-brand-700">Akses Utama</p>
         <h3 class="mt-2 text-xl font-black text-slate-900">Buka Menu</h3>
         <div class="mt-5 grid gap-2">

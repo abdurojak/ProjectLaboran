@@ -584,24 +584,66 @@
         }
 
         [data-global-loading] {
+            --loading-bg-base: #eef8f8;
+            --loading-bg-deep: #d7eef0;
+            --loading-glow-primary: rgba(20, 184, 166, 0.30);
+            --loading-glow-secondary: rgba(37, 99, 235, 0.16);
+            --loading-grid: rgba(15, 118, 110, 0.08);
             position: fixed;
             inset: 0;
             z-index: 120;
-            display: none;
+            display: flex;
             align-items: center;
             justify-content: center;
             background:
-                radial-gradient(circle at 50% 42%, rgba(20, 184, 166, 0.18), transparent 18rem),
-                rgba(15, 23, 42, 0.34);
-            backdrop-filter: blur(10px) saturate(1.1);
-            -webkit-backdrop-filter: blur(10px) saturate(1.1);
+                radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.86), transparent 12rem),
+                radial-gradient(circle at 34% 34%, var(--loading-glow-primary), transparent 18rem),
+                radial-gradient(circle at 70% 64%, var(--loading-glow-secondary), transparent 20rem),
+                linear-gradient(135deg, var(--loading-bg-base), var(--loading-bg-deep));
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
             opacity: 0;
             transition: opacity 160ms ease;
+            overflow: hidden;
+        }
+
+        [data-global-loading]::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(var(--loading-grid) 1px, transparent 1px),
+                linear-gradient(90deg, var(--loading-grid) 1px, transparent 1px);
+            background-size: 38px 38px;
+            mask-image: radial-gradient(circle at 50% 45%, black, transparent 72%);
+            -webkit-mask-image: radial-gradient(circle at 50% 45%, black, transparent 72%);
+            pointer-events: none;
+        }
+
+        [data-global-loading]::after {
+            content: "";
+            position: absolute;
+            width: min(34rem, 72vw);
+            aspect-ratio: 1;
+            border-radius: 999px;
+            background: conic-gradient(from 180deg, rgba(20, 184, 166, 0), rgba(20, 184, 166, 0.14), rgba(59, 130, 246, 0.10), rgba(20, 184, 166, 0));
+            filter: blur(4px);
+            opacity: 0.74;
+            animation: labhub-loading-aura 7s linear infinite;
+            pointer-events: none;
+        }
+
+        [data-global-loading][data-initial-loading="true"] {
+            opacity: 1;
         }
 
         [data-global-loading].is-visible {
             display: flex;
             opacity: 1;
+        }
+
+        [data-global-loading]:not(.is-visible):not([data-initial-loading="true"]) {
+            display: none;
         }
 
         [data-global-loading-card] {
@@ -668,9 +710,16 @@
         }
 
         html[data-theme="dark"] [data-global-loading] {
+            --loading-bg-base: #020617;
+            --loading-bg-deep: #0f2533;
+            --loading-glow-primary: rgba(45, 212, 191, 0.20);
+            --loading-glow-secondary: rgba(14, 165, 233, 0.14);
+            --loading-grid: rgba(148, 163, 184, 0.07);
             background:
-                radial-gradient(circle at 50% 42%, rgba(94, 234, 212, 0.14), transparent 18rem),
-                rgba(2, 6, 23, 0.52);
+                radial-gradient(circle at 50% 40%, rgba(15, 23, 42, 0.58), transparent 12rem),
+                radial-gradient(circle at 34% 34%, var(--loading-glow-primary), transparent 18rem),
+                radial-gradient(circle at 70% 64%, var(--loading-glow-secondary), transparent 20rem),
+                linear-gradient(135deg, var(--loading-bg-base), var(--loading-bg-deep));
         }
 
         html[data-theme="dark"] [data-global-loading-card] {
@@ -699,6 +748,10 @@
         @keyframes labhub-loading-float {
             0%, 100% { transform: translateY(0) scale(1); }
             50% { transform: translateY(-0.18rem) scale(1.035); }
+        }
+
+        @keyframes labhub-loading-aura {
+            to { transform: rotate(360deg); }
         }
 
         html[data-theme="dark"] .text-teal-600,
@@ -1001,6 +1054,78 @@
         }
 
         @media (hover: none), (pointer: coarse) {
+            html {
+                overscroll-behavior-y: contain;
+            }
+
+            .app-page-background,
+            .surface-card,
+            .glass-card,
+            [data-app-content],
+            [data-app-frame],
+            [data-app-window-bar],
+            #dashboard-sidebar {
+                backface-visibility: hidden;
+                transform: translateZ(0);
+            }
+
+            .app-page-background {
+                transform: none !important;
+                will-change: auto !important;
+                background-attachment: scroll !important;
+            }
+
+            .surface-card,
+            .glass-card,
+            html[data-bg="custom"] .surface-card,
+            html[data-bg="custom"] .glass-card,
+            html[data-bg="custom"] main article,
+            html[data-bg="custom"] main aside,
+            html[data-bg="custom"] main form,
+            html[data-theme="dark"][data-bg="custom"] .surface-card,
+            html[data-theme="dark"][data-bg="custom"] .glass-card,
+            html[data-theme="dark"][data-bg="custom"] main article,
+            html[data-theme="dark"][data-bg="custom"] main aside,
+            html[data-theme="dark"][data-bg="custom"] main form,
+            [data-app-window-bar],
+            body:has([data-app-content]) #dashboard-sidebar {
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+            }
+
+            [data-app-content] {
+                animation: none !important;
+            }
+
+            a,
+            button,
+            summary,
+            [data-dashboard-sidebar-shell],
+            #dashboard-sidebar,
+            #dashboard-sidebar *,
+            #dashboard-sidebar [data-sidebar-link],
+            #dashboard-sidebar [data-sidebar-summary],
+            #dashboard-sidebar [data-sidebar-child],
+            .labhub-topbar *,
+            .surface-card,
+            tbody tr {
+                transition-duration: 0ms !important;
+            }
+
+            #dashboard-sidebar,
+            [data-dashboard-sidebar-shell],
+            [data-sidebar-compact-submenu] {
+                transition: none !important;
+                animation: none !important;
+            }
+
+            #dashboard-sidebar [data-sidebar-chevron] i,
+            #dashboard-sidebar [data-sidebar-label][data-lucide],
+            #dashboard-sidebar .group-open\:rotate-90,
+            #dashboard-sidebar .group-open\:rotate-180 {
+                transition: none !important;
+            }
+
             a:active,
             button:active,
             summary:active {
@@ -1810,7 +1935,7 @@
 </head>
 <body>
     <div class="app-page-background" aria-hidden="true"></div>
-    <div data-global-loading aria-live="polite" aria-hidden="true">
+    <div data-global-loading data-initial-loading="true" class="is-visible" aria-live="polite" aria-hidden="false">
         <div data-global-loading-card>
             <div data-global-loading-core>
                 <img src="{% static 'core/img/labhub-logo.png' %}" alt="">
@@ -1939,6 +2064,7 @@
             const globalLoading = document.querySelector('[data-global-loading]');
             let loadingTimer = null;
             let loadingCount = 0;
+            let initialLoadingActive = Boolean(globalLoading && globalLoading.dataset.initialLoading === 'true');
 
             function shouldSkipGlobalLoading(event) {
                 const source = event && event.detail && event.detail.elt ? event.detail.elt : event && event.target;
@@ -1952,18 +2078,40 @@
                 window.clearTimeout(loadingTimer);
                 loadingTimer = window.setTimeout(function () {
                     globalLoading.classList.add('is-visible');
+                    delete globalLoading.dataset.initialLoading;
                     globalLoading.setAttribute('aria-hidden', 'false');
                 }, 120);
             }
 
-            function hideGlobalLoading(event) {
+            function hideGlobalLoading(event, options) {
                 if (shouldSkipGlobalLoading(event)) return;
                 if (!globalLoading) return;
-                loadingCount = Math.max(loadingCount - 1, 0);
+                if (initialLoadingActive && options && options.initial) {
+                    initialLoadingActive = false;
+                } else {
+                    loadingCount = Math.max(loadingCount - 1, 0);
+                }
                 if (loadingCount > 0) return;
                 window.clearTimeout(loadingTimer);
+                delete globalLoading.dataset.initialLoading;
                 globalLoading.classList.remove('is-visible');
                 globalLoading.setAttribute('aria-hidden', 'true');
+            }
+
+            function hideInitialLoadingWhenReady() {
+                window.requestAnimationFrame(function () {
+                    window.requestAnimationFrame(function () {
+                        window.setTimeout(function () {
+                            hideGlobalLoading(null, {initial: true});
+                        }, 80);
+                    });
+                });
+            }
+
+            if (document.readyState === 'complete') {
+                hideInitialLoadingWhenReady();
+            } else {
+                window.addEventListener('load', hideInitialLoadingWhenReady, {once: true});
             }
 
             document.body.addEventListener('htmx:beforeRequest', showGlobalLoading);
