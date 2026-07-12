@@ -298,6 +298,10 @@ class BantuanTests(TestCase):
         self.assertContains(response, "event.key !== 'Enter' || event.shiftKey")
         self.assertContains(response, "fetch(asyncUrl")
         self.assertContains(response, 'Chat Bantuan')
+        self.assertContains(response, '[data-help-floating] button')
+        self.assertContains(response, 'background: rgba(15, 118, 110, 0.96) !important;')
+        self.assertContains(response, 'html[data-theme="dark"] [data-help-floating] button')
+        self.assertContains(response, 'background: rgba(20, 184, 166, 0.94) !important;')
 
     def test_floating_chat_bantuan_tidak_muncul_untuk_guest(self):
         self.client.session.flush()
@@ -329,8 +333,8 @@ class BantuanTests(TestCase):
         self.assertContains(response, reverse('core:bantuan_admin_summary'))
         self.assertContains(response, 'data-admin-help-count')
         self.assertContains(response, 'updateAdminHelpSummary')
-        self.assertNotContains(response, 'data-help-floating')
-        self.assertNotContains(response, 'data-help-dialog')
+        self.assertContains(response, '[data-admin-chat-floating] > a')
+        self.assertNotContains(response, 'data-help-dialog>')
 
     def test_admin_bantuan_summary_mengembalikan_jumlah_antrean(self):
         admin = Pengguna.objects.create(
