@@ -54,6 +54,17 @@ from .surat_honor import generate_surat_honor_pdf, month_year_label
 logger = logging.getLogger(__name__)
 
 
+def nilai_huruf(nilai):
+    if nilai is None:
+        return '-'
+    nilai = Decimal(nilai)
+    if nilai >= Decimal('80'):
+        return 'A'
+    if nilai >= Decimal('70'):
+        return 'B'
+    return 'C'
+
+
 class HonorAdminRequiredMixin:
     def dispatch(self, request, *args, **kwargs):
         pengguna = getattr(request, 'current_pengguna', None)
@@ -773,6 +784,7 @@ class PraktikumMahasiswaListView(PraktikumMahasiswaAccessMixin, TemplateView):
             summary = nilai_summary.get(peserta.pk, {})
             peserta.rata_rata_nilai = summary.get('rata_rata')
             peserta.jumlah_nilai = summary.get('jumlah_nilai', 0)
+            peserta.nilai_huruf = nilai_huruf(peserta.rata_rata_nilai) if peserta.rata_rata_nilai is not None else '-'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1127,6 +1139,7 @@ def build_rekap_nilai_matkul(matkul, hasil_list):
             'scores': scores,
             'total': total,
             'average': average,
+            'letter': nilai_huruf(average) if average is not None else '-',
             'keterangan': 'Lengkap' if modules and len(filled_scores) == len(modules) else 'Belum lengkap',
         })
         rows.append(row)
@@ -1146,7 +1159,7 @@ def build_rekap_nilai_matkul(matkul, hasil_list):
 def build_rekap_nilai_excel_rows(matkul, rekap):
     headers = ['No', 'NIM', 'Nama Mahasiswa', 'Kelas', 'Mata Kuliah']
     headers.extend([f'Modul {module.nomor}' for module in rekap['modules']])
-    headers.extend(['Total Nilai', 'Rata-rata Nilai', 'Keterangan'])
+    headers.extend(['Total Nilai', 'Rata-rata Nilai', 'Nilai Huruf', 'Keterangan'])
     rows = [headers]
     for row in rekap['rows']:
         values = [row['no'], row['nim'], row['nama'], row['kelas'], row['matkul']]
@@ -1154,6 +1167,7 @@ def build_rekap_nilai_excel_rows(matkul, rekap):
         values.extend([
             '' if row['total'] is None else f'{row["total"]:.2f}',
             '' if row['average'] is None else f'{row["average"]:.2f}',
+            row['letter'],
             row['keterangan'],
         ])
         rows.append(values)
@@ -1188,6 +1202,7 @@ def build_nilai_praktikum_rows(hasil_list):
         'Nilai Laporan',
         'Rata-rata Modul',
         'Rata-rata Mahasiswa',
+        'Nilai Huruf',
         'Catatan',
         'Dicatat Oleh',
     ]]
@@ -1210,6 +1225,7 @@ def build_nilai_praktikum_rows(hasil_list):
             '' if hasil.nilai_laporan is None else str(hasil.nilai_laporan),
             '' if hasil.hitung_nilai_rata_rata() is None else str(hasil.hitung_nilai_rata_rata()),
             '' if nim not in rata_rata_mahasiswa else str(rata_rata_mahasiswa[nim]),
+            '' if nim not in rata_rata_mahasiswa else nilai_huruf(rata_rata_mahasiswa[nim]),
             hasil.catatan,
             hasil.dicatat_oleh.nama_pengguna if hasil.dicatat_oleh_id else '',
         ])

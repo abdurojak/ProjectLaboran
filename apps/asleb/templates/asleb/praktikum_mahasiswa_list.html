@@ -360,7 +360,7 @@
                     <tr>
                         <th>No</th><th>NIM</th><th>Nama Mahasiswa</th><th>Kelas</th><th>Mata Kuliah</th>
                         {% for modul in rekap_modules %}<th>Modul {{ modul.nomor }}</th>{% endfor %}
-                        <th>Total Nilai</th><th>Rata-rata Nilai</th><th>Keterangan</th>
+                        <th>Total Nilai</th><th>Rata-rata Nilai</th><th>Huruf</th><th>Keterangan</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -370,6 +370,7 @@
                         {% for score in row.scores %}<td>{% if score is not None %}{{ score|floatformat:2 }}{% else %}<span class="text-slate-400">-</span>{% endif %}</td>{% endfor %}
                         <td>{% if row.total is not None %}{{ row.total|floatformat:2 }}{% else %}<span class="text-slate-400">-</span>{% endif %}</td>
                         <td>{% if row.average is not None %}<span class="font-black text-brand-700">{{ row.average|floatformat:2 }}</span>{% else %}<span class="text-slate-400">-</span>{% endif %}</td>
+                        <td>{% if row.letter != '-' %}<span class="rounded-full {% if row.letter == 'A' %}bg-emerald-50 text-emerald-700{% elif row.letter == 'B' %}bg-blue-50 text-blue-700{% else %}bg-amber-50 text-amber-700{% endif %} px-3 py-1 text-xs font-black">{{ row.letter }}</span>{% else %}<span class="text-slate-400">-</span>{% endif %}</td>
                         <td><span class="rounded-full {% if row.keterangan == 'Lengkap' %}bg-emerald-50 text-emerald-700{% else %}bg-amber-50 text-amber-700{% endif %} px-3 py-1 text-xs font-bold">{{ row.keterangan }}</span></td>
                     </tr>
                     {% empty %}
@@ -446,6 +447,7 @@
                                         <th>Nama</th>
                                         <th>Akun</th>
                                         <th>Rata-rata Nilai</th>
+                                        <th>Huruf</th>
                                         <th>Status</th>
                                         <th>Aksi</th>
                                     </tr>
@@ -458,6 +460,7 @@
                                         <td>{{ peserta.nama }}</td>
                                         <td>{% if peserta.pengguna %}<span class="font-bold text-emerald-700">Terhubung</span>{% else %}<span class="text-slate-500">Belum terhubung</span>{% endif %}</td>
                                         <td>{% if peserta.rata_rata_nilai %}<span class="font-black text-brand-700">{{ peserta.rata_rata_nilai|floatformat:2 }}</span><span class="ml-1 text-xs text-slate-400">({{ peserta.jumlah_nilai }} modul)</span>{% else %}<span class="text-slate-400">Belum ada nilai</span>{% endif %}</td>
+                                        <td>{% if peserta.nilai_huruf != '-' %}<span class="rounded-full {% if peserta.nilai_huruf == 'A' %}bg-emerald-50 text-emerald-700{% elif peserta.nilai_huruf == 'B' %}bg-blue-50 text-blue-700{% else %}bg-amber-50 text-amber-700{% endif %} px-3 py-1 text-xs font-black">{{ peserta.nilai_huruf }}</span>{% else %}<span class="text-slate-400">-</span>{% endif %}</td>
                                         <td>{% if peserta.aktif %}<span class="text-emerald-700">Aktif</span>{% else %}<span class="text-slate-500">Nonaktif</span>{% endif %}</td>
                                         <td>
                                             <div class="flex flex-wrap gap-2">
@@ -471,9 +474,9 @@
                                         </td>
                                     </tr>
                                     {% empty %}
-                                    <tr data-empty-row><td colspan="7" class="py-10 text-center text-slate-500">Belum ada peserta.</td></tr>
+                                    <tr data-empty-row><td colspan="8" class="py-10 text-center text-slate-500">Belum ada peserta.</td></tr>
                                     {% endfor %}
-                                    <tr class="hidden" data-no-result-row><td colspan="7" class="py-10 text-center text-slate-500">Tidak ada peserta yang sesuai filter.</td></tr>
+                                    <tr class="hidden" data-no-result-row><td colspan="8" class="py-10 text-center text-slate-500">Tidak ada peserta yang sesuai filter.</td></tr>
                                 </tbody>
                             </table>
                         </div>
