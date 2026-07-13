@@ -37,6 +37,22 @@
         color: #fecdd3 !important;
     }
 
+    .peminjaman-overdue-alert {
+        border: 1px solid rgba(244, 63, 94, 0.28);
+        background:
+            radial-gradient(circle at 0% 0%, rgba(244, 63, 94, 0.18), transparent 34%),
+            linear-gradient(135deg, rgba(255, 241, 242, 0.96), rgba(255, 255, 255, 0.82));
+        color: #9f1239;
+    }
+
+    html[data-theme="dark"] .peminjaman-overdue-alert {
+        border-color: rgba(251, 113, 133, 0.24);
+        background:
+            radial-gradient(circle at 0% 0%, rgba(244, 63, 94, 0.18), transparent 36%),
+            linear-gradient(135deg, rgba(127, 29, 29, 0.34), rgba(15, 23, 42, 0.72));
+        color: #fecdd3;
+    }
+
     .loan-shop-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr));
@@ -412,6 +428,20 @@
             </button>
         </div>
     </form>
+    {% endif %}
+
+    {% if has_overdue_peminjaman %}
+    <div class="peminjaman-overdue-alert rounded-[28px] px-5 py-4 shadow-lg shadow-rose-950/10">
+        <div class="flex flex-wrap items-start gap-3">
+            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-rose-600 text-white">
+                <i data-lucide="triangle-alert" class="h-5 w-5"></i>
+            </span>
+            <div>
+                <p class="font-black">Ada peminjaman yang terlambat dikembalikan.</p>
+                <p class="mt-1 text-sm font-semibold opacity-85">Baris berwarna merah perlu segera ditindaklanjuti atau dikonfirmasi pengembaliannya.</p>
+            </div>
+        </div>
+    </div>
     {% endif %}
 
     <div class="surface-card min-w-0 max-w-full overflow-hidden">
@@ -826,7 +856,7 @@
 
         document.addEventListener('labhub:realtime', function (event) {
             const payload = event.detail || {};
-            if (payload.event !== 'peminjaman.stock.updated') {
+            if (!['peminjaman.stock.updated', 'peminjaman.status.updated'].includes(payload.event)) {
                 return;
             }
             const content = document.getElementById('peminjaman-list-content');

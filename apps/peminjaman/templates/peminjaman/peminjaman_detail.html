@@ -2,6 +2,16 @@
 
 {% block title %}Detail Peminjaman{% endblock %}
 
+{% block extra_head %}{{ block.super }}
+<style>
+    html[data-theme="dark"] .peminjaman-detail-overdue-alert {
+        border-color: rgba(251, 113, 133, 0.28) !important;
+        background: linear-gradient(135deg, rgba(127, 29, 29, 0.38), rgba(15, 23, 42, 0.72)) !important;
+        color: #fecdd3 !important;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <section id="peminjaman-detail-content" class="mx-auto max-w-4xl space-y-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
@@ -39,6 +49,20 @@
             </a>
         </div>
     </div>
+
+    {% if is_overdue %}
+    <div class="peminjaman-detail-overdue-alert rounded-[28px] border border-rose-200 bg-rose-50 px-5 py-4 text-rose-800 shadow-lg shadow-rose-950/10">
+        <div class="flex flex-wrap items-start gap-3">
+            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-rose-600 text-white">
+                <i data-lucide="triangle-alert" class="h-5 w-5"></i>
+            </span>
+            <div>
+                <p class="font-black">Peminjaman ini terlambat dikembalikan{% if overdue_days %} {{ overdue_days }} hari{% endif %}.</p>
+                <p class="mt-1 text-sm font-semibold opacity-85">Segera kembalikan barang atau hubungi laboran untuk konfirmasi status peminjaman.</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     <div class="surface-card grid gap-5 p-6 md:grid-cols-2 md:p-8">
         <div class="rounded-3xl bg-slate-50 p-5 md:col-span-2">

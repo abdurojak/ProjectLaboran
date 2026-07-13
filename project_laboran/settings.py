@@ -46,6 +46,10 @@ PUBLIC_ACCESS_BASE_URL = os.getenv('PUBLIC_ACCESS_BASE_URL', 'http://127.0.0.1:8
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '').strip()
 OPENAI_CHATBOT_MODEL = os.getenv('OPENAI_CHATBOT_MODEL', 'gpt-4o-mini').strip() or 'gpt-4o-mini'
 OPENAI_CHATBOT_TIMEOUT_SECONDS = int(os.getenv('OPENAI_CHATBOT_TIMEOUT_SECONDS', '12'))
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '').strip()
+GEMINI_CHATBOT_MODEL = os.getenv('GEMINI_CHATBOT_MODEL', 'gemini-flash-latest').strip() or 'gemini-flash-latest'
+GEMINI_CHATBOT_TIMEOUT_SECONDS = int(os.getenv('GEMINI_CHATBOT_TIMEOUT_SECONDS', '20'))
+GEMINI_CHATBOT_MAX_OUTPUT_TOKENS = int(os.getenv('GEMINI_CHATBOT_MAX_OUTPUT_TOKENS', '1200'))
 
 
 # Application definition
