@@ -446,11 +446,11 @@ class RegisterPenggunaForm(forms.ModelForm):
         widgets = {
             'foto': forms.FileInput(attrs={'class': 'hidden', 'accept': 'image/*'}),
             'password': forms.PasswordInput(attrs={'autocomplete': 'new-password'}, render_value=False),
-            'email': forms.EmailInput(attrs={
+            'email': forms.TextInput(attrs={
                 'autocomplete': 'email',
-                'placeholder': 'nama@std.trisakti.ac.id',
-                'pattern': '.+@std\\.trisakti\\.ac\\.id',
-                'title': 'Gunakan email mahasiswa dengan akhiran @std.trisakti.ac.id',
+                'placeholder': 'nama.email',
+                'pattern': '[A-Za-z0-9._%+-]+(@std\\.trisakti\\.ac\\.id)?',
+                'title': 'Cukup isi nama email. Domain @std.trisakti.ac.id akan ditambahkan otomatis.',
             }),
             'nim_nik': forms.TextInput(attrs={
                 'autocomplete': 'username',
@@ -482,9 +482,15 @@ class RegisterPenggunaForm(forms.ModelForm):
         return nim_nik
 
     def clean_email(self):
-        email = self.cleaned_data['email'].strip().lower()
-        if not email.endswith('@std.trisakti.ac.id'):
-            raise forms.ValidationError('Email harus menggunakan domain @std.trisakti.ac.id.')
+        raw_email = self.cleaned_data['email'].strip().lower()
+        if '@' in raw_email and not raw_email.endswith('@std.trisakti.ac.id'):
+            raise forms.ValidationError('Email registrasi hanya boleh memakai domain @std.trisakti.ac.id.')
+        local_part = raw_email.removesuffix('@std.trisakti.ac.id').strip()
+        if not local_part:
+            raise forms.ValidationError('Nama email wajib diisi.')
+        if '@' in local_part:
+            raise forms.ValidationError('Cukup isi nama email tanpa domain.')
+        email = f'{local_part}@std.trisakti.ac.id'
         if Pengguna.objects.filter(email__iexact=email).exists():
             raise forms.ValidationError('Email sudah terdaftar. Gunakan email Trisakti lain atau login.')
         return email

@@ -6,10 +6,53 @@
 <style>
     .pengguna-card {
         min-width: 0;
+        background:
+            linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(241, 245, 249, 0.88));
+        border-color: rgba(203, 213, 225, 0.9);
+        color: #0f172a;
+        box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
     }
     .pengguna-avatar {
         width: 3.5rem;
         height: 3.5rem;
+    }
+    .pengguna-card-title {
+        color: #0f172a !important;
+    }
+    .pengguna-card-muted {
+        color: #475569 !important;
+    }
+    .pengguna-card-soft {
+        background: rgba(241, 245, 249, 0.95) !important;
+        color: #64748b !important;
+    }
+    .pengguna-card .pengguna-card-icon {
+        color: #0f766e !important;
+    }
+    .theme-dark .pengguna-card,
+    [data-theme="dark"] .pengguna-card,
+    body.dark .pengguna-card {
+        background:
+            linear-gradient(135deg, rgba(15, 23, 42, 0.88), rgba(8, 47, 73, 0.72)) !important;
+        border-color: rgba(125, 211, 252, 0.2) !important;
+        color: #e2e8f0 !important;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.26);
+    }
+    .theme-dark .pengguna-card-title,
+    [data-theme="dark"] .pengguna-card-title,
+    body.dark .pengguna-card-title {
+        color: #f8fafc !important;
+    }
+    .theme-dark .pengguna-card-muted,
+    [data-theme="dark"] .pengguna-card-muted,
+    body.dark .pengguna-card-muted {
+        color: #cbd5e1 !important;
+    }
+    .theme-dark .pengguna-card-soft,
+    [data-theme="dark"] .pengguna-card-soft,
+    body.dark .pengguna-card-soft {
+        background: rgba(15, 23, 42, 0.72) !important;
+        color: #cbd5e1 !important;
     }
     @media (max-width: 767px) {
         .pengguna-actions,
@@ -84,35 +127,35 @@
 
         <div class="grid gap-4 p-4 lg:grid-cols-2 2xl:grid-cols-3">
             {% for pengguna in group.users %}
-            <article class="pengguna-card rounded-[24px] border border-slate-200 bg-white/90 p-4">
+            <article class="pengguna-card rounded-[24px] border p-4">
                 <div class="flex min-w-0 items-start gap-4">
                     {% if pengguna.foto %}
                     <img src="{{ pengguna.foto.url }}" alt="{{ pengguna.nama_pengguna }}" class="pengguna-avatar shrink-0 rounded-2xl object-cover ring-1 ring-slate-200">
                     {% else %}
-                    <div class="pengguna-avatar flex shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+                    <div class="pengguna-avatar pengguna-card-soft flex shrink-0 items-center justify-center rounded-2xl">
                         <i data-lucide="user-round" class="h-5 w-5"></i>
                     </div>
                     {% endif %}
 
                     <div class="min-w-0 flex-1">
                         <div class="flex flex-wrap items-center gap-2">
-                            <h4 class="min-w-0 truncate text-lg font-black text-slate-900">{{ pengguna.nama_pengguna }}</h4>
+                            <h4 class="pengguna-card-title min-w-0 truncate text-lg font-black">{{ pengguna.nama_pengguna }}</h4>
                             <span class="inline-flex shrink-0 rounded-full bg-brand-100 px-3 py-1 text-xs font-bold text-brand-800">
                                 {{ pengguna.get_role_display }}
                             </span>
                         </div>
-                        <div class="mt-1 text-sm text-slate-500">{{ pengguna.kode_pengguna }} &middot; {{ pengguna.nim_nik }}</div>
-                        <div class="mt-3 grid gap-2 text-sm text-slate-600">
+                        <div class="pengguna-card-muted mt-1 text-sm">{{ pengguna.kode_pengguna }} &middot; {{ pengguna.nim_nik }}</div>
+                        <div class="pengguna-card-muted mt-3 grid gap-2 text-sm">
                             <div class="flex min-w-0 items-center gap-2">
-                                <i data-lucide="mail" class="h-4 w-4 shrink-0 text-brand-700"></i>
+                                <i data-lucide="mail" class="pengguna-card-icon h-4 w-4 shrink-0"></i>
                                 <span class="min-w-0 truncate">{{ pengguna.email }}</span>
                             </div>
                             <div class="flex min-w-0 items-center gap-2">
-                                <i data-lucide="phone" class="h-4 w-4 shrink-0 text-brand-700"></i>
+                                <i data-lucide="phone" class="pengguna-card-icon h-4 w-4 shrink-0"></i>
                                 <span class="min-w-0 truncate">{{ pengguna.no_hp }}</span>
                             </div>
                             <div class="flex min-w-0 items-center gap-2">
-                                <i data-lucide="school" class="h-4 w-4 shrink-0 text-brand-700"></i>
+                                <i data-lucide="school" class="pengguna-card-icon h-4 w-4 shrink-0"></i>
                                 <span class="min-w-0 truncate">{{ pengguna.fakultas }} / {{ pengguna.prodi }}</span>
                             </div>
                         </div>

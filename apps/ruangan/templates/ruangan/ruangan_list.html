@@ -2,6 +2,110 @@
 
 {% block title %}Ruangan Lab{% endblock %}
 
+{% block extra_head %}
+<style>
+    .room-card {
+        display: flex;
+        min-height: 100%;
+        flex-direction: column;
+    }
+
+    .room-card-hero {
+        height: clamp(10rem, 14vw, 12rem);
+    }
+
+    .room-card-body {
+        display: flex;
+        flex: 1 1 auto;
+        flex-direction: column;
+    }
+
+    .room-card-meta {
+        display: grid;
+        grid-template-columns: 3.5rem minmax(0, 1fr);
+        gap: 1rem;
+        align-items: start;
+    }
+
+    .room-card-head {
+        min-height: 6.25rem;
+    }
+
+    .room-card-description {
+        min-height: 5.25rem;
+    }
+
+    .room-gallery {
+        margin-top: auto;
+    }
+
+    .room-gallery-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.65rem;
+    }
+
+    .room-gallery-item img {
+        height: 5.5rem;
+    }
+
+    .room-hero-action {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.25rem;
+        border: 1px solid rgba(255, 255, 255, 0.34);
+        border-radius: 1rem;
+        background: rgba(15, 23, 42, 0.78);
+        padding: 0.5rem 0.75rem;
+        color: #f8fafc !important;
+        font-size: 0.75rem;
+        font-weight: 900;
+        line-height: 1;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.26);
+        backdrop-filter: blur(14px);
+        transition: transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+    }
+
+    .room-hero-action:hover {
+        transform: translateY(-1px);
+        border-color: rgba(103, 232, 249, 0.8);
+        background: rgba(8, 47, 73, 0.92);
+        color: #ffffff !important;
+    }
+
+    .room-hero-action.is-photo {
+        background: rgba(20, 184, 166, 0.9);
+        border-color: rgba(153, 246, 228, 0.72);
+        color: #ffffff !important;
+    }
+
+    .room-hero-action.is-photo:hover {
+        background: rgba(13, 148, 136, 0.96);
+    }
+
+    html[data-theme="light"] .room-hero-action {
+        background: rgba(15, 23, 42, 0.82);
+        color: #ffffff !important;
+    }
+
+    @media (max-width: 767px) {
+        .room-card-meta {
+            grid-template-columns: 1fr;
+        }
+
+        .room-card-head,
+        .room-card-description {
+            min-height: auto;
+        }
+
+        .room-gallery-item img {
+            height: 4.75rem;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <section class="space-y-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
@@ -21,11 +125,11 @@
         </div>
     </div>
 
-    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <div class="grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
         {% for ruangan in ruangan_list %}
-        <article class="surface-card overflow-hidden p-0">
+        <article class="room-card surface-card overflow-hidden p-0">
             {% with foto_utama=ruangan.foto_lab.all|first %}
-            <div class="relative h-48 overflow-hidden bg-gradient-to-br from-slate-100 via-cyan-50 to-teal-100">
+            <div class="room-card-hero relative overflow-hidden bg-gradient-to-br from-slate-100 via-cyan-50 to-teal-100">
                 {% if foto_utama %}
                 <img src="{{ foto_utama.gambar.url }}" alt="{{ foto_utama.judul|default:ruangan.nama }}" class="h-full w-full object-cover">
                 <div class="absolute inset-0 bg-gradient-to-t from-slate-950/55 via-slate-950/10 to-transparent"></div>
@@ -48,18 +152,18 @@
                         <h3 class="{% if foto_utama %}text-white{% else %}text-slate-900{% endif %} mt-1 truncate text-xl font-black">{{ ruangan.nama }}</h3>
                     </div>
                     {% if request.current_pengguna and request.current_pengguna.role == 'laboran' %}
-                    <a href="{% url 'ruangan:ruangan_update' ruangan.pk %}" class="shrink-0 rounded-2xl bg-white/90 px-3 py-2 text-xs font-black text-slate-700 shadow-sm backdrop-blur transition hover:bg-white">
+                    <a href="{% url 'ruangan:ruangan_update' ruangan.pk %}" class="room-hero-action shrink-0">
                         <i data-lucide="pencil" class="mr-1 inline h-3.5 w-3.5"></i>Edit
                     </a>
-                    <a href="{% url 'ruangan:foto_create' ruangan.pk %}" class="shrink-0 rounded-2xl bg-white/90 px-3 py-2 text-xs font-black text-teal-700 shadow-sm backdrop-blur transition hover:bg-white">
+                    <a href="{% url 'ruangan:foto_create' ruangan.pk %}" class="room-hero-action is-photo shrink-0">
                         <i data-lucide="plus" class="mr-1 inline h-3.5 w-3.5"></i>Foto
                     </a>
                     {% endif %}
                 </div>
             </div>
             {% endwith %}
-            <div class="p-6">
-            <div class="flex items-start gap-4">
+            <div class="room-card-body p-6">
+            <div class="room-card-meta">
                 <span class="
                     {% if ruangan.warna == 'amber' %}bg-amber-50 text-amber-600
                     {% elif ruangan.warna == 'blue' %}bg-blue-50 text-blue-700
@@ -70,33 +174,33 @@
                     <i data-lucide="building-2" class="h-6 w-6"></i>
                 </span>
                 <div class="min-w-0">
-                    <div class="mt-3 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
+                    <div class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
                         {% if ruangan.kapasitas %}
                         Kapasitas {{ ruangan.kapasitas }} mahasiswa
                         {% else %}
                         Kapasitas belum diatur
                         {% endif %}
                     </div>
-                    <div class="mt-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
+                    <div class="room-card-head mt-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
                         <div class="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-slate-400">
                             <i data-lucide="user-round-check" class="h-4 w-4"></i>
                             Kepala Lab
                         </div>
                         <p class="mt-1 font-bold text-slate-800">{{ ruangan.kepala_lab|default:"Belum diatur" }}</p>
                     </div>
-                    <p class="mt-3 text-sm leading-7 text-slate-500">{{ ruangan.deskripsi }}</p>
                 </div>
             </div>
+            <p class="room-card-description mt-4 text-sm leading-7 text-slate-500">{{ ruangan.deskripsi|default:"Deskripsi ruangan belum ditambahkan." }}</p>
             {% if ruangan.foto_lab.all %}
-            <div class="mt-5 border-t border-slate-100 pt-4">
+            <div class="room-gallery border-t border-slate-100 pt-4">
                 <div class="mb-3 flex items-center justify-between gap-3">
                     <p class="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Galeri Foto</p>
                     <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-500">{{ ruangan.foto_lab.all|length }} foto</span>
                 </div>
-                <div class="grid grid-cols-3 gap-2">
+                <div class="room-gallery-grid">
                     {% for foto in ruangan.foto_lab.all|slice:":6" %}
-                    <div class="group relative overflow-hidden rounded-2xl border border-slate-100 bg-slate-50">
-                        <img src="{{ foto.gambar.url }}" alt="{{ foto.judul|default:ruangan.nama }}" class="h-20 w-full object-cover">
+                    <div class="room-gallery-item group relative overflow-hidden rounded-2xl border border-slate-100 bg-slate-50">
+                        <img src="{{ foto.gambar.url }}" alt="{{ foto.judul|default:ruangan.nama }}" class="w-full object-cover">
                         {% if request.current_pengguna and request.current_pengguna.role == 'laboran' %}
                         <div class="absolute inset-0 flex items-center justify-center gap-1 bg-slate-950/55 opacity-0 transition group-hover:opacity-100">
                             <a href="{% url 'ruangan:foto_update' foto.pk %}" class="rounded-lg bg-white px-2 py-1 text-[10px] font-black text-slate-800">Edit</a>
@@ -108,7 +212,7 @@
                 </div>
             </div>
             {% elif request.current_pengguna and request.current_pengguna.role == 'laboran' %}
-            <div class="mt-5 rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4 text-sm text-slate-500">
+            <div class="room-gallery rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4 text-sm text-slate-500">
                 Belum ada foto lab. Klik tombol <span class="font-black text-teal-700">Foto</span> untuk upload gambar ruangan.
             </div>
             {% endif %}

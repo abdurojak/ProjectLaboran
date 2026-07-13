@@ -26,13 +26,13 @@
     </article>
 
     {% if pendaftaran_asleb_dibuka %}
-    <section class="min-w-0 rounded-[30px] border-2 border-brand-300 bg-gradient-to-r from-brand-100 via-cyan-50 to-white p-5 shadow-lg shadow-brand-100/60 ring-4 ring-brand-50 md:p-6">
+    <section class="min-w-0 rounded-[30px] border border-cyan-300/50 bg-gradient-to-r from-slate-950 via-teal-950 to-cyan-900 p-5 shadow-2xl shadow-cyan-950/20 ring-1 ring-white/10 md:p-6">
         <div class="flex flex-wrap items-center justify-between gap-4">
             <div class="flex min-w-0 flex-wrap items-center gap-4 sm:flex-nowrap">
-                <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-100 text-brand-700"><i data-lucide="user-round-plus" class="h-6 w-6"></i></span>
-                <div><p class="text-xs font-black uppercase tracking-[0.2em] text-brand-700">Pendaftaran Aslab</p><h3 class="mt-1 text-xl font-black text-slate-900">Pendaftaran aslab sedang dibuka</h3><p class="mt-1 text-sm text-slate-500">Siapkan transkrip dan lengkapi profil Anda.</p></div>
+                <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-cyan-300/15 text-cyan-200 ring-1 ring-cyan-200/30"><i data-lucide="user-round-plus" class="h-6 w-6"></i></span>
+                <div><p class="text-xs font-black uppercase tracking-[0.2em] text-cyan-200">Pendaftaran Aslab</p><h3 class="mt-1 text-xl font-black text-white">Pendaftaran aslab sedang dibuka</h3><p class="mt-1 text-sm font-semibold text-cyan-50/80">Siapkan transkrip dan lengkapi profil Anda.</p></div>
             </div>
-            <div class="flex flex-wrap items-center gap-3"><img src="{% url 'pendaftaran_asleb:registration_qr' %}" alt="QR pendaftaran aslab" class="h-20 w-20 rounded-xl bg-white p-1"><a href="{{ public_registration_url }}" class="btn-primary gap-2"><i data-lucide="arrow-right" class="h-4 w-4"></i>Daftar Sekarang</a></div>
+            <div class="flex flex-wrap items-center gap-3"><img src="{% url 'pendaftaran_asleb:registration_qr' %}" alt="QR pendaftaran aslab" class="h-20 w-20 rounded-xl bg-white p-1 shadow-lg shadow-black/20"><a href="{{ public_registration_url }}" class="btn-primary gap-2"><i data-lucide="arrow-right" class="h-4 w-4"></i>Daftar Sekarang</a></div>
         </div>
     </section>
     {% endif %}

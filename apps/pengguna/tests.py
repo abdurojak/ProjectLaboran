@@ -1063,6 +1063,26 @@ class PenggunaAuthTests(TestCase):
         self.assertTrue(pengguna.is_verified)
         self.assertEqual(self.client.session['pengguna_id'], pengguna.pk)
 
+    def test_register_menambahkan_domain_std_trisakti_otomatis(self):
+        response = self.client.post(
+            reverse('pengguna:register'),
+            {
+                'nama_pengguna': 'Email Otomatis',
+                'nim_nik': '0642201099',
+                'email': 'email.otomatis',
+                'password': 'passwordku123',
+                'password_confirmation': 'passwordku123',
+                'no_hp': '081234567899',
+                'alamat': 'Jakarta',
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Informatika',
+                'gender': 'perempuan',
+            },
+        )
+
+        self.assertRedirects(response, reverse('pengguna:verify_register'))
+        self.assertTrue(Pengguna.objects.filter(email='email.otomatis@std.trisakti.ac.id').exists())
+
     def test_register_link_verifikasi_langsung_mengaktifkan_akun(self):
         response = self.client.post(
             reverse('pengguna:register'),
@@ -1112,7 +1132,7 @@ class PenggunaAuthTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Email harus menggunakan domain @std.trisakti.ac.id.')
+        self.assertContains(response, 'Email registrasi hanya boleh memakai domain @std.trisakti.ac.id.')
         self.assertFalse(Pengguna.objects.filter(nim_nik='0642201003').exists())
 
     def test_register_menolak_password_lemah(self):
@@ -1153,7 +1173,7 @@ class PenggunaAuthTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Email harus menggunakan domain @std.trisakti.ac.id.')
+        self.assertContains(response, 'Email registrasi hanya boleh memakai domain @std.trisakti.ac.id.')
         self.assertFalse(Pengguna.objects.filter(nim_nik='0642201002').exists())
 
     def test_register_menolak_email_yang_sudah_terdaftar(self):

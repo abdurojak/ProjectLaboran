@@ -36,6 +36,114 @@
         background: rgba(127, 29, 29, 0.34) !important;
         color: #fecdd3 !important;
     }
+
+    .loan-shop-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr));
+        gap: 1rem;
+    }
+
+    .loan-product-card {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid rgba(203, 213, 225, 0.88);
+        border-radius: 1.45rem;
+        background: rgba(255, 255, 255, 0.94);
+        box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
+        transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .loan-product-card:not(.is-disabled):hover {
+        transform: translateY(-4px);
+        border-color: rgba(20, 184, 166, 0.45);
+        box-shadow: 0 26px 54px rgba(15, 118, 110, 0.14);
+    }
+
+    .loan-product-card.is-disabled {
+        filter: grayscale(0.75);
+        opacity: 0.62;
+    }
+
+    .loan-product-card.is-disabled::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.1);
+        pointer-events: none;
+    }
+
+    .loan-product-image {
+        aspect-ratio: 1 / 0.78;
+        width: 100%;
+        object-fit: cover;
+    }
+
+    .loan-product-placeholder {
+        aspect-ratio: 1 / 0.78;
+        background:
+            radial-gradient(circle at top left, rgba(45, 212, 191, 0.22), transparent 34%),
+            linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(8, 47, 73, 0.86));
+    }
+
+    .loan-product-action {
+        border-radius: 1rem;
+        border: 1px solid rgba(20, 184, 166, 0.28);
+        background: rgba(20, 184, 166, 0.1);
+        color: #0f766e !important;
+        padding: 0.65rem 0.8rem;
+        font-size: 0.8rem;
+        font-weight: 900;
+        transition: background-color 0.2s ease, color 0.2s ease;
+    }
+
+    .loan-product-action:hover {
+        background: rgba(13, 148, 136, 0.95);
+        color: #fff !important;
+    }
+
+    .loan-cart-panel {
+        position: sticky;
+        top: 7.5rem;
+    }
+
+    .loan-detail-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 70;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(15, 23, 42, 0.58);
+        padding: 1rem;
+        backdrop-filter: blur(12px);
+    }
+
+    .loan-detail-modal.is-open {
+        display: flex;
+    }
+
+    html[data-theme="dark"] .loan-product-card {
+        border-color: rgba(71, 85, 105, 0.7);
+        background: rgba(15, 23, 42, 0.82);
+        box-shadow: 0 22px 56px rgba(0, 0, 0, 0.24);
+    }
+
+    html[data-theme="dark"] .loan-product-action {
+        border-color: rgba(45, 212, 191, 0.36);
+        background: rgba(45, 212, 191, 0.12);
+        color: #99f6e4 !important;
+    }
+
+    html[data-theme="dark"] .loan-product-action:hover {
+        background: rgba(20, 184, 166, 0.92);
+        color: #fff !important;
+    }
+
+    @media (max-width: 1023px) {
+        .loan-cart-panel {
+            position: static;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -55,13 +163,166 @@
         <div>
             <p class="text-sm font-bold uppercase tracking-[0.2em] text-amber-600">Peminjaman</p>
             <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Peminjaman Alat</h2>
-            <p class="mt-2 text-sm text-slate-500">Kelola daftar peminjaman alat laboratorium, status peminjaman, dan jadwal pengembalian.</p>
+            <p class="mt-2 text-sm text-slate-500">{% if is_borrower %}Pilih alat seperti katalog, masukkan ke keranjang, lalu ajukan peminjaman.{% else %}Kelola daftar peminjaman alat laboratorium, status peminjaman, dan jadwal pengembalian.{% endif %}</p>
         </div>
+        {% if not is_borrower %}
         <a class="btn-primary bg-amber-500 hover:bg-amber-600 shadow-amber-500/20" href="{% url 'peminjaman:peminjaman_create' %}">
             <i data-lucide="plus" class="h-4 w-4"></i>
             <span>Buat Peminjaman</span>
         </a>
+        {% endif %}
     </div>
+
+    {% if is_borrower %}
+    <section class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]" data-loan-shop>
+        <div class="surface-card min-w-0 p-5 md:p-6">
+            <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <p class="text-xs font-black uppercase tracking-[0.2em] text-teal-700">Katalog Alat</p>
+                    <h3 class="mt-2 text-2xl font-black text-slate-900">Pilih alat untuk dipinjam</h3>
+                </div>
+                <span class="rounded-full bg-teal-50 px-3 py-1 text-xs font-black text-teal-700">{{ catalog_products|length }} produk</span>
+            </div>
+
+            <div class="loan-shop-grid">
+                {% for product in catalog_products %}
+                <article class="loan-product-card {% if not product.is_available %}is-disabled{% endif %}"
+                         data-product-card
+                         data-product-name="{{ product.nama }}"
+                         data-product-code="{{ product.kode }}"
+                         data-product-detail-code="{{ product.detail_kode }}"
+                         data-product-location="{{ product.lokasi }}"
+                         data-product-condition="{{ product.kondisi }}"
+                         data-product-description="{{ product.keterangan }}"
+                         data-product-photo="{{ product.photo_url }}"
+                         data-product-stock="{{ product.available_count }}"
+                         data-product-total="{{ product.total_count }}"
+                         data-available-ids="{{ product.available_ids }}"
+                         data-available-labels="{{ product.available_labels }}">
+                    <button type="button" class="block w-full text-left {% if not product.is_available %}cursor-not-allowed{% endif %}" data-product-detail {% if not product.is_available %}disabled aria-disabled="true"{% endif %}>
+                        {% if product.photo_url %}
+                        <img src="{{ product.photo_url }}" alt="{{ product.nama }}" class="loan-product-image">
+                        {% else %}
+                        <div class="loan-product-placeholder flex items-center justify-center text-white">
+                            <i data-lucide="box" class="h-12 w-12"></i>
+                        </div>
+                        {% endif %}
+                        <div class="p-4">
+                            <div class="mb-2 flex items-center gap-2">
+                                <span class="rounded-md bg-rose-600 px-1.5 py-0.5 text-[10px] font-black text-white">Lab</span>
+                                <span class="rounded-md bg-white px-1.5 py-0.5 text-[10px] font-black text-rose-600 ring-1 ring-rose-100">ORI</span>
+                            </div>
+                            <h4 class="line-clamp-2 min-h-[2.7rem] text-sm font-black leading-5 text-slate-900">{{ product.nama }}</h4>
+                            <p class="mt-2 text-xs font-semibold text-slate-500">{{ product.kode }} · {{ product.lokasi }}</p>
+                            <div class="mt-3 flex items-center justify-between gap-2">
+                                {% if product.is_available %}
+                                <span class="text-sm font-black text-emerald-600">{{ product.available_count }} tersedia</span>
+                                {% else %}
+                                <span class="text-sm font-black text-rose-600">Sudah dipinjam</span>
+                                {% endif %}
+                                <span class="text-xs font-bold text-slate-400">Total {{ product.total_count }}</span>
+                            </div>
+                        </div>
+                    </button>
+                    <div class="border-t border-slate-100 p-3">
+                        {% if product.is_available %}
+                        <button type="button" class="loan-product-action w-full" data-add-cart>
+                            <i data-lucide="shopping-cart" class="mr-1 inline h-4 w-4"></i>
+                            Tambah ke Keranjang
+                        </button>
+                        {% else %}
+                        <div class="rounded-2xl bg-slate-100 px-3 py-2 text-center text-xs font-black text-slate-500">Stok habis / sedang dipinjam</div>
+                        {% endif %}
+                    </div>
+                </article>
+                {% empty %}
+                <div class="rounded-3xl border border-dashed border-slate-200 px-4 py-10 text-center text-sm font-semibold text-slate-500">
+                    Belum ada alat yang cocok dengan pencarian.
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <aside class="loan-cart-panel surface-card p-5">
+            <div class="flex items-center gap-3">
+                <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+                    <i data-lucide="shopping-bag" class="h-5 w-5"></i>
+                </span>
+                <div>
+                    <p class="text-xs font-black uppercase tracking-[0.18em] text-amber-600">Keranjang Pinjam</p>
+                    <h3 class="text-xl font-black text-slate-900">Ajukan Peminjaman</h3>
+                </div>
+            </div>
+            <form method="post" action="{% url 'peminjaman:peminjaman_create' %}" class="mt-5 space-y-4" data-cart-form>
+                {% csrf_token %}
+                <input type="hidden" name="selected_barang_ids" data-cart-input>
+                <input type="hidden" name="barang" value="">
+                <input type="hidden" name="status" value="diajukan">
+                <div class="grid gap-3">
+                    <div>
+                        <label for="id_catalog_tanggal_pinjam">Tanggal pinjam</label>
+                        <input id="id_catalog_tanggal_pinjam" name="tanggal_pinjam" type="date" value="{{ today|date:'Y-m-d' }}" required>
+                    </div>
+                    <div>
+                        <label for="id_catalog_tanggal_kembali">Tanggal kembali</label>
+                        <input id="id_catalog_tanggal_kembali" name="tanggal_kembali" type="date" required>
+                    </div>
+                    <div>
+                        <label for="id_catalog_catatan">Catatan</label>
+                        <textarea id="id_catalog_catatan" name="catatan" rows="3" placeholder="Opsional, contoh: dipakai untuk praktikum modul 2"></textarea>
+                    </div>
+                </div>
+                <div class="rounded-3xl border border-slate-200 bg-slate-50/70 p-3">
+                    <div class="mb-2 flex items-center justify-between gap-3">
+                        <span class="text-sm font-black text-slate-800">Barang dipilih</span>
+                        <button type="button" class="text-xs font-black text-rose-600 hover:text-rose-700" data-cart-clear>Kosongkan</button>
+                    </div>
+                    <div class="grid gap-2" data-cart-items>
+                        <p class="rounded-2xl border border-dashed border-slate-200 px-3 py-4 text-center text-sm font-semibold text-slate-500" data-cart-empty>Belum ada barang di keranjang.</p>
+                    </div>
+                </div>
+                <button type="submit" class="btn-primary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50" data-cart-submit disabled>
+                    <i data-lucide="send" class="h-4 w-4"></i>
+                    Ajukan Peminjaman
+                </button>
+            </form>
+        </aside>
+    </section>
+
+    <div class="loan-detail-modal" data-product-modal aria-hidden="true">
+        <div class="surface-card w-full max-w-3xl overflow-hidden p-0">
+            <div class="grid md:grid-cols-[minmax(0,.9fr)_minmax(0,1.1fr)]">
+                <div class="bg-slate-100">
+                    <img src="" alt="" class="hidden h-full min-h-72 w-full object-cover" data-modal-photo>
+                    <div class="loan-product-placeholder flex h-full min-h-72 items-center justify-center text-white" data-modal-placeholder>
+                        <i data-lucide="box" class="h-14 w-14"></i>
+                    </div>
+                </div>
+                <div class="p-6">
+                    <div class="flex items-start justify-between gap-4">
+                        <div>
+                            <p class="text-xs font-black uppercase tracking-[0.2em] text-teal-700" data-modal-code></p>
+                            <h3 class="mt-2 text-2xl font-black text-slate-900" data-modal-name></h3>
+                        </div>
+                        <button type="button" class="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200" data-modal-close aria-label="Tutup detail">
+                            <i data-lucide="x" class="h-5 w-5"></i>
+                        </button>
+                    </div>
+                    <div class="mt-5 grid gap-3 text-sm">
+                        <div class="rounded-2xl bg-slate-50 p-4"><span class="font-black text-slate-500">Kode detail</span><p class="mt-1 font-bold text-slate-900" data-modal-detail-code></p></div>
+                        <div class="rounded-2xl bg-slate-50 p-4"><span class="font-black text-slate-500">Lokasi</span><p class="mt-1 font-bold text-slate-900" data-modal-location></p></div>
+                        <div class="rounded-2xl bg-slate-50 p-4"><span class="font-black text-slate-500">Kondisi</span><p class="mt-1 font-bold text-slate-900" data-modal-condition></p></div>
+                        <div class="rounded-2xl bg-slate-50 p-4"><span class="font-black text-slate-500">Stok</span><p class="mt-1 font-bold text-slate-900" data-modal-stock></p></div>
+                    </div>
+                    <div class="mt-4 rounded-2xl border border-slate-200 p-4">
+                        <p class="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Spesifikasi</p>
+                        <p class="mt-2 text-sm leading-7 text-slate-600" data-modal-description></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     <form method="get" class="surface-card min-w-0 max-w-full p-5" data-auto-filter-form
           data-no-global-loading="true"
@@ -392,12 +653,182 @@
         });
     }
 
+    function bindLoanShop(root) {
+        const shop = (root || document).querySelector('[data-loan-shop]');
+        if (!shop || shop.dataset.loanShopBound === 'true') {
+            return;
+        }
+        shop.dataset.loanShopBound = 'true';
+
+        const cartInput = shop.querySelector('[data-cart-input]');
+        const cartItems = shop.querySelector('[data-cart-items]');
+        const cartEmpty = shop.querySelector('[data-cart-empty]');
+        const cartSubmit = shop.querySelector('[data-cart-submit]');
+        const clearButton = shop.querySelector('[data-cart-clear]');
+        const modal = document.querySelector('[data-product-modal]');
+        const selected = new Map();
+
+        function splitValues(value, separator) {
+            return (value || '').split(separator).map(function (item) {
+                return item.trim();
+            }).filter(Boolean);
+        }
+
+        function syncProductButtons() {
+            shop.querySelectorAll('[data-product-card]').forEach(function (card) {
+                const availableIds = splitValues(card.dataset.availableIds, ',');
+                const remaining = availableIds.filter(function (id) {
+                    return !selected.has(id);
+                }).length;
+                const button = card.querySelector('[data-add-cart]');
+                if (!button) {
+                    return;
+                }
+                button.disabled = remaining <= 0;
+                button.classList.toggle('opacity-50', remaining <= 0);
+                button.classList.toggle('cursor-not-allowed', remaining <= 0);
+                button.innerHTML = remaining > 0
+                    ? '<i data-lucide="shopping-cart" class="mr-1 inline h-4 w-4"></i>Tambah ke Keranjang'
+                    : '<i data-lucide="check" class="mr-1 inline h-4 w-4"></i>Semua stok dipilih';
+            });
+            if (window.lucide) {
+                window.lucide.createIcons();
+            }
+        }
+
+        function renderCart() {
+            if (!cartInput || !cartItems || !cartSubmit) {
+                return;
+            }
+            cartInput.value = Array.from(selected.keys()).join(',');
+            cartItems.querySelectorAll('[data-cart-row]').forEach(function (row) {
+                row.remove();
+            });
+            if (cartEmpty) {
+                cartEmpty.classList.toggle('hidden', selected.size > 0);
+            }
+            selected.forEach(function (label, id) {
+                const row = document.createElement('div');
+                row.dataset.cartRow = 'true';
+                row.className = 'flex items-center justify-between gap-3 rounded-2xl bg-white px-3 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-200';
+
+                const text = document.createElement('span');
+                text.className = 'min-w-0 truncate';
+                text.textContent = label;
+
+                const removeButton = document.createElement('button');
+                removeButton.type = 'button';
+                removeButton.className = 'shrink-0 rounded-full bg-rose-50 px-2 py-1 text-xs font-black text-rose-600 hover:bg-rose-100';
+                removeButton.textContent = 'Hapus';
+                removeButton.addEventListener('click', function () {
+                    selected.delete(id);
+                    renderCart();
+                    syncProductButtons();
+                });
+
+                row.appendChild(text);
+                row.appendChild(removeButton);
+                cartItems.appendChild(row);
+            });
+            cartSubmit.disabled = selected.size === 0;
+        }
+
+        shop.querySelectorAll('[data-add-cart]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                const card = button.closest('[data-product-card]');
+                const availableIds = splitValues(card.dataset.availableIds, ',');
+                const labels = splitValues(card.dataset.availableLabels, '||');
+                const nextId = availableIds.find(function (id) {
+                    return !selected.has(id);
+                });
+                if (!nextId) {
+                    return;
+                }
+                const labelIndex = availableIds.indexOf(nextId);
+                selected.set(nextId, labels[labelIndex] || card.dataset.productName || 'Barang dipilih');
+                renderCart();
+                syncProductButtons();
+            });
+        });
+
+        if (clearButton) {
+            clearButton.addEventListener('click', function () {
+                selected.clear();
+                renderCart();
+                syncProductButtons();
+            });
+        }
+
+        function closeModal() {
+            if (!modal) {
+                return;
+            }
+            modal.classList.remove('is-open');
+            modal.setAttribute('aria-hidden', 'true');
+        }
+
+        function setText(selector, value) {
+            const target = modal ? modal.querySelector(selector) : null;
+            if (target) {
+                target.textContent = value || '-';
+            }
+        }
+
+        shop.querySelectorAll('[data-product-detail]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                if (!modal || button.disabled) {
+                    return;
+                }
+                const card = button.closest('[data-product-card]');
+                const photo = modal.querySelector('[data-modal-photo]');
+                const placeholder = modal.querySelector('[data-modal-placeholder]');
+                setText('[data-modal-code]', card.dataset.productCode);
+                setText('[data-modal-name]', card.dataset.productName);
+                setText('[data-modal-detail-code]', card.dataset.productDetailCode);
+                setText('[data-modal-location]', card.dataset.productLocation);
+                setText('[data-modal-condition]', card.dataset.productCondition);
+                setText('[data-modal-stock]', (card.dataset.productStock || '0') + ' tersedia dari ' + (card.dataset.productTotal || '0') + ' unit');
+                setText('[data-modal-description]', card.dataset.productDescription);
+                if (photo && placeholder) {
+                    if (card.dataset.productPhoto) {
+                        photo.src = card.dataset.productPhoto;
+                        photo.alt = card.dataset.productName || 'Foto barang';
+                        photo.classList.remove('hidden');
+                        placeholder.classList.add('hidden');
+                    } else {
+                        photo.removeAttribute('src');
+                        photo.classList.add('hidden');
+                        placeholder.classList.remove('hidden');
+                    }
+                }
+                modal.classList.add('is-open');
+                modal.setAttribute('aria-hidden', 'false');
+            });
+        });
+
+        if (modal) {
+            modal.querySelectorAll('[data-modal-close]').forEach(function (button) {
+                button.addEventListener('click', closeModal);
+            });
+            modal.addEventListener('click', function (event) {
+                if (event.target === modal) {
+                    closeModal();
+                }
+            });
+        }
+
+        renderCart();
+        syncProductButtons();
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         bindPeminjamanAutoFilter(document);
         bindPeminjamanSelectionSubmit(document);
+        bindLoanShop(document);
         document.body.addEventListener('htmx:afterSwap', function (event) {
             bindPeminjamanAutoFilter(event.target);
             bindPeminjamanSelectionSubmit(event.target);
+            bindLoanShop(event.target);
             if (window.lucide) {
                 window.lucide.createIcons();
             }
