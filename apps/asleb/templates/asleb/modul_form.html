@@ -150,7 +150,7 @@
                 <div>
                     <div class="text-xs font-black uppercase tracking-[0.18em] text-cyan-700">Preview modul saat ini</div>
                     <div class="mt-2 text-base font-black text-slate-900">{{ object.judul }}</div>
-                    <p class="mt-1 text-sm text-slate-500">{{ object.matkul }} · {{ object.file_type|upper }} · {{ object.file_size|filesizeformat }}</p>
+                    <p class="mt-1 text-sm text-slate-500">{{ object.matkul }} - {{ object.file_type|upper }} - {{ object.file_size|filesizeformat }}</p>
                 </div>
                 <div class="flex flex-wrap gap-2">
                     <button
@@ -413,13 +413,14 @@
             activePreviewUrl = payload.url;
             shouldRevokePreview = Boolean(payload.revokeOnClose);
             previewTitle.textContent = payload.title || 'Preview Modul';
-            previewMeta.textContent = `${String(type || 'file').toUpperCase()} · ${formatBytes(payload.size)} · ${payload.date || '-'}`;
+            previewMeta.textContent = `${String(type || 'file').toUpperCase()} - ${formatBytes(payload.size)} - ${payload.date || '-'}`;
             openLink.href = payload.url;
             downloadLink.href = payload.url;
+            downloadLink.setAttribute('download', '');
             if (isPdf) {
                 pdfWrap.classList.remove('hidden');
                 docWrap.classList.add('hidden');
-                pdfFrame.src = payload.url;
+                pdfFrame.src = `${payload.url}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`;
             } else {
                 pdfWrap.classList.add('hidden');
                 docWrap.classList.remove('hidden');
@@ -462,4 +463,5 @@
         });
     });
 </script>
+{% include "components/confirmation_modal.html" with title="Konfirmasi Hapus Modul" confirm_label="Hapus Modul" confirm_icon="trash-2" %}
 {% endblock %}

@@ -19,6 +19,7 @@ from apps.pengguna.models import Pengguna
 from .forms import PeminjamanAlatForm
 from .models import PeminjamanAlat, PeminjamanTransaksi
 from .notifications import send_peminjaman_request_notifications, send_peminjaman_status_notification
+from .services import update_peminjaman_status
 
 
 MANAGER_ROLES = {LABORAN_ROLE}
@@ -187,10 +188,8 @@ def bulk_update_status(request):
         )
         for peminjaman in detail_list:
             next_status = resolve_bulk_status(peminjaman.status, status)
-            if next_status == peminjaman.status:
+            if not update_peminjaman_status(peminjaman, next_status):
                 continue
-            peminjaman.status = next_status
-            peminjaman.save(update_fields=['status', 'diperbarui_pada'])
             send_peminjaman_status_notification(peminjaman)
             transaction.on_commit(lambda item_id=peminjaman.pk: send_peminjaman_status_update(
                 PeminjamanAlat.objects.select_related('barang').get(pk=item_id)
@@ -233,10 +232,8 @@ def update_detail_status(request, pk):
         )
         for peminjaman in detail_queryset:
             next_status = resolve_bulk_status(peminjaman.status, status)
-            if next_status == peminjaman.status:
+            if not update_peminjaman_status(peminjaman, next_status):
                 continue
-            peminjaman.status = next_status
-            peminjaman.save(update_fields=['status', 'diperbarui_pada'])
             send_peminjaman_status_notification(peminjaman)
             transaction.on_commit(lambda item_id=peminjaman.pk: send_peminjaman_status_update(
                 PeminjamanAlat.objects.select_related('barang').get(pk=item_id)

@@ -6,7 +6,7 @@ from html import escape
 
 from django.contrib import messages
 from django.core.files.base import ContentFile
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Avg, Count, Q, Sum
 from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
@@ -23,6 +23,7 @@ from apps.kalender.realtime import send_attendance_update, send_honor_update
 from apps.pengguna.models import Pengguna
 from apps.pendaftaran_asleb.forms import PengaturanBiayaTransferForm
 from apps.pendaftaran_asleb.models import PengaturanBiayaTransfer
+from apps.pendaftaran_asleb.services import deactivate_asleb_membership, notify_manual_asleb_removal
 
 from .forms import (
     AbsensiAslebForm,
@@ -123,13 +124,28 @@ def end_asleb_membership(request, pk):
         return redirect('asleb:asleb_list')
 
     asleb = get_object_or_404(Asleb, pk=pk)
-    Asleb.objects.filter(nim=asleb.nim, status='aktif').update(status='nonaktif')
-    akun = Pengguna.objects.filter(nim_nik=asleb.nim).first()
-    if akun and akun.role == 'asisten_lab':
-        akun.role = 'mahasiswa'
-        akun.save(update_fields=['role', 'diperbarui_pada'])
+    alasan_pengeluaran = request.POST.get('alasan_pengeluaran', '').strip()
+    if not alasan_pengeluaran:
+        messages.error(request, 'Alasan pengeluaran Aslab wajib diisi sebelum akun dinonaktifkan.')
+        return redirect('asleb:asleb_list')
 
-    messages.success(request, f'Masa tugas {asleb.nama} diakhiri. Role akun kini menjadi Mahasiswa.')
+    result = deactivate_asleb_membership(
+        asleb,
+        forced=True,
+        reason=alasan_pengeluaran,
+        acted_by=pengguna,
+    )
+    akun = result.get('akun')
+    if akun:
+        transaction.on_commit(
+            lambda asleb_item=asleb, akun_item=akun, reason=alasan_pengeluaran, actor=pengguna:
+            notify_manual_asleb_removal(asleb_item, akun_item, reason=reason, acted_by=actor)
+        )
+
+    messages.success(
+        request,
+        f'{asleb.nama} dikeluarkan dari Aslab. Role akun kembali menjadi Mahasiswa dan notifikasi telah dikirim.',
+    )
     return redirect('asleb:asleb_list')
 
 
@@ -173,9 +189,9 @@ class HonorAslebListView(HonorAccessMixin, ListView):
         status = self.request.GET.get('status', '').strip()
 
         if pengguna and pengguna.role == LABORAN_ROLE:
-            queryset = queryset.filter(assigned_laboran=pengguna)
+            queryset = queryset.filter(assigned_laboran=pengguna, asleb__status='aktif')
         elif pengguna and pengguna.role == ASISTEN_LAB_ROLE:
-            queryset = queryset.filter(asleb__nim=pengguna.nim_nik)
+            queryset = queryset.filter(asleb__nim=pengguna.nim_nik, asleb__status='aktif')
         elif pengguna:
             queryset = queryset.none()
 
@@ -209,9 +225,9 @@ class HonorAslebListView(HonorAccessMixin, ListView):
         pengguna = getattr(self.request, 'current_pengguna', None)
         base_honor_qs = HonorAsleb.objects.all()
         if pengguna and pengguna.role == LABORAN_ROLE:
-            base_honor_qs = base_honor_qs.filter(assigned_laboran=pengguna)
+            base_honor_qs = base_honor_qs.filter(assigned_laboran=pengguna, asleb__status='aktif')
         elif pengguna and pengguna.role == ASISTEN_LAB_ROLE:
-            base_honor_qs = base_honor_qs.filter(asleb__nim=pengguna.nim_nik)
+            base_honor_qs = base_honor_qs.filter(asleb__nim=pengguna.nim_nik, asleb__status='aktif')
         elif pengguna:
             base_honor_qs = base_honor_qs.none()
 
@@ -506,7 +522,18 @@ class AbsensiAslebCreateView(CreateView):
 
     def form_valid(self, form):
         form.instance.asleb = self.asleb
-        response = super().form_valid(form)
+        try:
+            response = super().form_valid(form)
+        except IntegrityError:
+            modul = form.cleaned_data.get('modul_praktikum')
+            if modul:
+                form.add_error(
+                    'modul_praktikum',
+                    f'Modul {modul.nomor} sudah pernah diabsen. Data tidak disimpan dua kali.'
+                )
+            else:
+                form.add_error(None, 'Absensi modul ini sudah pernah tersimpan sebelumnya.')
+            return self.form_invalid(form)
         sync_honor_from_absensi(self.object)
         transaction.on_commit(lambda: send_attendance_update(self.object))
         messages.success(self.request, f'Absensi Modul {self.object.modul} berhasil disimpan.')
@@ -684,7 +711,7 @@ class ModulPraktikumDeleteView(ModulManageRequiredMixin, PostOnlyDeleteMixin, De
 
 
 def get_praktikum_matkul_queryset(pengguna):
-    from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, RiwayatAsleb
+    from apps.pendaftaran_asleb.models import MataKuliahAsleb
 
     queryset = MataKuliahAsleb.objects.filter(aktif=True)
     if not pengguna:
@@ -694,18 +721,18 @@ def get_praktikum_matkul_queryset(pengguna):
     if pengguna.role != ASISTEN_LAB_ROLE:
         return queryset.none()
 
-    matkul_ids = PendaftaranAsleb.objects.filter(
-        nim=pengguna.nim_nik,
-        status__in=['diterima', 'digenerate'],
-    ).values_list('matkul_id', flat=True)
-    history_ids = RiwayatAsleb.objects.filter(nim=pengguna.nim_nik).values_list('matkul_id', flat=True)
-    combined_ids = set(matkul_ids) | set(history_ids)
-    if combined_ids:
-        return queryset.filter(pk__in=combined_ids)
+    active_asleb_rows = list(
+        Asleb.objects.filter(nim=pengguna.nim_nik, status='aktif').order_by('-diperbarui_pada', '-pk')
+    )
+    if active_asleb_rows:
+        active_matkul_ids = []
+        for asleb in active_asleb_rows:
+            matkul = get_asleb_matkul(asleb)
+            if matkul and matkul.pk not in active_matkul_ids:
+                active_matkul_ids.append(matkul.pk)
+        return queryset.filter(pk__in=active_matkul_ids) if active_matkul_ids else queryset.none()
 
-    asleb = Asleb.objects.filter(nim=pengguna.nim_nik).first()
-    fallback = get_asleb_matkul(asleb) if asleb else None
-    return queryset.filter(pk=fallback.pk) if fallback else queryset.none()
+    return queryset.none()
 
 
 class PraktikumMahasiswaAccessMixin:

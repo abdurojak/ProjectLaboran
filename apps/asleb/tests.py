@@ -17,12 +17,14 @@ from reportlab.lib.enums import TA_RIGHT
 
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, PeriodeAsleb
 from apps.pendaftaran_asleb.services import sync_expired_asleb_periods
-from apps.pengguna.models import Pengguna
+from apps.kalender.models import Notifikasi
+from apps.pengguna.models import PengalamanPengguna, Pengguna
 from apps.jadwal.models import JadwalPraktikum
 from apps.ruangan.models import RuanganLab
 
-from .forms import AbsensiAslebForm, ENABLE_CAMERA_LOCATION_CAPTURE
+from .forms import AbsensiAslebForm, ENABLE_CAMERA_LOCATION_CAPTURE, get_asleb_matkul
 from .models import AbsensiAsleb, Asleb, HasilPraktikumMahasiswa, HonorAsleb, ModulPraktikum, PengaturanAbsensiAsleb, PesertaPraktikum
+from .views import get_praktikum_matkul_queryset
 from .surat_honor import LAB_SIGNATURES, build_lab_signature, build_lampiran_page, build_styles
 
 
@@ -269,7 +271,65 @@ class AslebViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Siti Nurhaliza')
 
-    def test_laboran_dapat_mengeluarkan_asleb_dan_role_kembali_mahasiswa(self):
+    def test_asisten_lab_hanya_melihat_matkul_aslab_yang_masih_aktif(self):
+        matkul_lama = MataKuliahAsleb.objects.create(
+            kode='PM_TEST_LAMA',
+            kode_mk='PM001',
+            nama='Pemrograman Mobile',
+            dosen='Dosen Mobile',
+            kelas='SI-01',
+            aktif=True,
+        )
+        matkul_baru = MataKuliahAsleb.objects.create(
+            kode='PW_TEST_BARU',
+            kode_mk='PW001',
+            nama='Pemrograman Web',
+            dosen='Dosen Web',
+            kelas='SI-01',
+            aktif=True,
+        )
+        pengguna_aslab = Pengguna.objects.create(
+            nama_pengguna='Aslab Aktif',
+            nim_nik='0640020098',
+            email='aslab-aktif@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081234567801',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='asisten_lab',
+            is_verified=True,
+        )
+        Asleb.objects.create(
+            nama='Aslab Aktif',
+            nim=pengguna_aslab.nim_nik,
+            no_hp=pengguna_aslab.no_hp,
+            email=pengguna_aslab.email,
+            program_studi=pengguna_aslab.prodi,
+            matkul=str(matkul_lama),
+            semester=4,
+            status='nonaktif',
+            tanggal_bergabung=date(2026, 1, 10),
+        )
+        asleb_aktif = Asleb.objects.create(
+            nama='Aslab Aktif',
+            nim=pengguna_aslab.nim_nik,
+            no_hp=pengguna_aslab.no_hp,
+            email=pengguna_aslab.email,
+            program_studi=pengguna_aslab.prodi,
+            matkul=str(matkul_baru),
+            semester=4,
+            status='aktif',
+            tanggal_bergabung=date(2026, 7, 10),
+        )
+
+        matkul_queryset = get_praktikum_matkul_queryset(pengguna_aslab)
+
+        self.assertEqual(list(matkul_queryset), [matkul_baru])
+        self.assertEqual(get_asleb_matkul(asleb_aktif), matkul_baru)
+
+    def test_laboran_tidak_bisa_mengeluarkan_asleb_tanpa_alasan(self):
         laboran = Pengguna.objects.create(
             nama_pengguna='Laboran Terminasi', nim_nik='LAB-TERM',
             email='laboran-term@trisakti.ac.id', password='rahasia123',
@@ -286,13 +346,54 @@ class AslebViewTests(TestCase):
         session['pengguna_id'] = laboran.pk
         session.save()
 
-        response = self.client.post(reverse('asleb:asleb_end_membership', args=[self.asleb.pk]))
+        response = self.client.post(
+            reverse('asleb:asleb_end_membership', args=[self.asleb.pk]),
+            {'alasan_pengeluaran': ''},
+            follow=True,
+        )
 
-        self.assertRedirects(response, reverse('asleb:asleb_list'))
         akun_asleb.refresh_from_db()
         self.asleb.refresh_from_db()
+        self.assertContains(response, 'Alasan pengeluaran Aslab wajib diisi')
+        self.assertEqual(akun_asleb.role, 'asisten_lab')
+        self.assertEqual(self.asleb.status, 'aktif')
+        self.assertFalse(PengalamanPengguna.objects.filter(pengguna=akun_asleb).exists())
+
+    def test_laboran_dapat_mengeluarkan_asleb_dengan_alasan_tanpa_masuk_pengalaman(self):
+        laboran = Pengguna.objects.create(
+            nama_pengguna='Laboran Terminasi', nim_nik='LAB-TERM-2',
+            email='laboran-term-2@trisakti.ac.id', password='rahasia123',
+            no_hp='081200000098', alamat='Jakarta', fakultas='Teknologi Industri',
+            prodi='Informatika', gender='laki_laki', role='laboran', is_verified=True,
+        )
+        akun_asleb = Pengguna.objects.create(
+            nama_pengguna=self.asleb.nama, nim_nik=self.asleb.nim,
+            email='asleb-term-2@std.trisakti.ac.id', password='rahasia123',
+            no_hp=self.asleb.no_hp, alamat='Jakarta', fakultas='Teknologi Industri',
+            prodi='Informatika', gender='perempuan', role='asisten_lab', is_verified=True,
+        )
+        session = self.client.session
+        session['pengguna_id'] = laboran.pk
+        session.save()
+
+        response = self.client.post(
+            reverse('asleb:asleb_end_membership', args=[self.asleb.pk]),
+            {'alasan_pengeluaran': 'Pelanggaran aturan laboratorium.'},
+            follow=True,
+        )
+
+        akun_asleb.refresh_from_db()
+        self.asleb.refresh_from_db()
+        self.assertContains(response, 'notifikasi telah dikirim')
         self.assertEqual(akun_asleb.role, 'mahasiswa')
         self.assertEqual(self.asleb.status, 'nonaktif')
+        self.assertFalse(PengalamanPengguna.objects.filter(pengguna=akun_asleb).exists())
+        self.assertTrue(Notifikasi.objects.filter(
+            pengguna=akun_asleb,
+            source_key=f'asleb-removed:{self.asleb.pk}:{akun_asleb.pk}',
+        ).exists())
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('Status Asisten Lab Dinonaktifkan', mail.outbox[0].subject)
 
     def test_data_aslab_tidak_menampilkan_tombol_edit_dan_hapus(self):
         response = self.client.get(reverse('asleb:asleb_list'))
@@ -872,6 +973,57 @@ class AslebViewTests(TestCase):
 
         self.assertFalse(second_form.is_valid())
         self.assertIn('modul_praktikum', second_form.errors)
+
+    def test_absensi_menolak_nomor_modul_yang_sudah_pernah_diabsen_meski_absensi_lama_tanpa_relasi_modul(self):
+        PendaftaranAsleb.objects.create(
+            nama=self.asleb.nama,
+            nim=self.asleb.nim,
+            no_hp=self.asleb.no_hp,
+            email=self.asleb.email,
+            program_studi=self.asleb.program_studi,
+            semester=self.asleb.semester,
+            matkul=self.matkul,
+            status='digenerate',
+        )
+        modul_baru = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=2,
+            judul='Array Dasar',
+            file=SimpleUploadedFile('modul-baru-2.pdf', b'isi modul baru', content_type='application/pdf'),
+        )
+        jadwal = self.create_active_schedule()
+        AbsensiAsleb.objects.create(
+            asleb=self.asleb,
+            jadwal=jadwal,
+            modul_praktikum=None,
+            tanggal_praktikum=timezone.localdate(),
+            modul=2,
+            materi_praktikum='Arsip Modul 2',
+            pekerjaan='Membantu praktikum',
+            file_modul=SimpleUploadedFile('arsip-modul-2.pdf', b'isi modul lama', content_type='application/pdf'),
+            bukti_foto=self.make_camera_photo('foto-lama-2.png'),
+            bukti_video=SimpleUploadedFile('video-lama-2.mp4', b'video lama', content_type='video/mp4'),
+        )
+
+        second_form = AbsensiAslebForm(
+            data={
+                'modul_praktikum': modul_baru.pk,
+                'pekerjaan': 'Membantu praktikum revisi',
+                'latitude': '-6.1680678',
+                'longitude': '106.7916257',
+                'gps_accuracy': '10',
+            },
+            files={
+                'bukti_foto': self.make_camera_photo('foto-baru-2.png'),
+                'bukti_video': SimpleUploadedFile('video-baru-2.mp4', b'video baru', content_type='video/mp4'),
+            },
+            asleb=self.asleb,
+            jadwal=jadwal,
+        )
+
+        self.assertFalse(second_form.is_valid())
+        self.assertIn('modul_praktikum', second_form.errors)
+        self.assertIn('Modul 2 sudah pernah diabsen', str(second_form.errors['modul_praktikum']))
 
     @skipUnless(ENABLE_CAMERA_LOCATION_CAPTURE, 'Validasi radius lokasi sedang dinonaktifkan sementara.')
     def test_absensi_ditolak_jika_di_luar_radius_kampus(self):

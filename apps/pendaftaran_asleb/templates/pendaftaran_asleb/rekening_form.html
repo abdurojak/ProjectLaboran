@@ -1,11 +1,49 @@
 {% extends "base.html" %}
 {% block title %}Edit Metode Pembayaran{% endblock %}
+{% block extra_head %}
+<style>
+    .account-help-card {
+        position: relative;
+        overflow: hidden;
+        border-radius: 1.25rem;
+        border: 1px solid rgba(56, 189, 248, 0.24);
+        background: linear-gradient(135deg, rgba(240, 249, 255, 0.98), rgba(236, 254, 255, 0.98));
+        box-shadow: 0 16px 30px rgba(15, 23, 42, 0.08);
+    }
+
+    .account-help-card::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 0.32rem;
+        background: linear-gradient(180deg, #0284c7, #22d3ee);
+    }
+
+    .account-help-card__content {
+        position: relative;
+        z-index: 1;
+        color: #334155;
+    }
+
+    html[data-theme="dark"] .account-help-card {
+        border-color: rgba(56, 189, 248, 0.26);
+        background: linear-gradient(135deg, rgba(3, 105, 161, 0.2), rgba(15, 23, 42, 0.96));
+        box-shadow: 0 20px 36px rgba(2, 6, 23, 0.24);
+    }
+
+    html[data-theme="dark"] .account-help-card__content {
+        color: #e2e8f0;
+    }
+</style>
+{% endblock %}
 {% block content %}
 <section class="mx-auto max-w-2xl space-y-6">
     <div><p class="text-sm font-black uppercase tracking-[0.2em] text-teal-700">Honor Aslab</p><h2 class="mt-2 text-3xl font-black text-slate-900">Edit Metode Pembayaran</h2><p class="mt-2 text-sm text-slate-500">Perubahan akan digunakan untuk pencairan honor berikutnya.</p></div>
     <form method="post" class="surface-card space-y-5 p-6 md:p-8" data-payment-form>{% csrf_token %}
         {% for field in form %}<div>{{ field.label_tag }}{{ field }}{% for error in field.errors %}<p class="mt-2 text-sm font-semibold text-rose-600">{{ error }}</p>{% endfor %}</div>{% endfor %}
-        <p data-account-help class="rounded-2xl bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-800"></p>
+        <p data-account-help class="account-help-card account-help-card__content hidden px-4 py-3 pl-7 text-sm font-semibold"></p>
         <div class="flex gap-3"><button class="btn-primary" type="submit"><i data-lucide="save" class="h-4 w-4"></i>Simpan</button><a class="btn-secondary" href="{% url 'pendaftaran_asleb:pendaftaran_success' %}">Batal</a></div>
     </form>
 </section>

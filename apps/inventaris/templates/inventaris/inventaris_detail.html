@@ -115,7 +115,7 @@
                         <td>{{ barang.lokasi.nama_lokasi|default:"-" }}</td>
                         <td>{{ barang.get_kondisi_display }}</td>
                         <td>
-                            <span class="{% if barang.sedang_dipinjam %}bg-amber-100 text-amber-700{% else %}bg-emerald-100 text-emerald-700{% endif %} inline-flex rounded-full px-3 py-1 text-xs font-bold">
+                            <span class="{% if barang.status_pinjam_key == 'dipinjam' %}bg-amber-100 text-amber-700{% elif barang.status_pinjam_key == 'rusak' %}bg-rose-100 text-rose-700{% elif barang.status_pinjam_key == 'hilang' %}bg-slate-200 text-slate-700{% else %}bg-emerald-100 text-emerald-700{% endif %} inline-flex rounded-full px-3 py-1 text-xs font-bold">
                                 {{ barang.status_pinjam }}
                             </span>
                         </td>

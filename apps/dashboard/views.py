@@ -23,6 +23,7 @@ from apps.kalender.models import KegiatanKalender, Notifikasi
 from apps.core.permissions import LABORAN_ROLE, can_manage_lab_operations
 from apps.peminjaman.models import PeminjamanAlat
 from apps.peminjaman.notifications import send_peminjaman_status_notification
+from apps.peminjaman.services import update_peminjaman_status
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb, RiwayatAsleb
 from apps.pendaftaran_asleb.services import is_registration_open
 from apps.pendaftaran_asleb.utils import get_public_registration_url
@@ -137,7 +138,6 @@ class DashboardView(TemplateView):
         peminjaman_qs = PeminjamanAlat.objects.select_related('barang')
         peminjaman_aktif = peminjaman_qs.filter(status__in=ACTIVE_PEMINJAMAN_STATUSES)
         asleb_qs = Asleb.objects.all()
-        pendaftaran_asleb_qs = PendaftaranAsleb.objects.all()
         is_mahasiswa = bool(pengguna and pengguna.role == 'mahasiswa')
         is_asisten_lab = bool(pengguna and pengguna.role == 'asisten_lab')
         context['is_mahasiswa_dashboard'] = is_mahasiswa or is_asisten_lab
@@ -405,13 +405,6 @@ class DashboardView(TemplateView):
                 'icon': 'calendar-clock',
                 'tone': 'blue',
             },
-            {
-                'label': 'Calon Aslab',
-                'value': pendaftaran_asleb_qs.filter(status='diajukan').count(),
-                'note': 'Pendaftar yang perlu diseleksi',
-                'icon': 'user-round-check',
-                'tone': 'green',
-            },
         ])
         context['menu_modules'] = self._decorate_items([
             {
@@ -445,14 +438,6 @@ class DashboardView(TemplateView):
                 'status': 'Aktif',
                 'icon': 'users',
                 'tone': 'green',
-            },
-            {
-                'title': 'Pendaftaran Aslab',
-                'description': 'Kelola calon aslab yang mendaftar berdasarkan matkul, kontak, dan status seleksi.',
-                'url': 'pendaftaran_asleb:pendaftaran_list',
-                'status': 'Aktif',
-                'icon': 'user-round-plus',
-                'tone': 'teal',
             },
             {
                 'title': 'Rekap Honorarium Aslab',
@@ -509,7 +494,7 @@ class DashboardView(TemplateView):
             {
                 'time': '08:55',
                 'title': 'Data aslab diperbarui',
-                'detail': f'{asleb_qs.filter(status="aktif").count()} aslab aktif dan {pendaftaran_asleb_qs.filter(status="diajukan").count()} pendaftar menunggu seleksi.',
+                'detail': f'{asleb_qs.filter(status="aktif").count()} aslab aktif siap dipantau dari modul Data Aslab dan Pendaftaran Aslab.',
                 'tone': 'green',
             },
         ]
@@ -555,13 +540,6 @@ class DashboardView(TemplateView):
                 'url': 'asleb:asleb_create',
                 'icon': 'user-plus',
                 'tone': 'green',
-            },
-            {
-                'title': 'Tambah Pendaftaran Aslab',
-                'description': 'Catat calon aslab baru beserta matkul yang diminati.',
-                'url': 'pendaftaran_asleb:pendaftaran_create',
-                'icon': 'user-round-plus',
-                'tone': 'teal',
             },
             {
                 'title': 'Tambah Kegiatan Kalender',
@@ -699,8 +677,7 @@ def _mark_borrowed_status(request, pk, status):
     with transaction.atomic():
         peminjaman = get_object_or_404(PeminjamanAlat.objects.select_for_update(), pk=pk, status='dipinjam')
         for item in _get_peminjaman_group_for_update(peminjaman).filter(status='dipinjam'):
-            item.status = status
-            item.save(update_fields=['status', 'diperbarui_pada'])
+            update_peminjaman_status(item, status)
             send_peminjaman_status_notification(item)
     return redirect('dashboard:home')
 
@@ -733,8 +710,7 @@ def mark_peminjaman_replaced(request, pk):
             status__in=['hilang', 'rusak'],
         )
         for item in _get_peminjaman_group_for_update(peminjaman).filter(status__in=['hilang', 'rusak']):
-            item.status = 'digantikan'
-            item.save(update_fields=['status', 'diperbarui_pada'])
+            update_peminjaman_status(item, 'digantikan')
             send_peminjaman_status_notification(item)
     return redirect('dashboard:home')
 

@@ -197,8 +197,15 @@ class AbsensiAslebForm(forms.ModelForm):
         modul = self.cleaned_data['modul_praktikum']
         if modul.matkul != get_asleb_matkul(self.asleb) or self.jadwal.mata_kuliah != str(modul.matkul):
             raise forms.ValidationError('Modul tidak sesuai dengan mata kuliah pada jadwal aktif.')
-        if AbsensiAsleb.objects.filter(asleb=self.asleb, modul_praktikum=modul).exists():
+        duplicate_qs = AbsensiAsleb.objects.filter(asleb=self.asleb)
+        if self.instance and self.instance.pk:
+            duplicate_qs = duplicate_qs.exclude(pk=self.instance.pk)
+        if duplicate_qs.filter(modul_praktikum=modul).exists():
             raise forms.ValidationError('Modul ini sudah pernah diabsen dan tidak dapat dipilih lagi.')
+        if duplicate_qs.filter(modul=modul.nomor).exists():
+            raise forms.ValidationError(
+                f'Modul {modul.nomor} sudah pernah diabsen. Pilih modul lain yang belum dipakai.'
+            )
         return modul
 
     def clean(self):
@@ -519,6 +526,16 @@ class HasilPraktikumMahasiswaForm(forms.ModelForm):
 def get_asleb_matkul(asleb):
     from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, RiwayatAsleb
 
+    active_match = next(
+        (
+            matkul for matkul in MataKuliahAsleb.objects.filter(aktif=True)
+            if str(matkul) == asleb.matkul
+        ),
+        None,
+    )
+    if active_match:
+        return active_match
+
     registration = PendaftaranAsleb.objects.filter(
         nim=asleb.nim,
         status__in=['diterima', 'digenerate'],
@@ -528,4 +545,4 @@ def get_asleb_matkul(asleb):
     history = RiwayatAsleb.objects.filter(nim=asleb.nim).select_related('matkul').order_by('-pk').first()
     if history:
         return history.matkul
-    return next((matkul for matkul in MataKuliahAsleb.objects.filter(aktif=True) if str(matkul) == asleb.matkul), None)
+    return None

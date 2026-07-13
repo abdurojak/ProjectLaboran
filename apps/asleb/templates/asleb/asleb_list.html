@@ -80,9 +80,10 @@
                                     <i data-lucide="eye" class="h-4 w-4"></i><span>Detail</span>
                                 </a>
                                 {% if can_end_asleb and asleb.status == 'aktif' %}
-                                <form method="post" action="{% url 'asleb:asleb_end_membership' asleb.pk %}" data-confirm-message="Akhiri seluruh penugasan aktif {{ asleb.nama }} dan ubah rolenya menjadi Mahasiswa?" class="inline">
+                                <form method="post" action="{% url 'asleb:asleb_end_membership' asleb.pk %}" data-confirm-message="Keluarkan {{ asleb.nama }} dari Aslab? Akun akan kembali menjadi Mahasiswa dan wajib menyertakan alasan." class="inline" data-end-asleb-form>
                                     {% csrf_token %}
-                                    <button type="submit" class="inline-flex items-center gap-1 text-orange-600 hover:text-orange-700">
+                                    <input type="hidden" name="alasan_pengeluaran" value="">
+                                    <button type="submit" class="inline-flex items-center gap-1 text-orange-600 hover:text-orange-700" data-end-asleb-trigger data-asleb-name="{{ asleb.nama|escape }}">
                                         <i data-lucide="user-round-x" class="h-4 w-4"></i>
                                         <span>Keluarkan Aslab</span>
                                     </button>
@@ -111,6 +112,7 @@
         const searchInput = document.getElementById('id_q');
         const statusSelect = document.getElementById('id_status');
         let searchTimer = null;
+        const reasonButtons = document.querySelectorAll('[data-end-asleb-trigger]');
 
         if (searchInput) {
             searchInput.addEventListener('input', function () {
@@ -126,6 +128,35 @@
                 form.submit();
             });
         }
+
+        reasonButtons.forEach(function (button) {
+            button.addEventListener('click', function (event) {
+                const submitForm = button.closest('form[data-end-asleb-form]');
+                if (!submitForm) {
+                    return;
+                }
+                const reasonInput = submitForm.querySelector('input[name="alasan_pengeluaran"]');
+                if (!reasonInput || reasonInput.value.trim()) {
+                    return;
+                }
+
+                event.preventDefault();
+                event.stopPropagation();
+
+                const personName = button.dataset.aslebName || 'Aslab ini';
+                const reason = window.prompt(`Masukkan alasan mengeluarkan ${personName} dari Aslab:`, '');
+                if (reason === null) {
+                    return;
+                }
+                const trimmedReason = reason.trim();
+                if (!trimmedReason) {
+                    window.alert('Alasan pengeluaran wajib diisi.');
+                    return;
+                }
+                reasonInput.value = trimmedReason;
+                button.click();
+            });
+        });
     });
 </script>
 {% endblock %}

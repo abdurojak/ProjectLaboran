@@ -74,7 +74,7 @@
                     </a>
                     {% if can_manage_modul %}
                     <a href="{% url 'asleb:modul_update' modul.pk %}" class="btn-secondary" title="Edit modul"><i data-lucide="pencil" class="h-4 w-4"></i></a>
-                    <form method="post" action="{% url 'asleb:modul_delete' modul.pk %}">
+                    <form method="post" action="{% url 'asleb:modul_delete' modul.pk %}" data-confirm-message="Hapus modul {{ modul.judul }}? Riwayat absensi lama tetap tersimpan, tetapi file modul ini akan dihapus dari daftar aktif.">
                         {% csrf_token %}
                         <button type="submit" class="btn-secondary text-rose-700" title="Hapus modul"><i data-lucide="trash-2" class="h-4 w-4"></i></button>
                     </form>
@@ -255,13 +255,14 @@
                 const type = String(button.dataset.previewType || '').toLowerCase();
                 const isPdf = type === 'pdf';
                 previewTitle.textContent = button.dataset.previewTitle || 'Preview Modul';
-                previewMeta.textContent = `${String(type || 'file').toUpperCase()} · ${formatBytes(button.dataset.previewSize)} · ${button.dataset.previewDate || '-'}`;
+                previewMeta.textContent = `${String(type || 'file').toUpperCase()} - ${formatBytes(button.dataset.previewSize)} - ${button.dataset.previewDate || '-'}`;
                 openLink.href = button.dataset.previewUrl;
                 downloadLink.href = button.dataset.previewUrl;
+                downloadLink.setAttribute('download', '');
                 if (isPdf) {
                     pdfWrap.classList.remove('hidden');
                     docWrap.classList.add('hidden');
-                    pdfFrame.src = button.dataset.previewUrl;
+                    pdfFrame.src = `${button.dataset.previewUrl}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`;
                 } else {
                     pdfWrap.classList.add('hidden');
                     docWrap.classList.remove('hidden');
@@ -293,4 +294,5 @@
         });
     });
 </script>
+{% include "components/confirmation_modal.html" with title="Konfirmasi Hapus Modul" confirm_label="Hapus Modul" confirm_icon="trash-2" %}
 {% endblock %}

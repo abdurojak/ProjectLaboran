@@ -4,12 +4,102 @@
 
 {% block extra_head %}
 <style>
+    .context-note-card {
+        position: relative;
+        overflow: hidden;
+        border-radius: 1.5rem;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.98));
+        box-shadow: 0 18px 38px rgba(15, 23, 42, 0.08);
+    }
+
+    .context-note-card::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 0.35rem;
+        background: linear-gradient(180deg, rgba(14, 165, 233, 0.88), rgba(45, 212, 191, 0.88));
+    }
+
+    .context-note-card--teal {
+        border-color: rgba(20, 184, 166, 0.24);
+        background: linear-gradient(135deg, rgba(240, 253, 250, 0.98), rgba(236, 254, 255, 0.98));
+    }
+
+    .context-note-card--teal::before {
+        background: linear-gradient(180deg, #0f766e, #14b8a6);
+    }
+
+    .context-note-card--sky {
+        border-color: rgba(56, 189, 248, 0.24);
+        background: linear-gradient(135deg, rgba(240, 249, 255, 0.98), rgba(236, 254, 255, 0.98));
+    }
+
+    .context-note-card--sky::before {
+        background: linear-gradient(180deg, #0284c7, #22d3ee);
+    }
+
+    .context-note-card__content {
+        position: relative;
+        z-index: 1;
+        padding-left: 0.9rem;
+        color: #334155;
+    }
+
+    .context-note-card__title {
+        color: #0f172a;
+        font-weight: 900;
+    }
+
+    html[data-theme="dark"] .context-note-card {
+        border-color: rgba(148, 163, 184, 0.18);
+        background: linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.94));
+        box-shadow: 0 20px 40px rgba(2, 6, 23, 0.28);
+    }
+
+    html[data-theme="dark"] .context-note-card--teal {
+        border-color: rgba(45, 212, 191, 0.28);
+        background: linear-gradient(135deg, rgba(15, 118, 110, 0.18), rgba(15, 23, 42, 0.96));
+    }
+
+    html[data-theme="dark"] .context-note-card--sky {
+        border-color: rgba(56, 189, 248, 0.26);
+        background: linear-gradient(135deg, rgba(3, 105, 161, 0.2), rgba(15, 23, 42, 0.96));
+    }
+
+    html[data-theme="dark"] .context-note-card__content {
+        color: #e2e8f0;
+    }
+
+    html[data-theme="dark"] .context-note-card__title {
+        color: #f8fafc;
+    }
+
     .registration-check-card {
-        transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+        position: relative;
+        overflow: hidden;
+        transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+        border-color: rgba(16, 185, 129, 0.24) !important;
+        background: linear-gradient(135deg, rgba(236, 253, 245, 0.98), rgba(240, 253, 250, 0.98)) !important;
+        box-shadow: 0 18px 34px rgba(15, 23, 42, 0.08);
+    }
+
+    .registration-check-card::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 0.35rem;
+        background: linear-gradient(180deg, #059669, #14b8a6);
     }
 
     .registration-check-label {
         align-items: flex-start;
+        position: relative;
+        z-index: 1;
     }
 
     .registration-check-input {
@@ -20,8 +110,10 @@
     }
 
     .registration-check-card:hover {
-        border-color: rgba(20, 184, 166, 0.36);
-        background-color: rgba(240, 253, 250, 0.86);
+        border-color: rgba(20, 184, 166, 0.4) !important;
+        background: linear-gradient(135deg, rgba(220, 252, 231, 0.98), rgba(236, 253, 245, 0.98)) !important;
+        box-shadow: 0 22px 40px rgba(16, 185, 129, 0.12);
+        transform: translateY(-1px);
     }
 
     .registration-check-input:focus {
@@ -30,19 +122,37 @@
         outline: none;
     }
 
+    .registration-check-label .font-black {
+        color: #064e3b;
+    }
+
+    .registration-check-label .text-emerald-900\/75 {
+        color: rgba(6, 78, 59, 0.82) !important;
+    }
+
     html[data-theme="dark"] .registration-check-card {
-        background: rgba(20, 184, 166, 0.12) !important;
-        border-color: rgba(94, 234, 212, 0.24) !important;
+        background: linear-gradient(135deg, rgba(6, 78, 59, 0.32), rgba(15, 23, 42, 0.96)) !important;
+        border-color: rgba(45, 212, 191, 0.3) !important;
+        box-shadow: 0 20px 38px rgba(2, 6, 23, 0.3);
     }
 
     html[data-theme="dark"] .registration-check-card:hover {
-        background: rgba(20, 184, 166, 0.18) !important;
-        border-color: rgba(94, 234, 212, 0.34) !important;
+        background: linear-gradient(135deg, rgba(6, 95, 70, 0.4), rgba(15, 23, 42, 0.98)) !important;
+        border-color: rgba(94, 234, 212, 0.42) !important;
+        box-shadow: 0 24px 40px rgba(20, 184, 166, 0.16);
     }
 
     html[data-theme="dark"] .registration-check-input {
         border-color: rgba(148, 163, 184, 0.44) !important;
         background-color: rgba(15, 23, 42, 0.54) !important;
+    }
+
+    html[data-theme="dark"] .registration-check-label .font-black {
+        color: #ecfdf5;
+    }
+
+    html[data-theme="dark"] .registration-check-label .text-emerald-900\/75 {
+        color: rgba(220, 252, 231, 0.82) !important;
     }
 </style>
 {% endblock %}
@@ -74,19 +184,23 @@
         </div>
 
         {% if current_pengguna and current_pengguna.role == 'mahasiswa' or current_pengguna and current_pengguna.role == 'asisten_lab' %}
-        <div class="mx-6 mt-6 rounded-3xl border border-teal-100 bg-teal-50 p-5 md:mx-8">
-            <p class="text-sm font-bold text-teal-800">Data akun otomatis digunakan untuk pendaftaran Anda.</p>
-            <div class="mt-3 grid gap-3 text-sm text-teal-900 md:grid-cols-2">
+        <div class="context-note-card context-note-card--teal mx-6 mt-6 p-5 md:mx-8">
+            <div class="context-note-card__content">
+            <p class="context-note-card__title text-sm">Data akun otomatis digunakan untuk pendaftaran Anda.</p>
+            <div class="mt-3 grid gap-3 text-sm font-semibold md:grid-cols-2">
                 <div><span class="font-semibold">Nama:</span> {{ current_pengguna.nama_pengguna }}</div>
                 <div><span class="font-semibold">NIM:</span> {{ current_pengguna.nim_nik }}</div>
                 <div><span class="font-semibold">No HP:</span> {{ current_pengguna.no_hp }}</div>
                 <div><span class="font-semibold">Email:</span> {{ current_pengguna.email }}</div>
                 <div class="md:col-span-2"><span class="font-semibold">Prodi:</span> {{ current_pengguna.prodi }}</div>
             </div>
+            </div>
         </div>
-        <div class="mx-6 mt-4 rounded-2xl border border-cyan-200 bg-cyan-50 px-5 py-4 text-sm text-cyan-900 md:mx-8">
+        <div class="context-note-card context-note-card--sky mx-6 mt-4 px-5 py-4 md:mx-8">
+            <div class="context-note-card__content text-sm font-semibold">
             Level pendaftaran Anda: <strong>{{ registration_level|title }}</strong>.
             Maksimal <strong>{{ registration_limit }} matkul</strong> per periode; saat ini sudah mengambil <strong>{{ registration_count }}</strong>.
+            </div>
         </div>
         {% endif %}
 
@@ -173,13 +287,13 @@
                     {% endif %}
                 {% endfor %}
             </div>
-            <p data-account-help class="rounded-2xl bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-800"></p>
+            <p data-account-help class="context-note-card context-note-card--sky hidden context-note-card__content px-4 py-3 text-sm font-semibold"></p>
 
-            <div class="rounded-3xl border border-teal-100 bg-teal-50 p-5 text-sm text-slate-700">
-                <div class="flex items-start gap-3">
+            <div class="context-note-card context-note-card--teal p-5 text-sm text-slate-700 dark:text-slate-100">
+                <div class="context-note-card__content flex items-start gap-3">
                     <i data-lucide="badge-info" class="mt-0.5 h-5 w-5 shrink-0 text-teal-700"></i>
                     <div>
-                        <p class="font-black text-teal-900">Ketentuan pencairan honor</p>
+                        <p class="context-note-card__title">Ketentuan pencairan honor</p>
                         <p class="mt-1 leading-6">BNI dan DANA bebas biaya admin. Bank lain dipotong Rp2.500. ShopeePay, GoPay, dan OVO dipotong Rp1.500 saat honor dicairkan.</p>
                     </div>
                 </div>

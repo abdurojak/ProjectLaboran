@@ -7,7 +7,7 @@ from django.urls import reverse
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb
 from apps.pengguna.models import Pengguna
 from apps.ruangan.models import GrupRuanganGabungan, RuanganLab
-from apps.asleb.models import PesertaPraktikum
+from apps.asleb.models import AbsensiAsleb, Asleb, PesertaPraktikum
 
 from .models import JadwalPraktikum, PermintaanPerubahanJadwal
 
@@ -629,6 +629,36 @@ class JadwalViewTests(TestCase):
         self.assertRedirects(create_response, reverse('jadwal:jadwal_list'))
         self.assertRedirects(update_response, reverse('jadwal:jadwal_list'))
         self.assertRedirects(delete_response, reverse('jadwal:jadwal_list'))
+        self.assertTrue(JadwalPraktikum.objects.filter(pk=jadwal.pk).exists())
+
+    def test_hapus_jadwal_yang_masih_dipakai_absensi_tidak_error_kuning(self):
+        jadwal = JadwalPraktikum.objects.first()
+        asleb = Asleb.objects.create(
+            nama='Nadhira Anindita Ralena',
+            nim='0640020011',
+            no_hp='081234567812',
+            email='nadhira@std.trisakti.ac.id',
+            program_studi='Informatika',
+            matkul=jadwal.mata_kuliah,
+            semester=4,
+            status='aktif',
+            tanggal_bergabung=timezone.localdate(),
+        )
+        AbsensiAsleb.objects.create(
+            asleb=asleb,
+            jadwal=jadwal,
+            tanggal_praktikum=timezone.localdate(),
+            modul=1,
+            materi_praktikum='Pengenalan',
+            pekerjaan='Menguji proteksi hapus jadwal',
+            file_modul='absensi_asleb/modul/test.pdf',
+            bukti_video='absensi_asleb/video/test.mp4',
+        )
+
+        response = self.client.post(reverse('jadwal:jadwal_delete', args=[jadwal.pk]), follow=True)
+
+        self.assertRedirects(response, reverse('jadwal:jadwal_detail', args=[jadwal.pk]))
+        self.assertContains(response, 'Jadwal praktikum tidak bisa dihapus karena masih dipakai')
         self.assertTrue(JadwalPraktikum.objects.filter(pk=jadwal.pk).exists())
 
     def test_jadwal_tidak_bisa_bentrok_ruangan_dan_waktu(self):
