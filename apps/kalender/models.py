@@ -57,10 +57,7 @@ class KegiatanKalender(models.Model):
 
     def visible_for(self, pengguna):
         if not pengguna:
-            return True
-
-        if pengguna.role in {'admin', 'laboran'}:
-            return True
+            return not self.dibuat_oleh_id and not self.target_role
 
         if self.dibuat_oleh_id == pengguna.pk:
             return True
@@ -68,12 +65,13 @@ class KegiatanKalender(models.Model):
         if not self.dibuat_oleh_id and not self.target_role:
             return True
 
-        return (
-            self.dibuat_oleh_id
-            and self.dibuat_oleh
-            and self.dibuat_oleh.role in {'admin', 'laboran'}
-            and pengguna.role in self.target_role_list
-        )
+        if pengguna.role not in self.target_role_list:
+            return False
+
+        if not self.dibuat_oleh_id:
+            return True
+
+        return bool(self.dibuat_oleh and self.dibuat_oleh.role in {'admin', 'laboran'})
 
     def __str__(self):
         return self.judul

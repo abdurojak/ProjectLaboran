@@ -43,10 +43,21 @@ class BarangTertinggalViewTests(TestCase):
         self.assertContains(response, self.barang.kode_barang_tertinggal)
         self.assertContains(response, 'Flashdisk')
         self.assertContains(response, 'Tertinggal')
-        self.assertContains(response, 'Rusak')
         self.assertContains(response, 'Hilang')
+        self.assertContains(response, 'Diambil')
+        self.assertNotContains(response, 'Diajukan')
+        self.assertNotContains(response, 'Rusak')
         self.assertContains(response, 'data-confirmation-modal')
         self.assertContains(response, reverse('barang_tertinggal:delete', args=[self.barang.pk]))
+
+    def test_form_hanya_memiliki_tiga_status_barang_tertinggal(self):
+        response = self.client.get(reverse('barang_tertinggal:create'))
+
+        self.assertContains(response, '<option value="tertinggal"', html=False)
+        self.assertContains(response, '<option value="hilang"', html=False)
+        self.assertContains(response, '<option value="diambil"', html=False)
+        self.assertNotContains(response, '<option value="diajukan"', html=False)
+        self.assertNotContains(response, '<option value="rusak"', html=False)
 
     def test_create_barang_tertinggal(self):
         foto = SimpleUploadedFile(

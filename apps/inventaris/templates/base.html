@@ -2170,6 +2170,318 @@
             document.body.addEventListener('htmx:responseError', hideGlobalLoading);
             document.body.addEventListener('htmx:sendError', hideGlobalLoading);
 
+            function initFileUploadComponents(root) {
+                const scope = root || document;
+                const uploadState = window.LabHubFileUploadState || new WeakMap();
+                window.LabHubFileUploadState = uploadState;
+
+                function getDeleteInput(component) {
+                    const inputId = component.dataset.deleteInputId;
+                    if (inputId) {
+                        return document.getElementById(inputId);
+                    }
+                    const form = component.closest('form');
+                    return form ? form.querySelector('input[type="hidden"][name="hapus_foto"]') : null;
+                }
+
+                function revokePreview(component) {
+                    const state = uploadState.get(component);
+                    if (state && state.previewUrl) {
+                        URL.revokeObjectURL(state.previewUrl);
+                        state.previewUrl = null;
+                    }
+                }
+
+                function setPreview(component, file) {
+                    const fileName = component.querySelector('[data-file-name]');
+                    const previewWrapper = component.querySelector('[data-preview-wrapper]');
+                    const previewImage = component.querySelector('[data-preview-image]');
+                    const cropButton = component.querySelector('[data-crop-button]');
+                    const emptyLabel = component.dataset.emptyLabel || 'Belum ada file dipilih';
+
+                    revokePreview(component);
+
+                    if (!file) {
+                        if (fileName) fileName.textContent = emptyLabel;
+                        if (previewImage) previewImage.removeAttribute('src');
+                        if (previewWrapper) previewWrapper.classList.add('hidden');
+                        if (cropButton) cropButton.classList.add('hidden');
+                        return;
+                    }
+
+                    if (fileName) fileName.textContent = file.name;
+                    if (previewImage && previewWrapper && file.type && file.type.startsWith('image/')) {
+                        const previewUrl = URL.createObjectURL(file);
+                        const state = uploadState.get(component) || {};
+                        state.previewUrl = previewUrl;
+                        state.file = file;
+                        uploadState.set(component, state);
+                        previewImage.src = previewUrl;
+                        previewWrapper.classList.remove('hidden');
+                        if (cropButton && component.dataset.cropEnabled !== 'false') {
+                            cropButton.classList.remove('hidden');
+                        }
+                    }
+                }
+
+                function setFileInputFile(input, file) {
+                    const transfer = new DataTransfer();
+                    transfer.items.add(file);
+                    input.files = transfer.files;
+                }
+
+                function ensureCropModal() {
+                    let modal = document.querySelector('[data-image-crop-modal]');
+                    if (modal) return modal;
+
+                    modal = document.createElement('div');
+                    modal.dataset.imageCropModal = 'true';
+                    modal.className = 'fixed inset-0 z-[130] hidden items-center justify-center bg-slate-950/76 p-4';
+                    modal.innerHTML = [
+                        '<div class="w-full max-w-2xl overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-slate-950/30" data-image-crop-card>',
+                        '<div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">',
+                        '<div><p class="text-xs font-black uppercase tracking-[0.2em] text-brand-700">Crop Gambar</p><h3 class="mt-1 text-xl font-black text-slate-900">Sesuaikan posisi gambar</h3></div>',
+                        '<button type="button" class="btn-secondary h-11 w-11 p-0" data-image-crop-cancel aria-label="Tutup crop gambar"><i data-lucide="x" class="h-4 w-4"></i></button>',
+                        '</div>',
+                        '<div class="grid gap-4 p-5">',
+                        '<div class="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-slate-950 p-3">',
+                        '<canvas data-image-crop-canvas class="mx-auto block max-w-full touch-none rounded-[1rem]"></canvas>',
+                        '</div>',
+                        '<div class="grid gap-2">',
+                        '<label for="image-crop-zoom" class="text-sm font-black text-slate-800">Zoom</label>',
+                        '<input id="image-crop-zoom" data-image-crop-zoom type="range" min="1" max="3" step="0.01" value="1">',
+                        '</div>',
+                        '<div class="flex flex-wrap justify-end gap-3">',
+                        '<button type="button" class="btn-secondary" data-image-crop-cancel>Batal</button>',
+                        '<button type="button" class="btn-primary gap-2" data-image-crop-apply><i data-lucide="check" class="h-4 w-4"></i><span>Gunakan Hasil Crop</span></button>',
+                        '</div>',
+                        '</div>',
+                        '</div>'
+                    ].join('');
+
+                    const style = document.createElement('style');
+                    style.textContent = [
+                        'html[data-theme="dark"] [data-image-crop-card]{background:rgba(15,23,42,.96)!important;border-color:rgba(71,85,105,.64)!important;}',
+                        'html[data-theme="dark"] [data-image-crop-card] .border-slate-200{border-color:rgba(71,85,105,.48)!important;}',
+                        'html[data-theme="dark"] [data-image-crop-card] .text-slate-900{color:#e2e8f0!important;}',
+                        'html[data-theme="dark"] [data-image-crop-card] .text-slate-800{color:#cbd5e1!important;}',
+                        '[data-image-crop-canvas]{cursor:grab;}',
+                        '[data-image-crop-canvas].is-dragging{cursor:grabbing;}'
+                    ].join('');
+                    document.head.appendChild(style);
+                    document.body.appendChild(modal);
+                    if (window.lucide) window.lucide.createIcons();
+                    return modal;
+                }
+
+                function openCropper(component, file, input) {
+                    if (!file || !file.type || !file.type.startsWith('image/')) return;
+                    const modal = ensureCropModal();
+                    const canvas = modal.querySelector('[data-image-crop-canvas]');
+                    const zoomInput = modal.querySelector('[data-image-crop-zoom]');
+                    const applyButton = modal.querySelector('[data-image-crop-apply]');
+                    const cancelButtons = modal.querySelectorAll('[data-image-crop-cancel]');
+                    const context = canvas.getContext('2d');
+                    const aspect = Math.max(parseFloat(component.dataset.cropAspect || '1') || 1, 0.2);
+                    const cropShape = component.dataset.cropShape || 'rect';
+                    const image = new Image();
+                    const reader = new FileReader();
+                    let baseScale = 1;
+                    let zoom = 1;
+                    let offsetX = 0;
+                    let offsetY = 0;
+                    let dragging = false;
+                    let lastX = 0;
+                    let lastY = 0;
+
+                    function sizeCanvas() {
+                        const maxWidth = Math.min(560, window.innerWidth - 48);
+                        const maxHeight = Math.min(420, window.innerHeight - 260);
+                        let width = maxWidth;
+                        let height = width / aspect;
+                        if (height > maxHeight) {
+                            height = maxHeight;
+                            width = height * aspect;
+                        }
+                        canvas.width = Math.round(width);
+                        canvas.height = Math.round(height);
+                    }
+
+                    function draw() {
+                        context.clearRect(0, 0, canvas.width, canvas.height);
+                        context.fillStyle = '#020617';
+                        context.fillRect(0, 0, canvas.width, canvas.height);
+                        const scale = baseScale * zoom;
+                        const width = image.naturalWidth * scale;
+                        const height = image.naturalHeight * scale;
+                        const minX = Math.min(0, canvas.width - width);
+                        const maxX = Math.max(0, canvas.width - width);
+                        const minY = Math.min(0, canvas.height - height);
+                        const maxY = Math.max(0, canvas.height - height);
+                        offsetX = Math.min(Math.max(offsetX, minX), maxX);
+                        offsetY = Math.min(Math.max(offsetY, minY), maxY);
+                        context.drawImage(image, offsetX, offsetY, width, height);
+
+                        if (cropShape === 'circle') {
+                            context.save();
+                            context.fillStyle = 'rgba(2, 6, 23, 0.42)';
+                            context.beginPath();
+                            context.rect(0, 0, canvas.width, canvas.height);
+                            context.arc(canvas.width / 2, canvas.height / 2, Math.min(canvas.width, canvas.height) / 2 - 2, 0, Math.PI * 2, true);
+                            context.fill('evenodd');
+                            context.strokeStyle = 'rgba(153, 246, 228, 0.92)';
+                            context.lineWidth = 3;
+                            context.beginPath();
+                            context.arc(canvas.width / 2, canvas.height / 2, Math.min(canvas.width, canvas.height) / 2 - 3, 0, Math.PI * 2);
+                            context.stroke();
+                            context.restore();
+                        }
+                    }
+
+                    function closeModal() {
+                        modal.classList.add('hidden');
+                        modal.classList.remove('flex');
+                        document.body.classList.remove('overflow-hidden');
+                    }
+
+                    function outputCroppedFile() {
+                        const outputCanvas = document.createElement('canvas');
+                        outputCanvas.width = canvas.width;
+                        outputCanvas.height = canvas.height;
+                        const outputContext = outputCanvas.getContext('2d');
+                        const scale = baseScale * zoom;
+                        outputContext.drawImage(
+                            image,
+                            offsetX,
+                            offsetY,
+                            image.naturalWidth * scale,
+                            image.naturalHeight * scale
+                        );
+                        outputCanvas.toBlob(function (blob) {
+                            if (!blob) return;
+                            const cleanName = file.name.replace(/\.[^.]+$/, '') || 'gambar';
+                            const croppedFile = new File([blob], cleanName + '-crop.jpg', {type: 'image/jpeg'});
+                            setFileInputFile(input, croppedFile);
+                            setPreview(component, croppedFile);
+                            const deleteInput = getDeleteInput(component);
+                            if (deleteInput) deleteInput.value = '0';
+                            closeModal();
+                        }, 'image/jpeg', 0.92);
+                    }
+
+                    reader.onload = function () {
+                        image.onload = function () {
+                            document.body.appendChild(modal);
+                            sizeCanvas();
+                            baseScale = Math.max(canvas.width / image.naturalWidth, canvas.height / image.naturalHeight);
+                            zoom = 1;
+                            zoomInput.value = '1';
+                            offsetX = (canvas.width - image.naturalWidth * baseScale) / 2;
+                            offsetY = (canvas.height - image.naturalHeight * baseScale) / 2;
+                            draw();
+                            modal.classList.remove('hidden');
+                            modal.classList.add('flex');
+                            document.body.classList.add('overflow-hidden');
+                        };
+                        image.src = reader.result;
+                    };
+
+                    zoomInput.oninput = function () {
+                        const previousZoom = zoom;
+                        zoom = parseFloat(zoomInput.value) || 1;
+                        const centerX = canvas.width / 2;
+                        const centerY = canvas.height / 2;
+                        offsetX = centerX - (centerX - offsetX) * (zoom / previousZoom);
+                        offsetY = centerY - (centerY - offsetY) * (zoom / previousZoom);
+                        draw();
+                    };
+
+                    canvas.onpointerdown = function (event) {
+                        dragging = true;
+                        lastX = event.clientX;
+                        lastY = event.clientY;
+                        canvas.classList.add('is-dragging');
+                        canvas.setPointerCapture(event.pointerId);
+                    };
+                    canvas.onpointermove = function (event) {
+                        if (!dragging) return;
+                        offsetX += event.clientX - lastX;
+                        offsetY += event.clientY - lastY;
+                        lastX = event.clientX;
+                        lastY = event.clientY;
+                        draw();
+                    };
+                    canvas.onpointerup = function () {
+                        dragging = false;
+                        canvas.classList.remove('is-dragging');
+                    };
+                    canvas.onpointercancel = canvas.onpointerup;
+                    applyButton.onclick = outputCroppedFile;
+                    cancelButtons.forEach(function (button) {
+                        button.onclick = closeModal;
+                    });
+                    reader.readAsDataURL(file);
+                }
+
+                scope.querySelectorAll('[data-file-upload]').forEach(function (component) {
+                    if (component.dataset.fileUploadReady === 'true') return;
+                    component.dataset.fileUploadReady = 'true';
+                    const fileInput = component.querySelector('input[type="file"]');
+                    const deleteButton = component.querySelector('[data-delete-button]');
+                    const cropButton = component.querySelector('[data-crop-button]');
+                    const fileName = component.querySelector('[data-file-name]');
+                    const deleteLabel = component.dataset.deleteLabel || 'File akan dihapus saat disimpan';
+
+                    if (!fileInput || !fileName) return;
+
+                    fileInput.addEventListener('change', function () {
+                        const file = fileInput.files && fileInput.files[0];
+                        if (!file) {
+                            setPreview(component, null);
+                            return;
+                        }
+
+                        const deleteInput = getDeleteInput(component);
+                        if (deleteInput) deleteInput.value = '0';
+
+                        if (component.dataset.cropEnabled !== 'false' && file.type && file.type.startsWith('image/')) {
+                            openCropper(component, file, fileInput);
+                            return;
+                        }
+
+                        setPreview(component, file);
+                    });
+
+                    if (cropButton) {
+                        cropButton.addEventListener('click', function () {
+                            const state = uploadState.get(component);
+                            const file = state && state.file ? state.file : fileInput.files && fileInput.files[0];
+                            if (file) openCropper(component, file, fileInput);
+                        });
+                    }
+
+                    if (deleteButton) {
+                        deleteButton.addEventListener('click', function () {
+                            revokePreview(component);
+                            fileInput.value = '';
+                            const deleteInput = getDeleteInput(component);
+                            if (deleteInput) deleteInput.value = '1';
+                            fileName.textContent = deleteLabel;
+                            const previewImage = component.querySelector('[data-preview-image]');
+                            const previewWrapper = component.querySelector('[data-preview-wrapper]');
+                            if (previewImage) previewImage.removeAttribute('src');
+                            if (previewWrapper) previewWrapper.classList.add('hidden');
+                            if (cropButton) cropButton.classList.add('hidden');
+                        });
+                    }
+                });
+            }
+
+            initFileUploadComponents(document);
+            document.body.addEventListener('htmx:afterSwap', function (event) {
+                initFileUploadComponents(event.target || document);
+            });
+
             document.addEventListener('submit', function (event) {
                 const form = event.target;
                 if (!form || form.matches('[hx-post], [hx-get], [hx-put], [hx-delete], [hx-patch]')) {

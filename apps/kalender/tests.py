@@ -169,7 +169,7 @@ class NotificationRealtimeTests(TransactionTestCase):
 
 class KalenderViewsTests(TestCase):
     def setUp(self):
-        pengguna = Pengguna.objects.create(
+        self.admin = Pengguna.objects.create(
             nama_pengguna='Lab Admin',
             nim_nik='ADM-KALENDER',
             email='admin-kalender@example.com',
@@ -181,8 +181,20 @@ class KalenderViewsTests(TestCase):
             gender='laki_laki',
             role='admin',
         )
+        self.laboran = Pengguna.objects.create(
+            nama_pengguna='Lab Laboran',
+            nim_nik='LAB-KALENDER',
+            email='laboran-kalender@example.com',
+            password='rahasia123',
+            no_hp='081234567802',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='laboran',
+        )
         session = self.client.session
-        session['pengguna_id'] = pengguna.pk
+        session['pengguna_id'] = self.admin.pk
         session.save()
 
         KegiatanKalender.objects.create(
@@ -459,6 +471,83 @@ class KalenderViewsTests(TestCase):
 
         self.assertNotContains(response, 'Catatan Praktikum Pribadi')
         self.assertContains(response, 'Briefing Untuk Semua Aslab')
+
+    def test_admin_tidak_melihat_kegiatan_pribadi_pengguna_lain(self):
+        pemilik = Pengguna.objects.create(
+            nama_pengguna='Pemilik Agenda Admin Hidden',
+            nim_nik='2204010',
+            email='pemilik-admin-hidden@example.com',
+            password='rahasia123',
+            no_hp='081444444410',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='mahasiswa',
+        )
+        private_kegiatan = KegiatanKalender.objects.create(
+            judul='Agenda Pribadi Tidak Untuk Admin',
+            tanggal=date.today() + timedelta(days=2),
+            waktu_mulai=time(7, 30),
+            dibuat_oleh=pemilik,
+            tampilkan_notifikasi=True,
+        )
+        shared_kegiatan = KegiatanKalender.objects.create(
+            judul='Agenda Operasional Admin',
+            tanggal=date.today() + timedelta(days=2),
+            waktu_mulai=time(8, 30),
+            dibuat_oleh=self.admin,
+            target_role='admin,laboran',
+        )
+
+        response = self.client.get(reverse('kalender:kegiatan_list'))
+
+        self.assertNotContains(response, private_kegiatan.judul)
+        self.assertContains(response, shared_kegiatan.judul)
+        self.assertEqual(
+            self.client.get(reverse('kalender:kegiatan_detail', args=[private_kegiatan.pk])).status_code,
+            404,
+        )
+
+    def test_laboran_tidak_melihat_kegiatan_pribadi_admin_lain(self):
+        laboran = Pengguna.objects.create(
+            nama_pengguna='Laboran Penonton Kalender',
+            nim_nik='LAB-KALENDER-PENONTON',
+            email='laboran-penonton-kalender@example.com',
+            password='rahasia123',
+            no_hp='081555555510',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='laboran',
+        )
+        private_kegiatan = KegiatanKalender.objects.create(
+            judul='Catatan Pribadi Admin Kalender',
+            tanggal=date.today() + timedelta(days=2),
+            waktu_mulai=time(10, 0),
+            dibuat_oleh=self.admin,
+            tampilkan_notifikasi=True,
+        )
+        shared_kegiatan = KegiatanKalender.objects.create(
+            judul='Agenda Dibagikan Untuk Laboran',
+            tanggal=date.today() + timedelta(days=2),
+            waktu_mulai=time(11, 0),
+            dibuat_oleh=self.admin,
+            target_role='laboran',
+        )
+        session = self.client.session
+        session['pengguna_id'] = laboran.pk
+        session.save()
+
+        response = self.client.get(reverse('kalender:kegiatan_list'))
+
+        self.assertNotContains(response, private_kegiatan.judul)
+        self.assertContains(response, shared_kegiatan.judul)
+        self.assertEqual(
+            self.client.get(reverse('kalender:kegiatan_detail', args=[private_kegiatan.pk])).status_code,
+            404,
+        )
 
     def test_jadwal_praktikum_asisten_lab_tidak_muncul_di_menu_kalender(self):
         asisten = Pengguna.objects.create(

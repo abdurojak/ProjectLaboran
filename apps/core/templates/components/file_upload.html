@@ -6,17 +6,84 @@
     data-initial-file-name="{% if current_file %}{{ current_file.name }}{% else %}{{ empty_label|default:'Belum ada file dipilih' }}{% endif %}"
     data-initial-preview-src="{% if current_file %}{{ current_file.url }}{% endif %}"
     data-has-initial-preview="{% if current_file %}true{% else %}false{% endif %}"
+    data-crop-enabled="{{ crop_enabled|default:'true' }}"
+    data-crop-aspect="{{ crop_aspect|default:'1' }}"
+    data-crop-shape="{{ crop_shape|default:'rect' }}"
+    data-delete-input-id="{{ delete_input_id|default:'' }}"
 >
+    <style>
+        [data-file-upload] .file-upload-dropzone {
+            background: rgba(240, 253, 250, 0.42);
+            border-color: rgba(45, 212, 191, 0.42);
+        }
+
+        [data-file-upload] .file-upload-button {
+            background: rgba(255, 255, 255, 0.92) !important;
+            border-color: rgba(45, 212, 191, 0.36) !important;
+            color: #0f766e !important;
+        }
+
+        [data-file-upload] .file-upload-button:hover {
+            background: rgba(204, 251, 241, 0.72) !important;
+        }
+
+        [data-file-upload] .file-upload-title {
+            color: #0f172a;
+        }
+
+        [data-file-upload] .file-upload-name,
+        [data-file-upload] .file-upload-preview-label {
+            color: #64748b;
+        }
+
+        [data-file-upload] .file-upload-preview-image {
+            border: 1px solid rgba(148, 163, 184, 0.28);
+            box-shadow: 0 18px 44px rgba(15, 23, 42, 0.14);
+        }
+
+        html[data-theme="dark"] [data-file-upload] .file-upload-dropzone {
+            background: rgba(15, 23, 42, 0.58) !important;
+            border-color: rgba(94, 234, 212, 0.30) !important;
+            box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.40);
+        }
+
+        html[data-theme="dark"] [data-file-upload] .file-upload-button {
+            background: rgba(20, 184, 166, 0.16) !important;
+            border-color: rgba(94, 234, 212, 0.28) !important;
+            color: #99f6e4 !important;
+            box-shadow: none !important;
+        }
+
+        html[data-theme="dark"] [data-file-upload] .file-upload-button:hover {
+            background: rgba(20, 184, 166, 0.24) !important;
+            border-color: rgba(94, 234, 212, 0.44) !important;
+        }
+
+        html[data-theme="dark"] [data-file-upload] .file-upload-title {
+            color: #e2e8f0 !important;
+        }
+
+        html[data-theme="dark"] [data-file-upload] .file-upload-name,
+        html[data-theme="dark"] [data-file-upload] .file-upload-preview-label {
+            color: #cbd5e1 !important;
+        }
+
+        html[data-theme="dark"] [data-file-upload] .file-upload-preview-image {
+            border-color: rgba(71, 85, 105, 0.52);
+            box-shadow: 0 20px 50px rgba(2, 6, 23, 0.44);
+        }
+    </style>
+
     <div class="sr-only">{{ field }}</div>
-    <div class="mt-3 rounded-[24px] border border-dashed border-brand-200 bg-brand-50/40 p-5">
+    <div class="file-upload-dropzone mt-3 rounded-[24px] border border-dashed p-5">
         <div class="flex flex-wrap items-center gap-4">
-            <label for="{{ field.id_for_label }}" class="btn-secondary cursor-pointer gap-2 border-brand-200 bg-white text-brand-800 hover:bg-brand-50">
+            <label for="{{ field.id_for_label }}" class="file-upload-button btn-secondary cursor-pointer gap-2">
                 <i data-lucide="{{ icon|default:'upload-cloud' }}" class="h-5 w-5"></i>
                 <span>{{ button_label|default:'Pilih File' }}</span>
             </label>
             <div class="min-w-0">
-                <div class="text-sm font-bold text-slate-800">{{ title|default:'Upload file' }}</div>
-                <p data-file-name class="mt-1 break-all text-sm font-semibold text-slate-500">
+                <div class="file-upload-title text-sm font-bold">{{ title|default:'Upload file' }}</div>
+                <p data-file-name class="file-upload-name mt-1 break-all text-sm font-semibold">
                     {% if current_file %}{{ current_file.name }}{% else %}{{ empty_label|default:'Belum ada file dipilih' }}{% endif %}
                 </p>
             </div>
@@ -25,18 +92,27 @@
 
     {% if show_preview|default:True %}
     <div data-preview-wrapper class="{% if not current_file %}hidden{% endif %} mt-4">
-        <div class="mb-2 text-sm font-semibold text-slate-700">{{ preview_label|default:'Preview file' }}</div>
+        <div class="file-upload-preview-label mb-2 text-sm font-semibold">{{ preview_label|default:'Preview file' }}</div>
         <div class="flex flex-wrap items-start gap-4">
             <img
                 data-preview-image
                 src="{% if current_file %}{{ current_file.url }}{% endif %}"
                 alt="{{ preview_alt|default:'Preview file' }}"
-                class="h-44 w-44 rounded-3xl object-cover ring-1 ring-slate-200"
+                class="file-upload-preview-image h-44 w-44 rounded-3xl object-cover"
             >
             {% if delete_input_id %}
+            <button data-crop-button type="button" class="file-upload-crop-button btn-secondary hidden gap-2 text-brand-700 hover:bg-brand-50">
+                <i data-lucide="crop" class="h-4 w-4"></i>
+                <span>{{ crop_button_label|default:'Crop Ulang' }}</span>
+            </button>
             <button data-delete-button type="button" class="btn-secondary gap-2 text-rose-700 hover:bg-rose-50">
                 <i data-lucide="trash-2" class="h-4 w-4"></i>
                 <span>{{ delete_button_label|default:'Hapus File' }}</span>
+            </button>
+            {% else %}
+            <button data-crop-button type="button" class="file-upload-crop-button btn-secondary hidden gap-2 text-brand-700 hover:bg-brand-50">
+                <i data-lucide="crop" class="h-4 w-4"></i>
+                <span>{{ crop_button_label|default:'Crop Ulang' }}</span>
             </button>
             {% endif %}
         </div>

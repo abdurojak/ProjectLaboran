@@ -97,6 +97,43 @@
 
 {% block extra_script %}{{ block.super }}
 <script>
+    (function () {
+        const tabletDetailQuery = window.matchMedia('(max-width: 1279px)');
+        let shouldScrollToBugErrorDetail = false;
+
+        function scrollToBugErrorDetail() {
+            if (!shouldScrollToBugErrorDetail || !tabletDetailQuery.matches) return;
+            shouldScrollToBugErrorDetail = false;
+
+            const detailPanel = document.querySelector('[data-bug-error-detail-panel]');
+            if (!detailPanel) return;
+
+            requestAnimationFrame(function () {
+                detailPanel.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start',
+                });
+            });
+        }
+
+        document.addEventListener('click', function (event) {
+            if (event.target.closest('[data-bug-error-item-link]')) {
+                shouldScrollToBugErrorDetail = true;
+            }
+        });
+
+        document.body.addEventListener('htmx:afterSwap', function () {
+            scrollToBugErrorDetail();
+        });
+
+        window.addEventListener('pageshow', function () {
+            if (new URLSearchParams(window.location.search).has('log')) {
+                shouldScrollToBugErrorDetail = true;
+                scrollToBugErrorDetail();
+            }
+        });
+    })();
+
     document.body.addEventListener('htmx:afterSwap', function () {
         if (window.lucide) {
             window.lucide.createIcons();

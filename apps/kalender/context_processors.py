@@ -61,14 +61,18 @@ def get_unread_notification_count(pengguna):
 def kalender_notifikasi(request):
     today = timezone.localdate()
     limit_date = today + timedelta(days=7)
+    current_pengguna = getattr(request, 'current_pengguna', None)
     kegiatan_notifications = list(
         KegiatanKalender.objects.filter(
             tampilkan_notifikasi=True,
             tanggal__gte=today,
             tanggal__lte=limit_date,
         )
-        .order_by('tanggal', 'waktu_mulai')[:5]
+        .order_by('tanggal', 'waktu_mulai')
     )
+    kegiatan_notifications = [
+        kegiatan for kegiatan in kegiatan_notifications if kegiatan.visible_for(current_pengguna)
+    ][:5]
     manual_notifications = [
         build_manual_notification(
             kegiatan,
@@ -80,7 +84,6 @@ def kalender_notifikasi(request):
         manual_notifications + get_perayaan_notifications(today),
         key=lambda item: (item['tanggal'], item['judul']),
     )[:5]
-    current_pengguna = getattr(request, 'current_pengguna', None)
     unread_notification_count = get_unread_notification_count(current_pengguna)
 
     return {

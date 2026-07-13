@@ -43,13 +43,17 @@ def notifikasi_summary(request):
 
 def get_visible_kegiatan_queryset(pengguna):
     queryset = KegiatanKalender.objects.select_related('dibuat_oleh')
-    if not pengguna or pengguna.role in {'admin', 'laboran'}:
-        return queryset
+    if not pengguna:
+        return queryset.filter(dibuat_oleh__isnull=True, target_role='')
 
     return queryset.filter(
         Q(dibuat_oleh=pengguna) |
         Q(
             dibuat_oleh__role__in=['admin', 'laboran'],
+            target_role__contains=pengguna.role,
+        ) |
+        Q(
+            dibuat_oleh__isnull=True,
             target_role__contains=pengguna.role,
         ) |
         Q(dibuat_oleh__isnull=True, target_role='')
@@ -58,8 +62,18 @@ def get_visible_kegiatan_queryset(pengguna):
 
 def get_manageable_kegiatan_queryset(pengguna):
     queryset = KegiatanKalender.objects.select_related('dibuat_oleh')
-    if not pengguna or pengguna.role in {'admin', 'laboran'}:
-        return queryset
+    if not pengguna:
+        return queryset.none()
+
+    if pengguna.role in {'admin', 'laboran'}:
+        return queryset.filter(
+            Q(dibuat_oleh=pengguna) |
+            Q(
+                dibuat_oleh__role__in=['admin', 'laboran'],
+                target_role__gt='',
+            ) |
+            Q(dibuat_oleh__isnull=True)
+        )
 
     return queryset.filter(dibuat_oleh=pengguna)
 
