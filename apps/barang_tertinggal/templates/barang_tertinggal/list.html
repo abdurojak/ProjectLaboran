@@ -8,7 +8,7 @@
         <div>
             <p class="text-sm font-bold uppercase tracking-[0.2em] text-amber-600">Barang Tertinggal</p>
             <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Barang Mahasiswa Tertinggal</h2>
-            <p class="mt-2 text-sm text-slate-500">Kelola barang mahasiswa yang ditemukan, diajukan, rusak, hilang, atau sudah diambil.</p>
+            <p class="mt-2 text-sm text-slate-500">Kelola barang mahasiswa yang tertinggal, hilang, atau sudah diambil.</p>
         </div>
         <a class="btn-primary bg-amber-500 shadow-amber-500/20 hover:bg-amber-600" href="{% url 'barang_tertinggal:create' %}">
             <i data-lucide="plus" class="h-4 w-4"></i>
@@ -61,10 +61,8 @@
                         <td>
                             <span class="
                                 {% if barang.status == 'tertinggal' %}bg-amber-100 text-amber-700
-                                {% elif barang.status == 'diajukan' %}bg-blue-100 text-blue-700
-                                {% elif barang.status == 'diambil' %}bg-emerald-100 text-emerald-700
-                                {% elif barang.status == 'rusak' %}bg-orange-100 text-orange-700
                                 {% elif barang.status == 'hilang' %}bg-rose-100 text-rose-700
+                                {% elif barang.status == 'diambil' %}bg-emerald-100 text-emerald-700
                                 {% else %}bg-slate-100 text-slate-700{% endif %}
                                 inline-flex rounded-full px-3 py-1 text-xs font-bold">
                                 {{ barang.get_status_display }}

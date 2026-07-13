@@ -7,10 +7,8 @@ from django.urls import reverse
 class BarangTertinggal(models.Model):
     STATUS_CHOICES = [
         ('tertinggal', 'Tertinggal'),
-        ('diajukan', 'Diajukan'),
-        ('diambil', 'Diambil'),
-        ('rusak', 'Rusak'),
         ('hilang', 'Hilang'),
+        ('diambil', 'Diambil'),
     ]
 
     kode_barang_tertinggal = models.CharField(max_length=15, unique=True, blank=True, editable=False)
