@@ -348,6 +348,7 @@ class PeminjamanAlatListView(ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        current_pengguna = getattr(self.request, 'current_pengguna', None)
         context['filter_barang'] = self.request.GET.get('barang', '').strip()
         context['filter_tanggal_mulai'] = self.request.GET.get('tanggal_mulai', '').strip()
         context['filter_tanggal_selesai'] = self.request.GET.get('tanggal_selesai', '').strip()
@@ -358,14 +359,94 @@ class PeminjamanAlatListView(ListView):
             if choice[0] != 'ditolak'
         ]
         context['bulk_status_choices'] = BULK_STATUS_UI_CHOICES
-        context['current_pengguna'] = getattr(self.request, 'current_pengguna', None)
+        context['current_pengguna'] = current_pengguna
         context['is_borrower'] = bool(
             context['current_pengguna'] and context['current_pengguna'].role in BORROWER_ROLES
         )
         context['is_manager'] = bool(
             context['current_pengguna'] and context['current_pengguna'].role in MANAGER_ROLES
         )
+        if context['is_borrower']:
+            context['catalog_products'] = self.get_catalog_products()
+            context['today'] = timezone.localdate()
         return context
+
+    def get_catalog_products(self):
+        active_loans = PeminjamanAlat.objects.filter(
+            barang_id=OuterRef('pk'),
+            status__in=ACTIVE_PEMINJAMAN_STATUSES,
+        )
+        queryset = (
+            Barang.objects.select_related('inventaris', 'lokasi')
+            .annotate(is_borrowed=Exists(active_loans))
+            .order_by('inventaris__nama', 'nama', 'kode_barang')
+        )
+        keyword = self.request.GET.get('barang', '').strip()
+        if keyword:
+            queryset = queryset.filter(
+                Q(kode_barang__icontains=keyword)
+                | Q(nama__icontains=keyword)
+                | Q(inventaris__nama__icontains=keyword)
+                | Q(lokasi__nama_lokasi__icontains=keyword)
+            )
+
+        group_cache = {}
+
+        def get_group_key(barang):
+            return f'inventaris-{barang.inventaris_id}' if barang.inventaris_id else f'nama-{slugify(barang.nama)}'
+
+        def get_group_items(barang):
+            group_key = get_group_key(barang)
+            if group_key in group_cache:
+                return group_cache[group_key]
+
+            group_queryset = (
+                Barang.objects.select_related('inventaris', 'lokasi')
+                .annotate(is_borrowed=Exists(active_loans))
+                .exclude(kondisi='rusak_berat')
+            )
+            if barang.inventaris_id:
+                group_queryset = group_queryset.filter(inventaris_id=barang.inventaris_id)
+            else:
+                group_queryset = group_queryset.filter(inventaris__isnull=True, nama=barang.nama)
+
+            group_cache[group_key] = list(group_queryset.order_by('kode_barang'))
+            return group_cache[group_key]
+
+        products = []
+        seen_groups = set()
+        for barang in queryset:
+            group_key = get_group_key(barang)
+            if group_key in seen_groups:
+                continue
+            seen_groups.add(group_key)
+            group_items = get_group_items(barang)
+            available_items = [
+                item for item in group_items
+                if not item.is_borrowed and item.kondisi != 'rusak_berat'
+            ]
+            photo_url = ''
+            if barang.foto:
+                photo_url = barang.foto.url
+            elif barang.inventaris_id and barang.inventaris.foto:
+                photo_url = barang.inventaris.foto.url
+            products.append({
+                'id': barang.pk,
+                'nama': barang.inventaris.nama if barang.inventaris_id else barang.nama,
+                'kode': barang.inventaris.kode_inventaris if barang.inventaris_id else barang.kode_barang,
+                'detail_kode': barang.kode_barang,
+                'lokasi': barang.lokasi.nama_lokasi if barang.lokasi_id else '-',
+                'kondisi': barang.get_kondisi_display(),
+                'keterangan': (barang.inventaris.keterangan if barang.inventaris_id else barang.keterangan) or 'Belum ada spesifikasi tambahan.',
+                'photo_url': photo_url,
+                'total_count': len(group_items),
+                'available_count': len(available_items),
+                'available_ids': ','.join(str(item.pk) for item in available_items),
+                'available_labels': '||'.join(f'{item.kode_barang} - {item.nama}' for item in available_items),
+                'is_available': bool(available_items),
+            })
+
+        return products
 
 
 class PeminjamanAlatDetailView(DetailView):
