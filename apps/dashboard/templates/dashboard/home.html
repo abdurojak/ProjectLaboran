@@ -49,7 +49,7 @@
     .dashboard-analytics-chart {
         display: grid;
         grid-template-columns: repeat(6, minmax(0, 1fr));
-        gap: 0.9rem;
+        gap: 1rem;
         align-items: end;
         min-height: 17rem;
     }
@@ -57,34 +57,68 @@
     .dashboard-chart-bar {
         position: relative;
         display: flex;
-        min-height: 15rem;
+        min-height: 14.5rem;
         align-items: end;
         justify-content: center;
+        padding: 2.65rem 0.65rem 0.65rem;
     }
 
     .dashboard-chart-bar::before {
         content: "";
         position: absolute;
         inset: 0;
-        border-radius: 1.5rem;
-        background: linear-gradient(180deg, rgba(148, 163, 184, 0.06), rgba(148, 163, 184, 0.02));
+        border-radius: 1.75rem;
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.04)),
+            repeating-linear-gradient(
+                to top,
+                rgba(148, 163, 184, 0.16) 0 1px,
+                transparent 1px 3.2rem
+            );
         border: 1px solid rgba(148, 163, 184, 0.12);
     }
 
     .dashboard-chart-bar-fill {
         position: relative;
         width: 100%;
-        border-radius: 1.25rem 1.25rem 0.9rem 0.9rem;
-        padding: 0.85rem 0.75rem;
+        min-height: 3.15rem;
+        border-radius: 1.35rem;
+        padding: 0.7rem 0.45rem;
         display: flex;
-        align-items: flex-end;
+        align-items: center;
         justify-content: center;
         color: white;
-        box-shadow: 0 18px 35px rgba(37, 99, 235, 0.22);
+        overflow: visible;
+        box-shadow: 0 20px 44px rgba(37, 99, 235, 0.24);
+        isolation: isolate;
+    }
+
+    .dashboard-chart-bar-fill::before {
+        content: "";
+        position: absolute;
+        inset: 0.35rem;
+        border-radius: 1.05rem;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), transparent 52%);
+        opacity: 0.82;
+        z-index: -1;
+    }
+
+    .dashboard-chart-bar-fill::after {
+        content: "";
+        position: absolute;
+        left: 18%;
+        right: 18%;
+        bottom: -0.6rem;
+        height: 1.15rem;
+        border-radius: 999px;
+        background: inherit;
+        filter: blur(16px);
+        opacity: 0.46;
+        z-index: -2;
     }
 
     .dashboard-chart-bar-fill--honor {
-        background: linear-gradient(180deg, rgba(6, 182, 212, 0.95), rgba(37, 99, 235, 0.95));
+        background: linear-gradient(180deg, #22d3ee 0%, #0ea5e9 48%, #2563eb 100%);
     }
 
     .dashboard-chart-bar-fill--absensi {
@@ -117,13 +151,33 @@
     }
 
     .dashboard-chart-value {
-        writing-mode: vertical-rl;
-        transform: rotate(180deg);
+        position: absolute;
+        left: 50%;
+        top: -2.25rem;
+        transform: translateX(-50%);
+        width: max-content;
+        max-width: 8.5rem;
+        border: 1px solid rgba(255, 255, 255, 0.38);
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.86);
+        padding: 0.45rem 0.65rem;
         font-size: 0.72rem;
         line-height: 1.1;
-        font-weight: 800;
-        letter-spacing: 0.04em;
-        opacity: 0.96;
+        font-weight: 950;
+        letter-spacing: 0.01em;
+        color: #fff;
+        box-shadow: 0 14px 32px rgba(15, 23, 42, 0.2);
+        white-space: nowrap;
+    }
+
+    .dashboard-chart-value::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 100%;
+        transform: translateX(-50%);
+        border: 6px solid transparent;
+        border-top-color: rgba(15, 23, 42, 0.86);
     }
 
     .dashboard-chart-month {
@@ -145,6 +199,44 @@
         color: rgb(100 116 139);
     }
 
+    .dashboard-honor-panel {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid rgba(125, 211, 252, 0.22);
+        background:
+            radial-gradient(circle at 10% 0%, rgba(34, 211, 238, 0.2), transparent 30%),
+            radial-gradient(circle at 100% 12%, rgba(99, 102, 241, 0.16), transparent 34%),
+            linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(240, 249, 255, 0.72));
+    }
+
+    .dashboard-honor-panel::before {
+        content: "";
+        position: absolute;
+        inset: 4.2rem 1.25rem 5.7rem;
+        border-radius: 2rem;
+        background:
+            linear-gradient(90deg, rgba(14, 165, 233, 0.08), rgba(99, 102, 241, 0.08)),
+            repeating-linear-gradient(
+                to right,
+                transparent 0 calc(16.66% - 1px),
+                rgba(148, 163, 184, 0.12) calc(16.66% - 1px) 16.66%
+            );
+        pointer-events: none;
+    }
+
+    .dashboard-honor-panel > * {
+        position: relative;
+        z-index: 1;
+    }
+
+    .dashboard-honor-total-card {
+        border-radius: 1.5rem;
+        border: 1px solid rgba(14, 165, 233, 0.18);
+        background: rgba(255, 255, 255, 0.72);
+        padding: 0.85rem 1rem;
+        box-shadow: 0 18px 45px rgba(14, 165, 233, 0.12);
+    }
+
     .dashboard-insight-pill {
         border-radius: 999px;
         border: 1px solid rgba(148, 163, 184, 0.18);
@@ -161,6 +253,20 @@
 
     html[data-theme="dark"] .dashboard-chart-month span {
         color: rgb(148 163 184);
+    }
+
+    html[data-theme="dark"] .dashboard-honor-panel {
+        border-color: rgba(125, 211, 252, 0.16);
+        background:
+            radial-gradient(circle at 10% 0%, rgba(34, 211, 238, 0.14), transparent 32%),
+            radial-gradient(circle at 100% 12%, rgba(99, 102, 241, 0.16), transparent 36%),
+            linear-gradient(135deg, rgba(15, 23, 42, 0.88), rgba(8, 47, 73, 0.58));
+    }
+
+    html[data-theme="dark"] .dashboard-honor-total-card {
+        border-color: rgba(125, 211, 252, 0.16);
+        background: rgba(15, 23, 42, 0.55);
+        box-shadow: 0 18px 45px rgba(0, 0, 0, 0.22);
     }
 
     html[data-theme="dark"] .dashboard-insight-pill {
@@ -504,13 +610,14 @@
             </div>
 
             <div class="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1.4fr)_360px]">
-                <div class="rounded-[28px] border border-slate-200/80 bg-white/70 p-4 shadow-sm backdrop-blur md:p-5">
+                <div class="dashboard-honor-panel rounded-[32px] p-4 shadow-xl shadow-cyan-950/10 backdrop-blur md:p-5">
                     <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
                         <div>
                             <p class="text-xs font-black uppercase tracking-[0.18em] text-cyan-700">Honorarium Aslab</p>
                             <h4 class="mt-2 text-xl font-black text-slate-900">Pergerakan honor 6 bulan terakhir</h4>
+                            <p class="mt-1 text-sm font-semibold text-slate-500">Ringkasan nilai honor aktif, pending, dan bulan paling besar.</p>
                         </div>
-                        <div class="text-right">
+                        <div class="dashboard-honor-total-card text-right">
                             <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Total Periode</p>
                             <div class="mt-1 text-lg font-black text-slate-900">{{ superadmin_honor_summary.total_window }}</div>
                         </div>
