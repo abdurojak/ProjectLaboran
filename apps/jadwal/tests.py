@@ -3,6 +3,7 @@ from datetime import time
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb
 from apps.pengguna.models import Pengguna
@@ -631,7 +632,7 @@ class JadwalViewTests(TestCase):
         self.assertRedirects(delete_response, reverse('jadwal:jadwal_list'))
         self.assertTrue(JadwalPraktikum.objects.filter(pk=jadwal.pk).exists())
 
-    def test_hapus_jadwal_yang_masih_dipakai_absensi_tidak_error_kuning(self):
+    def test_hapus_jadwal_yang_masih_dipakai_absensi_menjaga_riwayat_absensi(self):
         jadwal = JadwalPraktikum.objects.first()
         asleb = Asleb.objects.create(
             nama='Nadhira Anindita Ralena',
@@ -657,9 +658,11 @@ class JadwalViewTests(TestCase):
 
         response = self.client.post(reverse('jadwal:jadwal_delete', args=[jadwal.pk]), follow=True)
 
-        self.assertRedirects(response, reverse('jadwal:jadwal_detail', args=[jadwal.pk]))
-        self.assertContains(response, 'Jadwal praktikum tidak bisa dihapus karena masih dipakai')
-        self.assertTrue(JadwalPraktikum.objects.filter(pk=jadwal.pk).exists())
+        self.assertRedirects(response, reverse('jadwal:jadwal_list'))
+        self.assertContains(response, 'Jadwal praktikum berhasil dihapus')
+        self.assertFalse(JadwalPraktikum.objects.filter(pk=jadwal.pk).exists())
+        absensi = AbsensiAsleb.objects.get(asleb=asleb)
+        self.assertIsNone(absensi.jadwal)
 
     def test_jadwal_tidak_bisa_bentrok_ruangan_dan_waktu(self):
         jadwal_bentrok = JadwalPraktikum(

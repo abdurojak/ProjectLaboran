@@ -1205,12 +1205,21 @@
         }
 
         @media (max-width: 767px) {
+            body {
+                --labhub-page-padding: 0.75rem !important;
+                --labhub-shell-width: 0rem !important;
+                --labhub-main-gap: 0rem !important;
+            }
+
             main {
                 padding: 1rem 0.75rem 1.5rem !important;
+                display: block !important;
             }
 
             main > section {
                 gap: 1rem !important;
+                width: 100% !important;
+                max-width: 100% !important;
             }
 
             header > div {
@@ -1260,6 +1269,133 @@
             h1,
             h2 {
                 overflow-wrap: anywhere;
+            }
+
+            body:has([data-app-content]) [data-dashboard-sidebar-shell] {
+                width: 0 !important;
+                height: 0 !important;
+                flex: 0 0 0 !important;
+            }
+
+            body:has([data-app-content]) #dashboard-sidebar {
+                width: min(19rem, calc(100vw - 1.5rem)) !important;
+                height: calc(100dvh - 1.5rem) !important;
+                inset: 0.75rem auto 0.75rem 0.75rem !important;
+                border-radius: 1.5rem !important;
+                transform: translateX(calc(-100% - 1rem)) !important;
+                transition: transform 220ms ease, opacity 180ms ease !important;
+                opacity: 0 !important;
+                pointer-events: none !important;
+            }
+
+            body:has([data-app-content]) #dashboard-sidebar.mobile-open {
+                transform: translateX(0) !important;
+                opacity: 1 !important;
+                pointer-events: auto !important;
+            }
+
+            body:has([data-app-content]) #dashboard-sidebar [data-sidebar-brand-shell] {
+                min-height: 4.5rem !important;
+                justify-content: flex-end !important;
+                padding: 0.9rem 0.9rem 0.35rem !important;
+            }
+
+            body:has([data-app-content]) #dashboard-sidebar #dashboard-sidebar-toggle {
+                position: relative !important;
+                width: 2.75rem !important;
+                height: 2.75rem !important;
+                margin-inline: 0 !important;
+            }
+
+            body:has([data-app-content]) #dashboard-sidebar nav {
+                justify-items: stretch !important;
+                gap: 0.45rem !important;
+            }
+
+            body:has([data-app-content]) #dashboard-sidebar [data-sidebar-link],
+            body:has([data-app-content]) #dashboard-sidebar [data-sidebar-summary] {
+                width: auto !important;
+                height: 3.25rem !important;
+                justify-content: flex-start !important;
+                gap: 0.8rem !important;
+                padding: 0 0.75rem !important;
+                border-radius: 1rem !important;
+            }
+
+            body:has([data-app-content]) #dashboard-sidebar [data-sidebar-icon] {
+                width: 2.35rem !important;
+                height: 2.35rem !important;
+                margin: 0 !important;
+            }
+
+            body:has([data-app-content]) #dashboard-sidebar [data-sidebar-label] {
+                display: block !important;
+            }
+
+            body:has([data-app-content]) #dashboard-sidebar [data-sidebar-chevron] {
+                display: none !important;
+            }
+
+            body:has([data-app-content]) #dashboard-sidebar [data-sidebar-submenu] {
+                display: grid !important;
+                margin-left: 2.2rem !important;
+            }
+
+            body:has([data-app-content]) #dashboard-sidebar [data-sidebar-profile],
+            body:has([data-app-content]) #dashboard-sidebar [data-sidebar-rail-logout] {
+                display: none !important;
+            }
+
+            body:has([data-app-content]) .labhub-topbar {
+                z-index: 60 !important;
+            }
+
+            body:has([data-app-content]) .labhub-topbar [data-labhub-topbar-inner] {
+                margin-left: 0 !important;
+                margin-right: 0 !important;
+                min-height: 4.75rem !important;
+                gap: 0.7rem !important;
+                padding: 0.75rem !important;
+            }
+
+            body:has([data-app-content]) .labhub-topbar .labhub-topbar-brand {
+                min-width: 0 !important;
+                max-width: min(13rem, calc(100vw - 11.5rem)) !important;
+                padding: 0.5rem 0.65rem !important;
+                border-radius: 1.25rem !important;
+            }
+
+            body:has([data-app-content]) .labhub-topbar .labhub-topbar-logo {
+                width: 2.4rem !important;
+                height: 2.4rem !important;
+                border-radius: 0.95rem !important;
+            }
+
+            body:has([data-app-content]) .labhub-topbar .labhub-topbar-title {
+                font-size: 1rem !important;
+                max-width: 7rem !important;
+            }
+
+            body:has([data-app-content]) .labhub-topbar .labhub-topbar-subtitle {
+                max-width: 7rem !important;
+                font-size: 0.68rem !important;
+            }
+
+            body:has([data-app-content]) .labhub-topbar [aria-label="Buka notifikasi"],
+            body:has([data-app-content]) .labhub-topbar [data-profile-menu-toggle],
+            body:has([data-app-content]) .labhub-topbar #dashboard-sidebar-mobile-toggle {
+                width: 2.9rem !important;
+                height: 2.9rem !important;
+            }
+
+            body:has([data-app-content]) [data-app-frame] {
+                border-radius: 1.5rem !important;
+            }
+
+            body:has([data-app-content]) [data-app-window-bar] {
+                min-height: 3rem !important;
+                padding: 0.65rem 0.8rem !important;
+                border-radius: 1.5rem 1.5rem 0 0 !important;
             }
         }
 
@@ -1730,6 +1866,22 @@
             width: 3.1rem;
             height: 3.1rem;
             border-radius: 999px;
+            border: 1px solid var(--dashboard-sidebar-border) !important;
+            background: var(--dashboard-sidebar-subtle-bg) !important;
+            color: var(--dashboard-sidebar-icon-text) !important;
+            box-shadow: 0 12px 24px rgba(15, 23, 42, 0.10);
+            transition: background-color 180ms ease, color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+        }
+
+        body:has([data-app-content]) #dashboard-sidebar [data-sidebar-rail-logout] button:hover {
+            background: var(--dashboard-sidebar-hover-icon-bg) !important;
+            color: var(--dashboard-sidebar-hover-icon-text) !important;
+            transform: translateY(-1px);
+            box-shadow: 0 14px 28px rgba(15, 23, 42, 0.14);
+        }
+
+        body:has([data-app-content]) #dashboard-sidebar [data-sidebar-rail-logout] button svg {
+            color: currentColor !important;
         }
 
         body:has([data-app-content]) #dashboard-sidebar [data-sidebar-submenu],

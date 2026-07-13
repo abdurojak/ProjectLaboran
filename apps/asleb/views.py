@@ -241,7 +241,7 @@ class HonorAslebListView(HonorAccessMixin, ListView):
         context['is_admin'] = False
         context['is_laboran'] = bool(pengguna and pengguna.role == LABORAN_ROLE)
         context['is_asisten_lab'] = bool(pengguna and pengguna.role == ASISTEN_LAB_ROLE)
-        context['formula_note'] = 'Total Honor = min(7 x Total Pertemuan, 60) x Honor/Jam. Level otomatis: periode aslab ke-1 dan ke-2 Junior Rp7.000, mulai ke-3 Senior Rp8.000.'
+        context['formula_note'] = 'Total Honor = Status Aslab (Senior/Junior x (Jumlah Modul x Total Pertemuan )) = *7 jam /modul maximal 60 jam /bulan. Level otomatis: periode aslab ke-1 dan ke-2 Junior Rp7.000, mulai ke-3 Senior Rp8.000.'
         context['biaya_transfer_form'] = PengaturanBiayaTransferForm(instance=PengaturanBiayaTransfer.get_solo())
         return context
 

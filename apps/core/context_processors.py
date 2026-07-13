@@ -141,6 +141,14 @@ MAHASISWA_VISIBLE_NAMESPACES = {'core', 'dashboard', 'kalender', 'peminjaman', '
 ASISTEN_LAB_HIDDEN_NAMESPACES = {'inventaris', 'barang_tertinggal', 'asleb', 'pendaftaran_asleb', 'pengguna'}
 ADMIN_VISIBLE_NAMESPACES = {'core', 'dashboard', 'kalender', 'pengguna'}
 
+PUBLIC_PAGE_META = {
+    ('pengguna', 'login'): {'title': 'Login', 'icon': 'log-in'},
+    ('pengguna', 'register'): {'title': 'Register', 'icon': 'user-plus'},
+    ('pengguna', 'verify_register'): {'title': 'Verifikasi Register', 'icon': 'shield-check'},
+    ('pengguna', 'forgot_password'): {'title': 'Lupa Password', 'icon': 'key-round'},
+    ('pengguna', 'reset_password'): {'title': 'Reset Password', 'icon': 'lock-keyhole'},
+}
+
 
 def _set_active(item, current_namespace, current_url_name):
     url_names = item.get('url_names')
@@ -155,6 +163,7 @@ def dashboard_sidebar(request):
     current_url_name = getattr(request.resolver_match, 'url_name', '')
     links = []
     active_sidebar = None
+    public_page_meta = PUBLIC_PAGE_META.get((current_namespace, current_url_name))
 
     for link in SIDEBAR_LINKS:
         current_pengguna = getattr(request, 'current_pengguna', None)
@@ -203,7 +212,11 @@ def dashboard_sidebar(request):
 
     return {
         'sidebar_links': links,
-        'active_sidebar_title': active_sidebar['title'] if active_sidebar else 'Dashboard',
-        'active_sidebar_icon': active_sidebar['icon'] if active_sidebar else 'layout-dashboard',
+        'active_sidebar_title': (
+            active_sidebar['title'] if active_sidebar else (public_page_meta or {}).get('title', 'Dashboard')
+        ),
+        'active_sidebar_icon': (
+            active_sidebar['icon'] if active_sidebar else (public_page_meta or {}).get('icon', 'layout-dashboard')
+        ),
         'today': timezone.localdate(),
     }

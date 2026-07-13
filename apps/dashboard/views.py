@@ -82,6 +82,18 @@ class DashboardView(TemplateView):
     def format_rupiah(self, value):
         return f'Rp {value:,.0f}'.replace(',', '.')
 
+    def get_recent_month_starts(self, total=6):
+        today = timezone.localdate()
+        current = today.replace(day=1)
+        months = []
+        for _ in range(total):
+            months.append(current)
+            if current.month == 1:
+                current = current.replace(year=current.year - 1, month=12, day=1)
+            else:
+                current = current.replace(month=current.month - 1, day=1)
+        return list(reversed(months))
+
     def get_asisten_lab_matkul_labels(self, pengguna):
         if not pengguna or pengguna.role != 'asisten_lab':
             return []
@@ -143,6 +155,7 @@ class DashboardView(TemplateView):
         context['is_mahasiswa_dashboard'] = is_mahasiswa or is_asisten_lab
         context['is_asisten_lab_dashboard'] = is_asisten_lab
         context['is_manager_dashboard'] = bool(pengguna and pengguna.role == LABORAN_ROLE)
+        context['is_super_admin_dashboard'] = bool(pengguna and pengguna.role == 'admin')
 
         if context['is_mahasiswa_dashboard']:
             pengaturan_pendaftaran = PengaturanPendaftaranAsleb.get_solo()
@@ -383,6 +396,144 @@ class DashboardView(TemplateView):
         ).filter(status='diajukan')[:8]
         context['today'] = timezone.localdate()
         hari_ini = self.WEEKDAY_TO_HARI.get(context['today'].weekday())
+        if context['is_super_admin_dashboard']:
+            recent_months = self.get_recent_month_starts(total=6)
+            honor_chart_data = []
+            absensi_chart_data = []
+            honor_level_chart_data = []
+            max_honor = 0
+            max_absensi = 0
+            max_level_total = 0
+            total_honor_window = 0
+            total_honor_dibayar_window = 0
+            total_honor_pending_window = 0
+
+            for month_start in recent_months:
+                honor_month_qs = HonorAsleb.objects.filter(
+                    bulan__year=month_start.year,
+                    bulan__month=month_start.month,
+                )
+                total_honor = honor_month_qs.aggregate(total=Sum('jumlah'))['total'] or 0
+                honor_dibayar = honor_month_qs.filter(status='dibayar').aggregate(total=Sum('jumlah'))['total'] or 0
+                honor_pending = max(total_honor - honor_dibayar, 0)
+                honor_junior = honor_month_qs.filter(level='junior').aggregate(total=Sum('jumlah'))['total'] or 0
+                honor_senior = honor_month_qs.filter(level='senior').aggregate(total=Sum('jumlah'))['total'] or 0
+                absensi_total = AbsensiAsleb.objects.filter(
+                    tanggal_praktikum__year=month_start.year,
+                    tanggal_praktikum__month=month_start.month,
+                ).count()
+
+                max_honor = max(max_honor, total_honor)
+                max_absensi = max(max_absensi, absensi_total)
+                max_level_total = max(max_level_total, honor_junior + honor_senior)
+                total_honor_window += total_honor
+                total_honor_dibayar_window += honor_dibayar
+                total_honor_pending_window += honor_pending
+
+                honor_chart_data.append({
+                    'label': month_start.strftime('%b'),
+                    'month_label': month_start.strftime('%B %Y'),
+                    'total': total_honor,
+                    'dibayar': honor_dibayar,
+                    'pending': honor_pending,
+                    'total_rupiah': self.format_rupiah(total_honor),
+                    'dibayar_rupiah': self.format_rupiah(honor_dibayar),
+                    'pending_rupiah': self.format_rupiah(honor_pending),
+                })
+                honor_level_chart_data.append({
+                    'label': month_start.strftime('%b'),
+                    'month_label': month_start.strftime('%B %Y'),
+                    'junior': honor_junior,
+                    'senior': honor_senior,
+                    'junior_rupiah': self.format_rupiah(honor_junior),
+                    'senior_rupiah': self.format_rupiah(honor_senior),
+                })
+                absensi_chart_data.append({
+                    'label': month_start.strftime('%b'),
+                    'month_label': month_start.strftime('%B %Y'),
+                    'total': absensi_total,
+                })
+
+            for item in honor_chart_data:
+                item['height_percent'] = max(18, round((item['total'] / max_honor) * 100)) if max_honor else 18
+                item['paid_percent'] = round((item['dibayar'] / item['total']) * 100) if item['total'] else 0
+            for item in absensi_chart_data:
+                item['height_percent'] = max(18, round((item['total'] / max_absensi) * 100)) if max_absensi else 18
+            for item in honor_level_chart_data:
+                total_level = item['junior'] + item['senior']
+                item['total'] = total_level
+                item['stack_height_percent'] = max(22, round((total_level / max_level_total) * 100)) if max_level_total else 22
+                item['junior_percent'] = round((item['junior'] / total_level) * 100) if total_level else 0
+                item['senior_percent'] = 100 - item['junior_percent'] if total_level else 0
+
+            pendaftaran_breakdown = [
+                {
+                    'label': 'Diajukan',
+                    'value': PendaftaranAsleb.objects.filter(status='diajukan').count(),
+                    'tone': 'amber',
+                },
+                {
+                    'label': 'Diterima',
+                    'value': PendaftaranAsleb.objects.filter(status='diterima').count(),
+                    'tone': 'emerald',
+                },
+                {
+                    'label': 'Sudah Generate',
+                    'value': PendaftaranAsleb.objects.filter(status='digenerate').count(),
+                    'tone': 'cyan',
+                },
+                {
+                    'label': 'Ditolak',
+                    'value': PendaftaranAsleb.objects.filter(status='ditolak').count(),
+                    'tone': 'rose',
+                },
+            ]
+            peminjaman_breakdown = [
+                {
+                    'label': 'Diajukan',
+                    'value': PeminjamanAlat.objects.filter(status='diajukan').count(),
+                    'tone': 'amber',
+                },
+                {
+                    'label': 'Dipinjam',
+                    'value': PeminjamanAlat.objects.filter(status='dipinjam').count(),
+                    'tone': 'blue',
+                },
+                {
+                    'label': 'Bermasalah',
+                    'value': PeminjamanAlat.objects.filter(status__in=['rusak', 'hilang']).count(),
+                    'tone': 'rose',
+                },
+                {
+                    'label': 'Selesai',
+                    'value': PeminjamanAlat.objects.filter(status__in=['dikembalikan', 'digantikan']).count(),
+                    'tone': 'emerald',
+                },
+            ]
+            pendaftaran_total = sum(item['value'] for item in pendaftaran_breakdown)
+            peminjaman_total = sum(item['value'] for item in peminjaman_breakdown)
+            for item in pendaftaran_breakdown:
+                item['percent'] = round((item['value'] / pendaftaran_total) * 100) if pendaftaran_total else 0
+            for item in peminjaman_breakdown:
+                item['percent'] = round((item['value'] / peminjaman_total) * 100) if peminjaman_total else 0
+
+            context['superadmin_honor_chart'] = honor_chart_data
+            context['superadmin_absensi_chart'] = absensi_chart_data
+            context['superadmin_honor_level_chart'] = honor_level_chart_data
+            context['superadmin_pendaftaran_breakdown'] = pendaftaran_breakdown
+            context['superadmin_peminjaman_breakdown'] = peminjaman_breakdown
+            context['superadmin_honor_summary'] = {
+                'total_window': self.format_rupiah(total_honor_window),
+                'paid_window': self.format_rupiah(total_honor_dibayar_window),
+                'pending_window': self.format_rupiah(total_honor_pending_window),
+                'active_aslab': asleb_qs.filter(status='aktif').count(),
+                'pending_registration': PendaftaranAsleb.objects.filter(status='diajukan').count(),
+                'pending_schedule_changes': PermintaanPerubahanJadwal.objects.filter(status='diajukan').count(),
+                'absensi_bulan_ini': AbsensiAsleb.objects.filter(
+                    tanggal_praktikum__year=context['today'].year,
+                    tanggal_praktikum__month=context['today'].month,
+                ).count(),
+            }
         context['stats_cards'] = self._decorate_items([
             {
                 'label': 'Total Barang',

@@ -368,7 +368,7 @@ class AbsensiAsleb(models.Model):
     asleb = models.ForeignKey(Asleb, on_delete=models.CASCADE, related_name='absensi')
     jadwal = models.ForeignKey(
         'jadwal.JadwalPraktikum',
-        on_delete=models.PROTECT,
+        on_delete=models.SET_NULL,
         related_name='absensi_asleb',
         blank=True,
         null=True,
@@ -421,8 +421,10 @@ class AbsensiMasukAsleb(models.Model):
     asleb = models.ForeignKey(Asleb, on_delete=models.PROTECT, related_name='absensi_masuk')
     jadwal = models.ForeignKey(
         'jadwal.JadwalPraktikum',
-        on_delete=models.PROTECT,
+        on_delete=models.SET_NULL,
         related_name='absensi_masuk_asleb',
+        blank=True,
+        null=True,
     )
     tanggal_absensi = models.DateField(default=timezone.localdate)
     waktu_masuk = models.DateTimeField(default=timezone.now)
@@ -448,7 +450,8 @@ class AbsensiMasukAsleb(models.Model):
         verbose_name_plural = 'Absensi Masuk Aslab'
 
     def __str__(self):
-        return f'{self.asleb.nama} - {self.jadwal} - {self.tanggal_absensi:%d-%m-%Y}'
+        jadwal_label = self.jadwal or 'Jadwal dihapus'
+        return f'{self.asleb.nama} - {jadwal_label} - {self.tanggal_absensi:%d-%m-%Y}'
 
 
 class PesertaPraktikum(models.Model):
