@@ -36,8 +36,9 @@ class InventarisBarangCreateForm(forms.ModelForm):
 class InventarisBarangUpdateForm(forms.ModelForm):
     class Meta:
         model = InventarisBarang
-        fields = ['nama', 'foto', 'keterangan']
+        fields = ['nama', 'jumlah', 'foto', 'keterangan']
         widgets = {
+            'jumlah': forms.NumberInput(attrs={'min': 0}),
             'foto': forms.FileInput(attrs={'class': 'hidden', 'accept': 'image/*'}),
             'keterangan': forms.Textarea(attrs={'rows': 4}),
         }

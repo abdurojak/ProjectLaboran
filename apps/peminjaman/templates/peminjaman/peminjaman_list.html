@@ -208,10 +208,6 @@
                         </div>
                         {% endif %}
                         <div class="p-4">
-                            <div class="mb-2 flex items-center gap-2">
-                                <span class="rounded-md bg-rose-600 px-1.5 py-0.5 text-[10px] font-black text-white">Lab</span>
-                                <span class="rounded-md bg-white px-1.5 py-0.5 text-[10px] font-black text-rose-600 ring-1 ring-rose-100">ORI</span>
-                            </div>
                             <h4 class="line-clamp-2 min-h-[2.7rem] text-sm font-black leading-5 text-slate-900">{{ product.nama }}</h4>
                             <p class="mt-2 text-xs font-semibold text-slate-500">{{ product.kode }} · {{ product.lokasi }}</p>
                             <div class="mt-3 flex items-center justify-between gap-2">
@@ -821,14 +817,43 @@
         syncProductButtons();
     }
 
+    function bindLoanCatalogRealtime() {
+        if (document.body.dataset.loanCatalogRealtimeBound === 'true') {
+            return;
+        }
+        document.body.dataset.loanCatalogRealtimeBound = 'true';
+        let refreshTimer = null;
+
+        document.addEventListener('labhub:realtime', function (event) {
+            const payload = event.detail || {};
+            if (payload.event !== 'peminjaman.stock.updated') {
+                return;
+            }
+            const content = document.getElementById('peminjaman-list-content');
+            if (!content || !window.htmx) {
+                return;
+            }
+            window.clearTimeout(refreshTimer);
+            refreshTimer = window.setTimeout(function () {
+                window.htmx.ajax('GET', window.location.href, {
+                    target: '#peminjaman-list-content',
+                    select: '#peminjaman-list-content',
+                    swap: 'outerHTML',
+                });
+            }, 350);
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         bindPeminjamanAutoFilter(document);
         bindPeminjamanSelectionSubmit(document);
         bindLoanShop(document);
+        bindLoanCatalogRealtime();
         document.body.addEventListener('htmx:afterSwap', function (event) {
             bindPeminjamanAutoFilter(event.target);
             bindPeminjamanSelectionSubmit(event.target);
             bindLoanShop(event.target);
+            bindLoanCatalogRealtime();
             if (window.lucide) {
                 window.lucide.createIcons();
             }

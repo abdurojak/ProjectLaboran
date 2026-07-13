@@ -274,6 +274,52 @@ class BarangUpdateView(LaboranInventarisRequiredMixin, UpdateView):
     template_name = 'inventaris/barang_form.html'
     success_url = reverse_lazy('inventaris:barang_list')
 
+    def form_valid(self, form):
+        with transaction.atomic():
+            previous_total = self.object.detail_barang.count()
+            response = super().form_valid(form)
+            self.sync_detail_stock(previous_total)
+        return response
+
+    def sync_detail_stock(self, previous_total):
+        target_total = self.object.jumlah
+        current_total = self.object.detail_barang.count()
+        if target_total == current_total:
+            return
+
+        if target_total > current_total:
+            template_detail = self.object.detail_barang.order_by('pk').first()
+            for _ in range(target_total - current_total):
+                Barang.objects.create(
+                    inventaris=self.object,
+                    nama=self.object.nama,
+                    jumlah=target_total,
+                    lokasi=template_detail.lokasi if template_detail else None,
+                    kondisi='baik',
+                )
+            self.object.detail_barang.update(jumlah=target_total, nama=self.object.nama)
+            messages.success(self.request, f'Stok ditambah dari {current_total} menjadi {target_total}.')
+            return
+
+        reduce_count = current_total - target_total
+        removable_items = list(
+            self.object.detail_barang
+            .exclude(peminjaman__status__in=ACTIVE_PEMINJAMAN_STATUSES)
+            .order_by('-pk')[:reduce_count]
+        )
+        if len(removable_items) < reduce_count:
+            self.object.jumlah = current_total
+            self.object.save(update_fields=['jumlah', 'diperbarui_pada'])
+            messages.warning(
+                self.request,
+                'Stok belum bisa dikurangi sebanyak itu karena sebagian unit sedang dipinjam, hilang, atau rusak.',
+            )
+            return
+
+        Barang.objects.filter(pk__in=[item.pk for item in removable_items]).delete()
+        self.object.detail_barang.update(jumlah=target_total, nama=self.object.nama)
+        messages.success(self.request, f'Stok dikurangi dari {current_total} menjadi {target_total}.')
+
 
 class BarangDeleteView(LaboranInventarisRequiredMixin, PostOnlyDeleteMixin, DeleteView):
     model = InventarisBarang
