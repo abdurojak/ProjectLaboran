@@ -335,7 +335,12 @@ class JadwalPraktikumDeleteView(JadwalMutationAccessMixin, PostOnlyDeleteMixin, 
     def post(self, request, *args, **kwargs):
         self.object = self.get_object()
         try:
-            return super().post(request, *args, **kwargs)
+            response = super().post(request, *args, **kwargs)
+            messages.success(
+                request,
+                'Jadwal praktikum berhasil dihapus. Riwayat absensi lama tetap disimpan tanpa referensi jadwal.'
+            )
+            return response
         except ProtectedError:
             related_absensi_count = self.object.absensi_asleb.count()
             related_absensi_masuk_count = self.object.absensi_masuk_asleb.count()

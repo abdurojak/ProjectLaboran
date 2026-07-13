@@ -66,8 +66,8 @@ class ScheduleSerializer(serializers.ModelSerializer):
 
 
 class AttendanceSerializer(serializers.ModelSerializer):
-    mata_kuliah = serializers.CharField(source='jadwal.mata_kuliah', read_only=True)
-    kelas = serializers.CharField(source='jadwal.kelas', read_only=True)
+    mata_kuliah = serializers.SerializerMethodField()
+    kelas = serializers.SerializerMethodField()
     laboratorium = serializers.SerializerMethodField()
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     foto_url = serializers.SerializerMethodField()
@@ -82,7 +82,13 @@ class AttendanceSerializer(serializers.ModelSerializer):
         ]
 
     def get_laboratorium(self, obj):
-        return obj.jadwal.get_display_ruangan_nama()
+        return obj.jadwal.get_display_ruangan_nama() if obj.jadwal_id else 'Jadwal sudah dihapus'
+
+    def get_mata_kuliah(self, obj):
+        return obj.jadwal.mata_kuliah if obj.jadwal_id else 'Jadwal sudah dihapus'
+
+    def get_kelas(self, obj):
+        return obj.jadwal.kelas if obj.jadwal_id else '-'
 
     def get_foto_url(self, obj):
         return absolute_file_url(self.context['request'], obj.foto_absensi)

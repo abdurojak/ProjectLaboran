@@ -102,6 +102,40 @@ class DashboardViewTests(TestCase):
         self.assertNotIn('Surat Laboran', titles)
         self.assertNotIn('Ruangan', titles)
 
+    def test_super_admin_melihat_panel_analitik_dashboard(self):
+        self.pengguna.role = 'admin'
+        self.pengguna.save(update_fields=['role'])
+        Asleb.objects.create(
+            nama='Aslab Aktif',
+            nim='0640000001',
+            semester=4,
+            no_hp='081200000001',
+            email='aslab.aktif@std.trisakti.ac.id',
+            program_studi='Informatika',
+            matkul='Pemrograman Web - Dosen A - SI-01',
+            status='aktif',
+            tanggal_bergabung=timezone.localdate(),
+        )
+        HonorAsleb.objects.create(
+            asleb=Asleb.objects.first(),
+            bulan=timezone.localdate().replace(day=1),
+            jumlah=450000,
+            status='diproses',
+        )
+
+        response = self.client.get(reverse('dashboard:home'))
+
+        self.assertContains(response, 'Analitik Super Admin')
+        self.assertContains(response, 'Pergerakan honor 6 bulan terakhir')
+        self.assertContains(response, 'Distribusi status pendaftar')
+        self.assertContains(response, 'Distribusi status peminjaman')
+
+    def test_laboran_tidak_melihat_panel_analitik_super_admin(self):
+        response = self.client.get(reverse('dashboard:home'))
+
+        self.assertNotContains(response, 'Analitik Super Admin')
+        self.assertNotContains(response, 'Distribusi status pendaftar')
+
     def test_admin_ditolak_dari_url_operasional_laboran(self):
         self.pengguna.role = 'admin'
         self.pengguna.save(update_fields=['role'])

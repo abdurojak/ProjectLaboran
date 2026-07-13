@@ -59,7 +59,7 @@
     </div>
     <form method="post" action="{% url 'pengguna:logout' %}" class="px-3 pb-5" data-sidebar-rail-logout>
         {% csrf_token %}
-        <button type="submit" class="flex h-11 w-11 items-center justify-center rounded-full text-white/80 transition hover:bg-white/15 hover:text-white" aria-label="Logout" title="Logout">
+        <button type="submit" class="flex h-11 w-11 items-center justify-center rounded-full transition" aria-label="Logout" title="Logout">
             <i data-lucide="log-out" class="h-4 w-4"></i>
         </button>
     </form>
@@ -225,6 +225,7 @@
             closeCompactSubmenu();
             sidebar.dataset.collapsed = collapsed ? 'true' : 'false';
             sidebar.classList.toggle('is-collapsed', collapsed);
+            sidebar.classList.toggle('mobile-open', !collapsed && !isMedium);
             document.body.classList.toggle('dashboard-sidebar-expanded', isMedium && !collapsed);
 
             sidebar.classList.toggle('-translate-x-full', collapsed && !isMedium);
@@ -252,13 +253,15 @@
             });
 
             labels.forEach(function (label) {
-                label.classList.toggle('hidden', collapsed);
-                label.classList.toggle('block', !collapsed);
+                const hideLabel = collapsed && isMedium;
+                label.classList.toggle('hidden', hideLabel);
+                label.classList.toggle('block', !hideLabel);
             });
 
             submenus.forEach(function (submenu) {
-                submenu.classList.toggle('hidden', collapsed);
-                submenu.classList.toggle('grid', !collapsed);
+                const hideSubmenu = collapsed && isMedium;
+                submenu.classList.toggle('hidden', hideSubmenu);
+                submenu.classList.toggle('grid', !hideSubmenu);
             });
 
             if (collapsed) {
@@ -291,7 +294,7 @@
 
         groupSummaries.forEach(function (summary) {
             summary.addEventListener('click', function (event) {
-                if (!isCollapsed) {
+                if (!isCollapsed || !mediumQuery.matches) {
                     return;
                 }
                 event.preventDefault();
@@ -305,6 +308,9 @@
             link.addEventListener('click', function () {
                 markActiveLink(link.href);
                 closeCompactSubmenu();
+                if (!mediumQuery.matches) {
+                    setCollapsed(true);
+                }
             });
         });
 

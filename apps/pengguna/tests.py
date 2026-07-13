@@ -994,11 +994,19 @@ class PenggunaAuthTests(TestCase):
         self.assertContains(response, 'Informatika')
 
     def test_halaman_publik_login_register_tidak_menampilkan_sidebar_dashboard(self):
-        for url in [reverse('pengguna:login'), reverse('pengguna:register')]:
+        expected_labels = {
+            reverse('pengguna:login'): 'Login',
+            reverse('pengguna:register'): 'Register',
+        }
+        for url, label in expected_labels.items():
             response = self.client.get(url)
 
             self.assertEqual(response.status_code, 200)
             self.assertNotContains(response, 'id="dashboard-sidebar"', html=False)
+            self.assertContains(response, label)
+            window_tab = response.content.decode().split('data-window-tab', 1)[1].split('</span>', 1)[0]
+            self.assertIn(label, window_tab)
+            self.assertNotIn('Dashboard', window_tab)
 
     def test_login_dan_register_membaca_tema_terakhir_dari_browser(self):
         for url in [reverse('pengguna:login'), reverse('pengguna:register')]:
