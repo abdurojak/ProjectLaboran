@@ -1,3 +1,8 @@
+import json
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+
+from django.conf import settings
 from django.contrib import messages
 from django.http import JsonResponse
 from django.db.models import Q
@@ -14,7 +19,7 @@ from .models import BugErrorLog, PercakapanBantuan, PesanBantuan
 from .realtime import broadcast_help_message, broadcast_help_status
 
 
-def bot_answer(question):
+def fallback_bot_answer(question):
     normalized = question.lower()
     if any(keyword in normalized for keyword in {'panduan', 'fitur web', 'fitur labhub', 'apa saja', 'bisa apa'}):
         return (
@@ -27,6 +32,61 @@ def bot_answer(question):
         if any(keyword in normalized for keyword in topic['keywords']):
             return topic['answer']
     return BOT_FALLBACK
+
+
+def openai_bot_answer(question):
+    if not settings.OPENAI_API_KEY:
+        return ''
+
+    topic_context = '\n\n'.join(
+        f"- Kata kunci: {', '.join(sorted(topic['keywords']))}\n  Jawaban panduan: {topic['answer']}"
+        for topic in BOT_GUIDE_TOPICS
+    )
+    payload = {
+        'model': settings.OPENAI_CHATBOT_MODEL,
+        'input': [
+            {
+                'role': 'system',
+                'content': (
+                    'Anda adalah chatbot bantuan LabHub/Project Laboran. Jawab dalam Bahasa Indonesia yang singkat, ramah, '
+                    'dan praktis. Utamakan panduan internal berikut. Jika pertanyaan di luar sistem, arahkan pengguna untuk '
+                    'menghubungi admin. Jangan mengarang fitur yang tidak ada.\n\n'
+                    f'{BOT_GUIDE_INTRO}\n\n{topic_context}'
+                ),
+            },
+            {'role': 'user', 'content': question},
+        ],
+        'temperature': 0.2,
+        'max_output_tokens': 450,
+    }
+    request = Request(
+        'https://api.openai.com/v1/responses',
+        data=json.dumps(payload).encode('utf-8'),
+        headers={
+            'Authorization': f'Bearer {settings.OPENAI_API_KEY}',
+            'Content-Type': 'application/json',
+        },
+        method='POST',
+    )
+    try:
+        with urlopen(request, timeout=settings.OPENAI_CHATBOT_TIMEOUT_SECONDS) as response:
+            data = json.loads(response.read().decode('utf-8'))
+    except (HTTPError, URLError, TimeoutError, OSError, ValueError):
+        return ''
+
+    text = (data.get('output_text') or '').strip()
+    if text:
+        return text
+
+    for output in data.get('output', []):
+        for content in output.get('content', []):
+            if content.get('type') in {'output_text', 'text'} and content.get('text'):
+                return content['text'].strip()
+    return ''
+
+
+def bot_answer(question):
+    return openai_bot_answer(question) or fallback_bot_answer(question)
 
 
 def get_active_help_conversation(pengguna):

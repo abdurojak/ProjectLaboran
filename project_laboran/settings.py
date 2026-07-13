@@ -43,6 +43,10 @@ ALLOWED_HOSTS = [
 
 PUBLIC_ACCESS_BASE_URL = os.getenv('PUBLIC_ACCESS_BASE_URL', 'http://127.0.0.1:8000')
 
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '').strip()
+OPENAI_CHATBOT_MODEL = os.getenv('OPENAI_CHATBOT_MODEL', 'gpt-4o-mini').strip() or 'gpt-4o-mini'
+OPENAI_CHATBOT_TIMEOUT_SECONDS = int(os.getenv('OPENAI_CHATBOT_TIMEOUT_SECONDS', '12'))
+
 
 # Application definition
 
