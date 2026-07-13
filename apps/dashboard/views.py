@@ -171,8 +171,9 @@ class DashboardView(TemplateView):
             peringatan_peminjaman_saya = []
             for peminjaman in peminjaman_bermasalah[:5]:
                 if peminjaman.status == 'dipinjam':
-                    label = 'Lewat masa pengembalian'
-                    tone = 'amber'
+                    terlambat_hari = max((today - peminjaman.tanggal_kembali).days, 1)
+                    label = f'Terlambat {terlambat_hari} hari'
+                    tone = 'rose'
                 else:
                     label = peminjaman.get_status_display()
                     tone = 'rose' if peminjaman.status == 'hilang' else 'orange'
@@ -202,7 +203,11 @@ class DashboardView(TemplateView):
                 )
             context['today'] = timezone.localdate()
             hari_ini = self.WEEKDAY_TO_HARI.get(context['today'].weekday())
-            context['peminjaman_saya'] = peminjaman_saya[:6]
+            peminjaman_saya_list = list(peminjaman_saya[:6])
+            for peminjaman in peminjaman_saya_list:
+                peminjaman.is_overdue = peminjaman.status == 'dipinjam' and peminjaman.tanggal_kembali < today
+                peminjaman.terlambat_hari = max((today - peminjaman.tanggal_kembali).days, 0) if peminjaman.is_overdue else 0
+            context['peminjaman_saya'] = peminjaman_saya_list
             context['peringatan_peminjaman_saya'] = peringatan_peminjaman_saya
             context['has_peringatan_peminjaman_saya'] = bool(peringatan_peminjaman_saya)
             context['riwayat_honor_saya'] = riwayat_honor_saya

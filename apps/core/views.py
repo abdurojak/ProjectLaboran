@@ -85,8 +85,67 @@ def openai_bot_answer(question):
     return ''
 
 
+def gemini_bot_answer(question):
+    if not settings.GEMINI_API_KEY:
+        return ''
+
+    normalized = question.lower()
+    related_topics = [
+        topic for topic in BOT_GUIDE_TOPICS
+        if any(keyword in normalized for keyword in topic['keywords'])
+    ][:4]
+    if not related_topics:
+        related_topics = BOT_GUIDE_TOPICS[:6]
+    topic_context = '\n\n'.join(f"- {topic['answer']}" for topic in related_topics)
+    prompt = (
+        'Anda adalah chatbot bantuan LabHub/Project Laboran. Jawab dalam Bahasa Indonesia yang singkat, ramah, tanpa emoji, '
+        'dan praktis. Utamakan panduan internal berikut. Jika pertanyaan di luar sistem, arahkan pengguna untuk '
+        'menghubungi admin. Jangan mengarang fitur yang tidak ada.\n\n'
+        f'{BOT_GUIDE_INTRO}\n\n{topic_context}\n\n'
+        f'Pertanyaan pengguna: {question}'
+    )
+    payload = {
+        'contents': [
+            {
+                'parts': [
+                    {'text': prompt},
+                ],
+            },
+        ],
+        'generationConfig': {
+            'temperature': 0.2,
+            'maxOutputTokens': settings.GEMINI_CHATBOT_MAX_OUTPUT_TOKENS,
+            'thinkingConfig': {
+                'thinkingBudget': 0,
+            },
+        },
+    }
+    request = Request(
+        f'https://generativelanguage.googleapis.com/v1beta/models/{settings.GEMINI_CHATBOT_MODEL}:generateContent',
+        data=json.dumps(payload).encode('utf-8'),
+        headers={
+            'Content-Type': 'application/json',
+            'X-goog-api-key': settings.GEMINI_API_KEY,
+        },
+        method='POST',
+    )
+    try:
+        with urlopen(request, timeout=settings.GEMINI_CHATBOT_TIMEOUT_SECONDS) as response:
+            data = json.loads(response.read().decode('utf-8'))
+    except (HTTPError, URLError, TimeoutError, OSError, ValueError):
+        return ''
+
+    for candidate in data.get('candidates', []):
+        parts = candidate.get('content', {}).get('parts', [])
+        text = ''.join(part.get('text', '') for part in parts).strip()
+        if text:
+            return text
+    return ''
+
+
 def bot_answer(question):
-    return openai_bot_answer(question) or fallback_bot_answer(question)
+    return gemini_bot_answer(question) or fallback_bot_answer(question)
+
 
 
 def get_active_help_conversation(pengguna):

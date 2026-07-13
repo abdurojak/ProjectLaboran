@@ -354,6 +354,10 @@ class PeminjamanAlatListView(ListView):
         context['filter_tanggal_selesai'] = self.request.GET.get('tanggal_selesai', '').strip()
         context['filter_status'] = self.request.GET.get('status', '').strip()
         context['filter_semua'] = self.request.GET.get('semua') == '1'
+        context['has_overdue_peminjaman'] = any(
+            getattr(peminjaman, 'is_overdue', False)
+            for peminjaman in context.get('peminjaman_list', [])
+        )
         context['status_choices'] = [
             choice for choice in PeminjamanAlat.STATUS_CHOICES
             if choice[0] != 'ditolak'
@@ -492,6 +496,15 @@ class PeminjamanAlatDetailView(DetailView):
         context['has_actionable_details'] = any(
             detail.status not in ARCHIVED_STATUS_CHOICES
             for detail in context['detail_transaksi']
+        )
+        today = timezone.localdate()
+        overdue_details = [
+            detail for detail in context['detail_transaksi']
+            if detail.status == 'dipinjam' and detail.tanggal_kembali < today
+        ]
+        context['is_overdue'] = bool(overdue_details)
+        context['overdue_days'] = max(
+            [(today - detail.tanggal_kembali).days for detail in overdue_details] or [0]
         )
         context['detail_status_choices'] = BULK_STATUS_UI_CHOICES
         return context
