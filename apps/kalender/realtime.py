@@ -31,7 +31,12 @@ def _normalized_payload(payload):
         'icon': payload.get('icon', 'bell-ring'),
         'icon_class': payload.get('icon_class', 'bg-brand-50 text-brand-700'),
         'created_at': payload.get('created_at', now.isoformat()),
+        'silent': payload.get('silent', False),
+        'auto_refresh': payload.get('auto_refresh', False),
     }
+    for key in ('catalog_available_ids', 'catalog_unavailable_ids'):
+        if key in payload:
+            result[key] = payload[key]
     return result
 
 
@@ -215,6 +220,23 @@ def send_peminjaman_request_update(peminjaman):
     send_role_notification('laboran', payload)
 
 
+def send_peminjaman_stock_update(peminjaman):
+    payload = {
+        'event': 'peminjaman.stock.updated',
+        'title': 'Stok peminjaman diperbarui',
+        'message': f'Status ketersediaan {peminjaman.barang.nama} diperbarui.',
+        'notification_type': 'stok',
+        'related_object_id': peminjaman.barang_id,
+        'related_url': reverse('peminjaman:peminjaman_list'),
+        'refresh_paths': [],
+        'silent': True,
+        'icon': 'boxes',
+        'icon_class': 'bg-teal-50 text-teal-700',
+    }
+    for role in ('mahasiswa', 'asisten_lab'):
+        send_role_notification(role, payload, persist=False)
+
+
 def send_peminjaman_status_update(peminjaman):
     status_label = peminjaman.get_status_display()
     status_meta = {
@@ -243,6 +265,7 @@ def send_peminjaman_status_update(peminjaman):
     }
     for pengguna in users_for_nim(peminjaman.nim):
         send_user_notification(pengguna.pk, payload)
+    send_peminjaman_stock_update(peminjaman)
 
 
 def send_peminjaman_rejected_update(peminjaman):
