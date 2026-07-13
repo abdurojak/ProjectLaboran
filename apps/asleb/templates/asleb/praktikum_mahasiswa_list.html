@@ -4,6 +4,90 @@
 
 {% block content %}
 <style>
+    .praktikum-shell {
+        display: grid;
+        gap: 1.25rem;
+        align-items: start;
+    }
+
+    @media (min-width: 1180px) {
+        .praktikum-shell {
+            grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+        }
+    }
+
+    .matkul-nav {
+        position: sticky;
+        top: 1.25rem;
+        max-height: calc(100vh - 7rem);
+        overflow: hidden;
+    }
+
+    .matkul-nav-list {
+        max-height: calc(100vh - 15rem);
+        overflow-y: auto;
+        padding-right: 0.35rem;
+    }
+
+    .matkul-nav-item {
+        display: block;
+        border-radius: 1.4rem;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        padding: 1rem 1rem 0.95rem;
+        transition: 180ms ease;
+        background: rgba(255, 255, 255, 0.9);
+    }
+
+    .matkul-nav-item:hover {
+        transform: translateY(-1px);
+        border-color: rgba(45, 212, 191, 0.3);
+        box-shadow: 0 18px 32px -24px rgba(15, 23, 42, 0.35);
+    }
+
+    .matkul-nav-item.is-active {
+        border-color: rgba(20, 184, 166, 0.34);
+        background: linear-gradient(135deg, rgba(240, 253, 250, 0.96), rgba(236, 254, 255, 0.92));
+        box-shadow: 0 22px 44px -28px rgba(13, 148, 136, 0.42);
+    }
+
+    .matkul-stat-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        border-radius: 999px;
+        padding: 0.55rem 0.85rem;
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+    }
+
+    .praktikum-hero {
+        position: relative;
+        overflow: hidden;
+    }
+
+    .praktikum-hero::after {
+        content: "";
+        position: absolute;
+        inset: auto -12% -35% auto;
+        width: 260px;
+        height: 260px;
+        border-radius: 999px;
+        background: radial-gradient(circle, rgba(45, 212, 191, 0.14), transparent 65%);
+        pointer-events: none;
+    }
+
+    html[data-theme="dark"] .matkul-nav-item {
+        border-color: rgba(148, 163, 184, 0.12);
+        background: rgba(15, 23, 42, 0.74);
+    }
+
+    html[data-theme="dark"] .matkul-nav-item.is-active {
+        border-color: rgba(45, 212, 191, 0.3);
+        background: linear-gradient(135deg, rgba(13, 148, 136, 0.18), rgba(15, 23, 42, 0.92));
+        box-shadow: 0 24px 48px -30px rgba(20, 184, 166, 0.28);
+    }
+
     .participant-modal {
         bottom: 0;
         height: 100dvh;
@@ -117,37 +201,6 @@
         </div>
     </div>
 
-    <div class="grid gap-4 lg:grid-cols-2">
-        {% for item in matkul_list %}
-        <article class="surface-card p-5">
-            <div class="flex items-start justify-between gap-3">
-                <div>
-                    <p class="text-xs font-black uppercase tracking-[0.16em] text-brand-700">{{ item.kode_mk|default:item.kode }}</p>
-                    <h3 class="mt-2 text-xl font-black text-slate-900">{{ item.nama }}</h3>
-                    <p class="mt-1 text-sm text-slate-500">{{ item.kelas|default:"Tanpa kelas" }} - {{ item.dosen }}</p>
-                </div>
-                <span class="rounded-full bg-brand-50 px-3 py-1 text-xs font-black text-brand-800">{{ item.jumlah_peserta }} peserta</span>
-            </div>
-            <div class="mt-5 flex flex-wrap gap-2">
-                {% for modul in item.modul_tersedia %}
-                <a class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:border-brand-300 hover:text-brand-800" href="{% url 'asleb:praktikum_nilai' item.pk modul.pk %}">
-                    <i data-lucide="clipboard-pen-line" class="h-4 w-4"></i>Modul {{ modul.nomor }}
-                </a>
-                {% empty %}
-                <span class="text-sm text-slate-400">Belum ada modul praktikum.</span>
-                {% endfor %}
-            </div>
-            {% if can_manage_peserta %}
-            <button type="button" class="mt-4 inline-flex items-center gap-2 text-sm font-bold text-brand-700" data-participant-modal-open="participants-{{ item.pk }}">
-                <i data-lucide="list" class="h-4 w-4"></i>Lihat daftar peserta
-            </button>
-            {% endif %}
-        </article>
-        {% empty %}
-        <div class="surface-card p-8 text-center text-slate-500 lg:col-span-2">Belum ada mata kuliah yang dapat diakses.</div>
-        {% endfor %}
-    </div>
-
     <div class="grid gap-4 md:grid-cols-4">
         <div class="surface-card p-5"><p class="text-xs font-black uppercase tracking-wider text-slate-400">Total Mahasiswa</p><div class="mt-2 text-3xl font-black text-slate-900">{{ rekap_summary.total_mahasiswa }}</div></div>
         <div class="surface-card p-5"><p class="text-xs font-black uppercase tracking-wider text-slate-400">Mata Kuliah</p><div class="mt-2 text-3xl font-black text-brand-700">{{ rekap_summary.jumlah_matkul }}</div></div>
@@ -155,7 +208,127 @@
         <div class="surface-card p-5"><p class="text-xs font-black uppercase tracking-wider text-slate-400">Kelengkapan Nilai</p><div class="mt-2 text-3xl font-black text-emerald-700">{{ rekap_summary.kelengkapan }}%</div></div>
     </div>
 
-    <div class="surface-card overflow-hidden">
+    <div class="praktikum-shell">
+        <aside class="surface-card matkul-nav p-4 md:p-5">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <p class="text-xs font-black uppercase tracking-[0.18em] text-brand-700">Navigasi Matkul</p>
+                    <h3 class="mt-2 text-xl font-black text-slate-900">Pilih kelas yang ingin dicek</h3>
+                    <p class="mt-1 text-sm text-slate-500">Daftar dibuat ringkas supaya laboran tidak perlu scroll panjang ke bawah.</p>
+                </div>
+                <span class="matkul-stat-chip bg-brand-50 text-brand-800">{{ matkul_list|length }} aktif</span>
+            </div>
+
+            <form method="get" class="mt-4 grid gap-3">
+                <div>
+                    <label for="id_kelas_sidebar">Filter kelas</label>
+                    <select id="id_kelas_sidebar" name="kelas">
+                        <option value="">Semua kelas</option>
+                        {% for kelas in class_options %}
+                        <option value="{{ kelas }}" {% if selected_kelas == kelas %}selected{% endif %}>{{ kelas }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% if selected_matkul_id %}
+                <input type="hidden" name="matkul" value="{{ selected_matkul_id }}">
+                {% endif %}
+                <button class="btn-secondary gap-2 w-full justify-center" type="submit">
+                    <i data-lucide="filter" class="h-4 w-4"></i>Terapkan Filter
+                </button>
+            </form>
+
+            <div class="matkul-nav-list mt-4 space-y-3">
+                {% for item in matkul_list %}
+                <a href="?{% if selected_kelas %}kelas={{ selected_kelas|urlencode }}&{% endif %}matkul={{ item.pk }}" class="matkul-nav-item {% if rekap_matkul and item.pk == rekap_matkul.pk %}is-active{% endif %}">
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <p class="truncate text-xs font-black uppercase tracking-[0.18em] text-brand-700">{{ item.kode_mk|default:item.kode }}</p>
+                            <h4 class="mt-2 line-clamp-2 text-base font-black text-slate-900">{{ item.nama }}</h4>
+                            <p class="mt-1 truncate text-sm text-slate-500">{{ item.kelas|default:"Tanpa kelas" }} - {{ item.dosen }}</p>
+                        </div>
+                        <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-700">{{ item.jumlah_peserta }}</span>
+                    </div>
+                    <div class="mt-3 flex flex-wrap gap-2 text-[11px] font-bold text-slate-500">
+                        <span class="rounded-full bg-slate-100/90 px-2.5 py-1">{{ item.modul_tersedia|length }} modul</span>
+                        {% if rekap_matkul and item.pk == rekap_matkul.pk %}
+                        <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">Sedang dibuka</span>
+                        {% endif %}
+                    </div>
+                </a>
+                {% empty %}
+                <div class="rounded-[1.5rem] border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500">
+                    Belum ada mata kuliah yang dapat diakses.
+                </div>
+                {% endfor %}
+            </div>
+        </aside>
+
+        <div class="min-w-0 space-y-6">
+            <section class="surface-card praktikum-hero p-5 md:p-6">
+                <div class="flex flex-wrap items-start justify-between gap-4">
+                    <div class="max-w-3xl">
+                        <p class="text-xs font-black uppercase tracking-[0.18em] text-brand-700">Fokus Aktif</p>
+                        <h3 class="mt-2 text-2xl font-black text-slate-900">{% if rekap_matkul %}{{ rekap_matkul.nama }} - {{ rekap_matkul.kelas }}{% else %}Pilih mata kuliah terlebih dahulu{% endif %}</h3>
+                        <p class="mt-2 text-sm text-slate-500">
+                            {% if rekap_matkul %}
+                            Pantau peserta, modul, dan rekap nilai untuk {{ rekap_matkul.nama }} dalam satu area tanpa perlu membuka semua matkul sekaligus.
+                            {% else %}
+                            Gunakan daftar matkul di sebelah kiri untuk membuka detail nilai dan absensi mahasiswa.
+                            {% endif %}
+                        </p>
+                    </div>
+                    {% if rekap_matkul %}
+                    <div class="flex flex-wrap gap-2">
+                        <span class="matkul-stat-chip bg-brand-50 text-brand-800">{{ rekap_matkul.jumlah_peserta }} peserta</span>
+                        <span class="matkul-stat-chip bg-blue-50 text-blue-700">{{ rekap_modules|length }} modul</span>
+                        <span class="matkul-stat-chip bg-emerald-50 text-emerald-700">{{ rekap_summary.kelengkapan }}% lengkap</span>
+                    </div>
+                    {% endif %}
+                </div>
+
+                {% if rekap_matkul %}
+                <div class="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+                    <div class="rounded-[1.75rem] border border-slate-200 bg-white/70 p-4">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <p class="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Modul Tersedia</p>
+                                <h4 class="mt-2 text-lg font-black text-slate-900">Akses cepat per modul</h4>
+                            </div>
+                            {% if can_manage_peserta %}
+                            <button type="button" class="btn-secondary gap-2" data-participant-modal-open="participants-{{ rekap_matkul.pk }}">
+                                <i data-lucide="list" class="h-4 w-4"></i>Daftar Peserta
+                            </button>
+                            {% endif %}
+                        </div>
+                        <div class="mt-4 flex flex-wrap gap-2">
+                            {% for modul in rekap_matkul.modul_tersedia %}
+                            <a class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:border-brand-300 hover:text-brand-800" href="{% url 'asleb:praktikum_nilai' rekap_matkul.pk modul.pk %}">
+                                <i data-lucide="clipboard-pen-line" class="h-4 w-4"></i>Modul {{ modul.nomor }}
+                            </a>
+                            {% empty %}
+                            <span class="text-sm text-slate-400">Belum ada modul praktikum.</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="rounded-[1.75rem] border border-slate-200 bg-white/70 p-4">
+                        <p class="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Info Pengajar</p>
+                        <h4 class="mt-2 text-lg font-black text-slate-900">{{ rekap_matkul.dosen }}</h4>
+                        <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                            <div class="rounded-2xl bg-slate-50 px-4 py-3">
+                                <p class="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Kelas</p>
+                                <p class="mt-2 text-base font-black text-slate-900">{{ rekap_matkul.kelas|default:"Tanpa kelas" }}</p>
+                            </div>
+                            <div class="rounded-2xl bg-slate-50 px-4 py-3">
+                                <p class="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Kode</p>
+                                <p class="mt-2 text-base font-black text-slate-900">{{ rekap_matkul.kode_mk|default:rekap_matkul.kode }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </section>
+
+            <div class="surface-card overflow-hidden">
         <div class="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 p-5">
             <div>
                 <p class="text-xs font-black uppercase tracking-[0.18em] text-brand-700">Rekap Gabungan</p>
@@ -163,6 +336,9 @@
                 <p class="mt-1 text-sm text-slate-500">Semua modul digabung dalam satu tabel rekap per mata kuliah.</p>
             </div>
             <form class="flex flex-wrap gap-2" method="get">
+                {% if selected_kelas %}
+                <input type="hidden" name="kelas" value="{{ selected_kelas }}">
+                {% endif %}
                 <select name="kelas" class="min-w-44">
                     <option value="">Semua kelas</option>
                     {% for kelas in class_options %}
@@ -201,6 +377,8 @@
                     {% endfor %}
                 </tbody>
             </table>
+        </div>
+            </div>
         </div>
     </div>
 

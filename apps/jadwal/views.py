@@ -3,6 +3,7 @@ from datetime import datetime, time, timedelta
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models.deletion import ProtectedError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
@@ -330,6 +331,21 @@ class JadwalPraktikumDeleteView(JadwalMutationAccessMixin, PostOnlyDeleteMixin, 
         if pengguna and pengguna.role == LABORAN_ROLE:
             return queryset
         return queryset
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        try:
+            return super().post(request, *args, **kwargs)
+        except ProtectedError:
+            related_absensi_count = self.object.absensi_asleb.count()
+            related_absensi_masuk_count = self.object.absensi_masuk_asleb.count()
+            total_references = related_absensi_count + related_absensi_masuk_count
+            messages.error(
+                request,
+                'Jadwal praktikum tidak bisa dihapus karena masih dipakai oleh '
+                f'{total_references} data absensi. Hapus atau pindahkan referensi absensinya terlebih dahulu.'
+            )
+            return redirect('jadwal:jadwal_detail', pk=self.object.pk)
 
 
 @require_POST

@@ -9,9 +9,12 @@ document.addEventListener('DOMContentLoaded', function () {
         const bni = method.value === 'bni';
         account.inputMode = bankOther ? 'text' : 'numeric';
         account.placeholder = bankOther ? 'Contoh: BCA 1234567890' : (bni ? 'Masukkan nomor rekening BNI' : 'Masukkan nomor e-wallet');
-        if (help) help.textContent = bankOther
-            ? 'Tuliskan nama bank dan nomor rekening.'
-            : (bni ? 'Rekening BNI hanya menerima angka.' : 'Nomor e-wallet hanya menerima angka.');
+        if (help) {
+            help.textContent = bankOther
+                ? 'Tuliskan nama bank dan nomor rekening.'
+                : (bni ? 'Rekening BNI hanya menerima angka.' : 'Nomor e-wallet hanya menerima angka.');
+            help.classList.remove('hidden');
+        }
     }
     method.addEventListener('change', updateAccountField);
     account.addEventListener('input', function () {

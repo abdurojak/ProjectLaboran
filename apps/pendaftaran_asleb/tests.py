@@ -797,6 +797,74 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertEqual(jadwal_diajukan.status, JadwalPraktikum.STATUS_DITOLAK)
         self.assertEqual(jadwal_diterima.status, JadwalPraktikum.STATUS_DITOLAK)
 
+    def test_laboran_mengakhiri_periode_menyembunyikan_rekap_honor_aslab_nonaktif(self):
+        period = PeriodeAsleb.get_for_date(timezone.localdate())
+        akun_asleb = Pengguna.objects.create(
+            nama_pengguna='Aslab Honor Periode', nim_nik='0640020888',
+            email='0640020888@std.trisakti.ac.id', password='rahasia123', no_hp='081288888888',
+            alamat='Jakarta', fakultas='Teknologi Industri', prodi='Informatika',
+            gender='laki_laki', role='asisten_lab', is_verified=True,
+        )
+        asleb = Asleb.objects.create(
+            nama=akun_asleb.nama_pengguna, nim=akun_asleb.nim_nik, no_hp=akun_asleb.no_hp,
+            email=akun_asleb.email, program_studi=akun_asleb.prodi, semester=5,
+            matkul=str(self.matkul), periode_aktif=period, tanggal_bergabung=period.mulai,
+        )
+        HonorAsleb.objects.create(
+            asleb=asleb,
+            bulan=timezone.localdate().replace(day=1),
+            total_pertemuan=3,
+            status='diproses',
+            assigned_laboran=self.laboran,
+        )
+
+        before_response = self.client.get(reverse('asleb:honor_list'), {
+            'bulan': timezone.localdate().replace(day=1).strftime('%Y-%m'),
+        })
+        self.assertContains(before_response, 'Aslab Honor Periode')
+
+        self.client.post(reverse('pendaftaran_asleb:periode_end', args=[period.pk]), {
+            'password': 'rahasia123',
+            'konfirmasi': 'on',
+        })
+
+        after_response = self.client.get(reverse('asleb:honor_list'), {
+            'bulan': timezone.localdate().replace(day=1).strftime('%Y-%m'),
+        })
+        self.assertNotContains(after_response, 'Aslab Honor Periode')
+
+    def test_laboran_mengakhiri_periode_otomatis_menandai_honor_lama_dibayar(self):
+        period = PeriodeAsleb.get_for_date(timezone.localdate())
+        akun_asleb = Pengguna.objects.create(
+            nama_pengguna='Aslab Arsip Honor', nim_nik='0640020777',
+            email='0640020777@std.trisakti.ac.id', password='rahasia123', no_hp='081277777777',
+            alamat='Jakarta', fakultas='Teknologi Industri', prodi='Informatika',
+            gender='laki_laki', role='asisten_lab', is_verified=True,
+        )
+        asleb = Asleb.objects.create(
+            nama=akun_asleb.nama_pengguna, nim=akun_asleb.nim_nik, no_hp=akun_asleb.no_hp,
+            email=akun_asleb.email, program_studi=akun_asleb.prodi, semester=5,
+            matkul=str(self.matkul), periode_aktif=period, tanggal_bergabung=period.mulai,
+        )
+        honor = HonorAsleb.objects.create(
+            asleb=asleb,
+            bulan=timezone.localdate().replace(day=1),
+            total_pertemuan=3,
+            status='diproses',
+            assigned_laboran=self.laboran,
+        )
+
+        self.client.post(reverse('pendaftaran_asleb:periode_end', args=[period.pk]), {
+            'password': 'rahasia123',
+            'konfirmasi': 'on',
+        })
+
+        honor.refresh_from_db()
+        self.assertEqual(honor.status, 'dibayar')
+        self.assertEqual(honor.tanggal_transfer, timezone.localdate())
+        self.assertEqual(honor.pic_transfer, 'Arsip Otomatis Periode')
+        self.assertIn('Diarsipkan otomatis saat periode Asisten Lab berakhir.', honor.keterangan)
+
     def test_admin_tidak_dapat_mengakhiri_periode_asleb(self):
         period = PeriodeAsleb.get_for_date(timezone.localdate())
         admin = Pengguna.objects.create(
@@ -1037,6 +1105,28 @@ class PeriodeAslebTests(TestCase):
         pengguna.refresh_from_db()
         self.assertEqual(pengguna.role, 'mahasiswa')
         self.assertTrue(PendaftaranAsleb.objects.filter(pk=registration.pk).exists())
+        self.assertEqual(PengalamanPengguna.objects.filter(pengguna=pengguna, otomatis=True).count(), 1)
+
+    def test_pengalaman_otomatis_asleb_tidak_duplikat_di_bulan_yang_sama(self):
+        period = PeriodeAsleb.get_for_date(date(2025, 3, 1))
+        matkul = MataKuliahAsleb.objects.first()
+        pengguna = Pengguna.objects.create(
+            nama_pengguna='Aslab Pengalaman', nim_nik='0642201887', email='pengalaman@std.trisakti.ac.id',
+            password='rahasia123', no_hp='081200000003', alamat='Jakarta', fakultas='Teknologi Industri',
+            prodi='Informatika', gender='laki_laki', role='asisten_lab',
+        )
+        Asleb.objects.create(
+            nama=pengguna.nama_pengguna, nim=pengguna.nim_nik, no_hp=pengguna.no_hp,
+            email=pengguna.email, program_studi=pengguna.prodi, semester=4,
+            matkul=str(matkul), tanggal_bergabung=period.mulai, periode_aktif=period,
+        )
+
+        sync_expired_asleb_periods(date(2025, 7, 1))
+        sync_expired_asleb_periods(date(2025, 7, 1))
+
+        pengalaman = PengalamanPengguna.objects.filter(pengguna=pengguna, otomatis=True)
+        self.assertEqual(pengalaman.count(), 1)
+        self.assertIn(str(matkul), pengalaman.first().deskripsi)
 
     def test_batas_matkul_junior_satu_dan_senior_dua(self):
         self.assertEqual(get_asleb_experience('0642201888'), ('junior', 1))

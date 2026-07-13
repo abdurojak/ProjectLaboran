@@ -149,8 +149,28 @@ class Barang(models.Model):
         return self.peminjaman.filter(status__in=ACTIVE_PEMINJAMAN_STATUSES).exists()
 
     @property
+    def status_pinjam_key(self):
+        active_statuses = set(
+            self.peminjaman.filter(status__in=ACTIVE_PEMINJAMAN_STATUSES)
+            .values_list('status', flat=True)
+        )
+        if 'dipinjam' in active_statuses:
+            return 'dipinjam'
+        if 'hilang' in active_statuses:
+            return 'hilang'
+        if 'rusak' in active_statuses:
+            return 'rusak'
+        return 'tersedia'
+
+    @property
     def status_pinjam(self):
-        return 'Dipinjam' if self.sedang_dipinjam else 'Tersedia'
+        labels = {
+            'dipinjam': 'Dipinjam',
+            'hilang': 'Hilang',
+            'rusak': 'Rusak',
+            'tersedia': 'Tersedia',
+        }
+        return labels[self.status_pinjam_key]
 
     def save(self, *args, **kwargs):
         if not self.kode_barang:

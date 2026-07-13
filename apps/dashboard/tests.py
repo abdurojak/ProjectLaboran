@@ -131,6 +131,33 @@ class DashboardViewTests(TestCase):
         self.assertContains(response, 'Terima')
         self.assertContains(response, 'Tolak')
 
+    def test_dashboard_laboran_tidak_menampilkan_panel_seleksi_pendaftaran_aslab(self):
+        matkul = MataKuliahAsleb.objects.create(
+            kode='DSH-PDAFTAR',
+            kode_mk='DSH001',
+            nama='Struktur Data',
+            dosen='Dosen Dashboard',
+            kelas='TIF-01',
+            aktif=True,
+        )
+        PendaftaranAsleb.objects.create(
+            nama='Calon Aslab Dashboard',
+            nim='20269999',
+            no_hp='081200009999',
+            email='calon-dashboard@std.trisakti.ac.id',
+            program_studi='Informatika',
+            semester=4,
+            matkul=matkul,
+            metode_rekening='dana',
+            rekening='081200009999',
+            status='diajukan',
+        )
+
+        response = self.client.get(reverse('dashboard:home'))
+
+        self.assertNotContains(response, 'Calon Aslab')
+        self.assertNotContains(response, 'Tambah Pendaftaran Aslab')
+
     def test_dashboard_mengelompokkan_peminjaman_per_kode_transaksi(self):
         barang_kedua = Barang.objects.create(nama='Kamera', jumlah=1)
         transaksi = PeminjamanTransaksi.objects.create(
@@ -488,6 +515,9 @@ class DashboardViewTests(TestCase):
 
         self.assertRedirects(response, reverse('dashboard:home'))
         self.assertEqual(peminjaman.status, 'rusak')
+        self.barang.refresh_from_db()
+        self.assertEqual(self.barang.kondisi, 'rusak_ringan')
+        self.assertEqual(self.barang.status_pinjam, 'Rusak')
 
     def test_mark_replaced_changes_lost_or_broken_status_to_digantikan(self):
         peminjaman = PeminjamanAlat.objects.create(
@@ -503,6 +533,8 @@ class DashboardViewTests(TestCase):
 
         self.assertRedirects(response, reverse('dashboard:home'))
         self.assertEqual(peminjaman.status, 'digantikan')
+        self.barang.refresh_from_db()
+        self.assertEqual(self.barang.kondisi, 'baik')
         self.assertFalse(self.barang.sedang_dipinjam)
         self.assertEqual(self.barang.status_pinjam, 'Tersedia')
         self.assertEqual(self.barang.stok_tersedia, self.barang.jumlah)

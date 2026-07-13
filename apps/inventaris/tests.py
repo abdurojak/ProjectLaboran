@@ -418,6 +418,21 @@ class DetailBarangCrudTests(TestCase):
         self.assertContains(detail_response, 'Dipinjam')
         self.assertContains(list_response, 'Dipinjam')
 
+    def test_detail_barang_menampilkan_status_pinjam_rusak(self):
+        PeminjamanAlat.objects.create(
+            barang=self.barang,
+            nama_peminjam='Budi',
+            tanggal_pinjam='2026-06-21',
+            tanggal_kembali='2026-06-22',
+            status='rusak',
+        )
+
+        detail_response = self.client.get(reverse('inventaris:barang_detail', args=[self.barang.pk]))
+        list_response = self.client.get(reverse('inventaris:inventaris_detail', args=[self.inventaris.pk]))
+
+        self.assertContains(detail_response, 'Rusak')
+        self.assertContains(list_response, 'Rusak')
+
 
 class InventarisCrudTests(TestCase):
     def setUp(self):
