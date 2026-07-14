@@ -112,7 +112,8 @@
                             class="btn-secondary gap-2"
                             data-open-modul-preview
                             data-preview-title="Modul {{ modul.nomor }} - {{ modul.judul }}"
-                            data-preview-url="{{ modul.file.url }}"
+                            data-preview-url="{% url 'asleb:modul_preview' modul.pk %}"
+                            data-download-url="{% url 'asleb:modul_download' modul.pk %}"
                             data-preview-type="{{ modul.file_type }}"
                             data-preview-size="{{ modul.file_size|default:0 }}"
                             data-preview-date="{{ modul.dibuat_pada|date:'d M Y H:i' }}"
@@ -158,7 +159,8 @@
                         class="btn-secondary gap-2"
                         data-open-modul-preview
                         data-preview-title="Modul {{ object.nomor }} - {{ object.judul }}"
-                        data-preview-url="{{ object.file.url }}"
+                        data-preview-url="{% url 'asleb:modul_preview' object.pk %}"
+                        data-download-url="{% url 'asleb:modul_download' object.pk %}"
                         data-preview-type="{{ object.file_type }}"
                         data-preview-size="{{ object.file_size|default:0 }}"
                         data-preview-date="{{ object.dibuat_pada|date:'d M Y H:i' }}"
@@ -415,7 +417,7 @@
             previewTitle.textContent = payload.title || 'Preview Modul';
             previewMeta.textContent = `${String(type || 'file').toUpperCase()} - ${formatBytes(payload.size)} - ${payload.date || '-'}`;
             openLink.href = payload.url;
-            downloadLink.href = payload.url;
+            downloadLink.href = payload.downloadUrl || payload.url;
             downloadLink.setAttribute('download', '');
             if (isPdf) {
                 pdfWrap.classList.remove('hidden');
@@ -437,6 +439,7 @@
                 openPreviewModal({
                     title: button.dataset.previewTitle,
                     url: button.dataset.previewUrl,
+                    downloadUrl: button.dataset.downloadUrl,
                     type: button.dataset.previewType,
                     size: button.dataset.previewSize,
                     date: button.dataset.previewDate,

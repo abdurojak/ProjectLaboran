@@ -59,6 +59,48 @@
         font-size: 0.78rem;
         font-weight: 800;
         letter-spacing: 0.02em;
+        border: 1px solid rgba(20, 184, 166, 0.18);
+        background: rgba(240, 253, 250, 0.92);
+        color: #0f766e;
+    }
+
+    .praktikum-detail-card {
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        background:
+            linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(240, 253, 250, 0.72));
+        box-shadow: 0 18px 42px -34px rgba(15, 23, 42, 0.32);
+    }
+
+    .praktikum-detail-tile {
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        background: rgba(248, 250, 252, 0.92);
+        color: #0f172a;
+    }
+
+    .praktikum-module-link {
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        background: rgba(255, 255, 255, 0.95);
+        color: #334155;
+    }
+
+    .praktikum-module-link:hover {
+        border-color: rgba(20, 184, 166, 0.38);
+        background: rgba(240, 253, 250, 0.96);
+        color: #0f766e;
+    }
+
+    .praktikum-muted-text {
+        color: #64748b;
+    }
+
+    .praktikum-count-chip {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        background: rgba(248, 250, 252, 0.92);
+        color: #334155;
+        font-weight: 900;
     }
 
     .praktikum-hero {
@@ -86,6 +128,48 @@
         border-color: rgba(45, 212, 191, 0.3);
         background: linear-gradient(135deg, rgba(13, 148, 136, 0.18), rgba(15, 23, 42, 0.92));
         box-shadow: 0 24px 48px -30px rgba(20, 184, 166, 0.28);
+    }
+
+    html[data-theme="dark"] .matkul-stat-chip {
+        border-color: rgba(94, 234, 212, 0.20);
+        background: rgba(20, 184, 166, 0.13);
+        color: #99f6e4;
+    }
+
+    html[data-theme="dark"] .praktikum-detail-card {
+        border-color: rgba(148, 163, 184, 0.16);
+        background:
+            radial-gradient(circle at top right, rgba(45, 212, 191, 0.11), transparent 42%),
+            rgba(15, 23, 42, 0.72);
+        box-shadow: 0 24px 52px -38px rgba(2, 6, 23, 0.65);
+    }
+
+    html[data-theme="dark"] .praktikum-detail-tile {
+        border-color: rgba(148, 163, 184, 0.16);
+        background: rgba(15, 23, 42, 0.62);
+        color: #e2e8f0;
+    }
+
+    html[data-theme="dark"] .praktikum-module-link {
+        border-color: rgba(148, 163, 184, 0.16);
+        background: rgba(15, 23, 42, 0.56);
+        color: #cbd5e1;
+    }
+
+    html[data-theme="dark"] .praktikum-module-link:hover {
+        border-color: rgba(94, 234, 212, 0.32);
+        background: rgba(20, 184, 166, 0.12);
+        color: #99f6e4;
+    }
+
+    html[data-theme="dark"] .praktikum-muted-text {
+        color: #94a3b8;
+    }
+
+    html[data-theme="dark"] .praktikum-count-chip {
+        border-color: rgba(148, 163, 184, 0.18);
+        background: rgba(15, 23, 42, 0.64);
+        color: #cbd5e1;
     }
 
     .participant-modal {
@@ -246,10 +330,10 @@
                             <h4 class="mt-2 line-clamp-2 text-base font-black text-slate-900">{{ item.nama }}</h4>
                             <p class="mt-1 truncate text-sm text-slate-500">{{ item.kelas|default:"Tanpa kelas" }} - {{ item.dosen }}</p>
                         </div>
-                        <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-700">{{ item.jumlah_peserta }}</span>
+                        <span class="praktikum-count-chip px-2.5 py-1 text-[11px]">{{ item.jumlah_peserta }}</span>
                     </div>
-                    <div class="mt-3 flex flex-wrap gap-2 text-[11px] font-bold text-slate-500">
-                        <span class="rounded-full bg-slate-100/90 px-2.5 py-1">{{ item.modul_tersedia|length }} modul</span>
+                    <div class="mt-3 flex flex-wrap gap-2 text-[11px] font-bold">
+                        <span class="praktikum-count-chip px-2.5 py-1">{{ item.modul_tersedia|length }} modul</span>
                         {% if rekap_matkul and item.pk == rekap_matkul.pk %}
                         <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">Sedang dibuka</span>
                         {% endif %}
@@ -288,10 +372,10 @@
 
                 {% if rekap_matkul %}
                 <div class="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-                    <div class="rounded-[1.75rem] border border-slate-200 bg-white/70 p-4">
+                    <div class="praktikum-detail-card rounded-[1.75rem] p-4">
                         <div class="flex items-start justify-between gap-3">
                             <div>
-                                <p class="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Modul Tersedia</p>
+                                <p class="praktikum-muted-text text-xs font-black uppercase tracking-[0.16em]">Modul Tersedia</p>
                                 <h4 class="mt-2 text-lg font-black text-slate-900">Akses cepat per modul</h4>
                             </div>
                             {% if can_manage_peserta %}
@@ -302,24 +386,24 @@
                         </div>
                         <div class="mt-4 flex flex-wrap gap-2">
                             {% for modul in rekap_matkul.modul_tersedia %}
-                            <a class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:border-brand-300 hover:text-brand-800" href="{% url 'asleb:praktikum_nilai' rekap_matkul.pk modul.pk %}">
+                            <a class="praktikum-module-link inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-bold transition" href="{% url 'asleb:praktikum_nilai' rekap_matkul.pk modul.pk %}">
                                 <i data-lucide="clipboard-pen-line" class="h-4 w-4"></i>Modul {{ modul.nomor }}
                             </a>
                             {% empty %}
-                            <span class="text-sm text-slate-400">Belum ada modul praktikum.</span>
+                            <span class="praktikum-muted-text text-sm">Belum ada modul praktikum.</span>
                             {% endfor %}
                         </div>
                     </div>
-                    <div class="rounded-[1.75rem] border border-slate-200 bg-white/70 p-4">
-                        <p class="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Info Pengajar</p>
+                    <div class="praktikum-detail-card rounded-[1.75rem] p-4">
+                        <p class="praktikum-muted-text text-xs font-black uppercase tracking-[0.16em]">Info Pengajar</p>
                         <h4 class="mt-2 text-lg font-black text-slate-900">{{ rekap_matkul.dosen }}</h4>
                         <div class="mt-4 grid gap-3 sm:grid-cols-2">
-                            <div class="rounded-2xl bg-slate-50 px-4 py-3">
-                                <p class="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Kelas</p>
+                            <div class="praktikum-detail-tile rounded-2xl px-4 py-3">
+                                <p class="praktikum-muted-text text-xs font-black uppercase tracking-[0.14em]">Kelas</p>
                                 <p class="mt-2 text-base font-black text-slate-900">{{ rekap_matkul.kelas|default:"Tanpa kelas" }}</p>
                             </div>
-                            <div class="rounded-2xl bg-slate-50 px-4 py-3">
-                                <p class="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Kode</p>
+                            <div class="praktikum-detail-tile rounded-2xl px-4 py-3">
+                                <p class="praktikum-muted-text text-xs font-black uppercase tracking-[0.14em]">Kode</p>
                                 <p class="mt-2 text-base font-black text-slate-900">{{ rekap_matkul.kode_mk|default:rekap_matkul.kode }}</p>
                             </div>
                         </div>

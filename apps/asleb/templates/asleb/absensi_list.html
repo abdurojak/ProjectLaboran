@@ -61,7 +61,8 @@
                         class="btn-secondary gap-2"
                         data-open-inline-modul-preview
                         data-preview-title="Modul {{ modul.nomor }} - {{ modul.judul }}"
-                        data-preview-url="{{ modul.file.url }}"
+                        data-preview-url="{% url 'asleb:modul_preview' modul.pk %}"
+                        data-download-url="{% url 'asleb:modul_download' modul.pk %}"
                         data-preview-type="{{ modul.file_type }}"
                         data-preview-size="{{ modul.file_size|default:0 }}"
                         data-preview-date="{{ modul.dibuat_pada|date:'d M Y H:i' }}"
@@ -257,7 +258,7 @@
                 previewTitle.textContent = button.dataset.previewTitle || 'Preview Modul';
                 previewMeta.textContent = `${String(type || 'file').toUpperCase()} - ${formatBytes(button.dataset.previewSize)} - ${button.dataset.previewDate || '-'}`;
                 openLink.href = button.dataset.previewUrl;
-                downloadLink.href = button.dataset.previewUrl;
+                downloadLink.href = button.dataset.downloadUrl || button.dataset.previewUrl;
                 downloadLink.setAttribute('download', '');
                 if (isPdf) {
                     pdfWrap.classList.remove('hidden');
