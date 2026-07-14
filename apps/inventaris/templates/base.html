@@ -2412,12 +2412,12 @@
                         <i data-lucide="messages-square" class="h-4 w-4"></i>
                         <span>Halaman Bantuan</span>
                     </a>
-                    {% if current_pengguna.role == 'admin' or current_pengguna.role == 'laboran' %}
+                    {% if current_pengguna.role == 'admin' %}
                     <a href="{% url 'core:bantuan_admin' %}" class="btn-secondary justify-center gap-2">
                         <i data-lucide="headphones" class="h-4 w-4"></i>
                         <span>Antrean Admin</span>
                     </a>
-                    {% else %}
+                    {% elif current_pengguna.role != 'laboran' %}
                     <form method="post" action="{% url 'core:bantuan_escalate' %}">
                         {% csrf_token %}
                         <button type="submit" class="btn-secondary w-full justify-center gap-2">

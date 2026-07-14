@@ -204,7 +204,11 @@ class AbsensiAslebForm(forms.ModelForm):
             duplicate_qs = duplicate_qs.exclude(pk=self.instance.pk)
         if duplicate_qs.filter(modul_praktikum=modul).exists():
             raise forms.ValidationError('Modul ini sudah pernah diabsen dan tidak dapat dipilih lagi.')
-        if duplicate_qs.filter(modul=modul.nomor).exists():
+        if duplicate_qs.filter(
+            modul_praktikum__isnull=True,
+            modul=modul.nomor,
+            jadwal__mata_kuliah=str(modul.matkul),
+        ).exists():
             raise forms.ValidationError(
                 f'Modul {modul.nomor} sudah pernah diabsen. Pilih modul lain yang belum dipakai.'
             )

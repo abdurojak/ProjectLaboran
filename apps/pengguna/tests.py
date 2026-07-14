@@ -967,6 +967,41 @@ class PenggunaAuthTests(TestCase):
         self.assertTrue(pengguna.is_verified)
         self.assertEqual(peserta.pengguna, pengguna)
 
+    def test_middleware_menautkan_peserta_praktikum_belum_terhubung_saat_akun_aktif(self):
+        matkul = MataKuliahAsleb.objects.create(
+            kode='AI_TIF01',
+            nama='Kecerdasan Buatan',
+            dosen='Anung B. Ariwibowo, M.Kom',
+            kelas='TIF-01',
+        )
+        peserta = PesertaPraktikum.objects.create(
+            matkul=matkul,
+            nim='064002000041',
+            nama='Mahasiswa Baru Praktikum',
+        )
+        pengguna = Pengguna.objects.create(
+            nama_pengguna='Mahasiswa Baru Praktikum',
+            nim_nik='064002000041',
+            email='mahasiswa.baru@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081234567891',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+            is_verified=True,
+        )
+        session = self.client.session
+        session['pengguna_id'] = pengguna.pk
+        session.save()
+
+        response = self.client.get(reverse('dashboard:home'))
+
+        self.assertEqual(response.status_code, 200)
+        peserta.refresh_from_db()
+        self.assertEqual(peserta.pengguna, pengguna)
+
     def test_login_mahasiswa_ditolak_di_mode_karyawan(self):
         response = self.client.post(
             reverse('pengguna:login'),

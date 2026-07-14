@@ -305,6 +305,13 @@
 
             <form method="get" class="mt-4 grid gap-3">
                 <div>
+                    <label for="id_q_sidebar">Cari mata kuliah</label>
+                    <div class="relative">
+                        <i data-lucide="search" class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"></i>
+                        <input id="id_q_sidebar" name="q" type="search" value="{{ search_query }}" placeholder="Cari nama, kode, dosen, atau kelas" class="pl-11" autocomplete="off" data-matkul-nav-search>
+                    </div>
+                </div>
+                <div>
                     <label for="id_kelas_sidebar">Filter kelas</label>
                     <select id="id_kelas_sidebar" name="kelas">
                         <option value="">Semua kelas</option>
@@ -319,11 +326,16 @@
                 <button class="btn-secondary gap-2 w-full justify-center" type="submit">
                     <i data-lucide="filter" class="h-4 w-4"></i>Terapkan Filter
                 </button>
+                {% if search_query or selected_kelas %}
+                <a class="btn-secondary gap-2 w-full justify-center" href="{% url 'asleb:praktikum_mahasiswa_list' %}">
+                    <i data-lucide="x" class="h-4 w-4"></i>Reset
+                </a>
+                {% endif %}
             </form>
 
             <div class="matkul-nav-list mt-4 space-y-3">
                 {% for item in matkul_list %}
-                <a href="?{% if selected_kelas %}kelas={{ selected_kelas|urlencode }}&{% endif %}matkul={{ item.pk }}" class="matkul-nav-item {% if rekap_matkul and item.pk == rekap_matkul.pk %}is-active{% endif %}">
+                <a href="?{% if search_query %}q={{ search_query|urlencode }}&{% endif %}{% if selected_kelas %}kelas={{ selected_kelas|urlencode }}&{% endif %}matkul={{ item.pk }}" class="matkul-nav-item {% if rekap_matkul and item.pk == rekap_matkul.pk %}is-active{% endif %}" data-matkul-nav-item>
                     <div class="flex items-start justify-between gap-3">
                         <div class="min-w-0">
                             <p class="truncate text-xs font-black uppercase tracking-[0.18em] text-brand-700">{{ item.kode_mk|default:item.kode }}</p>
@@ -340,10 +352,13 @@
                     </div>
                 </a>
                 {% empty %}
-                <div class="rounded-[1.5rem] border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500">
+                <div class="rounded-[1.5rem] border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500" data-matkul-nav-empty>
                     Belum ada mata kuliah yang dapat diakses.
                 </div>
                 {% endfor %}
+                <div class="hidden rounded-[1.5rem] border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500" data-matkul-nav-no-result>
+                    Tidak ada mata kuliah yang cocok dengan pencarian.
+                </div>
             </div>
         </aside>
 
@@ -682,6 +697,26 @@
                     row.classList.toggle('hidden', keyword && !row.textContent.toLowerCase().includes(keyword));
                 });
             });
+        }
+
+        const matkulSearch = document.querySelector('[data-matkul-nav-search]');
+        const matkulItems = Array.from(document.querySelectorAll('[data-matkul-nav-item]'));
+        const matkulNoResult = document.querySelector('[data-matkul-nav-no-result]');
+        if (matkulSearch && matkulItems.length) {
+            const filterMatkulItems = function () {
+                const keyword = matkulSearch.value.trim().toLowerCase();
+                let visibleCount = 0;
+                matkulItems.forEach(function (item) {
+                    const visible = !keyword || item.textContent.toLowerCase().includes(keyword);
+                    item.classList.toggle('hidden', !visible);
+                    if (visible) visibleCount += 1;
+                });
+                if (matkulNoResult) {
+                    matkulNoResult.classList.toggle('hidden', visibleCount > 0);
+                }
+            };
+            matkulSearch.addEventListener('input', filterMatkulItems);
+            filterMatkulItems();
         }
 
         const download = document.querySelector('[data-download-rekap]');
