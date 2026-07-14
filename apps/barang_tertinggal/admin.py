@@ -13,7 +13,9 @@ class BarangTertinggalAdmin(admin.ModelAdmin):
         'tanggal_ditemukan',
         'tanggal_diambil',
         'nama_pemilik',
+        'nim_pemilik',
+        'pemilik',
         'status',
     )
     list_filter = ('status', 'jenis_barang', 'tanggal_ditemukan')
-    search_fields = ('kode_barang_tertinggal', 'nama_barang', 'jenis_barang', 'nama_pemilik')
+    search_fields = ('kode_barang_tertinggal', 'nama_barang', 'jenis_barang', 'nama_pemilik', 'nim_pemilik')
