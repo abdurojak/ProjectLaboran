@@ -15,8 +15,10 @@ from .models import (
     HasilPraktikumMahasiswa,
     HonorAsleb,
     ModulPraktikum,
+    PengumpulanLaporanPraktikum,
     PesertaPraktikum,
     SuratHonorAsleb,
+    TugasLaporanPraktikum,
 )
 
 
@@ -521,6 +523,112 @@ class HasilPraktikumMahasiswaForm(forms.ModelForm):
             'nilai_laporan': forms.NumberInput(attrs={'min': 0, 'max': 100, 'step': '0.01', 'placeholder': '0-100'}),
             'catatan': forms.TextInput(attrs={'placeholder': 'Opsional'}),
         }
+
+
+class TugasLaporanPraktikumForm(forms.ModelForm):
+    class Meta:
+        model = TugasLaporanPraktikum
+        fields = [
+            'judul',
+            'matkul',
+            'modul',
+            'pertemuan',
+            'deskripsi',
+            'format_file',
+            'ukuran_maksimal_mb',
+            'mulai_pengumpulan',
+            'batas_pengumpulan',
+            'izinkan_terlambat',
+            'asisten_pemeriksa',
+            'aktif',
+        ]
+        widgets = {
+            'deskripsi': forms.Textarea(attrs={'rows': 4}),
+            'mulai_pengumpulan': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+            'batas_pengumpulan': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+            'format_file': forms.TextInput(attrs={'placeholder': 'pdf,doc,docx'}),
+        }
+        help_texts = {
+            'format_file': 'Pisahkan dengan koma. Contoh: pdf,doc,docx',
+            'ukuran_maksimal_mb': 'Ukuran maksimal file laporan dalam MB.',
+        }
+
+    def __init__(self, *args, **kwargs):
+        self.pengguna = kwargs.pop('pengguna', None)
+        super().__init__(*args, **kwargs)
+        from apps.pendaftaran_asleb.models import MataKuliahAsleb
+
+        matkul_qs = MataKuliahAsleb.objects.filter(aktif=True).order_by('nama', 'kelas')
+        if self.pengguna and self.pengguna.role == 'asisten_lab':
+            active_labels = list(
+                Asleb.objects.filter(nim=self.pengguna.nim_nik, status='aktif')
+                .exclude(matkul='')
+                .values_list('matkul', flat=True)
+            )
+            active_ids = [matkul.pk for matkul in matkul_qs if str(matkul) in active_labels]
+            matkul_qs = MataKuliahAsleb.objects.filter(pk__in=active_ids).order_by('nama', 'kelas')
+        self.fields['matkul'].queryset = matkul_qs
+        self.fields['modul'].queryset = ModulPraktikum.objects.select_related('matkul').order_by('matkul__nama', 'matkul__kelas', 'nomor')
+        self.fields['asisten_pemeriksa'].queryset = Asleb.objects.filter(status='aktif').order_by('nama')
+
+    def clean(self):
+        cleaned_data = super().clean()
+        matkul = cleaned_data.get('matkul')
+        modul = cleaned_data.get('modul')
+        asisten = cleaned_data.get('asisten_pemeriksa')
+        mulai = cleaned_data.get('mulai_pengumpulan')
+        batas = cleaned_data.get('batas_pengumpulan')
+        if modul and matkul and modul.matkul_id != matkul.pk:
+            self.add_error('modul', 'Modul harus berasal dari mata kuliah yang dipilih.')
+        if asisten and matkul and asisten.matkul != str(matkul):
+            self.add_error('asisten_pemeriksa', 'Asisten pemeriksa harus bertugas pada mata kuliah ini.')
+        if mulai and batas and batas <= mulai:
+            self.add_error('batas_pengumpulan', 'Batas pengumpulan harus setelah waktu mulai.')
+        return cleaned_data
+
+
+class PengumpulanLaporanPraktikumForm(forms.ModelForm):
+    class Meta:
+        model = PengumpulanLaporanPraktikum
+        fields = ['file_laporan']
+
+    def __init__(self, *args, **kwargs):
+        self.tugas = kwargs.pop('tugas')
+        super().__init__(*args, **kwargs)
+        self.fields['file_laporan'].help_text = (
+            f'Format: {", ".join(self.tugas.allowed_extensions).upper()}. '
+            f'Maksimal {self.tugas.ukuran_maksimal_mb} MB.'
+        )
+
+    def clean_file_laporan(self):
+        uploaded = self.cleaned_data.get('file_laporan')
+        if not uploaded:
+            return uploaded
+        extension = uploaded.name.lower().rsplit('.', 1)[-1] if '.' in uploaded.name else ''
+        if extension not in self.tugas.allowed_extensions:
+            raise forms.ValidationError('File laporan hanya boleh sesuai format yang ditentukan tugas.')
+        max_size = self.tugas.ukuran_maksimal_mb * 1024 * 1024
+        if uploaded.size > max_size:
+            raise forms.ValidationError(f'Ukuran file maksimal {self.tugas.ukuran_maksimal_mb} MB.')
+        return uploaded
+
+
+class ReviewLaporanPraktikumForm(forms.ModelForm):
+    class Meta:
+        model = PengumpulanLaporanPraktikum
+        fields = ['status', 'catatan_asisten', 'nilai']
+        widgets = {
+            'catatan_asisten': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Catatan, komentar, atau instruksi revisi'}),
+            'nilai': forms.NumberInput(attrs={'min': 0, 'max': 100, 'step': '0.01'}),
+        }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        status = cleaned_data.get('status')
+        nilai = cleaned_data.get('nilai')
+        if status == PengumpulanLaporanPraktikum.STATUS_DINILAI and nilai is None:
+            self.add_error('nilai', 'Nilai wajib diisi jika status sudah dinilai.')
+        return cleaned_data
 
 
 def get_asleb_matkul(asleb):

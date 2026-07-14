@@ -2670,6 +2670,7 @@
             const appContent = document.querySelector('[data-app-content]');
             if (appContent && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
                 document.addEventListener('click', function (event) {
+                    if (event.defaultPrevented) return;
                     const link = event.target.closest('a[href]:not([target]):not([href^="#"]):not([href^="mailto:"]):not([href^="tel:"])');
                     if (!link) return;
                     const href = link.getAttribute('href');

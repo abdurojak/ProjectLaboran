@@ -7,10 +7,13 @@ from .models import (
     HonorAsleb,
     ModulPraktikum,
     HasilPraktikumMahasiswa,
+    LogAktivitasPraktikum,
     PesertaPraktikum,
+    PengumpulanLaporanPraktikum,
     PengaturanAbsensiAsleb,
     PengingatAbsensiAsleb,
     SuratHonorAsleb,
+    TugasLaporanPraktikum,
 )
 
 
@@ -78,6 +81,27 @@ class HasilPraktikumMahasiswaAdmin(admin.ModelAdmin):
     list_display = ('peserta', 'modul', 'tanggal_praktikum', 'status_absensi', 'nilai_realtime', 'nilai_laporan', 'nilai', 'dicatat_oleh')
     list_filter = ('status_absensi', 'modul__matkul', 'modul')
     search_fields = ('peserta__nim', 'peserta__nama', 'modul__judul')
+
+
+@admin.register(TugasLaporanPraktikum)
+class TugasLaporanPraktikumAdmin(admin.ModelAdmin):
+    list_display = ('judul', 'matkul', 'modul', 'batas_pengumpulan', 'asisten_pemeriksa', 'aktif')
+    list_filter = ('aktif', 'matkul', 'asisten_pemeriksa')
+    search_fields = ('judul', 'matkul__nama', 'matkul__kelas', 'asisten_pemeriksa__nama')
+
+
+@admin.register(PengumpulanLaporanPraktikum)
+class PengumpulanLaporanPraktikumAdmin(admin.ModelAdmin):
+    list_display = ('tugas', 'peserta', 'versi', 'status', 'terlambat', 'nilai', 'dikumpulkan_pada')
+    list_filter = ('status', 'terlambat', 'tugas__matkul')
+    search_fields = ('tugas__judul', 'peserta__nim', 'peserta__nama', 'catatan_asisten')
+
+
+@admin.register(LogAktivitasPraktikum)
+class LogAktivitasPraktikumAdmin(admin.ModelAdmin):
+    list_display = ('aksi', 'pengguna', 'matkul_label', 'peserta_nim', 'dibuat_pada')
+    list_filter = ('aksi', 'dibuat_pada')
+    search_fields = ('aksi', 'deskripsi', 'matkul_label', 'peserta_nim', 'pengguna__nama_pengguna')
 
 
 @admin.register(PengaturanAbsensiAsleb)

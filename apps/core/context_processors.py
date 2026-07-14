@@ -96,6 +96,17 @@ SIDEBAR_LINKS = [
                 'roles': {LABORAN_ROLE, ASISTEN_LAB_ROLE},
             },
             {
+                'title': 'Laporan Praktikum',
+                'icon': 'file-up',
+                'url': 'asleb:laporan_tugas_list',
+                'namespace': 'asleb',
+                'url_names': {
+                    'laporan_tugas_list', 'laporan_tugas_create', 'laporan_submit',
+                    'laporan_review', 'laporan_preview', 'laporan_download',
+                },
+                'roles': {ASISTEN_LAB_ROLE, MAHASISWA_ROLE},
+            },
+            {
                 'title': 'Data Aslab',
                 'icon': 'contact-round',
                 'url': 'asleb:asleb_list',

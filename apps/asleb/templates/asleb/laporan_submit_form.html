@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Submit Laporan{% endblock %}
+{% block content %}
+<section class="mx-auto max-w-3xl space-y-6">
+    <div>
+        <p class="text-sm font-black uppercase tracking-[0.22em] text-brand-700">Pengumpulan Laporan</p>
+        <h2 class="mt-2 text-3xl font-black text-slate-900">{{ view.tugas.judul }}</h2>
+        <p class="mt-2 text-sm text-slate-500">{{ view.tugas.matkul }} · Batas {{ view.tugas.batas_pengumpulan|date:"d M Y H:i" }}</p>
+    </div>
+    <form method="post" enctype="multipart/form-data" class="surface-card space-y-5 p-6 md:p-8">
+        {% csrf_token %}
+        {% if form.non_field_errors %}<div class="rounded-2xl bg-rose-50 p-4 text-sm font-bold text-rose-700">{{ form.non_field_errors }}</div>{% endif %}
+        <div>
+            {{ form.file_laporan.label_tag }}{{ form.file_laporan }}
+            {% if form.file_laporan.help_text %}<p class="mt-2 text-xs text-slate-500">{{ form.file_laporan.help_text }}</p>{% endif %}
+            {% for error in form.file_laporan.errors %}<p class="mt-2 text-sm font-bold text-rose-600">{{ error }}</p>{% endfor %}
+        </div>
+        <div class="rounded-3xl border border-cyan-200 bg-cyan-50/50 p-4 text-sm text-cyan-900">
+            Pengumpulan ulang akan disimpan sebagai versi baru, jadi riwayat revisi tidak hilang.
+        </div>
+        <div class="flex flex-wrap gap-3">
+            <button class="btn-primary gap-2" type="submit"><i data-lucide="upload" class="h-4 w-4"></i>Kumpulkan</button>
+            <a class="btn-secondary" href="{% url 'asleb:laporan_tugas_list' %}">Batal</a>
+        </div>
+    </form>
+</section>
+{% endblock %}
