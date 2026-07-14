@@ -13,8 +13,9 @@ from django.views.generic import CreateView, DeleteView, DetailView, ListView, U
 
 from apps.core.views import PostOnlyDeleteMixin
 from apps.core.permissions import ADMIN_ROLE, ASISTEN_LAB_ROLE, LABORAN_ROLE
+from apps.asleb.models import Asleb
 from apps.kalender.realtime import send_schedule_change_request_update, send_schedule_update
-from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, RiwayatAsleb
+from apps.pendaftaran_asleb.models import MataKuliahAsleb
 from apps.ruangan.models import GrupRuanganGabungan, RuanganLab
 
 from .forms import JadwalPraktikumForm
@@ -25,19 +26,11 @@ def get_aslab_matkul_labels(pengguna):
     if not pengguna or pengguna.role != 'asisten_lab':
         return []
 
-    matkul_values = PendaftaranAsleb.objects.filter(
-        nim=pengguna.nim_nik,
-        status__in=['diterima', 'digenerate'],
-    ).select_related('matkul').values_list(
-        'matkul__nama',
-        'matkul__dosen',
-        'matkul__kelas',
+    labels = list(
+        Asleb.objects.filter(nim=pengguna.nim_nik, status='aktif')
+        .exclude(matkul='')
+        .values_list('matkul', flat=True)
     )
-    labels = [f'{nama} - {dosen} - {kelas}' for nama, dosen, kelas in matkul_values]
-    history_values = RiwayatAsleb.objects.filter(nim=pengguna.nim_nik).values_list(
-        'matkul__nama', 'matkul__dosen', 'matkul__kelas'
-    )
-    labels.extend(f'{nama} - {dosen} - {kelas}' for nama, dosen, kelas in history_values)
     return list(dict.fromkeys(labels))
 
 

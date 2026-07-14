@@ -1,5 +1,57 @@
 {% extends "base.html" %}
 {% block title %}{% if selecting_category %}Tambah Profil{% else %}{{ category_meta.label }}{% endif %}{% endblock %}
+{% block extra_head %}
+<style>
+    .school-results-panel {
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        background: rgba(255, 255, 255, 0.98);
+        color: #0f172a;
+    }
+
+    .school-result-option {
+        display: block;
+        width: 100%;
+        padding: 0.85rem 1rem;
+        text-align: left;
+        transition: background-color 0.16s ease, color 0.16s ease;
+    }
+
+    .school-result-option:hover {
+        background: rgba(20, 184, 166, 0.12);
+    }
+
+    .school-result-title {
+        color: #0f172a;
+        font-size: 0.875rem;
+        font-weight: 900;
+    }
+
+    .school-result-desc {
+        margin-top: 0.2rem;
+        color: #64748b;
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+
+    html[data-theme="dark"] .school-results-panel {
+        border-color: rgba(103, 232, 249, 0.18);
+        background: rgba(15, 23, 42, 0.98);
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+    }
+
+    html[data-theme="dark"] .school-result-option:hover {
+        background: rgba(34, 211, 238, 0.12);
+    }
+
+    html[data-theme="dark"] .school-result-title {
+        color: #f8fafc;
+    }
+
+    html[data-theme="dark"] .school-result-desc {
+        color: #94a3b8;
+    }
+</style>
+{% endblock %}
 {% block content %}
 <section class="mx-auto max-w-5xl space-y-6">
     <div>
@@ -23,14 +75,35 @@
         {% csrf_token %}
         {% if form.non_field_errors %}<div class="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-bold text-rose-700 md:col-span-2">{{ form.non_field_errors }}</div>{% endif %}
         {% for field in form %}
-        <div class="{% if field.name == 'deskripsi' or field.name == 'teknologi' or field.name == 'tautan' or field.name == 'file_sertifikat' or field.name == 'masih_berjalan' %}md:col-span-2{% endif %}"{% if field.name == 'tanggal_selesai' %} data-end-date-wrap{% endif %}>
+        <div class="{% if field.name == 'deskripsi' or field.name == 'teknologi' or field.name == 'tautan' or field.name == 'file_sertifikat' or field.name == 'masih_berjalan' or field.name == 'sekolah' or field.name == 'nama_sekolah_manual' %}md:col-span-2{% endif %}"{% if field.name == 'tanggal_selesai' %} data-end-date-wrap{% endif %}{% if field.name == 'bidang_studi' %} data-major-wrap{% endif %}{% if field.name == 'nama_sekolah_manual' %} data-school-manual-wrap{% endif %}>
             {% if field.name == 'masih_berjalan' %}
             <label class="flex cursor-pointer items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 p-4">{{ field }}<span class="mb-0 font-bold text-slate-800">{{ field.label }}</span></label>
+            {% elif field.name == 'sekolah' %}
+            {{ field }}
+            <label for="id_school_search">Nama Sekolah</label>
+            <div class="relative" data-school-autocomplete data-search-url="{% url 'pengguna:school_search' %}">
+                <input id="id_school_search" type="text" autocomplete="off" class="w-full" placeholder="Ketik minimal 2 huruf nama sekolah/NPSN" data-school-search-input value="{% if object and object.sekolah_snapshot %}{{ object.sekolah_snapshot }}{% endif %}">
+                <div class="pointer-events-none absolute right-4 top-1/2 hidden -translate-y-1/2 text-xs font-black text-brand-700" data-school-loading>Mencari...</div>
+                <div class="school-results-panel absolute left-0 right-0 top-[calc(100%+0.5rem)] z-40 hidden max-h-72 overflow-y-auto rounded-3xl shadow-2xl" data-school-results></div>
+            </div>
+            <p class="mt-2 text-xs font-semibold text-slate-500">Pilih jenjang dulu, lalu cari sekolah dari database lokal. Jika tidak ada, pilih input manual.</p>
             {% else %}{{ field.label_tag }}{{ field }}{% endif %}
             {% if field.help_text %}<p class="mt-2 text-xs text-slate-500">{{ field.help_text }}</p>{% endif %}
             {% for error in field.errors %}<p class="mt-2 text-sm font-bold text-rose-600">{{ error }}</p>{% endfor %}
         </div>
         {% endfor %}
+        {% if selected_category == 'pendidikan' %}
+        <datalist id="education-major-options">
+            <option value="IPA"></option>
+            <option value="IPS"></option>
+            <option value="Bahasa"></option>
+            <option value="Rekayasa Perangkat Lunak"></option>
+            <option value="Teknik Komputer dan Jaringan"></option>
+            <option value="Multimedia"></option>
+            <option value="Akuntansi"></option>
+            <option value="Otomatisasi dan Tata Kelola Perkantoran"></option>
+        </datalist>
+        {% endif %}
         <div class="flex flex-col gap-3 sm:flex-row md:col-span-2">
             <button class="btn-primary" type="submit"><i data-lucide="save" class="mr-2 h-4 w-4"></i>Simpan {{ category_meta.label }}</button>
             {% if not object %}<a class="btn-secondary" href="{% url 'pengguna:experience_create' profile_user.pk %}"><i data-lucide="layout-grid" class="mr-2 h-4 w-4"></i>Pilih Kategori Lain</a>{% endif %}
@@ -54,6 +127,140 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     checkbox.addEventListener('change', syncEndDate);
     syncEndDate();
+
+    const levelInput = document.querySelector('[data-education-level]');
+    const schoolIdInput = document.querySelector('[data-school-id]');
+    const schoolSearch = document.querySelector('[data-school-search-input]');
+    const schoolBox = document.querySelector('[data-school-results]');
+    const schoolLoading = document.querySelector('[data-school-loading]');
+    const schoolAuto = document.querySelector('[data-school-autocomplete]');
+    const manualWrap = document.querySelector('[data-school-manual-wrap]');
+    const manualInput = document.querySelector('[data-school-manual]');
+    const majorWrap = document.querySelector('[data-major-wrap]');
+    const majorInput = document.querySelector('[data-education-major]');
+    let schoolTimer = null;
+
+    function syncEducationFields() {
+        if (!levelInput) return;
+        const level = levelInput.value;
+        if (majorWrap && majorInput) {
+            const showMajor = level === 'SMA' || level === 'SMK';
+            majorWrap.classList.toggle('hidden', !showMajor);
+            majorInput.disabled = !showMajor;
+            if (!showMajor) majorInput.value = '';
+        }
+        if (schoolSearch) {
+            schoolSearch.disabled = !level;
+            schoolSearch.placeholder = level ? 'Ketik minimal 2 huruf nama sekolah/NPSN' : 'Pilih jenjang pendidikan terlebih dahulu';
+        }
+    }
+
+    function showManualSchool(show) {
+        if (!manualWrap || !manualInput) return;
+        manualWrap.classList.toggle('hidden', !show);
+        manualInput.required = show;
+        manualInput.disabled = !show;
+        if (!show) manualInput.value = '';
+    }
+
+    function renderSchoolResults(items, query) {
+        if (!schoolBox) return;
+        schoolBox.innerHTML = '';
+        if (!items.length) {
+            const empty = document.createElement('button');
+            empty.type = 'button';
+            empty.className = 'school-result-option';
+            empty.textContent = 'Sekolah tidak ditemukan. Silakan pilih input manual.';
+            empty.addEventListener('click', function () {
+                if (schoolIdInput) schoolIdInput.value = '';
+                if (schoolSearch) schoolSearch.value = query || '';
+                showManualSchool(true);
+                schoolBox.classList.add('hidden');
+            });
+            schoolBox.appendChild(empty);
+        } else {
+            items.forEach(function (item) {
+                const option = document.createElement('button');
+                option.type = 'button';
+                option.className = 'school-result-option';
+                const title = document.createElement('div');
+                title.className = 'school-result-title';
+                title.textContent = item.label || '-';
+                const desc = document.createElement('div');
+                desc.className = 'school-result-desc';
+                desc.textContent = item.description || '';
+                option.appendChild(title);
+                option.appendChild(desc);
+                option.addEventListener('click', function () {
+                    if (schoolIdInput) schoolIdInput.value = item.id;
+                    if (schoolSearch) schoolSearch.value = item.label;
+                    showManualSchool(false);
+                    schoolBox.classList.add('hidden');
+                });
+                schoolBox.appendChild(option);
+            });
+            const manual = document.createElement('button');
+            manual.type = 'button';
+            manual.className = 'school-result-option border-t border-slate-200';
+            manual.textContent = 'Sekolah tidak ditemukan';
+            manual.addEventListener('click', function () {
+                if (schoolIdInput) schoolIdInput.value = '';
+                showManualSchool(true);
+                schoolBox.classList.add('hidden');
+            });
+            schoolBox.appendChild(manual);
+        }
+        schoolBox.classList.remove('hidden');
+    }
+
+    function searchSchools() {
+        if (!schoolAuto || !schoolSearch || !levelInput || !schoolBox) return;
+        const query = schoolSearch.value.trim();
+        if (schoolIdInput) schoolIdInput.value = '';
+        if (query.length < 2 || !levelInput.value) {
+            schoolBox.classList.add('hidden');
+            return;
+        }
+        if (schoolLoading) schoolLoading.classList.remove('hidden');
+        const url = `${schoolAuto.dataset.searchUrl}?q=${encodeURIComponent(query)}&level=${encodeURIComponent(levelInput.value)}`;
+        fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+            .then(function (response) {
+                if (!response.ok) throw new Error('Pencarian sekolah gagal.');
+                return response.json();
+            })
+            .then(function (payload) {
+                renderSchoolResults(payload.results || [], query);
+            })
+            .catch(function () {
+                renderSchoolResults([], query);
+            })
+            .finally(function () {
+                if (schoolLoading) schoolLoading.classList.add('hidden');
+            });
+    }
+
+    if (levelInput) {
+        levelInput.addEventListener('change', function () {
+            if (schoolIdInput) schoolIdInput.value = '';
+            if (schoolSearch) schoolSearch.value = '';
+            showManualSchool(false);
+            syncEducationFields();
+        });
+        syncEducationFields();
+    }
+    if (schoolSearch) {
+        schoolSearch.addEventListener('input', function () {
+            showManualSchool(false);
+            clearTimeout(schoolTimer);
+            schoolTimer = setTimeout(searchSchools, 350);
+        });
+    }
+    document.addEventListener('click', function (event) {
+        if (schoolAuto && !schoolAuto.contains(event.target) && schoolBox) {
+            schoolBox.classList.add('hidden');
+        }
+    });
+    showManualSchool(Boolean(manualInput && manualInput.value));
 });
 </script>{% endif %}
 {% endblock %}

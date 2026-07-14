@@ -98,24 +98,7 @@ class DashboardView(TemplateView):
         if not pengguna or pengguna.role != 'asisten_lab':
             return []
 
-        matkul_values = PendaftaranAsleb.objects.filter(
-            nim=pengguna.nim_nik,
-            status__in=['diterima', 'digenerate'],
-        ).select_related('matkul').values_list(
-            'matkul__nama',
-            'matkul__dosen',
-            'matkul__kelas',
-        )
-        labels = [f'{nama} - {dosen} - {kelas}' for nama, dosen, kelas in matkul_values]
-
-        history_values = RiwayatAsleb.objects.filter(nim=pengguna.nim_nik).values_list(
-            'matkul__nama',
-            'matkul__dosen',
-            'matkul__kelas',
-        )
-        labels.extend(f'{nama} - {dosen} - {kelas}' for nama, dosen, kelas in history_values)
-
-        labels.extend(
+        labels = list(
             Asleb.objects.filter(nim=pengguna.nim_nik, status='aktif')
             .exclude(matkul='')
             .values_list('matkul', flat=True)

@@ -17,7 +17,6 @@ from .bot_knowledge import BOT_FALLBACK, BOT_GUIDE_TOPICS, BOT_GUIDE_INTRO
 from apps.pengguna.forms import PenggunaAppearanceForm
 from apps.asleb.models import Asleb, PesertaPraktikum
 from apps.jadwal.models import JadwalPraktikum
-from apps.pendaftaran_asleb.models import PendaftaranAsleb, RiwayatAsleb
 
 from .models import BugErrorLog, PercakapanBantuan, PesanBantuan
 from .realtime import broadcast_help_message, broadcast_help_status
@@ -51,19 +50,7 @@ def get_bot_matkul_labels(pengguna):
         return []
 
     if pengguna.role == 'asisten_lab':
-        labels = []
-        matkul_values = PendaftaranAsleb.objects.filter(
-            nim=pengguna.nim_nik,
-            status__in=['diterima', 'digenerate'],
-        ).select_related('matkul').values_list('matkul__nama', 'matkul__dosen', 'matkul__kelas')
-        labels.extend(f'{nama} - {dosen} - {kelas}' for nama, dosen, kelas in matkul_values)
-        history_values = RiwayatAsleb.objects.filter(nim=pengguna.nim_nik).values_list(
-            'matkul__nama',
-            'matkul__dosen',
-            'matkul__kelas',
-        )
-        labels.extend(f'{nama} - {dosen} - {kelas}' for nama, dosen, kelas in history_values)
-        labels.extend(
+        labels = list(
             Asleb.objects.filter(nim=pengguna.nim_nik, status='aktif')
             .exclude(matkul='')
             .values_list('matkul', flat=True)

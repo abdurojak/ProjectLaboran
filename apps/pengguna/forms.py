@@ -3,7 +3,7 @@ from django.contrib.auth.hashers import check_password
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.db import OperationalError, ProgrammingError
-from .models import Fakultas, PengalamanPengguna, Pengguna, Prodi
+from .models import Fakultas, PengalamanPengguna, Pengguna, Prodi, School
 from .utils import validate_human_face_photo
 
 
@@ -269,21 +269,127 @@ class PengalamanPenggunaForm(RiwayatProfilFormBase):
 
 class PendidikanPenggunaForm(RiwayatProfilFormBase):
     category = 'pendidikan'
+    JURUSAN_SMA = [
+        ('', 'Pilih jurusan'),
+        ('IPA', 'IPA'),
+        ('IPS', 'IPS'),
+        ('Bahasa', 'Bahasa'),
+        ('Lainnya', 'Lainnya'),
+    ]
+    JURUSAN_SMK = [
+        ('', 'Pilih jurusan'),
+        ('Rekayasa Perangkat Lunak', 'Rekayasa Perangkat Lunak'),
+        ('Teknik Komputer dan Jaringan', 'Teknik Komputer dan Jaringan'),
+        ('Multimedia', 'Multimedia'),
+        ('Akuntansi', 'Akuntansi'),
+        ('Otomatisasi dan Tata Kelola Perkantoran', 'Otomatisasi dan Tata Kelola Perkantoran'),
+        ('Jurusan lainnya', 'Jurusan lainnya'),
+    ]
+    jenjang_pendidikan = forms.ChoiceField(
+        label='Jenjang Pendidikan',
+        choices=[('', 'Pilih jenjang'), *School.LEVEL_CHOICES],
+        required=True,
+    )
+    sekolah = forms.ModelChoiceField(
+        label='Nama Sekolah',
+        queryset=School.objects.none(),
+        required=False,
+        widget=forms.HiddenInput(attrs={'data-school-id': 'true'}),
+    )
+    nama_sekolah_manual = forms.CharField(
+        label='Masukkan nama sekolah secara manual',
+        max_length=180,
+        required=False,
+        widget=forms.TextInput(attrs={'placeholder': 'Contoh: SMA Harapan Bangsa'}),
+    )
+    bidang_studi = forms.CharField(
+        label='Jurusan',
+        max_length=150,
+        required=False,
+        widget=forms.TextInput(attrs={'placeholder': 'Pilih/isi jurusan'}),
+    )
 
     class Meta:
         model = PengalamanPengguna
-        fields = ['organisasi', 'bidang_studi', 'tanggal_mulai', 'tanggal_selesai', 'masih_berjalan', 'deskripsi']
+        fields = [
+            'jenjang_pendidikan',
+            'sekolah',
+            'nama_sekolah_manual',
+            'bidang_studi',
+            'tanggal_mulai',
+            'tanggal_selesai',
+            'masih_berjalan',
+            'nilai_akhir',
+            'deskripsi',
+        ]
         labels = {
-            'organisasi': 'Nama Sekolah/Kampus',
             'bidang_studi': 'Jurusan/Program Studi',
+            'tanggal_mulai': 'Tahun masuk',
+            'tanggal_selesai': 'Tahun selesai',
             'masih_berjalan': 'Masih menempuh pendidikan',
+            'nilai_akhir': 'Nilai akhir (opsional)',
             'deskripsi': 'Deskripsi tambahan',
         }
-        widgets = RiwayatProfilFormBase.Meta.widgets
+        widgets = {
+            **RiwayatProfilFormBase.Meta.widgets,
+            'tanggal_mulai': forms.DateInput(attrs={'type': 'date'}),
+            'tanggal_selesai': forms.DateInput(attrs={'type': 'date'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        selected_school = None
+        if self.data:
+            selected_school = self.data.get(self.add_prefix('sekolah')) or self.data.get('sekolah')
+        if selected_school:
+            self.fields['sekolah'].queryset = School.objects.filter(pk=selected_school, aktif=True)
+        elif self.instance and self.instance.sekolah_id:
+            self.fields['sekolah'].queryset = School.objects.filter(pk=self.instance.sekolah_id)
+        else:
+            self.fields['sekolah'].queryset = School.objects.none()
+        self.fields['jenjang_pendidikan'].widget.attrs.update({'data-education-level': 'true'})
+        self.fields['bidang_studi'].widget.attrs.update({'data-education-major': 'true', 'list': 'education-major-options'})
+        self.fields['nama_sekolah_manual'].widget.attrs.update({'data-school-manual': 'true'})
+
+    def clean(self):
+        cleaned_data = super().clean()
+        level = cleaned_data.get('jenjang_pendidikan')
+        school = cleaned_data.get('sekolah')
+        manual = (cleaned_data.get('nama_sekolah_manual') or '').strip()
+        major = (cleaned_data.get('bidang_studi') or '').strip()
+        start = cleaned_data.get('tanggal_mulai')
+        end = cleaned_data.get('tanggal_selesai')
+        still = cleaned_data.get('masih_berjalan')
+
+        if school and manual:
+            raise ValidationError('Pilih sekolah dari dropdown atau isi manual, jangan keduanya.')
+        if not school and not manual:
+            raise ValidationError('Pilih sekolah dari dropdown atau isi nama sekolah manual.')
+        if school and level and school.jenjang != level:
+            self.add_error('sekolah', 'Sekolah yang dipilih tidak sesuai jenjang.')
+        if level in {'SMA', 'SMK'} and not major:
+            self.add_error('bidang_studi', 'Jurusan wajib diisi untuk SMA/SMK.')
+        if level in {'SD', 'SMP'}:
+            cleaned_data['bidang_studi'] = ''
+            self.instance.bidang_studi = ''
+        if still:
+            cleaned_data['tanggal_selesai'] = None
+            self.instance.tanggal_selesai = None
+        elif start and end and start > end:
+            self.add_error('tanggal_selesai', 'Tahun selesai tidak boleh lebih awal dari tahun masuk.')
+        return cleaned_data
 
     def save(self, commit=True):
         instance = super().save(commit=False)
-        instance.jabatan = self.cleaned_data.get('bidang_studi') or self.cleaned_data.get('organisasi')
+        school = self.cleaned_data.get('sekolah')
+        manual = (self.cleaned_data.get('nama_sekolah_manual') or '').strip()
+        instance.jenjang_pendidikan = self.cleaned_data.get('jenjang_pendidikan') or ''
+        instance.sekolah = school
+        instance.sekolah_npsn = school.npsn if school else ''
+        instance.sekolah_snapshot = school.nama if school else ''
+        instance.nama_sekolah_manual = manual if not school else ''
+        instance.organisasi = school.nama if school else manual
+        instance.jabatan = self.cleaned_data.get('bidang_studi') or instance.organisasi
         if commit:
             instance.save()
             self.save_m2m()

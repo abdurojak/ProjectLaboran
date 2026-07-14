@@ -1,6 +1,7 @@
 from django import forms
 
-from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, RiwayatAsleb
+from apps.asleb.models import Asleb
+from apps.pendaftaran_asleb.models import MataKuliahAsleb
 from apps.ruangan.models import GrupRuanganGabungan, RuanganLab
 
 from .models import JadwalPraktikum
@@ -57,14 +58,21 @@ class JadwalPraktikumForm(forms.ModelForm):
     def get_matkul_queryset(self):
         queryset = MataKuliahAsleb.objects.filter(aktif=True)
         if self.current_pengguna and self.current_pengguna.role == 'asisten_lab':
-            registration_ids = PendaftaranAsleb.objects.filter(
-                nim=self.current_pengguna.nim_nik,
-                status__in=['diterima', 'digenerate'],
-            ).values_list('matkul_id', flat=True)
-            history_ids = RiwayatAsleb.objects.filter(
-                nim=self.current_pengguna.nim_nik,
-            ).values_list('matkul_id', flat=True)
-            return queryset.filter(pk__in=set(registration_ids) | set(history_ids)).distinct()
+            active_labels = list(
+                Asleb.objects.filter(
+                    nim=self.current_pengguna.nim_nik,
+                    status='aktif',
+                ).exclude(matkul='').values_list('matkul', flat=True)
+            )
+            if not active_labels:
+                return queryset.none()
+
+            active_ids = [
+                matkul.pk
+                for matkul in queryset
+                if str(matkul) in active_labels
+            ]
+            return queryset.filter(pk__in=active_ids).distinct()
         return queryset
 
     def get_initial_matkul(self):

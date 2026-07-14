@@ -140,6 +140,18 @@ class PengalamanPengguna(models.Model):
     deskripsi = models.TextField(blank=True)
     otomatis = models.BooleanField(default=False, editable=False)
     source_key = models.CharField(max_length=100, blank=True, unique=True, null=True, editable=False)
+    jenjang_pendidikan = models.CharField(max_length=20, blank=True)
+    sekolah = models.ForeignKey(
+        'School',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='riwayat_pendidikan',
+    )
+    sekolah_npsn = models.CharField(max_length=20, blank=True)
+    sekolah_snapshot = models.CharField(max_length=180, blank=True)
+    nama_sekolah_manual = models.CharField(max_length=180, blank=True)
+    nilai_akhir = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
     dibuat_pada = models.DateTimeField(auto_now_add=True)
     diperbarui_pada = models.DateTimeField(auto_now=True)
 
@@ -166,3 +178,46 @@ class PengalamanPengguna(models.Model):
 
     def __str__(self):
         return f'{self.jabatan} - {self.organisasi}'
+
+    @property
+    def nama_pendidikan_display(self):
+        return self.sekolah_snapshot or self.nama_sekolah_manual or self.organisasi
+
+
+class School(models.Model):
+    LEVEL_CHOICES = [
+        ('SD', 'SD'),
+        ('SMP', 'SMP'),
+        ('SMA', 'SMA'),
+        ('SMK', 'SMK'),
+    ]
+    STATUS_CHOICES = [
+        ('negeri', 'Negeri'),
+        ('swasta', 'Swasta'),
+        ('lainnya', 'Lainnya'),
+    ]
+
+    npsn = models.CharField(max_length=20, unique=True)
+    nama = models.CharField(max_length=180, db_index=True)
+    jenjang = models.CharField(max_length=20, choices=LEVEL_CHOICES, db_index=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='lainnya')
+    provinsi = models.CharField(max_length=120, blank=True, db_index=True)
+    kabupaten_kota = models.CharField(max_length=120, blank=True, db_index=True)
+    kecamatan = models.CharField(max_length=120, blank=True)
+    alamat = models.CharField(max_length=260, blank=True)
+    aktif = models.BooleanField(default=True)
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+    diperbarui_pada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['nama']
+        indexes = [
+            models.Index(fields=['npsn']),
+            models.Index(fields=['jenjang', 'nama']),
+            models.Index(fields=['provinsi', 'kabupaten_kota']),
+        ]
+        verbose_name = 'Sekolah'
+        verbose_name_plural = 'Sekolah'
+
+    def __str__(self):
+        return f'{self.nama} ({self.npsn})'
