@@ -762,6 +762,170 @@
             background: rgba(13, 148, 136, 1) !important;
         }
 
+        [data-help-floating] [data-labbot-pet] {
+            width: 6.5rem;
+            height: 7rem;
+            padding: 0;
+            border: 0 !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            filter: drop-shadow(0 20px 26px rgba(15, 23, 42, 0.24));
+            transform-origin: 50% 88%;
+            opacity: 1;
+        }
+
+        [data-help-floating] [data-labbot-pet]:hover {
+            background: transparent !important;
+            filter: drop-shadow(0 24px 30px rgba(15, 23, 42, 0.30));
+            transform: translateY(-0.18rem) scale(1.02);
+        }
+
+        [data-help-floating] [data-labbot-pet]:focus-visible {
+            outline: 3px solid rgba(45, 212, 191, 0.68);
+            outline-offset: 0.25rem;
+        }
+
+        html[data-theme="dark"] [data-help-floating] [data-labbot-pet] {
+            background: transparent !important;
+            filter: drop-shadow(0 22px 32px rgba(2, 6, 23, 0.72));
+        }
+
+        .labbot-pet__sprite {
+            width: 6rem;
+            height: 6.5rem;
+            background-image: url("{% static 'core/img/labbot-spritesheet.webp' %}");
+            background-repeat: no-repeat;
+            background-size: 800% 1100%;
+            background-position: 0 0;
+            image-rendering: auto;
+            transform-origin: 50% 88%;
+            transition: transform 180ms ease;
+        }
+
+        .labbot-pet__shadow {
+            position: absolute;
+            bottom: 0.15rem;
+            left: 50%;
+            width: 4.25rem;
+            height: 0.9rem;
+            border-radius: 999px;
+            background: radial-gradient(ellipse at center, rgba(15, 23, 42, 0.26), transparent 68%);
+            transform: translateX(-50%);
+            opacity: 0.72;
+            pointer-events: none;
+        }
+
+        html[data-theme="dark"] .labbot-pet__shadow {
+            background: radial-gradient(ellipse at center, rgba(45, 212, 191, 0.24), transparent 68%);
+            opacity: 0.58;
+        }
+
+        .labbot-pet__bubble {
+            position: absolute;
+            right: 4.75rem;
+            bottom: 5.5rem;
+            width: min(18rem, calc(100vw - 8rem));
+            max-width: 18rem;
+            border: 1px solid rgba(45, 212, 191, 0.30);
+            border-radius: 1.35rem 1.35rem 0.35rem 1.35rem;
+            background: rgba(255, 255, 255, 0.96);
+            box-shadow: 0 20px 50px rgba(15, 23, 42, 0.20);
+            color: #0f172a;
+            transform: translateY(0.5rem) scale(0.96);
+            transform-origin: 100% 100%;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 180ms ease, transform 180ms ease;
+            backdrop-filter: blur(16px) saturate(1.08);
+            -webkit-backdrop-filter: blur(16px) saturate(1.08);
+        }
+
+        .labbot-pet__bubble::after {
+            content: "";
+            position: absolute;
+            right: 1.15rem;
+            bottom: -0.48rem;
+            width: 1rem;
+            height: 1rem;
+            border-bottom: 1px solid rgba(45, 212, 191, 0.28);
+            border-right: 1px solid rgba(45, 212, 191, 0.28);
+            background: inherit;
+            transform: rotate(45deg);
+        }
+
+        .labbot-pet__bubble.is-visible {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateY(0) scale(1);
+        }
+
+        .labbot-pet__bubble-title {
+            color: #0f766e;
+        }
+
+        .labbot-pet__bubble-message {
+            color: #475569;
+        }
+
+        html[data-theme="dark"] .labbot-pet__bubble {
+            border-color: rgba(94, 234, 212, 0.24);
+            background: rgba(15, 23, 42, 0.94);
+            box-shadow: 0 24px 64px rgba(2, 6, 23, 0.62);
+            color: #e2e8f0;
+        }
+
+        html[data-theme="dark"] .labbot-pet__bubble-title {
+            color: #67e8f9;
+        }
+
+        html[data-theme="dark"] .labbot-pet__bubble-message {
+            color: #cbd5e1;
+        }
+
+        [data-labbot-pet].is-bobbing .labbot-pet__sprite {
+            animation: labbot-pet-bob 1.6s ease-in-out infinite;
+        }
+
+        [data-labbot-pet].is-alerting .labbot-pet__sprite {
+            animation: labbot-pet-alert 680ms ease-in-out 2;
+        }
+
+        @keyframes labbot-pet-bob {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-0.22rem) rotate(-1deg); }
+        }
+
+        @keyframes labbot-pet-alert {
+            0%, 100% { transform: translateY(0) scale(1); }
+            35% { transform: translateY(-0.5rem) scale(1.04); }
+            70% { transform: translateY(0.08rem) scale(0.98); }
+        }
+
+        @media (max-width: 640px) {
+            [data-help-floating] [data-labbot-pet] {
+                width: 5.6rem;
+                height: 6rem;
+            }
+
+            .labbot-pet__sprite {
+                width: 5.15rem;
+                height: 5.58rem;
+            }
+
+            .labbot-pet__bubble {
+                right: 3.95rem;
+                bottom: 4.8rem;
+                width: min(16rem, calc(100vw - 6.5rem));
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            [data-labbot-pet].is-bobbing .labbot-pet__sprite,
+            [data-labbot-pet].is-alerting .labbot-pet__sprite {
+                animation: none;
+            }
+        }
+
         [data-help-dialog] {
             background-color: rgba(15, 23, 42, 0.62) !important;
         }
@@ -2192,9 +2356,15 @@
         </a>
     </div>
     {% else %}
-    <div class="fixed bottom-24 right-4 z-40 md:bottom-8 md:right-8" data-help-floating>
-        <button type="button" class="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-700 text-white shadow-xl shadow-brand-900/20 transition hover:-translate-y-0.5 hover:bg-brand-800" data-help-dialog-open aria-label="Buka chat bantuan" title="Chat Bantuan">
-            <i data-lucide="message-circle-question" class="h-6 w-6"></i>
+    <div class="fixed bottom-24 right-3 z-[80] md:bottom-7 md:right-7" data-help-floating>
+        <a href="{% url 'kalender:notifikasi_list' %}" class="labbot-pet__bubble block p-4" data-labbot-pet-bubble aria-live="polite">
+            <span class="labbot-pet__bubble-title block text-xs font-black uppercase tracking-[0.16em]">LabBot</span>
+            <span class="labbot-pet__bubble-message mt-1 block text-sm font-semibold leading-5" data-labbot-pet-bubble-message>Ada pembaruan baru.</span>
+        </a>
+        <button type="button" class="group relative inline-flex items-end justify-center transition" data-help-dialog-open data-labbot-pet aria-label="Buka chat bantuan" title="Chat Bantuan">
+            <span class="labbot-pet__shadow" aria-hidden="true"></span>
+            <span class="labbot-pet__sprite" data-labbot-pet-sprite aria-hidden="true"></span>
+            <span class="sr-only">Buka chat bantuan</span>
         </button>
     </div>
 
@@ -2272,6 +2442,11 @@
             function showGlobalLoading(event) {
                 if (shouldSkipGlobalLoading(event)) return;
                 if (!globalLoading) return;
+                document.dispatchEvent(new CustomEvent('labhub:pet:activity', {
+                    detail: {
+                        type: event && event.type === 'click' ? 'navigate' : 'working',
+                    },
+                }));
                 loadingCount += 1;
                 window.clearTimeout(loadingTimer);
                 loadingTimer = window.setTimeout(function () {
@@ -2294,6 +2469,7 @@
                 delete globalLoading.dataset.initialLoading;
                 globalLoading.classList.remove('is-visible');
                 globalLoading.setAttribute('aria-hidden', 'true');
+                document.dispatchEvent(new CustomEvent('labhub:pet:success'));
             }
 
             function hideInitialLoadingWhenReady() {
@@ -2695,7 +2871,174 @@
             const helpLoading = document.querySelector('[data-help-loading]');
             const helpError = document.querySelector('[data-help-error]');
             const helpSubmit = document.querySelector('[data-help-submit]');
+            let helpTypingPetTimer = null;
             const adminChatFloating = document.querySelector('[data-admin-chat-floating]');
+            const labbotPet = document.querySelector('[data-labbot-pet]');
+            const labbotPetSprite = document.querySelector('[data-labbot-pet-sprite]');
+            const labbotPetBubble = document.querySelector('[data-labbot-pet-bubble]');
+            const labbotPetBubbleMessage = document.querySelector('[data-labbot-pet-bubble-message]');
+
+            if (labbotPet && labbotPetSprite) {
+                const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                const frame = {
+                    column: 0,
+                    row: 0,
+                };
+                const sequences = {
+                    idle: {row: 0, frames: [0, 1, 2, 3, 4, 5], delay: 190, loops: 2},
+                    blink: {row: 0, frames: [0, 1, 2, 1, 0, 6], delay: 145, loops: 1},
+                    moveRight: {row: 1, frames: [0, 1, 2, 3, 4, 5, 6, 7], delay: 105, loops: 1},
+                    moveLeft: {row: 2, frames: [0, 1, 2, 3, 4, 5, 6, 7], delay: 105, loops: 1},
+                    wave: {row: 3, frames: [0, 1, 2, 3, 2, 1], delay: 125, loops: 1},
+                    jump: {row: 4, frames: [0, 1, 2, 3, 4, 3, 2, 1], delay: 120, loops: 1},
+                    failed: {row: 5, frames: [0, 1, 2, 3, 4, 5, 6, 7], delay: 140, loops: 1},
+                    wait: {row: 6, frames: [0, 1, 2, 3, 4, 5, 4, 3], delay: 155, loops: 1},
+                    working: {row: 7, frames: [0, 1, 2, 3, 4, 5, 4, 3], delay: 135, loops: 2},
+                    review: {row: 8, frames: [0, 1, 2, 3, 4, 5, 4, 3], delay: 150, loops: 1},
+                };
+                let sequenceTimer = null;
+                let idleTimer = null;
+                let bubbleTimer = null;
+                let isPlaying = false;
+
+                function setPetFrame(row, column) {
+                    frame.row = Math.max(0, Math.min(10, Number(row) || 0));
+                    frame.column = Math.max(0, Math.min(7, Number(column) || 0));
+                    labbotPetSprite.style.backgroundPosition = `${(frame.column / 7) * 100}% ${(frame.row / 10) * 100}%`;
+                }
+
+                function clearPetTimers() {
+                    window.clearTimeout(sequenceTimer);
+                    window.clearTimeout(idleTimer);
+                    window.clearTimeout(bubbleTimer);
+                }
+
+                function showPetBubble(payload) {
+                    if (!labbotPetBubble || !labbotPetBubbleMessage || !payload) return;
+                    if (payload.silent) return;
+                    const title = (payload.title || 'Pembaruan LabHub').toString().trim();
+                    const message = (payload.message || '').toString().trim();
+                    const displayMessage = message.length > 220 ? `${message.slice(0, 217).trim()}...` : message;
+                    labbotPetBubbleMessage.textContent = displayMessage ? `${title}: ${displayMessage}` : title;
+                    labbotPetBubble.href = payload.related_url || "{% url 'kalender:notifikasi_list' %}";
+                    labbotPetBubble.classList.add('is-visible');
+                    window.clearTimeout(bubbleTimer);
+                    bubbleTimer = window.setTimeout(function () {
+                        labbotPetBubble.classList.remove('is-visible');
+                    }, 7800);
+                }
+
+                function resolvePetSequenceForPayload(payload) {
+                    const notificationType = (payload.notification_type || payload.type || '').toString().toLowerCase();
+                    const eventName = (payload.event || '').toString().toLowerCase();
+                    if (notificationType.includes('error') || notificationType.includes('gagal') || notificationType.includes('ditolak') || eventName.includes('error')) {
+                        return 'failed';
+                    }
+                    if (notificationType.includes('success') || notificationType.includes('selesai') || notificationType.includes('diterima') || notificationType.includes('approved')) {
+                        return 'jump';
+                    }
+                    if (notificationType.includes('warning') || notificationType.includes('menunggu') || notificationType.includes('diajukan')) {
+                        return 'wait';
+                    }
+                    if (eventName.includes('updated') || eventName.includes('created')) {
+                        return 'jump';
+                    }
+                    return 'wait';
+                }
+
+                function resolvePetSequenceForActivity(detail) {
+                    const activityType = (detail && detail.type || '').toString().toLowerCase();
+                    if (activityType === 'navigate') {
+                        return Math.random() > 0.5 ? 'moveRight' : 'moveLeft';
+                    }
+                    if (activityType === 'typing') {
+                        return 'review';
+                    }
+                    if (activityType === 'thinking') {
+                        return 'working';
+                    }
+                    return 'working';
+                }
+
+                function scheduleIdle() {
+                    window.clearTimeout(idleTimer);
+                    if (reducedMotion) return;
+                    idleTimer = window.setTimeout(function () {
+                        const choices = ['idle', 'blink', 'wave', 'wait', 'review'];
+                        playPetSequence(choices[Math.floor(Math.random() * choices.length)]);
+                    }, 2400 + Math.floor(Math.random() * 3400));
+                }
+
+                function playPetSequence(name, force) {
+                    const sequence = sequences[name] || sequences.idle;
+                    if (isPlaying && name !== 'wave' && !force) return;
+                    window.clearTimeout(sequenceTimer);
+                    isPlaying = true;
+                    labbotPet.classList.toggle('is-bobbing', name === 'idle' || name === 'blink');
+
+                    const totalFrames = sequence.frames.length * sequence.loops;
+                    let index = 0;
+
+                    function tick() {
+                        const column = sequence.frames[index % sequence.frames.length];
+                        setPetFrame(sequence.row, column);
+                        index += 1;
+                        if (index < totalFrames) {
+                            sequenceTimer = window.setTimeout(tick, sequence.delay);
+                            return;
+                        }
+                        isPlaying = false;
+                        labbotPet.classList.remove('is-bobbing');
+                        setPetFrame(0, 6);
+                        scheduleIdle();
+                    }
+
+                    tick();
+                }
+
+                setPetFrame(0, 6);
+                if (!reducedMotion) {
+                    scheduleIdle();
+                    labbotPet.addEventListener('pointerenter', function () {
+                        playPetSequence('wave');
+                    });
+                    labbotPet.addEventListener('click', function () {
+                        playPetSequence('wave');
+                    });
+                    document.addEventListener('labhub:realtime', function (event) {
+                        if (event.detail && event.detail.silent) return;
+                        labbotPet.classList.remove('is-alerting');
+                        void labbotPet.offsetWidth;
+                        labbotPet.classList.add('is-alerting');
+                        playPetSequence(resolvePetSequenceForPayload(event.detail || {}));
+                    });
+                    document.addEventListener('labhub:pet:activity', function (event) {
+                        playPetSequence(resolvePetSequenceForActivity(event.detail || {}), true);
+                    });
+                    document.addEventListener('labhub:pet:error', function () {
+                        playPetSequence('failed');
+                    });
+                    document.addEventListener('labhub:pet:success', function () {
+                        playPetSequence('jump');
+                    });
+                    window.addEventListener('beforeunload', clearPetTimers);
+                }
+
+                document.addEventListener('labhub:realtime', function (event) {
+                    showPetBubble(event.detail || {});
+                });
+                document.addEventListener('labhub:pet:say', function (event) {
+                    const detail = event.detail || {};
+                    const message = (detail.message || '').toString().trim();
+                    if (!message) return;
+                    showPetBubble({
+                        title: detail.title || 'Bot Bantuan',
+                        message: message,
+                        related_url: detail.related_url || "{% url 'core:bantuan' %}",
+                    });
+                    playPetSequence(detail.sequence || 'review');
+                });
+            }
 
             if (adminChatFloating) {
                 const countBadge = adminChatFloating.querySelector('[data-admin-help-count]');
@@ -2741,6 +3084,11 @@
                         helpSubmit.disabled = isLoading;
                         helpSubmit.classList.toggle('opacity-70', isLoading);
                     }
+                    if (isLoading) {
+                        document.dispatchEvent(new CustomEvent('labhub:pet:activity', {
+                            detail: {type: 'thinking'},
+                        }));
+                    }
                 }
 
                 function setHelpError(message) {
@@ -2779,6 +3127,16 @@
 
                     helpMessages.appendChild(wrapper);
                     helpMessages.scrollTop = helpMessages.scrollHeight;
+                    if (!isUser) {
+                        document.dispatchEvent(new CustomEvent('labhub:pet:say', {
+                            detail: {
+                                title: 'Bot Bantuan',
+                                message: content,
+                                related_url: "{% url 'core:bantuan' %}",
+                                sequence: 'review',
+                            },
+                        }));
+                    }
                 }
 
                 function resetHelpDialogMessages() {
@@ -2832,6 +3190,15 @@
                             helpForm.requestSubmit();
                         }
                     });
+                    helpTextarea.addEventListener('input', function () {
+                        if (!helpTextarea.value.trim()) return;
+                        window.clearTimeout(helpTypingPetTimer);
+                        helpTypingPetTimer = window.setTimeout(function () {
+                            document.dispatchEvent(new CustomEvent('labhub:pet:activity', {
+                                detail: {type: 'typing'},
+                            }));
+                        }, 120);
+                    });
                 }
 
                 if (helpForm) {
@@ -2878,9 +3245,11 @@
                                 } else if (payload.notice) {
                                     appendHelpMessage('bot', payload.notice, '');
                                 }
+                                document.dispatchEvent(new CustomEvent('labhub:pet:success'));
                             })
                             .catch(function (error) {
                                 setHelpError(error.message || 'Pesan belum dapat dikirim.');
+                                document.dispatchEvent(new CustomEvent('labhub:pet:error'));
                             })
                             .finally(function () {
                                 setHelpLoading(false);

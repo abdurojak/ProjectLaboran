@@ -209,6 +209,39 @@ class GlobalBackgroundTests(TestCase):
         self.assertContains(response, "window.addEventListener('focus', syncNotificationSummary);")
         self.assertContains(response, '}, 5000);')
 
+    def test_labbot_pet_memakai_animasi_kontekstual(self):
+        pengguna = Pengguna.objects.create(
+            nama_pengguna='User LabBot',
+            nim_nik='0642201066',
+            email='labbot@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081234567866',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+        )
+        session = self.client.session
+        session['pengguna_id'] = pengguna.pk
+        session.save()
+
+        response = self.client.get(reverse('dashboard:home'))
+
+        self.assertContains(response, "jump: {row: 4")
+        self.assertContains(response, "failed: {row: 5")
+        self.assertContains(response, "working: {row: 7")
+        self.assertContains(response, "moveRight: {row: 1")
+        self.assertContains(response, "moveLeft: {row: 2")
+        self.assertContains(response, "resolvePetSequenceForPayload(payload)")
+        self.assertContains(response, "resolvePetSequenceForActivity(detail)")
+        self.assertContains(response, "activityType === 'typing'")
+        self.assertContains(response, "activityType === 'thinking'")
+        self.assertContains(response, "document.addEventListener('labhub:pet:activity'")
+        self.assertContains(response, "document.addEventListener('labhub:pet:error'")
+        self.assertContains(response, "document.addEventListener('labhub:pet:say'")
+        self.assertContains(response, "document.dispatchEvent(new CustomEvent('labhub:pet:say'")
+
     def test_logo_navbar_menyatu_dengan_panel_saat_scroll(self):
         pengguna = Pengguna.objects.create(
             nama_pengguna='User Navbar',
