@@ -241,6 +241,16 @@ class GlobalBackgroundTests(TestCase):
         self.assertContains(response, "document.addEventListener('labhub:pet:error'")
         self.assertContains(response, "document.addEventListener('labhub:pet:say'")
         self.assertContains(response, "document.dispatchEvent(new CustomEvent('labhub:pet:say'")
+        self.assertContains(response, "[data-help-floating] [data-labbot-pet]:active")
+        self.assertContains(response, "background-color: transparent !important;")
+        self.assertContains(response, "appearance: none;")
+        self.assertContains(response, "bottom-8 right-1")
+        self.assertContains(response, ".labbot-pet__bubble")
+        self.assertContains(response, "display: none !important;")
+        self.assertContains(response, "labbot-spritesheet.png")
+        self.assertContains(response, "<canvas class=\"labbot-pet__sprite\"")
+        self.assertContains(response, "spriteContext.drawImage(")
+        self.assertNotContains(response, ".labbot-pet__bubble::after")
 
     def test_logo_navbar_menyatu_dengan_panel_saat_scroll(self):
         pengguna = Pengguna.objects.create(
