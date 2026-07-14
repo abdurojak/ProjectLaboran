@@ -20,7 +20,7 @@
         {% csrf_token %}
         <input type="hidden" id="id_hapus_foto" name="hapus_foto" value="0">
         {% for field in form %}
-        <div class="{% if field.name == 'nama_barang' or field.name == 'nama_pemilik' or field.name == 'foto' %}md:col-span-2{% endif %}">
+        <div class="{% if field.name == 'nama_barang' or field.name == 'foto' %}md:col-span-2{% endif %}">
             {{ field.label_tag }}
             {% if field.name == 'foto' %}
             {% include "components/file_upload.html" with field=field current_file=object.foto button_label="Pilih Foto" title="Upload foto barang tertinggal" empty_label="Belum ada foto dipilih" delete_label="Foto akan dihapus saat disimpan" preview_label="Preview foto" preview_alt="Preview foto barang tertinggal" delete_input_id="id_hapus_foto" delete_button_label="Hapus Foto" %}

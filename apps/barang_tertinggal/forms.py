@@ -14,6 +14,7 @@ class BarangTertinggalForm(forms.ModelForm):
             'tanggal_ditemukan',
             'tanggal_diambil',
             'nama_pemilik',
+            'nim_pemilik',
             'status',
         ]
         widgets = {
