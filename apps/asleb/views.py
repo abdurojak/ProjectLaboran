@@ -1,4 +1,5 @@
 import logging
+import mimetypes
 import zipfile
 from decimal import Decimal, ROUND_HALF_UP
 from io import BytesIO
@@ -14,6 +15,7 @@ from django.urls import reverse_lazy
 from django.utils.text import slugify
 from django.utils import timezone
 from django.views.decorators.http import require_POST
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView
 
 from apps.core.views import PostOnlyDeleteMixin
@@ -1325,7 +1327,7 @@ def build_simple_xlsx(rows, sheet_name='Sheet1'):
     return output.getvalue()
 
 
-def download_modul_praktikum(request, pk):
+def _get_accessible_modul_praktikum(request, pk):
     pengguna = getattr(request, 'current_pengguna', None)
     modul = get_object_or_404(ModulPraktikum.objects.select_related('matkul'), pk=pk)
     allowed = can_manage_lab_operations(pengguna)
@@ -1336,12 +1338,36 @@ def download_modul_praktikum(request, pk):
 
     if not allowed:
         messages.error(request, 'Anda tidak memiliki akses ke modul praktikum ini.')
+        return None
+
+    return modul
+
+
+def download_modul_praktikum(request, pk):
+    modul = _get_accessible_modul_praktikum(request, pk)
+    if not modul:
         return redirect('asleb:absensi_list')
 
     return FileResponse(
         modul.file.open('rb'),
         as_attachment=True,
         filename=modul.file.name.rsplit('/', 1)[-1],
+    )
+
+
+@xframe_options_sameorigin
+def preview_modul_praktikum(request, pk):
+    modul = _get_accessible_modul_praktikum(request, pk)
+    if not modul:
+        return redirect('asleb:absensi_list')
+
+    filename = modul.file.name.rsplit('/', 1)[-1]
+    content_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+    return FileResponse(
+        modul.file.open('rb'),
+        as_attachment=False,
+        filename=filename,
+        content_type=content_type,
     )
 
 
