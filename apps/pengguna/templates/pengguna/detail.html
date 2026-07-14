@@ -476,9 +476,9 @@
             <div class="{% if field.name == 'foto' or field.name == 'cover_image' or field.name == 'nama_pengguna' or field.name == 'alamat' or field.name == 'ringkasan_profesional' or field.name == 'keahlian' %}md:col-span-2{% endif %}">
                 {{ field.label_tag }}
                 {% if field.name == 'foto' %}
-                {% include "components/file_upload.html" with field=field current_file=pengguna.foto button_label="Pilih Foto" title="Upload foto pengguna" empty_label="Belum ada foto dipilih" delete_label="Foto akan dihapus saat disimpan" preview_label="Preview foto" preview_alt="Preview foto pengguna" delete_input_id="id_profile_hapus_foto" delete_button_label="Hapus Foto" crop_aspect="1" crop_shape="circle" %}
+                {% include "components/file_upload.html" with field=field current_file=pengguna.foto button_label="Pilih Foto" title="Upload foto pengguna" empty_label="Belum ada foto dipilih" delete_label="Foto akan dihapus saat disimpan" preview_label="Preview foto" preview_alt="Preview foto pengguna" delete_input_id="id_profile_hapus_foto" delete_button_label="Hapus Foto" crop_aspect="1" crop_shape="circle" crop_output_width="900" %}
                 {% elif field.name == 'cover_image' %}
-                {% include "components/file_upload.html" with field=field current_file=pengguna.cover_image button_label="Pilih Foto Sampul" title="Upload foto sampul profil" empty_label="Belum ada foto sampul" preview_label="Preview foto sampul" preview_alt="Preview foto sampul" crop_aspect="3" crop_shape="rect" %}
+                {% include "components/file_upload.html" with field=field current_file=pengguna.cover_image button_label="Pilih Foto Sampul" title="Upload foto sampul profil" empty_label="Belum ada foto sampul" preview_label="Preview foto sampul" preview_alt="Preview foto sampul" crop_aspect="3" crop_shape="rect" crop_output_width="1800" %}
                 {% else %}
                 {{ field }}
                 {% endif %}
