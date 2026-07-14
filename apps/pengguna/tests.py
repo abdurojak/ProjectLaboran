@@ -338,6 +338,8 @@ class PenggunaViewTests(TestCase):
         self.assertContains(response, 'data-crop-aspect="1"')
         self.assertContains(response, 'data-crop-shape="circle"')
         self.assertContains(response, 'data-crop-aspect="3"')
+        self.assertContains(response, 'data-crop-output-width="1800"')
+        self.assertContains(response, 'const outputWidth = Math.max')
         self.assertContains(response, 'data-image-crop-modal')
         self.assertContains(response, "modal.className = 'fixed inset-0 z-[130]")
         self.assertContains(response, 'document.body.appendChild(modal);')
