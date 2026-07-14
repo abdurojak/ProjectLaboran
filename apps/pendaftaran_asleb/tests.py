@@ -86,6 +86,16 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertContains(response, 'Status: Ditutup')
         self.assertContains(response, 'Buka Pendaftaran')
         self.assertContains(response, get_public_registration_url())
+        self.assertContains(response, 'registration-admin-cards')
+        self.assertContains(response, 'registration-admin-table')
+        self.assertContains(response, 'registration-admin-card-actions')
+        self.assertContains(response, 'registration-admin-header')
+        self.assertContains(response, 'registration-admin-filter')
+        self.assertContains(response, 'registration-admin-control-grid')
+        self.assertContains(response, '@media (max-width: 1279px), (hover: none) and (pointer: coarse)')
+        self.assertContains(response, '@media (min-width: 641px) and (max-width: 1279px)')
+        self.assertContains(response, 'border-top: 1px solid rgba(148, 163, 184, 0.16)')
+        self.assertContains(response, 'Terima')
 
     def test_pendaftaran_success_hanya_mengarahkan_ke_dashboard(self):
         response = self.client.get(reverse('pendaftaran_asleb:pendaftaran_success'))
@@ -214,6 +224,10 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertNotContains(response, 'name="no_hp" type="text"')
         self.assertNotContains(response, 'name="email" type="email"')
         self.assertNotContains(response, 'name="program_studi" type="text"')
+        self.assertContains(response, 'aslab-registration-page')
+        self.assertContains(response, 'aslab-registration-steps')
+        self.assertContains(response, 'aslab-registration-actions')
+        self.assertContains(response, '@media (max-width: 640px)')
 
         transkrip_path = default_storage.save(
             'pendaftaran_asleb/transkrip_tmp/test-transkrip.pdf',

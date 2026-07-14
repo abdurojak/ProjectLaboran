@@ -767,24 +767,27 @@
             height: 7rem;
             padding: 0;
             border: 0 !important;
+            border-radius: 0;
             background: transparent !important;
             background-color: transparent !important;
             appearance: none;
             -webkit-appearance: none;
             -webkit-tap-highlight-color: transparent;
             box-shadow: none !important;
-            filter: drop-shadow(0 20px 26px rgba(15, 23, 42, 0.24));
+            filter: none;
             transform-origin: 50% 88%;
             opacity: 1;
+            overflow: visible;
         }
 
         [data-help-floating] [data-labbot-pet]:hover,
         [data-help-floating] [data-labbot-pet]:active,
         [data-help-floating] [data-labbot-pet]:focus {
+            border: 0 !important;
             background: transparent !important;
             background-color: transparent !important;
             box-shadow: none !important;
-            filter: drop-shadow(0 24px 30px rgba(15, 23, 42, 0.30));
+            filter: none;
             transform: translateY(-0.18rem) scale(1.02);
         }
 
@@ -801,9 +804,11 @@
         }
 
         html[data-theme="dark"] [data-help-floating] [data-labbot-pet] {
+            border: 0 !important;
             background: transparent !important;
             background-color: transparent !important;
-            filter: drop-shadow(0 22px 32px rgba(2, 6, 23, 0.72));
+            box-shadow: none !important;
+            filter: none;
         }
 
         .labbot-pet__sprite {
@@ -830,14 +835,14 @@
         }
 
         html[data-theme="dark"] .labbot-pet__shadow {
-            background: radial-gradient(ellipse at center, rgba(45, 212, 191, 0.24), transparent 68%);
-            opacity: 0.58;
+            background: radial-gradient(ellipse at center, rgba(2, 6, 23, 0.42), transparent 68%);
+            opacity: 0.48;
         }
 
         .labbot-pet__bubble {
             position: absolute;
-            right: 4.4rem;
-            bottom: 6.1rem;
+            right: 5.15rem;
+            bottom: 8.05rem;
             width: min(18rem, calc(100vw - 8rem));
             max-width: 18rem;
             border: 1px solid rgba(45, 212, 191, 0.30);
@@ -1350,8 +1355,10 @@
             [data-help-floating] [data-labbot-pet]:hover,
             [data-help-floating] [data-labbot-pet]:active,
             [data-help-floating] [data-labbot-pet]:focus {
+                border: 0 !important;
                 background: transparent !important;
                 background-color: transparent !important;
+                box-shadow: none !important;
                 -webkit-tap-highlight-color: transparent;
             }
 

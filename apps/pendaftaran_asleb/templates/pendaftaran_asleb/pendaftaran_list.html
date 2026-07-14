@@ -2,20 +2,166 @@
 
 {% block title %}Pendaftaran Aslab{% endblock %}
 
+{% block extra_head %}
+<style>
+    .registration-admin-page,
+    .registration-admin-page * {
+        min-width: 0;
+    }
+
+    .registration-admin-actions {
+        max-width: 100%;
+    }
+
+    .registration-admin-menu {
+        max-width: calc(100vw - 2rem);
+    }
+
+    .registration-admin-copy-input {
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    @media (max-width: 1279px), (hover: none) and (pointer: coarse) {
+        .registration-admin-header {
+            display: grid !important;
+            grid-template-columns: 1fr;
+        }
+
+        .registration-admin-heading {
+            font-size: 1.75rem !important;
+            line-height: 2.15rem !important;
+        }
+
+        .registration-admin-actions {
+            display: grid !important;
+            grid-template-columns: 1fr;
+            width: 100%;
+        }
+
+        .registration-admin-actions form,
+        .registration-admin-actions details,
+        .registration-admin-actions .btn-primary,
+        .registration-admin-actions .btn-secondary,
+        .registration-admin-actions summary {
+            width: 100%;
+        }
+
+        .registration-admin-actions .btn-primary,
+        .registration-admin-actions summary {
+            justify-content: center;
+        }
+
+        .registration-admin-menu {
+            left: 0;
+            right: auto;
+            width: 100%;
+        }
+
+        .registration-admin-control-grid {
+            grid-template-columns: 1fr !important;
+        }
+
+        .registration-admin-control-card {
+            padding: 1rem !important;
+        }
+
+        .registration-admin-filter {
+            grid-template-columns: 1fr !important;
+        }
+
+        .registration-admin-filter-actions {
+            display: grid !important;
+            grid-template-columns: 1fr;
+        }
+
+        .registration-admin-filter-actions .btn-primary,
+        .registration-admin-filter-actions .btn-secondary {
+            width: 100%;
+            justify-content: center;
+        }
+
+        .registration-admin-table {
+            display: none;
+        }
+
+        .registration-admin-cards {
+            display: grid;
+        }
+
+        .registration-admin-card-actions {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        @media (max-width: 380px) {
+            .registration-admin-card-actions {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .registration-admin-card-actions > *,
+        .registration-admin-card-actions button,
+        .registration-admin-card-actions a {
+            width: 100%;
+            justify-content: center;
+            text-align: center;
+        }
+
+        .registration-admin-cards .surface-card {
+            overflow: hidden;
+        }
+
+        .registration-admin-cards h3,
+        .registration-admin-cards p,
+        .registration-admin-cards span {
+            overflow-wrap: anywhere;
+        }
+    }
+
+    @media (min-width: 641px) and (max-width: 1279px), (min-width: 641px) and (hover: none) and (pointer: coarse) {
+        .registration-admin-card-actions {
+            border-top: 1px solid rgba(148, 163, 184, 0.16);
+            margin-top: 0.25rem;
+            padding-top: 1rem;
+        }
+    }
+
+    @media (min-width: 1280px) and (hover: hover) and (pointer: fine) {
+        .registration-admin-cards {
+            display: none;
+        }
+    }
+
+    html[data-theme="dark"] .registration-admin-cards .bg-slate-50 {
+        background-color: rgba(30, 41, 59, 0.48) !important;
+    }
+
+    html[data-theme="dark"] .registration-admin-cards .text-slate-900,
+    html[data-theme="dark"] .registration-admin-cards .text-slate-800 {
+        color: #f8fafc !important;
+    }
+
+    html[data-theme="dark"] .registration-admin-cards .text-slate-500 {
+        color: #cbd5e1 !important;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<section class="space-y-6">
-    <div class="flex flex-wrap items-start justify-between gap-4">
-        <div>
+<section class="registration-admin-page space-y-6">
+    <div class="registration-admin-header flex flex-wrap items-start justify-between gap-4">
+        <div class="min-w-0">
             <p class="text-sm font-bold uppercase tracking-[0.2em] text-teal-700">Pendaftaran</p>
-            <h2 class="mt-2 flex items-center gap-3 text-3xl font-black tracking-tight text-slate-900">
+            <h2 class="registration-admin-heading mt-2 flex min-w-0 items-center gap-3 text-3xl font-black tracking-tight text-slate-900">
                 <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
                     <i data-lucide="user-round-plus" class="h-6 w-6"></i>
                 </span>
-                <span>Pendaftaran Aslab</span>
+                <span class="min-w-0 break-words">Pendaftaran Aslab</span>
             </h2>
             <p class="mt-2 text-sm text-slate-500">Kelola calon asisten laboratorium yang mendaftar berdasarkan matkul, kontak, dan status seleksi.</p>
         </div>
-        <div class="flex flex-wrap items-start gap-3">
+        <div class="registration-admin-actions flex flex-wrap items-start gap-3">
             <form method="post" action="{% url 'pendaftaran_asleb:pendaftaran_generate_all_accepted' %}" onsubmit="return confirm('Generate sekarang? Semua pendaftar yang diterima akan dipindahkan ke Data Aslab. Setelah berhasil, seluruh data pendaftaran yang diterima maupun ditolak akan dihapus dari tabel ini.');">
                 {% csrf_token %}
                 <button type="submit" class="btn-primary bg-brand-700 hover:bg-brand-800 shadow-brand-900/15">
@@ -27,7 +173,7 @@
                 <summary class="btn-secondary cursor-pointer list-none gap-2">
                     <i data-lucide="ellipsis" class="h-4 w-4"></i><span>Aksi lainnya</span><i data-lucide="chevron-down" class="h-4 w-4 transition group-open:rotate-180"></i>
                 </summary>
-                <div class="absolute right-0 z-30 mt-2 w-60 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+                <div class="registration-admin-menu absolute right-0 z-30 mt-2 w-60 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
                     <a class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50" href="{{ public_registration_url }}"><i data-lucide="external-link" class="h-4 w-4 text-teal-700"></i><span>Buka form mahasiswa</span></a>
                     <a class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50" href="{% url 'pendaftaran_asleb:matkul_list' %}"><i data-lucide="book-open" class="h-4 w-4 text-teal-700"></i><span>Kelola mata kuliah</span></a>
                     <a class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50" href="{% url 'pendaftaran_asleb:pendaftaran_create' %}"><i data-lucide="user-plus" class="h-4 w-4 text-teal-700"></i><span>Tambah pendaftar manual</span></a>
@@ -36,8 +182,8 @@
         </div>
     </div>
 
-    <div class="grid gap-6 lg:grid-cols-[250px_minmax(0,1fr)]">
-        <div class="surface-card p-6">
+    <div class="registration-admin-control-grid grid gap-6 lg:grid-cols-[250px_minmax(0,1fr)]">
+        <div class="registration-admin-control-card surface-card p-6">
             <div class="flex items-start gap-4">
                 <span class="{% if pendaftaran_dibuka %}bg-teal-50 text-teal-700{% else %}bg-slate-100 text-slate-500{% endif %} flex h-14 w-14 items-center justify-center rounded-2xl">
                     <i data-lucide="qr-code" class="h-7 w-7"></i>
@@ -67,13 +213,13 @@
             </div>
             {% endif %}
         </div>
-        <div class="surface-card p-6">
+        <div class="registration-admin-control-card surface-card p-6">
             <div class="mb-5 rounded-2xl border border-cyan-200 bg-cyan-50 p-4 text-cyan-950">
                 <div class="font-black">Periode {{ periode_aktif.nama }}</div>
                 <div class="mt-1 text-sm">Masa tugas: {{ periode_aktif.mulai|date:"d M Y" }} - {{ periode_aktif.selesai|date:"d M Y" }}</div>
             </div>
             <label for="public-registration-url">Link Pendaftaran</label>
-            <input id="public-registration-url" type="text" value="{{ public_registration_url }}" readonly>
+            <input id="public-registration-url" class="registration-admin-copy-input" type="text" value="{{ public_registration_url }}" readonly>
             <form method="post" action="{% url 'pendaftaran_asleb:pendaftaran_toggle_status' %}" class="mt-4">
                 {% csrf_token %}
                 <button type="submit" class="{% if pendaftaran_dibuka %}border-rose-200 text-rose-700 hover:bg-rose-50{% else %}border-emerald-200 text-emerald-700 hover:bg-emerald-50{% endif %} inline-flex items-center gap-2 rounded-2xl border bg-white px-4 py-3 text-sm font-bold transition">
@@ -129,7 +275,7 @@
         </div>
     </div>
 
-    <form id="pendaftaran-filter-form" method="get" class="surface-card grid gap-4 p-5 md:grid-cols-[minmax(0,1.4fr)_220px_auto] md:items-end">
+    <form id="pendaftaran-filter-form" method="get" class="registration-admin-filter surface-card grid gap-4 p-5 md:grid-cols-[minmax(0,1.4fr)_220px_auto] md:items-end">
         <div>
             <label for="id_q">Cari pendaftar</label>
             <input id="id_q" name="q" type="text" value="{{ search_query }}" placeholder="Cari nama, NIM, no HP, program studi, atau matkul" autocomplete="off">
@@ -143,7 +289,7 @@
                 {% endfor %}
             </select>
         </div>
-        <div class="flex flex-wrap gap-3">
+        <div class="registration-admin-filter-actions flex flex-wrap gap-3">
             <button type="submit" class="btn-primary bg-teal-700 hover:bg-teal-800 shadow-teal-900/15">
                 <i data-lucide="search" class="h-4 w-4"></i>
                 <span>Terapkan</span>
@@ -155,7 +301,71 @@
         </div>
     </form>
 
-    <div class="surface-card overflow-hidden">
+    <div class="registration-admin-cards gap-4">
+        {% for pendaftaran in pendaftaran_list %}
+        <article class="surface-card space-y-4 p-4">
+            <div class="grid gap-3 sm:flex sm:items-start sm:justify-between">
+                <div class="min-w-0">
+                    <h3 class="truncate text-lg font-black text-slate-900">{{ pendaftaran.nama }}</h3>
+                    <p class="mt-1 text-sm font-semibold text-slate-500">{{ pendaftaran.nim }} · {{ pendaftaran.no_hp }}</p>
+                    <p class="mt-1 text-sm text-slate-500">{{ pendaftaran.email|default:"Email belum diisi" }}</p>
+                </div>
+                <span class="{% if pendaftaran.status == 'diterima' or pendaftaran.status == 'digenerate' %}bg-emerald-100 text-emerald-700{% elif pendaftaran.status == 'ditolak' %}bg-rose-100 text-rose-700{% else %}bg-amber-100 text-amber-700{% endif %} w-fit shrink-0 rounded-full px-3 py-1 text-xs font-bold">
+                    {{ pendaftaran.get_status_display }}
+                </span>
+            </div>
+
+            <div class="grid gap-3 text-sm sm:grid-cols-2">
+                <div class="rounded-2xl bg-slate-50 p-3">
+                    <p class="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Matkul</p>
+                    <p class="mt-1 font-bold text-slate-800">{{ pendaftaran.matkul }}</p>
+                </div>
+                <div class="rounded-2xl bg-slate-50 p-3">
+                    <p class="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Nilai</p>
+                    <p class="mt-1 font-bold text-slate-800">{{ pendaftaran.get_nilai_transkrip_display }}</p>
+                </div>
+                <div class="rounded-2xl bg-slate-50 p-3 sm:col-span-2">
+                    <p class="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Program Studi</p>
+                    <p class="mt-1 font-bold text-slate-800">{{ pendaftaran.program_studi }}</p>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap gap-2 text-xs font-bold">
+                {% if pendaftaran.cv %}<a class="rounded-full bg-blue-50 px-3 py-1 text-blue-700" href="{{ pendaftaran.cv.url }}">CV</a>{% endif %}
+                {% if pendaftaran.transkrip %}<a class="rounded-full bg-purple-50 px-3 py-1 text-purple-700" href="{{ pendaftaran.transkrip.url }}">Transkrip</a>{% endif %}
+                {% if pendaftaran.tanda_tangan %}<a class="rounded-full bg-teal-50 px-3 py-1 text-teal-700" href="{{ pendaftaran.tanda_tangan.url }}">TTD</a>{% endif %}
+            </div>
+
+            <div class="registration-admin-card-actions gap-2">
+                <a class="btn-secondary gap-2 px-3 py-2 text-xs" href="{% url 'pendaftaran_asleb:pendaftaran_detail' pendaftaran.pk %}">
+                    <i data-lucide="eye" class="h-4 w-4"></i><span>Detail</span>
+                </a>
+                <a class="btn-secondary gap-2 px-3 py-2 text-xs" href="{% url 'pendaftaran_asleb:pendaftaran_update' pendaftaran.pk %}">
+                    <i data-lucide="pencil" class="h-4 w-4"></i><span>Edit</span>
+                </a>
+                {% if pendaftaran.status == 'diajukan' %}
+                <form method="post" action="{% url 'pendaftaran_asleb:pendaftaran_accept' pendaftaran.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white">Terima</button>
+                </form>
+                <form method="post" action="{% url 'pendaftaran_asleb:pendaftaran_reject' pendaftaran.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-700">Tolak</button>
+                </form>
+                {% elif pendaftaran.status == 'diterima' %}
+                <form method="post" action="{% url 'pendaftaran_asleb:pendaftaran_generate_asleb' pendaftaran.pk %}" onsubmit="return confirm('Generate pendaftar yang sudah diterima sekarang? Role baru berubah setelah proses ini berhasil.');" class="sm:col-span-2">
+                    {% csrf_token %}
+                    <button type="submit" class="rounded-xl bg-brand-700 px-3 py-2 text-xs font-bold text-white">Generate</button>
+                </form>
+                {% endif %}
+            </div>
+        </article>
+        {% empty %}
+        <div class="surface-card p-8 text-center text-slate-500">Belum ada pendaftaran aslab.</div>
+        {% endfor %}
+    </div>
+
+    <div class="registration-admin-table surface-card overflow-hidden">
         <div class="overflow-x-auto">
             <table>
                 <thead class="bg-slate-50">

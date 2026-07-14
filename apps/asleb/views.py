@@ -9,9 +9,11 @@ from django.contrib import messages
 from django.core.files.base import ContentFile
 from django.db import IntegrityError, transaction
 from django.db.models import Avg, Count, Q, Sum
-from django.http import FileResponse, HttpResponse
+from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
+from django.template.response import TemplateResponse
 from django.urls import reverse_lazy
+from django.utils.http import content_disposition_header
 from django.utils.text import slugify
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -443,7 +445,7 @@ class AbsensiAslebListView(ListView):
     context_object_name = 'absensi_list'
 
     def get_queryset(self):
-        queryset = AbsensiAsleb.objects.select_related('asleb')
+        queryset = AbsensiAsleb.objects.select_related('asleb', 'modul_praktikum', 'modul_praktikum__matkul')
         pengguna = getattr(self.request, 'current_pengguna', None)
         search = self.request.GET.get('q', '').strip()
         modul = self.request.GET.get('modul', '').strip()
@@ -1689,12 +1691,72 @@ def preview_modul_praktikum(request, pk):
 
     filename = modul.file.name.rsplit('/', 1)[-1]
     content_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
-    return FileResponse(
+    response = FileResponse(
         modul.file.open('rb'),
         as_attachment=False,
         filename=filename,
         content_type=content_type,
     )
+    response['Content-Disposition'] = content_disposition_header(False, filename) or f'inline; filename="{filename.replace(chr(34), "")}"'
+    response['X-Content-Type-Options'] = 'nosniff'
+    return response
+
+
+def _read_modul_pdf_bytes(modul):
+    if not modul.is_pdf:
+        raise Http404('Preview gambar hanya tersedia untuk file PDF.')
+    with modul.file.open('rb') as file_obj:
+        return file_obj.read()
+
+
+def _get_modul_pdf_page_count(modul):
+    try:
+        import pypdfium2 as pdfium
+
+        document = pdfium.PdfDocument(_read_modul_pdf_bytes(modul))
+        return len(document)
+    except Exception:
+        return 0
+
+
+def viewer_modul_praktikum(request, pk):
+    modul = _get_accessible_modul_praktikum(request, pk)
+    if not modul:
+        return redirect('asleb:absensi_list')
+    if not modul.is_pdf:
+        return redirect('asleb:modul_preview', pk=modul.pk)
+
+    return TemplateResponse(request, 'asleb/modul_pdf_viewer.html', {
+        'modul': modul,
+    })
+
+
+def preview_modul_praktikum_page(request, pk, page):
+    modul = _get_accessible_modul_praktikum(request, pk)
+    if not modul:
+        return redirect('asleb:absensi_list')
+
+    try:
+        import pypdfium2 as pdfium
+
+        document = pdfium.PdfDocument(_read_modul_pdf_bytes(modul))
+        page_index = page - 1
+        if page_index < 0 or page_index >= len(document):
+            raise Http404('Halaman PDF tidak ditemukan.')
+        pdf_page = document[page_index]
+        bitmap = pdf_page.render(scale=2.2)
+        image = bitmap.to_pil()
+        output = BytesIO()
+        image.save(output, format='PNG', optimize=True)
+    except Http404:
+        raise
+    except Exception as exc:
+        logger.warning('Gagal membuat preview modul %s halaman %s: %s', modul.pk, page, exc)
+        raise Http404('Preview PDF tidak dapat dibuat.')
+
+    response = HttpResponse(output.getvalue(), content_type='image/png')
+    response['Cache-Control'] = 'private, max-age=300'
+    return response
 
 
 @require_POST

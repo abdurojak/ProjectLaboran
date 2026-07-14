@@ -31,6 +31,7 @@ from .views import (
     download_modul_praktikum,
     preview_laporan_praktikum,
     preview_modul_praktikum,
+    preview_modul_praktikum_page,
     TugasLaporanPraktikumCreateView,
     end_asleb_membership,
     export_nilai_praktikum_excel,
@@ -39,6 +40,7 @@ from .views import (
     delete_peserta_praktikum,
     toggle_absensi_status,
     update_transfer_fees,
+    viewer_modul_praktikum,
 )
 
 app_name = 'asleb'
@@ -53,6 +55,8 @@ urlpatterns = [
     path('absensi/modul/<int:pk>/edit/', ModulPraktikumUpdateView.as_view(), name='modul_update'),
     path('absensi/modul/<int:pk>/hapus/', ModulPraktikumDeleteView.as_view(), name='modul_delete'),
     path('absensi/modul/<int:pk>/preview/', preview_modul_praktikum, name='modul_preview'),
+    path('absensi/modul/<int:pk>/viewer/', viewer_modul_praktikum, name='modul_viewer'),
+    path('absensi/modul/<int:pk>/preview/halaman/<int:page>.png', preview_modul_praktikum_page, name='modul_preview_page'),
     path('absensi/modul/<int:pk>/download/', download_modul_praktikum, name='modul_download'),
     path('praktikum-mahasiswa/', PraktikumMahasiswaListView.as_view(), name='praktikum_mahasiswa_list'),
     path('praktikum-mahasiswa/tambah/', PesertaPraktikumBulkCreateView.as_view(), name='praktikum_peserta_create'),
