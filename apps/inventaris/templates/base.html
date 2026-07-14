@@ -768,16 +768,31 @@
             padding: 0;
             border: 0 !important;
             background: transparent !important;
+            background-color: transparent !important;
+            appearance: none;
+            -webkit-appearance: none;
+            -webkit-tap-highlight-color: transparent;
             box-shadow: none !important;
             filter: drop-shadow(0 20px 26px rgba(15, 23, 42, 0.24));
             transform-origin: 50% 88%;
             opacity: 1;
         }
 
-        [data-help-floating] [data-labbot-pet]:hover {
+        [data-help-floating] [data-labbot-pet]:hover,
+        [data-help-floating] [data-labbot-pet]:active,
+        [data-help-floating] [data-labbot-pet]:focus {
             background: transparent !important;
+            background-color: transparent !important;
+            box-shadow: none !important;
             filter: drop-shadow(0 24px 30px rgba(15, 23, 42, 0.30));
             transform: translateY(-0.18rem) scale(1.02);
+        }
+
+        [data-help-floating] [data-labbot-pet-sprite],
+        [data-help-floating] [data-labbot-pet]:hover [data-labbot-pet-sprite],
+        [data-help-floating] [data-labbot-pet]:active [data-labbot-pet-sprite],
+        [data-help-floating] [data-labbot-pet]:focus [data-labbot-pet-sprite] {
+            background-color: transparent;
         }
 
         [data-help-floating] [data-labbot-pet]:focus-visible {
@@ -787,16 +802,15 @@
 
         html[data-theme="dark"] [data-help-floating] [data-labbot-pet] {
             background: transparent !important;
+            background-color: transparent !important;
             filter: drop-shadow(0 22px 32px rgba(2, 6, 23, 0.72));
         }
 
         .labbot-pet__sprite {
             width: 6rem;
             height: 6.5rem;
-            background-image: url("{% static 'core/img/labbot-spritesheet.webp' %}");
-            background-repeat: no-repeat;
-            background-size: 800% 1100%;
-            background-position: 0 0;
+            background-color: transparent !important;
+            background-image: none !important;
             image-rendering: auto;
             transform-origin: 50% 88%;
             transition: transform 180ms ease;
@@ -822,8 +836,8 @@
 
         .labbot-pet__bubble {
             position: absolute;
-            right: 4.75rem;
-            bottom: 5.5rem;
+            right: 4.4rem;
+            bottom: 6.1rem;
             width: min(18rem, calc(100vw - 8rem));
             max-width: 18rem;
             border: 1px solid rgba(45, 212, 191, 0.30);
@@ -838,19 +852,6 @@
             transition: opacity 180ms ease, transform 180ms ease;
             backdrop-filter: blur(16px) saturate(1.08);
             -webkit-backdrop-filter: blur(16px) saturate(1.08);
-        }
-
-        .labbot-pet__bubble::after {
-            content: "";
-            position: absolute;
-            right: 1.15rem;
-            bottom: -0.48rem;
-            width: 1rem;
-            height: 1rem;
-            border-bottom: 1px solid rgba(45, 212, 191, 0.28);
-            border-right: 1px solid rgba(45, 212, 191, 0.28);
-            background: inherit;
-            transform: rotate(45deg);
         }
 
         .labbot-pet__bubble.is-visible {
@@ -903,19 +904,17 @@
 
         @media (max-width: 640px) {
             [data-help-floating] [data-labbot-pet] {
-                width: 5.6rem;
-                height: 6rem;
+                width: 4.7rem;
+                height: 5.1rem;
             }
 
             .labbot-pet__sprite {
-                width: 5.15rem;
-                height: 5.58rem;
+                width: 4.35rem;
+                height: 4.72rem;
             }
 
             .labbot-pet__bubble {
-                right: 3.95rem;
-                bottom: 4.8rem;
-                width: min(16rem, calc(100vw - 6.5rem));
+                display: none !important;
             }
         }
 
@@ -1345,6 +1344,15 @@
             button:active,
             summary:active {
                 background-color: var(--hover-bg) !important;
+            }
+
+            [data-help-floating] [data-labbot-pet],
+            [data-help-floating] [data-labbot-pet]:hover,
+            [data-help-floating] [data-labbot-pet]:active,
+            [data-help-floating] [data-labbot-pet]:focus {
+                background: transparent !important;
+                background-color: transparent !important;
+                -webkit-tap-highlight-color: transparent;
             }
 
             tbody tr:active,
@@ -2356,14 +2364,14 @@
         </a>
     </div>
     {% else %}
-    <div class="fixed bottom-24 right-3 z-[80] md:bottom-7 md:right-7" data-help-floating>
+    <div class="fixed bottom-8 right-1 z-[80] sm:bottom-16 sm:right-2 md:bottom-7 md:right-7" data-help-floating>
         <a href="{% url 'kalender:notifikasi_list' %}" class="labbot-pet__bubble block p-4" data-labbot-pet-bubble aria-live="polite">
             <span class="labbot-pet__bubble-title block text-xs font-black uppercase tracking-[0.16em]">LabBot</span>
             <span class="labbot-pet__bubble-message mt-1 block text-sm font-semibold leading-5" data-labbot-pet-bubble-message>Ada pembaruan baru.</span>
         </a>
         <button type="button" class="group relative inline-flex items-end justify-center transition" data-help-dialog-open data-labbot-pet aria-label="Buka chat bantuan" title="Chat Bantuan">
             <span class="labbot-pet__shadow" aria-hidden="true"></span>
-            <span class="labbot-pet__sprite" data-labbot-pet-sprite aria-hidden="true"></span>
+            <canvas class="labbot-pet__sprite" data-labbot-pet-sprite width="192" height="208" aria-hidden="true"></canvas>
             <span class="sr-only">Buka chat bantuan</span>
         </button>
     </div>
@@ -2880,6 +2888,10 @@
 
             if (labbotPet && labbotPetSprite) {
                 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                const spriteContext = labbotPetSprite.getContext ? labbotPetSprite.getContext('2d') : null;
+                const spriteSheet = new Image();
+                spriteSheet.decoding = 'async';
+                spriteSheet.src = "{% static 'core/img/labbot-spritesheet.png' %}";
                 const frame = {
                     column: 0,
                     row: 0,
@@ -2904,7 +2916,19 @@
                 function setPetFrame(row, column) {
                     frame.row = Math.max(0, Math.min(10, Number(row) || 0));
                     frame.column = Math.max(0, Math.min(7, Number(column) || 0));
-                    labbotPetSprite.style.backgroundPosition = `${(frame.column / 7) * 100}% ${(frame.row / 10) * 100}%`;
+                    if (!spriteContext || !spriteSheet.complete || !spriteSheet.naturalWidth) return;
+                    spriteContext.clearRect(0, 0, 192, 208);
+                    spriteContext.drawImage(
+                        spriteSheet,
+                        frame.column * 192,
+                        frame.row * 208,
+                        192,
+                        208,
+                        0,
+                        0,
+                        192,
+                        208
+                    );
                 }
 
                 function clearPetTimers() {
@@ -2996,6 +3020,9 @@
                     tick();
                 }
 
+                spriteSheet.addEventListener('load', function () {
+                    setPetFrame(frame.row, frame.column);
+                }, {once: true});
                 setPetFrame(0, 6);
                 if (!reducedMotion) {
                     scheduleIdle();
