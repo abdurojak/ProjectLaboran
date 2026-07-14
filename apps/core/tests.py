@@ -233,7 +233,11 @@ class GlobalBackgroundTests(TestCase):
         self.assertContains(response, 'border-color: transparent !important;')
         self.assertContains(response, '.labhub-topbar.is-scrolled .labhub-topbar-logo')
 
+from apps.asleb.models import PesertaPraktikum
+from apps.jadwal.models import JadwalPraktikum
+from apps.pendaftaran_asleb.models import MataKuliahAsleb
 from apps.pengguna.models import Pengguna
+from apps.ruangan.models import RuanganLab
 
 from project_laboran.asgi import application
 
@@ -386,6 +390,44 @@ class BantuanTests(TestCase):
         self.assertEqual(payload['user_message']['content'], 'Bagaimana cara daftar aslab?')
         self.assertIn('transkrip', payload['bot_message']['content'])
         self.assertEqual(payload['help_url'], reverse('core:bantuan'))
+
+    def test_bot_menjawab_jadwal_berdasarkan_akun_login(self):
+        matkul = MataKuliahAsleb.objects.create(
+            kode='BOT_JADWAL',
+            kode_mk='BOT101',
+            nama='Pemrograman Bot',
+            dosen='Dosen Bot',
+            kelas='SI-01',
+            aktif=True,
+        )
+        PesertaPraktikum.objects.create(
+            matkul=matkul,
+            pengguna=self.mahasiswa,
+            nim=self.mahasiswa.nim_nik,
+            nama=self.mahasiswa.nama_pengguna,
+        )
+        ruangan = RuanganLab.objects.create(nama='Lab Bot', kode='LAB-BOT', kapasitas=20)
+        JadwalPraktikum.objects.create(
+            mata_kuliah=str(matkul),
+            kelas='SI-01',
+            ruangan=ruangan,
+            pengampu='Dosen Bot',
+            hari='senin',
+            waktu_mulai='09:00',
+            waktu_selesai='10:30',
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+
+        response = self.client.post(
+            reverse('core:bantuan_async_message'),
+            {'pesan': 'jadwal praktikum saya apa?'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        content = response.json()['bot_message']['content']
+        self.assertIn('Pemrograman Bot', content)
+        self.assertIn('Lab Bot', content)
 
     def test_halaman_bantuan_memakai_realtime_tanpa_full_loading(self):
         self.client.get(reverse('core:bantuan'))

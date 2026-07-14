@@ -1,4 +1,5 @@
 import json
+from datetime import timedelta
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -14,12 +15,165 @@ from django.views.generic import TemplateView
 
 from .bot_knowledge import BOT_FALLBACK, BOT_GUIDE_TOPICS, BOT_GUIDE_INTRO
 from apps.pengguna.forms import PenggunaAppearanceForm
+from apps.asleb.models import Asleb, PesertaPraktikum
+from apps.jadwal.models import JadwalPraktikum
+from apps.pendaftaran_asleb.models import PendaftaranAsleb, RiwayatAsleb
 
 from .models import BugErrorLog, PercakapanBantuan, PesanBantuan
 from .realtime import broadcast_help_message, broadcast_help_status
 
+WEEKDAY_TO_HARI = {
+    0: 'senin',
+    1: 'selasa',
+    2: 'rabu',
+    3: 'kamis',
+    4: 'jumat',
+    5: 'sabtu',
+}
 
-def fallback_bot_answer(question):
+
+def build_bot_user_context(pengguna):
+    if not pengguna:
+        return ''
+    role_label = dict(getattr(pengguna, 'ROLE_CHOICES', [])).get(pengguna.role, pengguna.role)
+    return (
+        f'Nama pengguna login: {pengguna.nama_pengguna}\n'
+        f'NIM/NIK: {pengguna.nim_nik}\n'
+        f'Email: {pengguna.email}\n'
+        f'Role: {role_label}\n'
+        f'Fakultas: {pengguna.fakultas or "-"}\n'
+        f'Prodi: {pengguna.prodi or "-"}'
+    )
+
+
+def get_bot_matkul_labels(pengguna):
+    if not pengguna:
+        return []
+
+    if pengguna.role == 'asisten_lab':
+        labels = []
+        matkul_values = PendaftaranAsleb.objects.filter(
+            nim=pengguna.nim_nik,
+            status__in=['diterima', 'digenerate'],
+        ).select_related('matkul').values_list('matkul__nama', 'matkul__dosen', 'matkul__kelas')
+        labels.extend(f'{nama} - {dosen} - {kelas}' for nama, dosen, kelas in matkul_values)
+        history_values = RiwayatAsleb.objects.filter(nim=pengguna.nim_nik).values_list(
+            'matkul__nama',
+            'matkul__dosen',
+            'matkul__kelas',
+        )
+        labels.extend(f'{nama} - {dosen} - {kelas}' for nama, dosen, kelas in history_values)
+        labels.extend(
+            Asleb.objects.filter(nim=pengguna.nim_nik, status='aktif')
+            .exclude(matkul='')
+            .values_list('matkul', flat=True)
+        )
+        return list(dict.fromkeys(label for label in labels if label))
+
+    if pengguna.role == 'mahasiswa':
+        peserta = (
+            PesertaPraktikum.objects
+            .select_related('matkul')
+            .filter(Q(pengguna=pengguna) | Q(nim=pengguna.nim_nik), aktif=True)
+        )
+        return list(dict.fromkeys(str(item.matkul) for item in peserta))
+
+    return []
+
+
+def get_bot_schedule_queryset(pengguna):
+    labels = get_bot_matkul_labels(pengguna)
+    if not labels:
+        return JadwalPraktikum.objects.none()
+    return (
+        JadwalPraktikum.objects
+        .select_related('ruangan', 'ruangan_tambahan')
+        .filter(status=JadwalPraktikum.STATUS_DITERIMA, mata_kuliah__in=labels)
+        .order_by('hari', 'waktu_mulai', 'mata_kuliah')
+    )
+
+
+def format_bot_schedule(jadwal):
+    waktu_selesai = jadwal.get_waktu_selesai_efektif()
+    waktu_label = jadwal.waktu_mulai.strftime('%H:%M')
+    if waktu_selesai and waktu_selesai != jadwal.waktu_mulai:
+        waktu_label = f'{waktu_label}-{waktu_selesai.strftime("%H:%M")}'
+    return (
+        f'{jadwal.get_hari_display()}, {waktu_label}: {jadwal.mata_kuliah} '
+        f'({jadwal.kelas}) di {jadwal.get_display_ruangan_nama()}'
+    )
+
+
+def build_bot_schedule_context(pengguna):
+    schedules = list(get_bot_schedule_queryset(pengguna)[:8])
+    if not schedules:
+        return 'Tidak ada jadwal praktikum aktif yang terhubung dengan akun ini.'
+    return '\n'.join(f'- {format_bot_schedule(jadwal)}' for jadwal in schedules)
+
+
+def answer_profile_question(question, pengguna):
+    if not pengguna:
+        return ''
+
+    normalized = question.lower()
+    asks_identity = any(keyword in normalized for keyword in {
+        'nama saya', 'siapa nama saya', 'aku siapa', 'saya siapa', 'nama akun',
+    })
+    asks_role = any(keyword in normalized for keyword in {'role saya', 'akses saya', 'jabatan saya'})
+    asks_nim = any(keyword in normalized for keyword in {'nim saya', 'nik saya', 'nim/nik saya'})
+    asks_email = any(keyword in normalized for keyword in {'email saya', 'alamat email saya'})
+
+    role_label = dict(getattr(pengguna, 'ROLE_CHOICES', [])).get(pengguna.role, pengguna.role)
+    if asks_identity:
+        return f'Nama akun Anda adalah {pengguna.nama_pengguna}.'
+    if asks_role:
+        return f'Role akun Anda saat ini adalah {role_label}.'
+    if asks_nim:
+        return f'NIM/NIK akun Anda adalah {pengguna.nim_nik}.'
+    if asks_email:
+        return f'Email akun Anda adalah {pengguna.email}.'
+    return ''
+
+
+def answer_schedule_question(question, pengguna):
+    if not pengguna:
+        return ''
+
+    normalized = question.lower()
+    if not any(keyword in normalized for keyword in {'jadwal', 'praktikum hari ini', 'praktikum saya', 'mengajar hari ini'}):
+        return ''
+
+    schedules = get_bot_schedule_queryset(pengguna)
+    today = timezone.localdate()
+    hari_ini = WEEKDAY_TO_HARI.get(today.weekday())
+    wants_today = any(keyword in normalized for keyword in {'hari ini', 'sekarang', 'saat ini', 'hari ini apa', 'mengajar hari ini'})
+    wants_tomorrow = 'besok' in normalized
+
+    if wants_today and hari_ini:
+        schedules = schedules.filter(hari=hari_ini)
+        prefix = f'Jadwal Anda hari ini ({today.strftime("%d-%m-%Y")}):'
+    elif wants_tomorrow:
+        tomorrow = today + timedelta(days=1)
+        hari_besok = WEEKDAY_TO_HARI.get(tomorrow.weekday())
+        schedules = schedules.filter(hari=hari_besok) if hari_besok else schedules.none()
+        prefix = f'Jadwal Anda besok ({tomorrow.strftime("%d-%m-%Y")}):'
+    else:
+        prefix = 'Jadwal praktikum aktif yang terhubung dengan akun Anda:'
+
+    schedule_list = list(schedules[:8])
+    if not schedule_list:
+        return 'Belum ada jadwal praktikum aktif yang terhubung dengan akun Anda untuk waktu tersebut.'
+    return prefix + '\n' + '\n'.join(f'- {format_bot_schedule(jadwal)}' for jadwal in schedule_list)
+
+
+def fallback_bot_answer(question, pengguna=None):
+    profile_answer = answer_profile_question(question, pengguna)
+    if profile_answer:
+        return profile_answer
+    schedule_answer = answer_schedule_question(question, pengguna)
+    if schedule_answer:
+        return schedule_answer
+
     normalized = question.lower()
     if any(keyword in normalized for keyword in {'panduan', 'fitur web', 'fitur labhub', 'apa saja', 'bisa apa'}):
         return (
@@ -34,7 +188,7 @@ def fallback_bot_answer(question):
     return BOT_FALLBACK
 
 
-def openai_bot_answer(question):
+def openai_bot_answer(question, pengguna=None):
     if not settings.OPENAI_API_KEY:
         return ''
 
@@ -50,7 +204,10 @@ def openai_bot_answer(question):
                 'content': (
                     'Anda adalah chatbot bantuan LabHub/Project Laboran. Jawab dalam Bahasa Indonesia yang singkat, ramah, '
                     'dan praktis. Utamakan panduan internal berikut. Jika pertanyaan di luar sistem, arahkan pengguna untuk '
-                    'menghubungi admin. Jangan mengarang fitur yang tidak ada.\n\n'
+                    'menghubungi admin. Jangan mengarang fitur yang tidak ada. Jika pengguna bertanya tentang identitas akun '
+                    'mereka, jawab berdasarkan konteks akun login berikut, jangan menebak.\n\n'
+                    f'Konteks akun login:\n{build_bot_user_context(pengguna) or "Tidak tersedia"}\n\n'
+                    f'Konteks jadwal akun:\n{build_bot_schedule_context(pengguna)}\n\n'
                     f'{BOT_GUIDE_INTRO}\n\n{topic_context}'
                 ),
             },
@@ -85,7 +242,7 @@ def openai_bot_answer(question):
     return ''
 
 
-def gemini_bot_answer(question):
+def gemini_bot_answer(question, pengguna=None):
     if not settings.GEMINI_API_KEY:
         return ''
 
@@ -100,7 +257,10 @@ def gemini_bot_answer(question):
     prompt = (
         'Anda adalah chatbot bantuan LabHub/Project Laboran. Jawab dalam Bahasa Indonesia yang singkat, ramah, tanpa emoji, '
         'dan praktis. Utamakan panduan internal berikut. Jika pertanyaan di luar sistem, arahkan pengguna untuk '
-        'menghubungi admin. Jangan mengarang fitur yang tidak ada.\n\n'
+        'menghubungi admin. Jangan mengarang fitur yang tidak ada. Jika pengguna bertanya tentang identitas akun '
+        'mereka, jawab berdasarkan konteks akun login berikut, jangan menebak.\n\n'
+        f'Konteks akun login:\n{build_bot_user_context(pengguna) or "Tidak tersedia"}\n\n'
+        f'Konteks jadwal akun:\n{build_bot_schedule_context(pengguna)}\n\n'
         f'{BOT_GUIDE_INTRO}\n\n{topic_context}\n\n'
         f'Pertanyaan pengguna: {question}'
     )
@@ -143,8 +303,14 @@ def gemini_bot_answer(question):
     return ''
 
 
-def bot_answer(question):
-    return gemini_bot_answer(question) or fallback_bot_answer(question)
+def bot_answer(question, pengguna=None):
+    return (
+        answer_profile_question(question, pengguna)
+        or answer_schedule_question(question, pengguna)
+        or gemini_bot_answer(question, pengguna)
+        or openai_bot_answer(question, pengguna)
+        or fallback_bot_answer(question, pengguna)
+    )
 
 
 
@@ -293,7 +459,7 @@ class BantuanView(TemplateView):
         user_message = PesanBantuan.objects.create(percakapan=conversation, pengirim='pengguna', isi=content)
         broadcast_help_message(user_message)
         if conversation.status == 'bot':
-            bot_message = PesanBantuan.objects.create(percakapan=conversation, pengirim='bot', isi=bot_answer(content))
+            bot_message = PesanBantuan.objects.create(percakapan=conversation, pengirim='bot', isi=bot_answer(content, request.current_pengguna))
             broadcast_help_message(bot_message)
         conversation.save(update_fields=['diperbarui_pada'])
         return redirect('core:bantuan')
@@ -314,7 +480,7 @@ class BantuanAsyncMessageView(View):
         broadcast_help_message(user_message)
         bot_message = None
         if conversation.status == 'bot':
-            bot_message = PesanBantuan.objects.create(percakapan=conversation, pengirim='bot', isi=bot_answer(content))
+            bot_message = PesanBantuan.objects.create(percakapan=conversation, pengirim='bot', isi=bot_answer(content, pengguna))
             broadcast_help_message(bot_message)
         conversation.save(update_fields=['diperbarui_pada'])
 
