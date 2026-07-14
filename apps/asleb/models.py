@@ -397,7 +397,6 @@ class AbsensiAsleb(models.Model):
     class Meta:
         ordering = ['-tanggal_praktikum', 'asleb__nama', 'modul']
         constraints = [
-            models.UniqueConstraint(fields=['asleb', 'modul'], name='unique_absensi_asleb_per_modul'),
             models.UniqueConstraint(
                 fields=['asleb', 'modul_praktikum'],
                 name='unique_absensi_asleb_per_modul_praktikum',

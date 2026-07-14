@@ -1025,6 +1025,87 @@ class AslebViewTests(TestCase):
         self.assertIn('modul_praktikum', second_form.errors)
         self.assertIn('Modul 2 sudah pernah diabsen', str(second_form.errors['modul_praktikum']))
 
+    def test_absensi_mengizinkan_nomor_modul_sama_pada_matkul_berbeda(self):
+        PendaftaranAsleb.objects.create(
+            nama=self.asleb.nama,
+            nim=self.asleb.nim,
+            no_hp=self.asleb.no_hp,
+            email=self.asleb.email,
+            program_studi=self.asleb.program_studi,
+            semester=self.asleb.semester,
+            matkul=self.matkul,
+            status='digenerate',
+        )
+        modul_lama = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=1,
+            judul='Modul Lama',
+            file=SimpleUploadedFile('modul-lama.pdf', b'isi modul lama', content_type='application/pdf'),
+        )
+        jadwal_lama = self.create_active_schedule()
+        AbsensiAsleb.objects.create(
+            asleb=self.asleb,
+            jadwal=jadwal_lama,
+            modul_praktikum=modul_lama,
+            tanggal_praktikum=timezone.localdate(),
+            modul=1,
+            materi_praktikum='Modul Lama',
+            pekerjaan='Membantu praktikum lama',
+            file_modul=SimpleUploadedFile('modul-lama-arsip.pdf', b'isi modul lama', content_type='application/pdf'),
+            bukti_foto=self.make_camera_photo('foto-lama-matkul.png'),
+            bukti_video=SimpleUploadedFile('video-lama-matkul.mp4', b'video lama', content_type='video/mp4'),
+        )
+        matkul_baru = MataKuliahAsleb.objects.create(
+            kode='WEB_TIF01_TEST',
+            nama='Pemrograman Web',
+            dosen='Dosen Web',
+            kelas='TIF-01',
+        )
+        PendaftaranAsleb.objects.create(
+            nama=self.asleb.nama,
+            nim=self.asleb.nim,
+            no_hp=self.asleb.no_hp,
+            email=self.asleb.email,
+            program_studi=self.asleb.program_studi,
+            semester=self.asleb.semester,
+            matkul=matkul_baru,
+            status='digenerate',
+        )
+        modul_baru = ModulPraktikum.objects.create(
+            matkul=matkul_baru,
+            nomor=1,
+            judul='Modul Baru',
+            file=SimpleUploadedFile('modul-baru.pdf', b'isi modul baru', content_type='application/pdf'),
+        )
+        jadwal_baru = JadwalPraktikum.objects.create(
+            mata_kuliah=str(matkul_baru),
+            kelas=matkul_baru.kelas,
+            ruangan=self.test_room,
+            pengampu=matkul_baru.dosen,
+            hari='senin',
+            waktu_mulai='13:00',
+            waktu_selesai='15:00',
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+
+        form = AbsensiAslebForm(
+            data={
+                'modul_praktikum': modul_baru.pk,
+                'pekerjaan': 'Membantu praktikum baru',
+                'latitude': '-6.1680678',
+                'longitude': '106.7916257',
+                'gps_accuracy': '10',
+            },
+            files={
+                'bukti_foto': self.make_camera_photo('foto-baru-matkul.png'),
+                'bukti_video': SimpleUploadedFile('video-baru-matkul.mp4', b'video baru', content_type='video/mp4'),
+            },
+            asleb=self.asleb,
+            jadwal=jadwal_baru,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+
     @skipUnless(ENABLE_CAMERA_LOCATION_CAPTURE, 'Validasi radius lokasi sedang dinonaktifkan sementara.')
     def test_absensi_ditolak_jika_di_luar_radius_kampus(self):
         PendaftaranAsleb.objects.create(

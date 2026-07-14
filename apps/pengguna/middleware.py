@@ -87,7 +87,9 @@ class PenggunaLoginRequiredMiddleware:
             pengguna.refresh_from_db(fields=['role'])
 
             request.current_pengguna = pengguna
+            from apps.asleb.services import link_peserta_praktikum_to_pengguna
             from apps.barang_tertinggal.services import link_barang_tertinggal_to_pengguna
+            link_peserta_praktikum_to_pengguna(pengguna)
             link_barang_tertinggal_to_pengguna(pengguna)
 
         if not pengguna_id and not is_exempt:

@@ -894,7 +894,16 @@ class PraktikumMahasiswaListView(PraktikumMahasiswaAccessMixin, TemplateView):
         class_options = list(
             base_matkul_qs.exclude(kelas='').values_list('kelas', flat=True).distinct().order_by('kelas')
         )
+        search_query = self.request.GET.get('q', '').strip()
         selected_kelas = self.request.GET.get('kelas', '').strip()
+        if search_query:
+            base_matkul_qs = base_matkul_qs.filter(
+                Q(nama__icontains=search_query)
+                | Q(kode__icontains=search_query)
+                | Q(kode_mk__icontains=search_query)
+                | Q(kelas__icontains=search_query)
+                | Q(dosen__icontains=search_query)
+            )
         if selected_kelas:
             base_matkul_qs = base_matkul_qs.filter(kelas=selected_kelas)
         matkul_list = list(
@@ -944,6 +953,7 @@ class PraktikumMahasiswaListView(PraktikumMahasiswaAccessMixin, TemplateView):
             },
             'class_options': class_options,
             'selected_kelas': selected_kelas,
+            'search_query': search_query,
             'peserta_list': peserta_list,
             'selected_matkul_id': selected_id,
             'can_manage_peserta': pengguna.role == LABORAN_ROLE,
