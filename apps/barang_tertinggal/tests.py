@@ -74,6 +74,7 @@ class BarangTertinggalViewTests(TestCase):
                 'tanggal_ditemukan': '2026-06-23',
                 'tanggal_diambil': '',
                 'nama_pemilik': '',
+                'nim_pemilik': '',
                 'status': 'tertinggal',
                 'foto': foto,
             },
@@ -94,6 +95,7 @@ class BarangTertinggalViewTests(TestCase):
                 'tanggal_ditemukan': '2026-06-22',
                 'tanggal_diambil': '2026-06-24',
                 'nama_pemilik': 'Andi',
+                'nim_pemilik': '06400230001',
                 'status': 'diambil',
             },
         )
@@ -102,6 +104,7 @@ class BarangTertinggalViewTests(TestCase):
         self.assertRedirects(response, reverse('barang_tertinggal:list'))
         self.assertEqual(self.barang.nama_barang, 'Flashdisk Sandisk')
         self.assertEqual(self.barang.status, 'diambil')
+        self.assertEqual(self.barang.nim_pemilik, '06400230001')
 
     def test_form_edit_bisa_menghapus_foto(self):
         self.barang.foto = SimpleUploadedFile('flashdisk.jpg', b'fake-image-content', content_type='image/jpeg')
@@ -116,6 +119,7 @@ class BarangTertinggalViewTests(TestCase):
                 'tanggal_ditemukan': '2026-06-22',
                 'tanggal_diambil': '',
                 'nama_pemilik': '',
+                'nim_pemilik': '',
                 'status': 'tertinggal',
                 'hapus_foto': '1',
             },
@@ -142,4 +146,55 @@ class BarangTertinggalModelTests(TestCase):
         )
 
         self.assertEqual(barang.kode_barang_tertinggal, f'BRT-260622-{barang.id:04d}')
+
+    def test_barang_tertinggal_terhubung_ke_akun_jika_nim_cocok(self):
+        pengguna = Pengguna.objects.create(
+            nama_pengguna='Mahasiswa Pemilik',
+            nim_nik='06400230099',
+            email='pemilik@example.com',
+            password='rahasia123',
+            no_hp='080000000009',
+            alamat='Kampus',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+        )
+
+        barang = BarangTertinggal.objects.create(
+            nama_barang='Kartu Mahasiswa',
+            jenis_barang='Kartu',
+            jumlah_barang=1,
+            tanggal_ditemukan='2026-06-22',
+            nim_pemilik='06400230099',
+        )
+
+        self.assertEqual(barang.pemilik, pengguna)
+
+    def test_barang_tertinggal_lama_bisa_dihubungkan_saat_akun_ada(self):
+        barang = BarangTertinggal.objects.create(
+            nama_barang='Dompet',
+            jenis_barang='Pribadi',
+            jumlah_barang=1,
+            tanggal_ditemukan='2026-06-22',
+            nim_pemilik='06400230100',
+        )
+        pengguna = Pengguna.objects.create(
+            nama_pengguna='Mahasiswa Baru',
+            nim_nik='06400230100',
+            email='baru@example.com',
+            password='rahasia123',
+            no_hp='080000000010',
+            alamat='Kampus',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='mahasiswa',
+        )
+
+        from .services import link_barang_tertinggal_to_pengguna
+        link_barang_tertinggal_to_pengguna(pengguna)
+
+        barang.refresh_from_db()
+        self.assertEqual(barang.pemilik, pengguna)
 

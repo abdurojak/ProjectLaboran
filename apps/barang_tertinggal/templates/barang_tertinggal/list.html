@@ -35,6 +35,8 @@
                         <th>Tanggal Ditemukan</th>
                         <th>Tanggal Diambil</th>
                         <th>Pemilik</th>
+                        <th>NIM</th>
+                        <th>Akun</th>
                         <th>Status</th>
                         <th>Aksi</th>
                     </tr>
@@ -58,6 +60,20 @@
                         <td>{{ barang.tanggal_ditemukan|date:"d M Y" }}</td>
                         <td>{{ barang.tanggal_diambil|date:"d M Y"|default:"-" }}</td>
                         <td>{{ barang.nama_pemilik|default:"-" }}</td>
+                        <td class="font-semibold text-slate-600">{{ barang.nim_pemilik|default:"-" }}</td>
+                        <td>
+                            {% if barang.sudah_terhubung_akun %}
+                            <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
+                                <i data-lucide="link" class="h-3.5 w-3.5"></i>
+                                Terhubung
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
+                                <i data-lucide="unlink" class="h-3.5 w-3.5"></i>
+                                Belum terhubung
+                            </span>
+                            {% endif %}
+                        </td>
                         <td>
                             <span class="
                                 {% if barang.status == 'tertinggal' %}bg-amber-100 text-amber-700
@@ -90,7 +106,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="10" class="py-12 text-center text-slate-500">Belum ada data barang tertinggal.</td>
+                        <td colspan="12" class="py-12 text-center text-slate-500">Belum ada data barang tertinggal.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
