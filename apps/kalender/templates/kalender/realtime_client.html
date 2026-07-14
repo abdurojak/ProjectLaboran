@@ -105,6 +105,7 @@
 
         function showToast(payload) {
             if (!toastRoot) return;
+            if (document.querySelector('[data-labbot-pet]')) return;
             const toast = document.createElement('a');
             toast.href = payload.related_url || '#';
             toast.className = 'labhub-realtime-toast pointer-events-auto block rounded-2xl border p-4 shadow-xl shadow-slate-900/15 backdrop-blur transition hover:-translate-y-0.5';

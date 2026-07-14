@@ -82,6 +82,7 @@
         const typingIndicator = document.querySelector('[data-chat-typing]');
         let forceAsyncBot = false;
         let typingTimer = null;
+        let petTypingTimer = null;
         let adminOnlineTimer = null;
         let lastTypingSentAt = 0;
         if (messages) messages.scrollTop = messages.scrollHeight;
@@ -91,6 +92,11 @@
             if (submitButton) {
                 submitButton.disabled = isLoading;
                 submitButton.classList.toggle('opacity-70', isLoading);
+            }
+            if (isLoading) {
+                document.dispatchEvent(new CustomEvent('labhub:pet:activity', {
+                    detail: {type: 'thinking'},
+                }));
             }
         }
 
@@ -142,6 +148,16 @@
                 isi: content,
                 dibuat_pada: '',
             });
+            if (sender === 'bot' && content) {
+                document.dispatchEvent(new CustomEvent('labhub:pet:say', {
+                    detail: {
+                        title: 'Bot Bantuan',
+                        message: content,
+                        related_url: "{% url 'core:bantuan' %}",
+                        sequence: 'review',
+                    },
+                }));
+            }
         }
 
         function updateStatus(statusLabelText, status) {
@@ -277,6 +293,14 @@
         });
 
         textarea.addEventListener('input', function () {
+            if (textarea.value.trim()) {
+                window.clearTimeout(petTypingTimer);
+                petTypingTimer = window.setTimeout(function () {
+                    document.dispatchEvent(new CustomEvent('labhub:pet:activity', {
+                        detail: {type: 'typing'},
+                    }));
+                }, 120);
+            }
             if (forceAsyncBot || chatSocket.readyState !== WebSocket.OPEN) return;
             const now = Date.now();
             if (now - lastTypingSentAt > 1200) {
