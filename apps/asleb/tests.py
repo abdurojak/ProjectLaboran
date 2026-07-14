@@ -189,6 +189,51 @@ class AslebViewTests(TestCase):
         self.assertContains(response, 'Hashing')
         self.assertContains(response, '<span class="text-slate-400">-</span>', html=True)
 
+    def test_daftar_absensi_modul_memakai_preview_inline(self):
+        modul = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=9,
+            judul='Tree',
+            file=SimpleUploadedFile('modul-9.pdf', b'%PDF-1.4\n%%EOF', content_type='application/pdf'),
+        )
+        AbsensiAsleb.objects.create(
+            asleb=self.asleb,
+            jadwal=self.create_active_schedule(),
+            modul_praktikum=modul,
+            tanggal_praktikum=date(2026, 6, 24),
+            modul=9,
+            materi_praktikum='Tree',
+            pekerjaan='Praktikum struktur tree',
+            file_modul=SimpleUploadedFile('modul-lama.pdf', b'isi modul', content_type='application/pdf'),
+        )
+
+        response = self.client.get(reverse('asleb:absensi_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-open-inline-modul-preview')
+        self.assertContains(response, reverse('asleb:modul_preview', args=[modul.pk]))
+        self.assertContains(response, reverse('asleb:modul_viewer', args=[modul.pk]))
+        self.assertContains(response, 'core/vendor/pdfjs/pdf.min.mjs')
+        self.assertContains(response, 'renderPdfPages(button.dataset.previewUrl)')
+        self.assertContains(response, reverse('asleb:modul_download', args=[modul.pk]))
+        self.assertNotContains(response, f'href="{reverse("asleb:modul_download", args=[modul.pk])}">Unduh modul</a>')
+
+    def test_preview_modul_dikirim_inline_dan_download_tetap_attachment(self):
+        modul = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=10,
+            judul='Graph',
+            file=SimpleUploadedFile('modul-10.pdf', b'%PDF-1.4\n%%EOF', content_type='application/pdf'),
+        )
+
+        preview = self.client.get(reverse('asleb:modul_preview', args=[modul.pk]))
+        download = self.client.get(reverse('asleb:modul_download', args=[modul.pk]))
+
+        self.assertEqual(preview.status_code, 200)
+        self.assertEqual(preview['Content-Type'], 'application/pdf')
+        self.assertIn('inline', preview.get('Content-Disposition', ''))
+        self.assertIn('attachment', download.get('Content-Disposition', ''))
+
     def test_asisten_lab_tidak_dapat_menambah_modul(self):
         aslab_user = Pengguna.objects.create(
             nama_pengguna='Siti Nurhaliza',

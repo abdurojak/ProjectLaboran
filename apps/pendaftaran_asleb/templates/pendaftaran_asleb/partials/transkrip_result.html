@@ -12,7 +12,37 @@
         </span>
         {% endif %}
     </div>
-    <div class="mt-4 overflow-x-auto">
+    <div class="aslab-transcript-mobile mt-4 gap-3">
+        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p class="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Mata Kuliah</p>
+            <p class="mt-1 font-black text-slate-900">{{ selected_matkul.nama }}</p>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-2">
+            <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                <p class="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Dosen</p>
+                <p class="mt-1 text-sm font-bold text-slate-700">{{ selected_matkul.dosen }}</p>
+            </div>
+            <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                <p class="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Kelas</p>
+                <p class="mt-1 text-sm font-bold text-slate-700">{{ selected_matkul.kelas }}</p>
+            </div>
+        </div>
+        <div class="rounded-2xl border border-slate-200 bg-white p-4">
+            <p class="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Status</p>
+            <div class="mt-2">
+                {% if nilai_transkrip %}
+                    {% if nilai_lolos %}
+                    <span class="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">Nilai {{ nilai_transkrip }} - Lolos minimal B</span>
+                    {% else %}
+                    <span class="inline-flex rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700">Nilai {{ nilai_transkrip }} - Belum memenuhi syarat</span>
+                    {% endif %}
+                {% else %}
+                <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">Menunggu transkrip</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="aslab-transcript-table mt-4 overflow-x-auto">
         <table class="min-w-full">
             <thead class="bg-slate-50">
                 <tr>

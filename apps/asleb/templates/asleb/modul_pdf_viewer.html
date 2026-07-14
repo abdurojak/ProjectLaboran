@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Preview {{ modul }}{% endblock %}
+
+{% block content %}
+<section class="min-w-0 max-w-full space-y-5 overflow-hidden">
+    <div class="surface-card flex flex-wrap items-start justify-between gap-4 p-5">
+        <div class="min-w-0">
+            <p class="text-sm font-bold uppercase tracking-[0.18em] text-teal-700">Preview Modul</p>
+            <h2 class="mt-2 break-words text-2xl font-black text-slate-900">{{ modul }}</h2>
+            <p class="mt-2 text-sm font-semibold text-slate-500">{{ modul.matkul }}</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            <a href="{% url 'asleb:absensi_list' %}" class="btn-secondary gap-2">
+                <i data-lucide="arrow-left" class="h-4 w-4"></i><span>Kembali</span>
+            </a>
+            <a href="{% url 'asleb:modul_download' modul.pk %}" class="btn-primary gap-2">
+                <i data-lucide="download" class="h-4 w-4"></i><span>Download</span>
+            </a>
+        </div>
+    </div>
+
+    <div class="space-y-5" data-pdf-viewer-pages data-pdf-url="{% url 'asleb:modul_preview' modul.pk %}">
+        <div class="surface-card px-4 py-10 text-center text-sm font-semibold text-slate-500">Menyiapkan preview modul...</div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+{{ block.super }}
+<script type="module">
+    import * as pdfjsLib from '{% static "core/vendor/pdfjs/pdf.min.mjs" %}';
+
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '{% static "core/vendor/pdfjs/pdf.worker.min.mjs" %}';
+
+    const pagesContainer = document.querySelector('[data-pdf-viewer-pages]');
+
+    function setStatus(message) {
+        if (!pagesContainer) return;
+        pagesContainer.innerHTML = `<div class="surface-card px-4 py-10 text-center text-sm font-semibold text-slate-500">${message}</div>`;
+    }
+
+    async function renderViewerPdf() {
+        if (!pagesContainer) return;
+        try {
+            const pdf = await pdfjsLib.getDocument({ url: pagesContainer.dataset.pdfUrl, withCredentials: true }).promise;
+            pagesContainer.innerHTML = '';
+            for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+                const page = await pdf.getPage(pageNumber);
+                const containerWidth = Math.max(280, Math.min(pagesContainer.clientWidth - 32, 1040));
+                const initialViewport = page.getViewport({ scale: 1 });
+                const scale = containerWidth / initialViewport.width;
+                const viewport = page.getViewport({ scale });
+                const pixelRatio = window.devicePixelRatio || 1;
+
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.floor(viewport.width * pixelRatio);
+                canvas.height = Math.floor(viewport.height * pixelRatio);
+                canvas.style.width = `${Math.floor(viewport.width)}px`;
+                canvas.style.height = `${Math.floor(viewport.height)}px`;
+                canvas.className = 'mx-auto h-auto max-w-full rounded-xl bg-white shadow-lg';
+
+                const context = canvas.getContext('2d');
+                context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+                await page.render({ canvasContext: context, viewport }).promise;
+
+                const article = document.createElement('article');
+                article.className = 'surface-card overflow-hidden p-3 sm:p-4';
+                article.innerHTML = `<div class="mb-3 text-sm font-black uppercase tracking-[0.14em] text-slate-500">Halaman ${pageNumber}</div>`;
+
+                const frame = document.createElement('div');
+                frame.className = 'overflow-auto rounded-2xl bg-slate-100 p-2 sm:p-4';
+                frame.appendChild(canvas);
+                article.appendChild(frame);
+                pagesContainer.appendChild(article);
+            }
+        } catch (error) {
+            console.error('Gagal render viewer PDF:', error);
+            setStatus('Preview PDF belum bisa ditampilkan. Silakan gunakan tombol Download.');
+        }
+    }
+
+    renderViewerPdf();
+</script>
+{% endblock %}

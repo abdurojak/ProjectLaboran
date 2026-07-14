@@ -154,29 +154,165 @@
     html[data-theme="dark"] .registration-check-label .text-emerald-900\/75 {
         color: rgba(220, 252, 231, 0.82) !important;
     }
+
+    .aslab-registration-page {
+        width: min(100%, 64rem);
+    }
+
+    .aslab-registration-steps {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .aslab-registration-steps::-webkit-scrollbar {
+        display: none;
+    }
+
+    .aslab-registration-step {
+        min-width: 10.5rem;
+    }
+
+    .aslab-registration-actions {
+        align-items: center;
+    }
+
+    .aslab-registration-signature {
+        touch-action: none;
+    }
+
+    .aslab-transcript-mobile {
+        display: none;
+    }
+
+    html[data-theme="dark"] .aslab-transcript-mobile [class*="bg-white"],
+    html[data-theme="dark"] .aslab-transcript-mobile [class*="bg-slate-50"] {
+        border-color: rgba(148, 163, 184, 0.20) !important;
+        background-color: rgba(15, 23, 42, 0.46) !important;
+    }
+
+    html[data-theme="dark"] .aslab-transcript-mobile .text-slate-900 {
+        color: #f8fafc !important;
+    }
+
+    html[data-theme="dark"] .aslab-transcript-mobile .text-slate-700,
+    html[data-theme="dark"] .aslab-transcript-mobile .text-slate-500 {
+        color: #cbd5e1 !important;
+    }
+
+    @media (max-width: 640px) {
+        .aslab-registration-page {
+            margin-inline: -0.15rem;
+        }
+
+        .aslab-registration-hero {
+            padding: 1.35rem !important;
+        }
+
+        .aslab-registration-hero h2 {
+            font-size: 1.6rem !important;
+            line-height: 2rem !important;
+        }
+
+        .aslab-registration-hero p {
+            line-height: 1.55rem !important;
+        }
+
+        .aslab-registration-steps-wrap {
+            padding-inline: 1rem !important;
+        }
+
+        .aslab-registration-steps {
+            display: flex !important;
+            grid-template-columns: none !important;
+            gap: 0.75rem;
+            margin-inline: -0.25rem;
+            padding: 0.25rem;
+        }
+
+        .aslab-registration-step {
+            min-width: 8.75rem;
+            padding: 0.85rem !important;
+            border-radius: 1rem !important;
+        }
+
+        .aslab-registration-step .tracking-\[0\.18em\] {
+            letter-spacing: 0.12em !important;
+        }
+
+        .aslab-registration-form {
+            padding: 1rem !important;
+        }
+
+        .aslab-registration-profile {
+            margin-inline: 1rem !important;
+            padding: 1rem !important;
+        }
+
+        .aslab-registration-profile .grid {
+            gap: 0.65rem !important;
+        }
+
+        .aslab-registration-actions {
+            display: grid !important;
+            grid-template-columns: 1fr;
+        }
+
+        .aslab-registration-actions .btn-primary,
+        .aslab-registration-actions .btn-secondary {
+            width: 100%;
+            justify-content: center;
+        }
+
+        .aslab-registration-note {
+            border-radius: 1.25rem !important;
+            padding: 1rem !important;
+        }
+
+        .registration-check-label {
+            gap: 0.75rem !important;
+        }
+
+        .registration-check-card {
+            border-radius: 1.25rem !important;
+            padding: 1rem !important;
+        }
+
+        .aslab-registration-signature {
+            height: 12rem !important;
+        }
+
+        .aslab-transcript-table {
+            display: none;
+        }
+
+        .aslab-transcript-mobile {
+            display: grid;
+        }
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<section class="mx-auto max-w-5xl space-y-6">
+<section class="aslab-registration-page mx-auto space-y-6">
     <div class="surface-card overflow-hidden">
-        <div class="bg-gradient-to-r from-brand-900 via-brand-800 to-teal-700 p-8 text-white">
+        <div class="aslab-registration-hero bg-gradient-to-r from-brand-900 via-brand-800 to-teal-700 p-8 text-white">
             <p class="text-sm font-bold uppercase tracking-[0.24em] text-cyan-100">Pendaftaran Aslab</p>
             <h2 class="mt-3 text-3xl font-black tracking-tight md:text-4xl">Pendaftaran Asisten Laboratorium</h2>
             <p class="mt-3 max-w-3xl text-sm leading-7 text-white/80">Lengkapi data diri dan pengalaman di profil, pilih mata kuliah, upload transkrip untuk pengecekan NIM dan nilai minimal B, lalu lengkapi rekening dan tanda tangan. CV dibuat otomatis dari profil.</p>
         </div>
 
-        <div class="border-b border-slate-100 bg-slate-50 px-6 py-5 md:px-8">
-            <div class="grid gap-3 md:grid-cols-3">
-                <div class="rounded-2xl border {% if step == 'matkul' %}border-teal-300 bg-white text-teal-800{% else %}border-slate-200 bg-white text-slate-600{% endif %} p-4">
+        <div class="aslab-registration-steps-wrap border-b border-slate-100 bg-slate-50 px-6 py-5 md:px-8">
+            <div class="aslab-registration-steps grid gap-3 md:grid-cols-3">
+                <div class="aslab-registration-step rounded-2xl border {% if step == 'matkul' %}border-teal-300 bg-white text-teal-800{% else %}border-slate-200 bg-white text-slate-600{% endif %} p-4">
                     <div class="text-xs font-black uppercase tracking-[0.18em]">Tahap 1</div>
                     <div class="mt-1 font-bold">Pilih Matkul</div>
                 </div>
-                <div class="rounded-2xl border {% if step == 'transkrip' %}border-teal-300 bg-white text-teal-800{% else %}border-slate-200 bg-white text-slate-600{% endif %} p-4">
+                <div class="aslab-registration-step rounded-2xl border {% if step == 'transkrip' %}border-teal-300 bg-white text-teal-800{% else %}border-slate-200 bg-white text-slate-600{% endif %} p-4">
                     <div class="text-xs font-black uppercase tracking-[0.18em]">Tahap 2</div>
                     <div class="mt-1 font-bold">Cek Transkrip</div>
                 </div>
-                <div class="rounded-2xl border {% if step == 'berkas' %}border-teal-300 bg-white text-teal-800{% else %}border-slate-200 bg-white text-slate-600{% endif %} p-4">
+                <div class="aslab-registration-step rounded-2xl border {% if step == 'berkas' %}border-teal-300 bg-white text-teal-800{% else %}border-slate-200 bg-white text-slate-600{% endif %} p-4">
                     <div class="text-xs font-black uppercase tracking-[0.18em]">Tahap 3</div>
                     <div class="mt-1 font-bold">Lengkapi Berkas</div>
                 </div>
@@ -184,7 +320,7 @@
         </div>
 
         {% if current_pengguna and current_pengguna.role == 'mahasiswa' or current_pengguna and current_pengguna.role == 'asisten_lab' %}
-        <div class="context-note-card context-note-card--teal mx-6 mt-6 p-5 md:mx-8">
+        <div class="aslab-registration-profile context-note-card context-note-card--teal mx-6 mt-6 p-5 md:mx-8">
             <div class="context-note-card__content">
             <p class="context-note-card__title text-sm">Data akun otomatis digunakan untuk pendaftaran Anda.</p>
             <div class="mt-3 grid gap-3 text-sm font-semibold md:grid-cols-2">
@@ -196,7 +332,7 @@
             </div>
             </div>
         </div>
-        <div class="context-note-card context-note-card--sky mx-6 mt-4 px-5 py-4 md:mx-8">
+        <div class="aslab-registration-profile context-note-card context-note-card--sky mx-6 mt-4 px-5 py-4 md:mx-8">
             <div class="context-note-card__content text-sm font-semibold">
             Level pendaftaran Anda: <strong>{{ registration_level|title }}</strong>.
             Maksimal <strong>{{ registration_limit }} matkul</strong> per periode; saat ini sudah mengambil <strong>{{ registration_count }}</strong>.
@@ -205,7 +341,7 @@
         {% endif %}
 
         {% if step == 'matkul' %}
-        <form method="post" class="space-y-5 p-6 md:p-8">
+        <form method="post" class="aslab-registration-form space-y-5 p-6 md:p-8">
             {% csrf_token %}
             <div>
                 {{ matkul_form.matkul.label_tag }}
@@ -214,10 +350,10 @@
                 <div class="mt-2 text-sm font-semibold text-rose-600">{{ matkul_form.matkul.errors|striptags }}</div>
                 {% endif %}
             </div>
-            <div class="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-sm leading-7 text-slate-600">
+            <div class="aslab-registration-note rounded-3xl border border-slate-200 bg-slate-50 p-5 text-sm leading-7 text-slate-600">
                 Pilih satu mata kuliah terlebih dahulu. Sistem akan mencari nilai mata kuliah ini pada transkrip di tahap berikutnya.
             </div>
-            <div class="flex flex-wrap gap-3">
+            <div class="aslab-registration-actions flex flex-wrap gap-3">
                 <button type="submit" class="btn-primary bg-teal-700 hover:bg-teal-800 shadow-teal-900/15">
                     <i data-lucide="arrow-right" class="h-4 w-4"></i>
                     <span>Lanjut Cek Transkrip</span>
@@ -231,7 +367,7 @@
         {% endif %}
 
         {% if step == 'transkrip' %}
-        <div class="space-y-5 p-6 md:p-8">
+        <div class="aslab-registration-form space-y-5 p-6 md:p-8">
             {% include "pendaftaran_asleb/partials/transkrip_result.html" %}
             <form method="post" enctype="multipart/form-data" class="space-y-5" data-transcript-form>
                 {% csrf_token %}
@@ -248,7 +384,7 @@
                     <div class="mt-2 text-sm font-semibold text-rose-600">{{ transkrip_form.transkrip.errors|striptags }}</div>
                     {% endif %}
                 </div>
-                <div class="flex flex-wrap gap-3">
+                <div class="aslab-registration-actions flex flex-wrap gap-3">
                     <button type="submit" class="btn-primary bg-teal-700 hover:bg-teal-800 shadow-teal-900/15">
                         <i data-lucide="scan-text" class="h-4 w-4"></i>
                         <span>Baca Transkrip</span>
@@ -263,7 +399,7 @@
         {% endif %}
 
         {% if step == 'berkas' %}
-        <form method="post" enctype="multipart/form-data" class="space-y-5 p-6 md:p-8">
+        <form method="post" enctype="multipart/form-data" class="aslab-registration-form space-y-5 p-6 md:p-8">
             {% csrf_token %}
             {% include "pendaftaran_asleb/partials/transkrip_result.html" %}
             <div class="grid gap-5 md:grid-cols-2">
@@ -289,7 +425,7 @@
             </div>
             <p data-account-help class="context-note-card context-note-card--sky hidden context-note-card__content px-4 py-3 text-sm font-semibold"></p>
 
-            <div class="context-note-card context-note-card--teal p-5 text-sm text-slate-700 dark:text-slate-100">
+            <div class="aslab-registration-note context-note-card context-note-card--teal p-5 text-sm text-slate-700 dark:text-slate-100">
                 <div class="context-note-card__content flex items-start gap-3">
                     <i data-lucide="badge-info" class="mt-0.5 h-5 w-5 shrink-0 text-teal-700"></i>
                     <div>
@@ -299,10 +435,10 @@
                 </div>
             </div>
 
-            <div class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+            <div class="aslab-registration-note rounded-3xl border border-slate-200 bg-slate-50 p-5">
                 <label for="signature-pad" class="mb-3 block text-sm font-bold text-slate-900">Tanda Tangan</label>
                 <p class="mb-3 text-sm leading-6 text-slate-500">Tanda tangan langsung di kotak berikut sebagai persetujuan data pendaftaran.</p>
-                <canvas id="signature-pad" class="h-44 w-full rounded-2xl border border-slate-200 bg-white shadow-inner" width="900" height="260"></canvas>
+                <canvas id="signature-pad" class="aslab-registration-signature h-44 w-full rounded-2xl border border-slate-200 bg-white shadow-inner" width="900" height="260"></canvas>
                 <div class="mt-3 flex flex-wrap items-center gap-3">
                     <button type="button" id="clear-signature" class="btn-secondary">
                         <i data-lucide="eraser" class="h-4 w-4"></i>
@@ -341,7 +477,7 @@
                 {% endif %}
             </div>
 
-            <div class="flex flex-wrap gap-3">
+            <div class="aslab-registration-actions flex flex-wrap gap-3">
                 <button id="submit-registration" type="submit" class="btn-primary bg-teal-700 hover:bg-teal-800 shadow-teal-900/15 disabled:cursor-not-allowed disabled:opacity-50" disabled>
                     <i data-lucide="send" class="h-4 w-4"></i>
                     <span>Kirim Pendaftaran</span>
