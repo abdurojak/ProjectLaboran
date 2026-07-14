@@ -69,6 +69,24 @@
             <div class="text-sm font-semibold text-slate-500">Nama Pemilik</div>
             <div class="mt-2 text-xl font-bold text-slate-900">{{ barang.nama_pemilik|default:"-" }}</div>
         </div>
+        <div class="rounded-3xl bg-slate-50 p-5">
+            <div class="text-sm font-semibold text-slate-500">NIM Pemilik</div>
+            <div class="mt-2 text-xl font-bold text-slate-900">{{ barang.nim_pemilik|default:"-" }}</div>
+        </div>
+        <div class="rounded-3xl bg-slate-50 p-5">
+            <div class="text-sm font-semibold text-slate-500">Koneksi Akun</div>
+            {% if barang.sudah_terhubung_akun %}
+            <div class="mt-2 inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-sm font-bold text-emerald-700">
+                <i data-lucide="link" class="h-4 w-4"></i>
+                Terhubung ke {{ barang.pemilik.nama_pengguna }}
+            </div>
+            {% else %}
+            <div class="mt-2 inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-600">
+                <i data-lucide="unlink" class="h-4 w-4"></i>
+                Belum terhubung akun
+            </div>
+            {% endif %}
+        </div>
         </article>
     </div>
 </section>
