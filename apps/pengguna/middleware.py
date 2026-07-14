@@ -6,6 +6,12 @@ from .models import Pengguna
 
 class PenggunaLoginRequiredMiddleware:
     MAHASISWA_ALLOWED_NAMESPACES = {'core', 'dashboard', 'peminjaman', 'jadwal', 'pengguna', 'ruangan'}
+    MAHASISWA_ALLOWED_ASLEB_URLS = {
+        'laporan_tugas_list',
+        'laporan_submit',
+        'laporan_preview',
+        'laporan_download',
+    }
     MAHASISWA_ALLOWED_KALENDER_URLS = {
         'kegiatan_list',
         'kegiatan_create',
@@ -23,6 +29,12 @@ class PenggunaLoginRequiredMiddleware:
         'praktikum_mahasiswa_list',
         'praktikum_nilai',
         'praktikum_nilai_export',
+        'laporan_tugas_list',
+        'laporan_tugas_create',
+        'laporan_submit',
+        'laporan_review',
+        'laporan_preview',
+        'laporan_download',
     }
     ASISTEN_LAB_ALLOWED_KALENDER_URLS = {
         'kegiatan_list',
@@ -117,6 +129,9 @@ class PenggunaLoginRequiredMiddleware:
 
         if namespace == 'kalender':
             return resolved.url_name in self.MAHASISWA_ALLOWED_KALENDER_URLS
+
+        if namespace == 'asleb':
+            return resolved.url_name in self.MAHASISWA_ALLOWED_ASLEB_URLS
 
         if namespace != 'pengguna':
             return namespace in self.MAHASISWA_ALLOWED_NAMESPACES

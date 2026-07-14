@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Buat Tugas Laporan{% endblock %}
+{% block content %}
+<section class="mx-auto max-w-4xl space-y-6">
+    <div>
+        <p class="text-sm font-black uppercase tracking-[0.22em] text-brand-700">Laporan Praktikum</p>
+        <h2 class="mt-2 text-3xl font-black text-slate-900">Buat Tugas Laporan</h2>
+        <p class="mt-2 text-sm text-slate-500">Tugas hanya akan tampil untuk peserta pada mata kuliah dan kelas yang dipilih.</p>
+    </div>
+    <form method="post" class="surface-card grid gap-5 p-6 md:grid-cols-2 md:p-8">
+        {% csrf_token %}
+        {% if form.non_field_errors %}<div class="rounded-2xl bg-rose-50 p-4 text-sm font-bold text-rose-700 md:col-span-2">{{ form.non_field_errors }}</div>{% endif %}
+        {% for field in form %}
+        <div class="{% if field.name == 'deskripsi' or field.name == 'izinkan_terlambat' or field.name == 'aktif' %}md:col-span-2{% endif %}">
+            {% if field.name == 'izinkan_terlambat' or field.name == 'aktif' %}
+            <label class="flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white/70 p-4 font-bold text-slate-700">{{ field }}<span>{{ field.label }}</span></label>
+            {% else %}
+            {{ field.label_tag }}{{ field }}
+            {% endif %}
+            {% if field.help_text %}<p class="mt-2 text-xs text-slate-500">{{ field.help_text }}</p>{% endif %}
+            {% for error in field.errors %}<p class="mt-2 text-sm font-bold text-rose-600">{{ error }}</p>{% endfor %}
+        </div>
+        {% endfor %}
+        <div class="flex flex-wrap gap-3 md:col-span-2">
+            <button class="btn-primary gap-2" type="submit"><i data-lucide="save" class="h-4 w-4"></i>Simpan Tugas</button>
+            <a class="btn-secondary" href="{% url 'asleb:laporan_tugas_list' %}">Batal</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

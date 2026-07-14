@@ -599,6 +599,171 @@ class HasilPraktikumMahasiswa(models.Model):
         return f'{nama} - {modul_label} - {self.get_status_absensi_display()}'
 
 
+class TugasLaporanPraktikum(models.Model):
+    FORMAT_CHOICES = [
+        ('pdf', 'PDF'),
+        ('doc', 'DOC'),
+        ('docx', 'DOCX'),
+    ]
+
+    judul = models.CharField(max_length=200)
+    matkul = models.ForeignKey(
+        'pendaftaran_asleb.MataKuliahAsleb',
+        on_delete=models.PROTECT,
+        related_name='tugas_laporan',
+    )
+    modul = models.ForeignKey(
+        ModulPraktikum,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='tugas_laporan',
+    )
+    pertemuan = models.PositiveSmallIntegerField(blank=True, null=True)
+    deskripsi = models.TextField(blank=True)
+    format_file = models.CharField(max_length=120, default='pdf,doc,docx')
+    ukuran_maksimal_mb = models.PositiveSmallIntegerField(default=10)
+    mulai_pengumpulan = models.DateTimeField(default=timezone.now)
+    batas_pengumpulan = models.DateTimeField()
+    izinkan_terlambat = models.BooleanField(default=False)
+    asisten_pemeriksa = models.ForeignKey(
+        Asleb,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='tugas_laporan_diperiksa',
+    )
+    dibuat_oleh = models.ForeignKey(
+        'pengguna.Pengguna',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='tugas_laporan_dibuat',
+    )
+    aktif = models.BooleanField(default=True)
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+    diperbarui_pada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-batas_pengumpulan', 'matkul__nama', 'judul']
+        verbose_name = 'Tugas Laporan Praktikum'
+        verbose_name_plural = 'Tugas Laporan Praktikum'
+
+    @property
+    def allowed_extensions(self):
+        return [item.strip().lower().lstrip('.') for item in self.format_file.split(',') if item.strip()]
+
+    @property
+    def is_open(self):
+        now = timezone.now()
+        if now < self.mulai_pengumpulan:
+            return False
+        return self.izinkan_terlambat or now <= self.batas_pengumpulan
+
+    def __str__(self):
+        return f'{self.judul} - {self.matkul}'
+
+
+class PengumpulanLaporanPraktikum(models.Model):
+    STATUS_BELUM = 'belum_dikumpulkan'
+    STATUS_TERKUMPUL = 'sudah_dikumpulkan'
+    STATUS_TERLAMBAT = 'terlambat'
+    STATUS_DIPERIKSA = 'sedang_diperiksa'
+    STATUS_REVISI = 'perlu_revisi'
+    STATUS_DIREVISI = 'sudah_direvisi'
+    STATUS_DITERIMA = 'diterima'
+    STATUS_DINILAI = 'sudah_dinilai'
+    STATUS_CHOICES = [
+        (STATUS_BELUM, 'Belum dikumpulkan'),
+        (STATUS_TERKUMPUL, 'Sudah dikumpulkan'),
+        (STATUS_TERLAMBAT, 'Terlambat'),
+        (STATUS_DIPERIKSA, 'Sedang diperiksa'),
+        (STATUS_REVISI, 'Perlu revisi'),
+        (STATUS_DIREVISI, 'Sudah direvisi'),
+        (STATUS_DITERIMA, 'Diterima'),
+        (STATUS_DINILAI, 'Sudah dinilai'),
+    ]
+
+    tugas = models.ForeignKey(TugasLaporanPraktikum, on_delete=models.CASCADE, related_name='pengumpulan')
+    peserta = models.ForeignKey(PesertaPraktikum, on_delete=models.CASCADE, related_name='pengumpulan_laporan')
+    file_laporan = models.FileField(upload_to='laporan_praktikum/%Y/%m/')
+    nama_file_asli = models.CharField(max_length=220, blank=True)
+    file_size = models.PositiveBigIntegerField(blank=True, null=True)
+    versi = models.PositiveSmallIntegerField(default=1)
+    dikumpulkan_pada = models.DateTimeField(default=timezone.now)
+    terlambat = models.BooleanField(default=False)
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default=STATUS_TERKUMPUL)
+    catatan_asisten = models.TextField(blank=True)
+    nilai = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    diperiksa_oleh = models.ForeignKey(
+        'pengguna.Pengguna',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='laporan_praktikum_diperiksa',
+    )
+    diperiksa_pada = models.DateTimeField(blank=True, null=True)
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+    diperbarui_pada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-dikumpulkan_pada']
+        constraints = [
+            models.UniqueConstraint(fields=['tugas', 'peserta', 'versi'], name='unique_laporan_tugas_peserta_versi'),
+        ]
+        verbose_name = 'Pengumpulan Laporan Praktikum'
+        verbose_name_plural = 'Pengumpulan Laporan Praktikum'
+
+    @property
+    def file_extension(self):
+        name = (self.file_laporan.name or self.nama_file_asli or '').lower()
+        return name.rsplit('.', 1)[-1] if '.' in name else ''
+
+    @property
+    def is_pdf(self):
+        return self.file_extension == 'pdf'
+
+    def save(self, *args, **kwargs):
+        if self.file_laporan:
+            if not self.nama_file_asli:
+                self.nama_file_asli = self.file_laporan.name.rsplit('/', 1)[-1]
+            if hasattr(self.file_laporan, 'size'):
+                self.file_size = self.file_laporan.size
+        self.terlambat = self.dikumpulkan_pada > self.tugas.batas_pengumpulan
+        if self.terlambat and self.status == self.STATUS_TERKUMPUL:
+            self.status = self.STATUS_TERLAMBAT
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.peserta.nama} - {self.tugas.judul} v{self.versi}'
+
+
+class LogAktivitasPraktikum(models.Model):
+    pengguna = models.ForeignKey(
+        'pengguna.Pengguna',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='log_aktivitas_praktikum',
+    )
+    aksi = models.CharField(max_length=120)
+    deskripsi = models.TextField(blank=True)
+    matkul_label = models.CharField(max_length=250, blank=True)
+    peserta_nim = models.CharField(max_length=40, blank=True)
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-dibuat_pada']
+        verbose_name = 'Log Aktivitas Praktikum'
+        verbose_name_plural = 'Log Aktivitas Praktikum'
+
+
 class PengingatAbsensiAsleb(models.Model):
     asleb = models.ForeignKey(Asleb, on_delete=models.CASCADE, related_name='pengingat_absensi')
     jadwal = models.ForeignKey('jadwal.JadwalPraktikum', on_delete=models.CASCADE, related_name='pengingat_absensi_asleb')
