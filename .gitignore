@@ -3,5 +3,7 @@ __pycache__/
 *.py[cod]
 db.sqlite3
 .env
+.env.backup
 staticfiles/
 media/
+hatch-pet-runs
