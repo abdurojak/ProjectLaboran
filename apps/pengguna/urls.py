@@ -21,6 +21,7 @@ from .views import (
     ProdiCreateView,
     ProdiUpdateView,
     ResetPasswordView,
+    SchoolSearchView,
     delete_pengalaman,
     download_cv,
 )
@@ -48,6 +49,7 @@ urlpatterns = [
     path('<int:user_pk>/pengalaman/<int:experience_pk>/edit/', PengalamanUpdateView.as_view(), name='experience_update'),
     path('<int:user_pk>/pengalaman/<int:experience_pk>/hapus/', delete_pengalaman, name='experience_delete'),
     path('<int:user_pk>/cv/download/', download_cv, name='cv_download'),
+    path('api/profile/education/schools/search/', SchoolSearchView.as_view(), name='school_search'),
     path('<int:pk>/ganti-password/', PenggunaChangePasswordView.as_view(), name='change_password'),
     path('<int:pk>/hapus/', PenggunaDeleteView.as_view(), name='delete'),
 ]

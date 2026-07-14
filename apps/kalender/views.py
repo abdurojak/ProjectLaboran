@@ -10,7 +10,6 @@ from django.views.generic import CreateView, DeleteView, DetailView, ListView, U
 from apps.asleb.models import Asleb, PesertaPraktikum
 from apps.core.views import PostOnlyDeleteMixin
 from apps.jadwal.models import JadwalPraktikum
-from apps.pendaftaran_asleb.models import PendaftaranAsleb, RiwayatAsleb
 
 from .forms import KegiatanKalenderForm
 from .models import KegiatanKalender, Notifikasi
@@ -93,15 +92,10 @@ def get_asisten_lab_jadwal_queryset(pengguna):
         return JadwalPraktikum.objects.none()
 
     if pengguna.role == 'asisten_lab':
-        matkul_list = [
-            item.matkul
-            for item in PendaftaranAsleb.objects.filter(
-                nim=pengguna.nim_nik,
-                status__in=['diterima', 'digenerate'],
-            ).select_related('matkul')
-        ]
-        matkul_list.extend(
-            item.matkul for item in RiwayatAsleb.objects.filter(nim=pengguna.nim_nik).select_related('matkul')
+        labels = list(
+            Asleb.objects.filter(nim=pengguna.nim_nik, status='aktif')
+            .exclude(matkul='')
+            .values_list('matkul', flat=True)
         )
     else:
         matkul_list = [
@@ -112,7 +106,7 @@ def get_asisten_lab_jadwal_queryset(pengguna):
             ).select_related('matkul')
         ]
 
-    labels = [str(matkul) for matkul in matkul_list]
+        labels = [str(matkul) for matkul in matkul_list]
     queryset = JadwalPraktikum.objects.select_related('ruangan', 'ruangan_tambahan')
     if pengguna.role == 'mahasiswa':
         return queryset.filter(mata_kuliah__in=labels, status=JadwalPraktikum.STATUS_DITERIMA).distinct()

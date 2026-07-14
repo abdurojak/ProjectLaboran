@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Fakultas, PengalamanPengguna, Pengguna, Prodi
+from .models import Fakultas, PengalamanPengguna, Pengguna, Prodi, School
 
 
 @admin.register(Fakultas)
@@ -29,3 +29,10 @@ class PengalamanPenggunaAdmin(admin.ModelAdmin):
     list_display = ('pengguna', 'kategori', 'jabatan', 'organisasi', 'tanggal_mulai', 'tanggal_selesai', 'masih_berjalan', 'otomatis')
     list_filter = ('kategori', 'otomatis', 'masih_berjalan', 'organisasi')
     search_fields = ('pengguna__nama_pengguna', 'pengguna__nim_nik', 'jabatan', 'organisasi')
+
+
+@admin.register(School)
+class SchoolAdmin(admin.ModelAdmin):
+    list_display = ('npsn', 'nama', 'jenjang', 'status', 'kabupaten_kota', 'provinsi', 'aktif')
+    list_filter = ('jenjang', 'status', 'aktif', 'provinsi', 'kabupaten_kota')
+    search_fields = ('npsn', 'nama', 'kabupaten_kota', 'kecamatan')

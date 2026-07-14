@@ -229,6 +229,55 @@
     html[data-theme="dark"] [data-experience-modal] .text-brand-700 {
         color: #67e8f9 !important;
     }
+
+    .school-results-panel {
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        background: rgba(255, 255, 255, 0.98);
+        color: #0f172a;
+    }
+
+    .school-result-option {
+        display: block;
+        width: 100%;
+        padding: 0.85rem 1rem;
+        text-align: left;
+        transition: background-color 0.16s ease, color 0.16s ease;
+    }
+
+    .school-result-option:hover {
+        background: rgba(20, 184, 166, 0.12);
+    }
+
+    .school-result-title {
+        color: #0f172a;
+        font-size: 0.875rem;
+        font-weight: 900;
+    }
+
+    .school-result-desc {
+        margin-top: 0.2rem;
+        color: #64748b;
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+
+    html[data-theme="dark"] .school-results-panel {
+        border-color: rgba(103, 232, 249, 0.18);
+        background: rgba(15, 23, 42, 0.98);
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+    }
+
+    html[data-theme="dark"] .school-result-option:hover {
+        background: rgba(34, 211, 238, 0.12);
+    }
+
+    html[data-theme="dark"] .school-result-title {
+        color: #f8fafc;
+    }
+
+    html[data-theme="dark"] .school-result-desc {
+        color: #94a3b8;
+    }
 </style>
 {% endblock %}
 
@@ -479,9 +528,18 @@
             <form method="post" action="{% url 'pengguna:experience_create' pengguna.pk %}?kategori={{ category.key }}" enctype="multipart/form-data" class="grid gap-5 md:grid-cols-2">
                 {% csrf_token %}
                 {% for field in category.form %}
-                <div class="{% if field.name == 'deskripsi' or field.name == 'teknologi' or field.name == 'tautan' or field.name == 'file_sertifikat' or field.name == 'masih_berjalan' %}md:col-span-2{% endif %}"{% if field.name == 'tanggal_selesai' %} data-end-date-wrap{% endif %}>
+                <div class="{% if field.name == 'deskripsi' or field.name == 'teknologi' or field.name == 'tautan' or field.name == 'file_sertifikat' or field.name == 'masih_berjalan' or field.name == 'sekolah' or field.name == 'nama_sekolah_manual' %}md:col-span-2{% endif %}"{% if field.name == 'tanggal_selesai' %} data-end-date-wrap{% endif %}{% if field.name == 'bidang_studi' %} data-major-wrap{% endif %}{% if field.name == 'nama_sekolah_manual' %} data-school-manual-wrap{% endif %}>
                     {% if field.name == 'masih_berjalan' %}
                     <label class="flex cursor-pointer items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 p-4">{{ field }}<span class="mb-0 font-bold text-slate-800">{{ field.label }}</span></label>
+                    {% elif field.name == 'sekolah' %}
+                    {{ field }}
+                    <label for="id_school_search_create_{{ category.key }}">Nama Sekolah</label>
+                    <div class="relative" data-school-autocomplete data-search-url="{% url 'school_search_global' %}">
+                        <input id="id_school_search_create_{{ category.key }}" type="text" autocomplete="off" class="w-full" placeholder="Pilih jenjang terlebih dahulu" data-school-search-input>
+                        <div class="pointer-events-none absolute right-4 top-1/2 hidden -translate-y-1/2 text-xs font-black text-brand-700" data-school-loading>Mencari...</div>
+                        <div class="school-results-panel absolute left-0 right-0 top-[calc(100%+0.5rem)] z-40 hidden max-h-72 overflow-y-auto rounded-3xl shadow-2xl" data-school-results></div>
+                    </div>
+                    <p class="mt-2 text-xs font-semibold text-slate-500">Cari berdasarkan nama sekolah atau NPSN. Jika belum ada di database, pilih input manual.</p>
                     {% else %}{{ field.label_tag }}{{ field }}{% endif %}
                     {% if field.help_text %}<p class="mt-2 text-xs text-slate-500">{{ field.help_text }}</p>{% endif %}
                     {% for error in field.errors %}<p class="mt-2 text-sm font-bold text-rose-600">{{ error }}</p>{% endfor %}
@@ -498,14 +556,34 @@
         </section>
         {% endfor %}
 
+        <datalist id="education-major-options">
+            <option value="IPA"></option>
+            <option value="IPS"></option>
+            <option value="Bahasa"></option>
+            <option value="Rekayasa Perangkat Lunak"></option>
+            <option value="Teknik Komputer dan Jaringan"></option>
+            <option value="Multimedia"></option>
+            <option value="Akuntansi"></option>
+            <option value="Otomatisasi dan Tata Kelola Perkantoran"></option>
+        </datalist>
+
         {% for item_form in riwayat_edit_forms %}
         <section id="experience-edit-{{ item_form.item.pk }}" data-experience-panel data-experience-title="Edit {{ item_form.category_meta.label }}" class="mt-6 hidden">
             <form method="post" action="{% url 'pengguna:experience_update' pengguna.pk item_form.item.pk %}" enctype="multipart/form-data" class="grid gap-5 md:grid-cols-2">
                 {% csrf_token %}
                 {% for field in item_form.form %}
-                <div class="{% if field.name == 'deskripsi' or field.name == 'teknologi' or field.name == 'tautan' or field.name == 'file_sertifikat' or field.name == 'masih_berjalan' %}md:col-span-2{% endif %}"{% if field.name == 'tanggal_selesai' %} data-end-date-wrap{% endif %}>
+                <div class="{% if field.name == 'deskripsi' or field.name == 'teknologi' or field.name == 'tautan' or field.name == 'file_sertifikat' or field.name == 'masih_berjalan' or field.name == 'sekolah' or field.name == 'nama_sekolah_manual' %}md:col-span-2{% endif %}"{% if field.name == 'tanggal_selesai' %} data-end-date-wrap{% endif %}{% if field.name == 'bidang_studi' %} data-major-wrap{% endif %}{% if field.name == 'nama_sekolah_manual' %} data-school-manual-wrap{% endif %}>
                     {% if field.name == 'masih_berjalan' %}
                     <label class="flex cursor-pointer items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 p-4">{{ field }}<span class="mb-0 font-bold text-slate-800">{{ field.label }}</span></label>
+                    {% elif field.name == 'sekolah' %}
+                    {{ field }}
+                    <label for="id_school_search_edit_{{ item_form.item.pk }}">Nama Sekolah</label>
+                    <div class="relative" data-school-autocomplete data-search-url="{% url 'school_search_global' %}">
+                        <input id="id_school_search_edit_{{ item_form.item.pk }}" type="text" autocomplete="off" class="w-full" placeholder="Pilih jenjang terlebih dahulu" data-school-search-input value="{% if item_form.item.sekolah_snapshot %}{{ item_form.item.sekolah_snapshot }}{% endif %}">
+                        <div class="pointer-events-none absolute right-4 top-1/2 hidden -translate-y-1/2 text-xs font-black text-brand-700" data-school-loading>Mencari...</div>
+                        <div class="school-results-panel absolute left-0 right-0 top-[calc(100%+0.5rem)] z-40 hidden max-h-72 overflow-y-auto rounded-3xl shadow-2xl" data-school-results></div>
+                    </div>
+                    <p class="mt-2 text-xs font-semibold text-slate-500">Cari berdasarkan nama sekolah atau NPSN. Jika belum ada di database, pilih input manual.</p>
                     {% else %}{{ field.label_tag }}{{ field }}{% endif %}
                     {% if field.help_text %}<p class="mt-2 text-xs text-slate-500">{{ field.help_text }}</p>{% endif %}
                     {% for error in field.errors %}<p class="mt-2 text-sm font-bold text-rose-600">{{ error }}</p>{% endfor %}
@@ -636,6 +714,10 @@
             const checkbox = form.querySelector('input[name="masih_berjalan"]');
             const endWrap = form.querySelector('[data-end-date-wrap]');
             const endInput = form.querySelector('input[name="tanggal_selesai"]');
+            const levelInput = form.querySelector('[data-education-level]');
+            const schoolSearch = form.querySelector('[data-school-search-input]');
+            const majorWrap = form.querySelector('[data-major-wrap]');
+            const majorInput = form.querySelector('[data-education-major]');
 
             if (checkbox && endWrap && endInput) {
                 endWrap.classList.toggle('hidden', checkbox.checked);
@@ -644,6 +726,147 @@
                     endInput.value = '';
                 }
             }
+
+            if (majorWrap && majorInput && levelInput) {
+                const showMajor = levelInput.value === 'SMA' || levelInput.value === 'SMK';
+                majorWrap.classList.toggle('hidden', !showMajor);
+                majorInput.disabled = !showMajor;
+                if (!showMajor) {
+                    majorInput.value = '';
+                }
+            }
+
+            if (schoolSearch && levelInput) {
+                schoolSearch.disabled = !levelInput.value;
+                schoolSearch.placeholder = levelInput.value ? 'Ketik minimal 2 huruf nama sekolah/NPSN' : 'Pilih jenjang pendidikan terlebih dahulu';
+            }
+        }
+
+        function setManualSchool(form, show) {
+            const manualWrap = form.querySelector('[data-school-manual-wrap]');
+            const manualInput = form.querySelector('[data-school-manual]');
+            if (!manualWrap || !manualInput) {
+                return;
+            }
+            manualWrap.classList.toggle('hidden', !show);
+            manualInput.disabled = !show;
+            manualInput.required = show;
+            if (!show) {
+                manualInput.value = '';
+            }
+        }
+
+        function createSchoolOption(titleText, descText, onClick) {
+            const option = document.createElement('button');
+            option.type = 'button';
+            option.className = 'school-result-option';
+            const title = document.createElement('div');
+            title.className = 'school-result-title';
+            title.textContent = titleText || '-';
+            option.appendChild(title);
+            if (descText) {
+                const desc = document.createElement('div');
+                desc.className = 'school-result-desc';
+                desc.textContent = descText;
+                option.appendChild(desc);
+            }
+            option.addEventListener('click', onClick);
+            return option;
+        }
+
+        function renderSchoolResults(form, items, query) {
+            const results = form.querySelector('[data-school-results]');
+            const schoolId = form.querySelector('[data-school-id]');
+            const searchInput = form.querySelector('[data-school-search-input]');
+            if (!results) {
+                return;
+            }
+            results.innerHTML = '';
+            if (!items.length) {
+                results.appendChild(createSchoolOption('Sekolah tidak ditemukan', 'Klik untuk mengisi nama sekolah manual.', function () {
+                    if (schoolId) schoolId.value = '';
+                    if (searchInput) searchInput.value = query || '';
+                    setManualSchool(form, true);
+                    results.classList.add('hidden');
+                }));
+            } else {
+                items.forEach(function (item) {
+                    results.appendChild(createSchoolOption(item.label, item.description, function () {
+                        if (schoolId) schoolId.value = item.id;
+                        if (searchInput) searchInput.value = item.label || '';
+                        setManualSchool(form, false);
+                        results.classList.add('hidden');
+                    }));
+                });
+                const manual = createSchoolOption('Sekolah tidak ditemukan?', 'Gunakan input manual untuk menyimpan asal sekolah.', function () {
+                    if (schoolId) schoolId.value = '';
+                    setManualSchool(form, true);
+                    results.classList.add('hidden');
+                });
+                manual.classList.add('border-t', 'border-slate-200');
+                results.appendChild(manual);
+            }
+            results.classList.remove('hidden');
+        }
+
+        function setupSchoolAutocomplete(form) {
+            const autocomplete = form.querySelector('[data-school-autocomplete]');
+            const levelInput = form.querySelector('[data-education-level]');
+            const schoolId = form.querySelector('[data-school-id]');
+            const searchInput = form.querySelector('[data-school-search-input]');
+            const results = form.querySelector('[data-school-results]');
+            const loading = form.querySelector('[data-school-loading]');
+            const manualInput = form.querySelector('[data-school-manual]');
+            if (!autocomplete || !levelInput || !searchInput || !results) {
+                return;
+            }
+            let timer = null;
+
+            levelInput.addEventListener('change', function () {
+                if (schoolId) schoolId.value = '';
+                searchInput.value = '';
+                results.classList.add('hidden');
+                setManualSchool(form, false);
+                syncExperienceFormState(form);
+            });
+
+            searchInput.addEventListener('input', function () {
+                if (schoolId) schoolId.value = '';
+                setManualSchool(form, false);
+                clearTimeout(timer);
+                timer = setTimeout(function () {
+                    const query = searchInput.value.trim();
+                    if (query.length < 2 || !levelInput.value) {
+                        results.classList.add('hidden');
+                        return;
+                    }
+                    if (loading) loading.classList.remove('hidden');
+                    const url = `${autocomplete.dataset.searchUrl}?q=${encodeURIComponent(query)}&level=${encodeURIComponent(levelInput.value)}`;
+                    fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+                        .then(function (response) {
+                            if (!response.ok) throw new Error('Pencarian sekolah gagal.');
+                            return response.json();
+                        })
+                        .then(function (payload) {
+                            renderSchoolResults(form, payload.results || [], query);
+                        })
+                        .catch(function () {
+                            renderSchoolResults(form, [], query);
+                        })
+                        .finally(function () {
+                            if (loading) loading.classList.add('hidden');
+                        });
+                }, 300);
+            });
+
+            document.addEventListener('click', function (event) {
+                if (!autocomplete.contains(event.target)) {
+                    results.classList.add('hidden');
+                }
+            });
+
+            setManualSchool(form, Boolean(manualInput && manualInput.value));
+            syncExperienceFormState(form);
         }
 
         function resetModalForms(modalElement) {
@@ -791,10 +1014,12 @@
 
         document.querySelectorAll('[data-experience-modal] form').forEach(function (form) {
             const checkbox = form.querySelector('input[name="masih_berjalan"]');
-            if (!checkbox) return;
-            checkbox.addEventListener('change', function () {
-                syncExperienceFormState(form);
-            });
+            if (checkbox) {
+                checkbox.addEventListener('change', function () {
+                    syncExperienceFormState(form);
+                });
+            }
+            setupSchoolAutocomplete(form);
             syncExperienceFormState(form);
         });
     });

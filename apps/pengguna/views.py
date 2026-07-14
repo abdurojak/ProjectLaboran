@@ -6,7 +6,8 @@ from urllib.parse import urlencode, urljoin
 from django.contrib import messages
 from django.contrib.auth.hashers import check_password, make_password
 from django.conf import settings
-from django.http import HttpResponse
+from django.db.models import Q
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -38,7 +39,7 @@ from .forms import (
     VerificationCodeForm,
 )
 from .cv import build_cv_pdf
-from .models import Fakultas, PengalamanPengguna, Pengguna, Prodi
+from .models import Fakultas, PengalamanPengguna, Pengguna, Prodi, School
 
 
 OTP_SESSION_KEY = 'pengguna_otp'
@@ -483,6 +484,43 @@ def delete_pengalaman(request, user_pk, experience_pk):
     pengalaman.delete()
     messages.success(request, 'Pengalaman berhasil dihapus.')
     return redirect('pengguna:detail', pk=profile_user.pk)
+
+
+class SchoolSearchView(View):
+    def get(self, request, *args, **kwargs):
+        if not getattr(request, 'current_pengguna', None):
+            return JsonResponse({'results': [], 'error': 'Silakan login terlebih dahulu.'}, status=401)
+
+        keyword = request.GET.get('q', '').strip()
+        level = request.GET.get('level', '').strip().upper()
+        province = request.GET.get('province', '').strip()
+        city = request.GET.get('city', '').strip()
+
+        if len(keyword) < 2 or level not in {'SD', 'SMP', 'SMA', 'SMK'}:
+            return JsonResponse({'results': []})
+
+        queryset = School.objects.filter(aktif=True, jenjang=level).filter(
+            Q(nama__icontains=keyword) | Q(npsn__icontains=keyword)
+        )
+        if province:
+            queryset = queryset.filter(provinsi__icontains=province)
+        if city:
+            queryset = queryset.filter(kabupaten_kota__icontains=city)
+
+        results = []
+        for school in queryset.order_by('nama')[:20]:
+            location = ', '.join(part for part in [school.kabupaten_kota, school.provinsi] if part)
+            results.append({
+                'id': school.pk,
+                'npsn': school.npsn,
+                'nama': school.nama,
+                'jenjang': school.jenjang,
+                'status': school.get_status_display(),
+                'location': location,
+                'label': school.nama,
+                'description': f'NPSN: {school.npsn} - {location or "Lokasi belum tersedia"}',
+            })
+        return JsonResponse({'results': results})
 
 
 def download_cv(request, user_pk):

@@ -489,7 +489,11 @@ class AbsensiAslebListView(ListView):
         if not pengguna or pengguna.role != ASISTEN_LAB_ROLE:
             return None
 
-        return Asleb.objects.filter(nim=pengguna.nim_nik).first()
+        return (
+            Asleb.objects.filter(nim=pengguna.nim_nik, status='aktif')
+            .order_by('-diperbarui_pada', '-pk')
+            .first()
+        )
 
 
 class AbsensiAslebCreateView(CreateView):
@@ -500,7 +504,11 @@ class AbsensiAslebCreateView(CreateView):
 
     def dispatch(self, request, *args, **kwargs):
         pengguna = getattr(request, 'current_pengguna', None)
-        self.asleb = Asleb.objects.filter(nim=getattr(pengguna, 'nim_nik', '')).first()
+        self.asleb = (
+            Asleb.objects.filter(nim=getattr(pengguna, 'nim_nik', ''), status='aktif')
+            .order_by('-diperbarui_pada', '-pk')
+            .first()
+        )
 
         if not pengguna or pengguna.role != ASISTEN_LAB_ROLE:
             messages.error(request, 'Absensi hanya bisa diisi oleh role Asisten Lab.')
@@ -1333,7 +1341,11 @@ def _get_accessible_modul_praktikum(request, pk):
     allowed = can_manage_lab_operations(pengguna)
 
     if pengguna and pengguna.role == ASISTEN_LAB_ROLE:
-        asleb = Asleb.objects.filter(nim=pengguna.nim_nik).first()
+        asleb = (
+            Asleb.objects.filter(nim=pengguna.nim_nik, status='aktif')
+            .order_by('-diperbarui_pada', '-pk')
+            .first()
+        )
         allowed = bool(asleb and get_asleb_matkul(asleb) == modul.matkul)
 
     if not allowed:

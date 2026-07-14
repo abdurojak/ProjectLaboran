@@ -18,8 +18,10 @@ from django.contrib import admin
 from django.urls import include, path
 from django.conf import settings
 from django.conf.urls.static import static
+from apps.pengguna.views import SchoolSearchView
 
 urlpatterns = [
+    path('api/profile/education/schools/search/', SchoolSearchView.as_view(), name='school_search_global'),
     path('api/mobile/v1/', include('apps.mobile_api.urls')),
     path('', include('apps.dashboard.urls')),
     path('asleb/', include('apps.asleb.urls')),

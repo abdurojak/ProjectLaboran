@@ -524,7 +524,10 @@ class HasilPraktikumMahasiswaForm(forms.ModelForm):
 
 
 def get_asleb_matkul(asleb):
-    from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, RiwayatAsleb
+    from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb
+
+    if not asleb or asleb.status != 'aktif':
+        return None
 
     active_match = next(
         (
@@ -538,11 +541,8 @@ def get_asleb_matkul(asleb):
 
     registration = PendaftaranAsleb.objects.filter(
         nim=asleb.nim,
-        status__in=['diterima', 'digenerate'],
+        status='digenerate',
     ).select_related('matkul').order_by('-pk').first()
     if registration:
         return registration.matkul
-    history = RiwayatAsleb.objects.filter(nim=asleb.nim).select_related('matkul').order_by('-pk').first()
-    if history:
-        return history.matkul
     return None
