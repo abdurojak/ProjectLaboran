@@ -10,7 +10,7 @@ from django.urls import reverse
 from PIL import Image
 from rest_framework.test import APIClient
 
-from apps.asleb.models import AbsensiMasukAsleb, Asleb, PengaturanAbsensiAsleb
+from apps.asleb.models import AbsensiMasukAsleb, Asleb, HonorAsleb, PengaturanAbsensiAsleb
 from apps.jadwal.models import JadwalPraktikum
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PeriodeAsleb, RiwayatAsleb
 from apps.pengguna.models import Pengguna
@@ -128,6 +128,7 @@ class MobileAbsensiApiTests(TestCase):
         self.assertFalse(attendance.video_absensi)
         self.assertIsNone(attendance.latitude)
         self.assertIsNone(attendance.longitude)
+        self.assertTrue(HonorAsleb.objects.filter(asleb=self.asleb, total_pertemuan=1).exists())
 
         duplicate = self.client.post(
             reverse('mobile_api:check_in'), self.check_in_payload(), format='multipart'

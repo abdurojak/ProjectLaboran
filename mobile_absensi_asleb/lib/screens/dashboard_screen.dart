@@ -118,6 +118,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
+                  _HonorSummaryCard(honor: state.honor),
+                  const SizedBox(height: 24),
                   const Text(
                     'Jadwal hari ini',
                     style: TextStyle(
@@ -167,6 +169,88 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _HonorSummaryCard extends StatelessWidget {
+  const _HonorSummaryCard({required this.honor});
+  final Map<String, dynamic>? honor;
+
+  String _rupiah(dynamic value) {
+    final number = num.tryParse('${value ?? 0}') ?? 0;
+    final formatter = NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: 'Rp ',
+      decimalDigits: 0,
+    );
+    return formatter.format(number);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final monthHonor = Map<String, dynamic>.from(
+      honor?['bulan_ini'] as Map? ?? {},
+    );
+    final amount = monthHonor['jumlah'] ?? 0;
+    final pending = honor?['total_pending'] ?? 0;
+    final meetings = monthHonor['total_pertemuan'] ?? 0;
+    final status = monthHonor['status'] as String? ?? 'belum_ada';
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFDDE8E8)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: AppTheme.amber.withValues(alpha: .12),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: const Icon(Icons.payments_outlined, color: AppTheme.amber),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Honor Bulan Ini',
+                  style: TextStyle(
+                    color: Color(0xFF64748B),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _rupiah(amount),
+                  style: const TextStyle(
+                    color: AppTheme.navy,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$meetings pertemuan • ${status.replaceAll('_', ' ')} • pending ${_rupiah(pending)}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

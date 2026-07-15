@@ -47,6 +47,7 @@ from .forms import (
 )
 from .models import (
     AbsensiAsleb,
+    AbsensiMasukAsleb,
     Asleb,
     HasilPraktikumMahasiswa,
     HonorAsleb,
@@ -484,7 +485,32 @@ class AbsensiAslebListView(ListView):
         )
         context['modul_list'] = self.get_modul_list(pengguna, context['asleb_profile'])
         context['can_manage_modul'] = can_manage_lab_operations(pengguna)
+        context['mobile_absensi_list'] = self.get_mobile_absensi_queryset(pengguna)
         return context
+
+    def get_mobile_absensi_queryset(self, pengguna):
+        queryset = AbsensiMasukAsleb.objects.select_related(
+            'asleb',
+            'jadwal',
+            'jadwal__ruangan',
+            'jadwal__ruangan_tambahan',
+        )
+        search = self.request.GET.get('q', '').strip()
+
+        if pengguna and pengguna.role == ASISTEN_LAB_ROLE:
+            queryset = queryset.filter(asleb__nim=pengguna.nim_nik)
+        elif pengguna and pengguna.role != LABORAN_ROLE:
+            queryset = queryset.none()
+
+        if search:
+            queryset = queryset.filter(
+                Q(asleb__nama__icontains=search) |
+                Q(asleb__nim__icontains=search) |
+                Q(jadwal__mata_kuliah__icontains=search) |
+                Q(jadwal__kelas__icontains=search)
+            )
+
+        return queryset[:50]
 
     def get_modul_list(self, pengguna, asleb_profile):
         queryset = ModulPraktikum.objects.select_related('matkul', 'diunggah_oleh')
@@ -1872,11 +1898,7 @@ def roman_month(month):
 
 def sync_honor_from_absensi(absensi):
     bulan = absensi.tanggal_praktikum.replace(day=1)
-    total_pertemuan = AbsensiAsleb.objects.filter(
-        asleb=absensi.asleb,
-        tanggal_praktikum__year=bulan.year,
-        tanggal_praktikum__month=bulan.month,
-    ).count()
+    total_pertemuan = get_total_honor_attendance_count(absensi.asleb, bulan)
 
     honor, _ = HonorAsleb.objects.get_or_create(
         asleb=absensi.asleb,
@@ -1889,6 +1911,48 @@ def sync_honor_from_absensi(absensi):
     )
     honor.jumlah_praktikum = max(honor.jumlah_praktikum, 1)
     honor.total_pertemuan = total_pertemuan
+    if honor.status == 'draft':
+        honor.status = 'diproses'
+    honor.save()
+    return honor
+
+
+def get_total_honor_attendance_count(asleb, bulan):
+    web_absensi = AbsensiAsleb.objects.filter(
+        asleb=asleb,
+        tanggal_praktikum__year=bulan.year,
+        tanggal_praktikum__month=bulan.month,
+    )
+    mobile_absensi = AbsensiMasukAsleb.objects.filter(
+        asleb=asleb,
+        tanggal_absensi__year=bulan.year,
+        tanggal_absensi__month=bulan.month,
+    )
+
+    web_keys = set(web_absensi.exclude(jadwal__isnull=True).values_list('jadwal_id', 'tanggal_praktikum'))
+    mobile_count = 0
+    for attendance in mobile_absensi.values('jadwal_id', 'tanggal_absensi'):
+        key = (attendance['jadwal_id'], attendance['tanggal_absensi'])
+        if attendance['jadwal_id'] and key in web_keys:
+            continue
+        mobile_count += 1
+
+    return web_absensi.count() + mobile_count
+
+
+def sync_honor_from_mobile_absensi(absensi_masuk):
+    bulan = absensi_masuk.tanggal_absensi.replace(day=1)
+    honor, _ = HonorAsleb.objects.get_or_create(
+        asleb=absensi_masuk.asleb,
+        bulan=bulan,
+        defaults={
+            'jumlah_praktikum': 1,
+            'pic_transfer': '',
+            'status': 'diproses',
+        },
+    )
+    honor.jumlah_praktikum = max(honor.jumlah_praktikum, 1)
+    honor.total_pertemuan = get_total_honor_attendance_count(absensi_masuk.asleb, bulan)
     if honor.status == 'draft':
         honor.status = 'diproses'
     honor.save()
