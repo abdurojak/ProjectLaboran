@@ -104,6 +104,16 @@ class ApiService {
   Future<Map<String, dynamic>> scheduleDetail(int id) =>
       _getMap('schedules/$id/');
 
+  Future<String> askChatbot(String message) async {
+    try {
+      final response = await dio.post('chatbot/', data: {'message': message});
+      final data = Map<String, dynamic>.from(response.data as Map);
+      return data['answer'] as String? ?? 'Maaf, bot belum memberi jawaban.';
+    } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
+  }
+
   Future<List<AttendanceRecord>> history() async {
     final data = await _getMap('attendance/history/');
     return (data['results'] as List)

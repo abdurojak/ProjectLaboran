@@ -411,10 +411,8 @@ class AbsensiAsleb(models.Model):
 
 class AbsensiMasukAsleb(models.Model):
     STATUS_SUDAH_ABSEN = 'sudah_absen'
-    STATUS_TERLAMBAT = 'terlambat'
     STATUS_CHOICES = [
         (STATUS_SUDAH_ABSEN, 'Sudah Absen'),
-        (STATUS_TERLAMBAT, 'Terlambat'),
     ]
 
     asleb = models.ForeignKey(Asleb, on_delete=models.PROTECT, related_name='absensi_masuk')

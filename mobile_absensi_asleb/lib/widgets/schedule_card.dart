@@ -56,26 +56,38 @@ class ScheduleCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const Icon(Icons.chevron_right, color: Color(0xFF94A3B8)),
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2),
+                    child: Icon(Icons.chevron_right, color: Color(0xFF94A3B8)),
+                  ),
                 ],
               ),
               const SizedBox(height: 16),
-              Wrap(
-                spacing: 14,
-                runSpacing: 8,
+              Column(
                 children: [
-                  _Info(
-                    icon: Icons.calendar_today_outlined,
-                    text: schedule.hariDisplay,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _Info(
+                          icon: Icons.calendar_today_outlined,
+                          text: schedule.hariDisplay,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _Info(
+                          icon: Icons.schedule,
+                          text:
+                              '${schedule.waktuMulai} - ${schedule.waktuSelesai ?? '--:--'}',
+                        ),
+                      ),
+                    ],
                   ),
-                  _Info(
-                    icon: Icons.schedule,
-                    text:
-                        '${schedule.waktuMulai} - ${schedule.waktuSelesai ?? '--:--'}',
-                  ),
+                  const SizedBox(height: 9),
                   _Info(
                     icon: Icons.meeting_room_outlined,
                     text: schedule.laboratorium,
+                    maxLines: 2,
                   ),
                 ],
               ),
@@ -90,22 +102,27 @@ class ScheduleCard extends StatelessWidget {
 }
 
 class _Info extends StatelessWidget {
-  const _Info({required this.icon, required this.text});
+  const _Info({required this.icon, required this.text, this.maxLines = 1});
   final IconData icon;
   final String text;
+  final int maxLines;
 
   @override
   Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
+    mainAxisSize: MainAxisSize.max,
     children: [
       Icon(icon, size: 16, color: AppTheme.teal),
       const SizedBox(width: 6),
-      Text(
-        text,
-        style: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          color: Color(0xFF475569),
+      Expanded(
+        child: Text(
+          text,
+          maxLines: maxLines,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF475569),
+          ),
         ),
       ),
     ],

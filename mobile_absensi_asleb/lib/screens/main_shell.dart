@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'chatbot_screen.dart';
 import 'dashboard_screen.dart';
 import 'history_screen.dart';
 import 'profile_screen.dart';
@@ -19,6 +20,7 @@ class _MainShellState extends State<MainShell> {
     DashboardScreen(),
     ScheduleListScreen(),
     HistoryScreen(),
+    ChatbotScreen(),
     ProfileScreen(),
   ];
 
@@ -44,6 +46,11 @@ class _MainShellState extends State<MainShell> {
             icon: Icon(Icons.history_outlined),
             selectedIcon: Icon(Icons.history),
             label: 'Riwayat',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.chat_bubble_outline),
+            selectedIcon: Icon(Icons.chat_bubble),
+            label: 'Bantuan',
           ),
           NavigationDestination(
             icon: Icon(Icons.person_outline),

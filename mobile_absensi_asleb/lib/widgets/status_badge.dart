@@ -12,7 +12,6 @@ class StatusBadge extends StatelessWidget {
         const Color(0xFF047857),
         Icons.check_circle_outline,
       ),
-      'terlambat' => ('Terlambat', const Color(0xFFB45309), Icons.schedule),
       'tidak_hadir' => (
         'Tidak Hadir',
         const Color(0xFFBE123C),

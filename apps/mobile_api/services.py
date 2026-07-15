@@ -63,11 +63,7 @@ def validate_schedule_time(schedule, now=None):
         return False, f'Absensi belum dibuka. Absensi dapat dilakukan mulai {opens_at:%H:%M}.', None
     if local_now > ends_at:
         return False, 'Jadwal praktikum sudah lewat.', None
-    status = (
-        AbsensiMasukAsleb.STATUS_TERLAMBAT
-        if local_now > starts_at
-        else AbsensiMasukAsleb.STATUS_SUDAH_ABSEN
-    )
+    status = AbsensiMasukAsleb.STATUS_SUDAH_ABSEN
     return True, '', status
 
 

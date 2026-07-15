@@ -19,6 +19,7 @@ class AttendanceProvider extends ChangeNotifier {
   List<PraktikumSchedule> schedules = [];
   List<AttendanceRecord> history = [];
   Map<String, dynamic>? locationConfig;
+  Map<String, dynamic>? honor;
 
   Future<void> loadDashboard() async {
     await _guard(() async {
@@ -27,6 +28,7 @@ class AttendanceProvider extends ChangeNotifier {
         Map<String, dynamic>.from(data['profile'] as Map),
       );
       courses = List<String>.from(data['mata_kuliah'] as List);
+      honor = Map<String, dynamic>.from(data['honor'] as Map? ?? {});
       todaySchedules = (data['jadwal_hari_ini'] as List)
           .map(
             (item) => PraktikumSchedule.fromJson(

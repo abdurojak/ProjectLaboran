@@ -2,6 +2,7 @@ from django.urls import path
 
 from .views import (
     AttendanceHistoryView,
+    ChatbotView,
     CheckInView,
     DashboardView,
     LocationConfigView,
@@ -25,5 +26,6 @@ urlpatterns = [
     path('schedules/<int:pk>/', ScheduleDetailView.as_view(), name='schedule_detail'),
     path('attendance/check-in/', CheckInView.as_view(), name='check_in'),
     path('attendance/history/', AttendanceHistoryView.as_view(), name='attendance_history'),
+    path('chatbot/', ChatbotView.as_view(), name='chatbot'),
     path('config/location/', LocationConfigView.as_view(), name='location_config'),
 ]

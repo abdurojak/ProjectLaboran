@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.contrib.auth.hashers import check_password
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.parsers import FormParser, MultiPartParser
@@ -10,6 +10,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.asleb.models import AbsensiMasukAsleb, PengaturanAbsensiAsleb
+from apps.asleb.views import sync_honor_from_mobile_absensi
+from apps.asleb.models import HonorAsleb
+from apps.core.views import bot_answer
 from apps.pendaftaran_asleb.services import sync_expired_asleb_periods
 from apps.pengguna.models import Pengguna
 
@@ -133,11 +136,37 @@ class DashboardView(APIView):
         today_schedules = [item for item in schedules if item.hari == today_key]
         context = attendance_context(asleb, today_schedules, today)
         context['request'] = request
+        honor_queryset = HonorAsleb.objects.filter(asleb=asleb).order_by('-bulan')
+        honor_bulan_ini = honor_queryset.filter(
+            bulan__year=today.year,
+            bulan__month=today.month,
+        ).first()
+        total_pending = honor_queryset.exclude(status='dibayar').aggregate(total=Sum('jumlah'))['total'] or 0
         return Response({
             'profile': ProfileSerializer(request.user, context={'request': request}).data,
             'mata_kuliah': get_asleb_course_labels(asleb),
             'tanggal': today,
             'jadwal_hari_ini': ScheduleSerializer(today_schedules, many=True, context=context).data,
+            'honor': {
+                'bulan_ini': {
+                    'bulan': honor_bulan_ini.bulan if honor_bulan_ini else None,
+                    'jumlah': honor_bulan_ini.jumlah if honor_bulan_ini else 0,
+                    'status': honor_bulan_ini.status if honor_bulan_ini else 'belum_ada',
+                    'total_pertemuan': honor_bulan_ini.total_pertemuan if honor_bulan_ini else 0,
+                    'biaya_admin': honor_bulan_ini.biaya_admin if honor_bulan_ini else 0,
+                    'total_sebelum_potongan': honor_bulan_ini.honor_sebelum_potongan if honor_bulan_ini else 0,
+                },
+                'total_pending': total_pending,
+                'riwayat': [
+                    {
+                        'bulan': honor.bulan,
+                        'jumlah': honor.jumlah,
+                        'status': honor.status,
+                        'total_pertemuan': honor.total_pertemuan,
+                    }
+                    for honor in honor_queryset[:6]
+                ],
+            },
             'status_absensi_hari_ini': (
                 'tidak_ada_jadwal'
                 if not today_schedules
@@ -146,6 +175,14 @@ class DashboardView(APIView):
                 else 'belum_absen'
             ),
         })
+
+
+class ChatbotView(APIView):
+    def post(self, request):
+        message = str(request.data.get('message') or '').strip()[:1000]
+        if not message:
+            return api_error('Tulis pertanyaan terlebih dahulu.', 'empty_message')
+        return Response({'answer': bot_answer(message, request.user)})
 
 
 class ScheduleListView(APIView):
@@ -212,6 +249,7 @@ class CheckInView(APIView):
                 foto_absensi=serializer.validated_data['foto_absensi'],
                 video_absensi=serializer.validated_data.get('video_absensi') or '',
             )
+            sync_honor_from_mobile_absensi(attendance)
         except IntegrityError:
             return api_error('Anda sudah melakukan absensi masuk untuk jadwal ini.', 'duplicate_attendance')
         return Response(
