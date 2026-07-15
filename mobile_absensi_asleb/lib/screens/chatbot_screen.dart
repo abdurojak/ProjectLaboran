@@ -21,18 +21,9 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final profile = context.read<AttendanceProvider>().profile;
-      setState(() {
-        messages
-          ..clear()
-          ..add(
-            _ChatMessage(
-              fromBot: true,
-              text:
-                  'Halo ${profile?.nama ?? 'Asisten Lab'}, saya Bot Bantuan LabHub. Mau tanya jadwal, absensi, honor, atau kendala aplikasi?',
-            ),
-          );
-      });
+      final provider = context.read<AttendanceProvider>();
+      if (provider.profile == null) provider.loadDashboard();
+      _ensureGreeting(provider);
     });
   }
 
@@ -58,11 +49,14 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
       setState(() => messages.add(_ChatMessage(fromBot: true, text: answer)));
     } on ApiException catch (error) {
       if (!mounted) return;
+      final fallback = await _localFallbackAnswer(text);
       setState(
         () => messages.add(
           _ChatMessage(
             fromBot: true,
-            text: 'Maaf, bot belum bisa menjawab. ${error.message}',
+            text:
+                fallback ??
+                'Maaf, bot belum bisa menjawab dari server. ${error.message}',
           ),
         ),
       );
@@ -71,8 +65,68 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
     }
   }
 
+  void _ensureGreeting(AttendanceProvider provider) {
+    final name = provider.profile?.nama ?? 'Asisten Lab';
+    final greeting =
+        'Halo $name, saya Bot Bantuan LabHub. Mau tanya jadwal, absensi, honor, atau kendala aplikasi?';
+    if (!mounted) return;
+    setState(() {
+      if (messages.isEmpty) {
+        messages.add(_ChatMessage(fromBot: true, text: greeting));
+      } else if (messages.length == 1 &&
+          messages.first.fromBot &&
+          messages.first.text != greeting) {
+        messages[0] = _ChatMessage(fromBot: true, text: greeting);
+      }
+    });
+  }
+
+  Future<String?> _localFallbackAnswer(String question) async {
+    final provider = context.read<AttendanceProvider>();
+    final normalized = question.toLowerCase();
+
+    if (normalized.contains('jadwal')) {
+      if (provider.schedules.isEmpty) {
+        await provider.loadSchedules();
+      }
+      if (provider.schedules.isEmpty) {
+        return 'Belum ada jadwal praktikum yang terhubung dengan akun Anda.';
+      }
+      final rows = provider.schedules
+          .take(5)
+          .map(
+            (schedule) =>
+                '- ${schedule.hariDisplay}, ${schedule.waktuMulai}-${schedule.waktuSelesai ?? '--:--'}: ${schedule.mataKuliah} (${schedule.kelas}) di ${schedule.laboratorium}',
+          )
+          .join('\n');
+      return 'Jadwal praktikum yang terhubung dengan akun Anda:\n$rows';
+    }
+
+    if (normalized.contains('honor') ||
+        normalized.contains('gaji') ||
+        normalized.contains('bayar')) {
+      if (provider.honor == null) {
+        await provider.loadDashboard();
+      }
+      final monthHonor = Map<String, dynamic>.from(
+        provider.honor?['bulan_ini'] as Map? ?? {},
+      );
+      final amount = monthHonor['jumlah'] ?? 0;
+      final meetings = monthHonor['total_pertemuan'] ?? 0;
+      final status = (monthHonor['status'] as String? ?? 'belum_ada')
+          .replaceAll('_', ' ');
+      return 'Honor bulan ini: Rp $amount. Total pertemuan: $meetings. Status: $status.';
+    }
+
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<AttendanceProvider>();
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _ensureGreeting(provider),
+    );
     return Scaffold(
       appBar: AppBar(title: const Text('Chat Bantuan')),
       body: Column(
