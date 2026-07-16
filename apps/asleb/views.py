@@ -1181,12 +1181,6 @@ class ReviewLaporanPraktikumUpdateView(UpdateView):
     template_name = 'asleb/laporan_review_form.html'
     success_url = reverse_lazy('asleb:laporan_tugas_list')
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        page_count = _get_laporan_pdf_page_count(self.object) if self.object.is_pdf else 0
-        context['laporan_pdf_pages'] = range(1, page_count + 1)
-        return context
-
     def dispatch(self, request, *args, **kwargs):
         self.object = self.get_object()
         current_pengguna = getattr(request, 'current_pengguna', None)
@@ -1342,66 +1336,12 @@ def preview_laporan_praktikum(request, pk):
     if not laporan.file_laporan:
         messages.error(request, 'File laporan tidak ditemukan.')
         return redirect('asleb:laporan_tugas_list')
-    page_count = _get_laporan_pdf_page_count(laporan) if laporan.is_pdf else 0
-    return render(request, 'asleb/laporan_preview.html', {
-        'laporan': laporan,
-        'laporan_pdf_pages': range(1, page_count + 1),
-        'laporan_pdf_error': laporan.is_pdf and page_count == 0,
-    })
+    return render(request, 'asleb/laporan_preview.html', {'laporan': laporan})
 
 
 @xframe_options_sameorigin
 def preview_laporan_praktikum_file(request, pk):
     return _serve_laporan_file(request, pk, inline=True)
-
-
-def _read_laporan_pdf_bytes(laporan):
-    if not laporan.is_pdf:
-        raise Http404('Preview gambar hanya tersedia untuk file PDF.')
-    with laporan.file_laporan.open('rb') as file_obj:
-        return file_obj.read()
-
-
-def _get_laporan_pdf_page_count(laporan):
-    try:
-        import pypdfium2 as pdfium
-
-        document = pdfium.PdfDocument(_read_laporan_pdf_bytes(laporan))
-        return len(document)
-    except Exception as exc:
-        logger.warning('Gagal membaca laporan PDF %s: %s', laporan.pk, exc)
-        return 0
-
-
-def preview_laporan_praktikum_page(request, pk, page):
-    laporan = get_object_or_404(
-        PengumpulanLaporanPraktikum.objects.select_related('tugas', 'peserta', 'peserta__pengguna'),
-        pk=pk,
-    )
-    if not can_access_laporan(getattr(request, 'current_pengguna', None), laporan):
-        raise Http404('Halaman PDF tidak ditemukan.')
-
-    try:
-        import pypdfium2 as pdfium
-
-        document = pdfium.PdfDocument(_read_laporan_pdf_bytes(laporan))
-        page_index = page - 1
-        if page_index < 0 or page_index >= len(document):
-            raise Http404('Halaman PDF tidak ditemukan.')
-        pdf_page = document[page_index]
-        bitmap = pdf_page.render(scale=2.2)
-        image = bitmap.to_pil()
-        output = BytesIO()
-        image.save(output, format='PNG', optimize=True)
-    except Http404:
-        raise
-    except Exception as exc:
-        logger.warning('Gagal membuat preview laporan %s halaman %s: %s', laporan.pk, page, exc)
-        raise Http404('Preview PDF tidak dapat dibuat.')
-
-    response = HttpResponse(output.getvalue(), content_type='image/png')
-    response['Cache-Control'] = 'private, max-age=300'
-    return response
 
 
 def download_laporan_praktikum(request, pk):
