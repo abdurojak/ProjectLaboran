@@ -24,14 +24,23 @@
             </div>
             <div class="p-4">
                 {% if object.is_pdf %}
-                <div
-                    class="space-y-4"
-                    data-laporan-pdf-viewer
-                    data-pdf-url="{% url 'asleb:laporan_preview_file' object.pk %}"
-                >
-                    <div class="flex min-h-[360px] items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50/70 p-8 text-center text-sm font-bold text-slate-500">
-                        Menyiapkan preview laporan...
+                <div class="space-y-4">
+                    {% for page in laporan_pdf_pages %}
+                    <article class="overflow-hidden rounded-3xl border border-slate-200 bg-slate-100/70 p-3 sm:p-4">
+                        <div class="mb-3 text-xs font-black uppercase tracking-[0.14em] text-slate-500">Halaman {{ page }}</div>
+                        <img
+                            src="{% url 'asleb:laporan_preview_page' object.pk page %}"
+                            alt="Halaman {{ page }} laporan {{ object.tugas.judul }}"
+                            class="mx-auto block h-auto max-w-full rounded-xl bg-white shadow-lg"
+                            loading="{% if page == 1 %}eager{% else %}lazy{% endif %}"
+                        >
+                    </article>
+                    {% empty %}
+                    <div class="flex min-h-[360px] flex-col items-center justify-center rounded-3xl border border-dashed border-rose-300 bg-rose-50/80 p-8 text-center text-rose-700">
+                        <i data-lucide="file-warning" class="h-8 w-8"></i>
+                        <p class="mt-4 max-w-xl text-sm font-bold leading-6">Preview PDF belum dapat dibuat. File mungkin rusak atau terenkripsi. Gunakan tombol Download untuk memeriksa file asli.</p>
                     </div>
+                    {% endfor %}
                 </div>
                 {% else %}
                 <div class="flex min-h-[420px] flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50/70 p-8 text-center">
@@ -70,9 +79,4 @@
         </form>
     </div>
 </section>
-{% endblock %}
-
-{% block extra_script %}
-{{ block.super }}
-{% include "asleb/_laporan_pdf_viewer_script.html" %}
 {% endblock %}
