@@ -1,31 +1,68 @@
 {% extends "base.html" %}
 {% block title %}Review Laporan{% endblock %}
 {% block content %}
-<section class="mx-auto max-w-3xl space-y-6">
+<section class="mx-auto max-w-7xl space-y-6 pb-28">
     <div>
         <p class="text-sm font-black uppercase tracking-[0.22em] text-brand-700">Review Laporan</p>
         <h2 class="mt-2 text-3xl font-black text-slate-900">{{ object.peserta.nama }}</h2>
-        <p class="mt-2 text-sm text-slate-500">{{ object.tugas.judul }} · {{ object.tugas.matkul }} · Versi {{ object.versi }}</p>
+        <p class="mt-2 text-sm text-slate-500">{{ object.tugas.judul }} - {{ object.tugas.matkul }} - Versi {{ object.versi }}</p>
     </div>
-    <div class="surface-card p-5">
-        <div class="flex flex-wrap gap-3">
-            <a class="btn-secondary" href="{% url 'asleb:laporan_preview' object.pk %}" target="_blank">Preview File</a>
-            <a class="btn-secondary" href="{% url 'asleb:laporan_download' object.pk %}">Download File</a>
-        </div>
+
+    <div class="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]">
+        <article class="surface-card overflow-hidden">
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-5">
+                <div>
+                    <p class="text-xs font-black uppercase tracking-[0.18em] text-cyan-700">Preview Laporan</p>
+                    <h3 class="mt-1 break-words text-xl font-black text-slate-900">{{ object.nama_file_asli|default:"File laporan" }}</h3>
+                    <p class="mt-1 text-xs font-semibold text-slate-500">{{ object.peserta.nim }} - v{{ object.versi }}</p>
+                </div>
+                <a class="btn-secondary gap-2" href="{% url 'asleb:laporan_download' object.pk %}">
+                    <i data-lucide="download" class="h-4 w-4"></i>
+                    <span>Download</span>
+                </a>
+            </div>
+            <div class="p-4">
+                {% if object.is_pdf %}
+                <iframe
+                    title="Preview laporan {{ object.nama_file_asli }}"
+                    src="{% url 'asleb:laporan_preview_file' object.pk %}"
+                    class="h-[72vh] min-h-[560px] w-full rounded-3xl border border-slate-200 bg-white"
+                ></iframe>
+                {% else %}
+                <div class="flex min-h-[420px] flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50/70 p-8 text-center">
+                    <span class="flex h-16 w-16 items-center justify-center rounded-3xl bg-blue-50 text-blue-700">
+                        <i data-lucide="file-text" class="h-8 w-8"></i>
+                    </span>
+                    <h3 class="mt-4 text-xl font-black text-slate-900">Preview Word belum tersedia langsung</h3>
+                    <p class="mt-2 max-w-xl text-sm leading-6 text-slate-500">Gunakan tombol Download untuk membuka file <strong>{{ object.nama_file_asli }}</strong> di aplikasi dokumen.</p>
+                    <a class="btn-primary mt-5 gap-2" href="{% url 'asleb:laporan_download' object.pk %}">
+                        <i data-lucide="download" class="h-4 w-4"></i>
+                        <span>Download File</span>
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </article>
+
+        <form method="post" class="surface-card h-fit space-y-5 p-6 md:p-8">
+            {% csrf_token %}
+            <div>
+                <p class="text-xs font-black uppercase tracking-[0.18em] text-violet-600">Penilaian</p>
+                <h3 class="mt-1 text-xl font-black text-slate-900">Status dan nilai laporan</h3>
+                <p class="mt-1 text-sm text-slate-500">Nilai yang disimpan otomatis masuk ke nilai laporan pada rekap mahasiswa.</p>
+            </div>
+            {% if form.non_field_errors %}<div class="rounded-2xl bg-rose-50 p-4 text-sm font-bold text-rose-700">{{ form.non_field_errors }}</div>{% endif %}
+            {% for field in form %}
+            <div>
+                {{ field.label_tag }}{{ field }}
+                {% for error in field.errors %}<p class="mt-2 text-sm font-bold text-rose-600">{{ error }}</p>{% endfor %}
+            </div>
+            {% endfor %}
+            <div class="flex flex-wrap gap-3">
+                <button class="btn-primary gap-2" type="submit"><i data-lucide="save" class="h-4 w-4"></i>Simpan Review</button>
+                <a class="btn-secondary" href="{% url 'asleb:laporan_tugas_list' %}">Batal</a>
+            </div>
+        </form>
     </div>
-    <form method="post" class="surface-card space-y-5 p-6 md:p-8">
-        {% csrf_token %}
-        {% if form.non_field_errors %}<div class="rounded-2xl bg-rose-50 p-4 text-sm font-bold text-rose-700">{{ form.non_field_errors }}</div>{% endif %}
-        {% for field in form %}
-        <div>
-            {{ field.label_tag }}{{ field }}
-            {% for error in field.errors %}<p class="mt-2 text-sm font-bold text-rose-600">{{ error }}</p>{% endfor %}
-        </div>
-        {% endfor %}
-        <div class="flex flex-wrap gap-3">
-            <button class="btn-primary gap-2" type="submit"><i data-lucide="save" class="h-4 w-4"></i>Simpan Review</button>
-            <a class="btn-secondary" href="{% url 'asleb:laporan_tugas_list' %}">Batal</a>
-        </div>
-    </form>
 </section>
 {% endblock %}

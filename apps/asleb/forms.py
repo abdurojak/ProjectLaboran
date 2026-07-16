@@ -543,7 +543,6 @@ class TugasLaporanPraktikumForm(forms.ModelForm):
             'mulai_pengumpulan',
             'batas_pengumpulan',
             'izinkan_terlambat',
-            'asisten_pemeriksa',
             'aktif',
         ]
         widgets = {
@@ -573,19 +572,15 @@ class TugasLaporanPraktikumForm(forms.ModelForm):
             matkul_qs = MataKuliahAsleb.objects.filter(pk__in=active_ids).order_by('nama', 'kelas')
         self.fields['matkul'].queryset = matkul_qs
         self.fields['modul'].queryset = ModulPraktikum.objects.select_related('matkul').order_by('matkul__nama', 'matkul__kelas', 'nomor')
-        self.fields['asisten_pemeriksa'].queryset = Asleb.objects.filter(status='aktif').order_by('nama')
 
     def clean(self):
         cleaned_data = super().clean()
         matkul = cleaned_data.get('matkul')
         modul = cleaned_data.get('modul')
-        asisten = cleaned_data.get('asisten_pemeriksa')
         mulai = cleaned_data.get('mulai_pengumpulan')
         batas = cleaned_data.get('batas_pengumpulan')
         if modul and matkul and modul.matkul_id != matkul.pk:
             self.add_error('modul', 'Modul harus berasal dari mata kuliah yang dipilih.')
-        if asisten and matkul and asisten.matkul != str(matkul):
-            self.add_error('asisten_pemeriksa', 'Asisten pemeriksa harus bertugas pada mata kuliah ini.')
         if mulai and batas and batas <= mulai:
             self.add_error('batas_pengumpulan', 'Batas pengumpulan harus setelah waktu mulai.')
         return cleaned_data
