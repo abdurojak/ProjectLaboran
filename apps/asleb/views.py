@@ -1219,6 +1219,86 @@ class ReviewLaporanPraktikumUpdateView(UpdateView):
         return response
 
 
+@require_POST
+def delete_laporan_praktikum(request, pk):
+    laporan = get_object_or_404(
+        PengumpulanLaporanPraktikum.objects.select_related(
+            'tugas',
+            'tugas__matkul',
+            'tugas__modul',
+            'peserta',
+            'peserta__pengguna',
+        ),
+        pk=pk,
+    )
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not can_review_laporan(pengguna, laporan.tugas):
+        messages.error(request, 'Anda tidak memiliki akses untuk menghapus laporan ini.')
+        return redirect('asleb:laporan_tugas_list')
+    if laporan.peserta.pengguna_id == getattr(pengguna, 'pk', None):
+        messages.error(request, 'Asisten Lab tidak dapat menghapus laporan miliknya sendiri melalui menu pemeriksaan.')
+        return redirect('asleb:laporan_tugas_list')
+
+    peserta = laporan.peserta
+    tugas = laporan.tugas
+    file_name = laporan.file_laporan.name if laporan.file_laporan else ''
+    file_storage = laporan.file_laporan.storage if laporan.file_laporan else None
+
+    with transaction.atomic():
+        laporan.delete()
+
+        if tugas.modul_id:
+            hasil = HasilPraktikumMahasiswa.objects.filter(
+                peserta=peserta,
+                modul=tugas.modul,
+            ).first()
+            if hasil:
+                laporan_pengganti = (
+                    PengumpulanLaporanPraktikum.objects
+                    .filter(
+                        tugas__matkul=tugas.matkul,
+                        tugas__modul=tugas.modul,
+                        peserta=peserta,
+                        nilai__isnull=False,
+                    )
+                    .select_related('diperiksa_oleh')
+                    .order_by('-diperiksa_pada', '-dikumpulkan_pada', '-versi')
+                    .first()
+                )
+                hasil.nilai_laporan = laporan_pengganti.nilai if laporan_pengganti else None
+                hasil.dicatat_oleh = laporan_pengganti.diperiksa_oleh if laporan_pengganti else None
+                hasil.catatan = laporan_pengganti.catatan_asisten[:250] if laporan_pengganti else ''
+                if hasil.nilai_realtime is None and not laporan_pengganti:
+                    hasil.nilai = None
+                hasil.save(update_fields=[
+                    'nilai_laporan',
+                    'nilai',
+                    'dicatat_oleh',
+                    'catatan',
+                    'diperbarui_pada',
+                ])
+
+        if file_name and file_storage:
+            transaction.on_commit(lambda: file_storage.delete(file_name))
+
+    log_praktikum_activity(
+        pengguna,
+        'laporan_dihapus',
+        f'{tugas.judul} - {peserta.nama}',
+        tugas.matkul,
+        peserta,
+    )
+    notify_pengguna(
+        peserta.pengguna,
+        f'laporan-deleted:{pk}',
+        f'Laporan dihapus: {tugas.judul}',
+        'Laporan praktikum Anda dihapus oleh Asisten Lab. Silakan hubungi Asisten Lab jika memerlukan informasi lebih lanjut.',
+        url=str(reverse_lazy('asleb:laporan_tugas_list')),
+    )
+    messages.success(request, f'Laporan {peserta.nama} berhasil dihapus.')
+    return redirect('asleb:laporan_tugas_list')
+
+
 def _serve_laporan_file(request, pk, *, inline=False):
     laporan = get_object_or_404(
         PengumpulanLaporanPraktikum.objects.select_related('tugas', 'peserta', 'peserta__pengguna'),
@@ -1233,6 +1313,8 @@ def _serve_laporan_file(request, pk, *, inline=False):
     response = FileResponse(laporan.file_laporan.open('rb'), content_type=mimetypes.guess_type(laporan.nama_file_asli)[0] or 'application/octet-stream')
     disposition = 'inline' if inline and laporan.is_pdf else 'attachment'
     response['Content-Disposition'] = f'{disposition}; filename="{laporan.nama_file_asli or "laporan-praktikum"}"'
+    if inline and laporan.is_pdf:
+        response['X-Frame-Options'] = 'SAMEORIGIN'
     return response
 
 
@@ -1250,6 +1332,7 @@ def preview_laporan_praktikum(request, pk):
     return render(request, 'asleb/laporan_preview.html', {'laporan': laporan})
 
 
+@xframe_options_sameorigin
 def preview_laporan_praktikum_file(request, pk):
     return _serve_laporan_file(request, pk, inline=True)
 
