@@ -2,11 +2,16 @@ import base64
 import json
 import os
 from datetime import date
+from io import StringIO
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519, rsa
 from django.apps import apps
+from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.test import SimpleTestCase, override_settings
 
 from apps.core.licensing import (
@@ -26,10 +31,19 @@ def _canonical_payload(claims):
     return _b64encode(value)
 
 
-def _sign_claims(private_key, claims):
-    payload = _canonical_payload(claims)
+def _sign_payload(private_key, payload_bytes):
+    payload = _b64encode(payload_bytes)
     signature = _b64encode(private_key.sign(payload.encode('ascii')))
     return f'{payload}.{signature}'
+
+
+def _sign_claims(private_key, claims):
+    payload_bytes = json.dumps(
+        claims,
+        separators=(',', ':'),
+        sort_keys=True,
+    ).encode('utf-8')
+    return _sign_payload(private_key, payload_bytes)
 
 
 class LicensingTests(SimpleTestCase):
@@ -130,6 +144,30 @@ class LicensingTests(SimpleTestCase):
         )
 
         with self.assertRaisesMessage(LicenseError, 'version'):
+            self.validate_license(license_key)
+
+    def test_license_rejected_when_signed_payload_json_is_not_canonical(self):
+        payload_bytes = (
+            b'{"version":2, "customer":"Lab FTI",'
+            b'"expires_on":"2030-01-31","fingerprint":"server-utama"}'
+        )
+        license_key = _sign_payload(self.private_key, payload_bytes)
+
+        with self.assertRaisesMessage(LicenseError, 'canonical'):
+            self.validate_license(license_key)
+
+    def test_license_rejected_for_noncanonical_iso_expiration_date(self):
+        license_key = _sign_claims(
+            self.private_key,
+            {
+                'customer': 'Lab FTI',
+                'expires_on': '2030-W05-4',
+                'fingerprint': 'server-utama',
+                'version': 2,
+            },
+        )
+
+        with self.assertRaisesMessage(LicenseError, 'expiration date'):
             self.validate_license(license_key)
 
     def test_license_rejected_for_different_fingerprint(self):
@@ -241,6 +279,111 @@ class LicensingTests(SimpleTestCase):
             fingerprint='server-id',
             public_key_pem='embedded-public-key',
         )
+
+
+class GenerateLicenseCommandTests(SimpleTestCase):
+    def setUp(self):
+        self.private_key = ed25519.Ed25519PrivateKey.generate()
+        self.private_key_pem = self.private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        self.public_key_pem = self.private_key.public_key().public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+
+    def test_command_reads_text_private_key_file_and_outputs_valid_v2_license(self):
+        output = StringIO()
+
+        with TemporaryDirectory() as temp_dir:
+            private_key_path = Path(temp_dir) / 'license-private.pem'
+            private_key_path.write_text(
+                self.private_key_pem.decode('ascii'),
+                encoding='utf-8',
+            )
+            environment = {
+                'LABHUB_LICENSE_PRIVATE_KEY_FILE': str(private_key_path),
+                'LABHUB_LICENSE_SIGNING_SECRET': 'must-not-be-used',
+            }
+
+            with patch.dict(os.environ, environment, clear=True):
+                call_command(
+                    'generate_labhub_license',
+                    '--customer',
+                    'Lab FTI',
+                    '--fingerprint',
+                    'server-utama',
+                    '--expires-on',
+                    '2030-01-31',
+                    stdout=output,
+                )
+
+        claims = validate_license_key(
+            output.getvalue().strip(),
+            fingerprint='server-utama',
+            public_key_pem=self.public_key_pem,
+            today=date(2026, 7, 16),
+        )
+        self.assertEqual(claims['version'], 2)
+
+    def test_command_requires_private_key_file_environment_variable(self):
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            self.assertRaisesMessage(CommandError, 'LABHUB_LICENSE_PRIVATE_KEY_FILE'),
+        ):
+            call_command(
+                'generate_labhub_license',
+                '--customer',
+                'Lab FTI',
+                '--fingerprint',
+                'server-utama',
+                '--expires-on',
+                '2030-01-31',
+            )
+
+    def test_command_normalizes_unreadable_private_key_file_error(self):
+        with TemporaryDirectory() as temp_dir:
+            private_key_path = Path(temp_dir) / 'missing-private-key.pem'
+            environment = {'LABHUB_LICENSE_PRIVATE_KEY_FILE': str(private_key_path)}
+
+            with (
+                patch.dict(os.environ, environment, clear=True),
+                self.assertRaisesMessage(CommandError, 'private key file'),
+            ):
+                call_command(
+                    'generate_labhub_license',
+                    '--customer',
+                    'Lab FTI',
+                    '--fingerprint',
+                    'server-utama',
+                    '--expires-on',
+                    '2030-01-31',
+                )
+
+    def test_command_normalizes_invalid_expiration_date_error(self):
+        with TemporaryDirectory() as temp_dir:
+            private_key_path = Path(temp_dir) / 'license-private.pem'
+            private_key_path.write_text(
+                self.private_key_pem.decode('ascii'),
+                encoding='utf-8',
+            )
+            environment = {'LABHUB_LICENSE_PRIVATE_KEY_FILE': str(private_key_path)}
+
+            with (
+                patch.dict(os.environ, environment, clear=True),
+                self.assertRaisesMessage(CommandError, 'YYYY-MM-DD'),
+            ):
+                call_command(
+                    'generate_labhub_license',
+                    '--customer',
+                    'Lab FTI',
+                    '--fingerprint',
+                    'server-utama',
+                    '--expires-on',
+                    'not-a-date',
+                )
 
 
 class LicenseStartupTests(SimpleTestCase):

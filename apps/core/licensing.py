@@ -54,6 +54,8 @@ def validate_license_key(license_key, fingerprint, public_key_pem, today=None):
         expires_on = date.fromisoformat(claims['expires_on'])
     except (TypeError, ValueError) as exc:
         raise LicenseError('License expiration date is invalid.') from exc
+    if claims['expires_on'] != expires_on.isoformat():
+        raise LicenseError('License expiration date must use YYYY-MM-DD format.')
     if (today or date.today()) > expires_on:
         raise LicenseError('License has expired.')
 
@@ -124,12 +126,15 @@ def _split_license_key(license_key):
 
 def _load_claims(payload):
     try:
-        claims = json.loads(_b64decode(payload).decode('utf-8'))
+        payload_bytes = _b64decode(payload)
+        claims = json.loads(payload_bytes.decode('utf-8'))
     except (UnicodeDecodeError, ValueError) as exc:
         raise LicenseError('License payload is invalid.') from exc
 
     if not isinstance(claims, dict):
         raise LicenseError('License payload must be an object.')
+    if _json_dumps(claims) != payload_bytes:
+        raise LicenseError('License payload JSON is not canonical.')
 
     required_fields = {'customer', 'expires_on', 'fingerprint', 'version'}
     if not required_fields.issubset(claims):
