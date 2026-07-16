@@ -1,10 +1,14 @@
+import ast
 import base64
 import json
 import os
+import stat
+import tempfile
 from datetime import date
 from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import skipIf
 from unittest.mock import patch
 
 from cryptography.hazmat.primitives import serialization
@@ -427,6 +431,141 @@ class GenerateLicenseCommandTests(SimpleTestCase):
                     '--expires-on',
                     'not-a-date',
                 )
+
+
+class GenerateLicenseKeypairCommandTests(SimpleTestCase):
+    def call_keypair_command(self, temp_dir, *extra_args):
+        private_key_path = Path(temp_dir) / 'owner' / 'license-private.pem'
+        public_key_path = Path(temp_dir) / 'app' / 'license_public_key.py'
+        call_command(
+            'generate_labhub_license_keypair',
+            '--private-key-file',
+            str(private_key_path),
+            '--public-key-module',
+            str(public_key_path),
+            *extra_args,
+        )
+        return private_key_path, public_key_path
+
+    def test_command_generates_matching_ed25519_keypair_without_private_material(self):
+        with TemporaryDirectory() as temp_dir:
+            private_key_path, public_key_path = self.call_keypair_command(temp_dir)
+            private_pem = private_key_path.read_bytes()
+            public_module = public_key_path.read_text(encoding='ascii')
+
+        private_key = serialization.load_pem_private_key(private_pem, password=None)
+        assignment = 'PUBLIC_KEY_PEM = '
+        self.assertTrue(public_module.startswith(assignment))
+        public_pem = ast.literal_eval(public_module.removeprefix(assignment))
+        public_key = serialization.load_pem_public_key(public_pem)
+        message = b'LabHub owner keypair test'
+        public_key.verify(private_key.sign(message), message)
+        self.assertIsInstance(private_key, ed25519.Ed25519PrivateKey)
+        self.assertIsInstance(public_key, ed25519.Ed25519PublicKey)
+        self.assertIn('BEGIN PRIVATE KEY', private_pem.decode('ascii'))
+        self.assertNotIn('PRIVATE KEY', public_module)
+        self.assertEqual(public_module, f'PUBLIC_KEY_PEM = {public_pem!r}\n')
+
+    def test_command_refuses_either_existing_output_without_changing_files(self):
+        for existing_output in ('private', 'public'):
+            with self.subTest(existing_output=existing_output), TemporaryDirectory() as temp_dir:
+                private_key_path = Path(temp_dir) / 'license-private.pem'
+                public_key_path = Path(temp_dir) / 'license_public_key.py'
+                paths = {'private': private_key_path, 'public': public_key_path}
+                paths[existing_output].write_text('keep-me', encoding='ascii')
+
+                with self.assertRaisesMessage(CommandError, 'already exists'):
+                    call_command(
+                        'generate_labhub_license_keypair',
+                        '--private-key-file',
+                        str(private_key_path),
+                        '--public-key-module',
+                        str(public_key_path),
+                    )
+
+                self.assertEqual(paths[existing_output].read_text(encoding='ascii'), 'keep-me')
+                missing_output = 'public' if existing_output == 'private' else 'private'
+                self.assertFalse(paths[missing_output].exists())
+
+    def test_force_replaces_both_existing_outputs(self):
+        with TemporaryDirectory() as temp_dir:
+            private_key_path = Path(temp_dir) / 'license-private.pem'
+            public_key_path = Path(temp_dir) / 'license_public_key.py'
+            private_key_path.write_text('old-private', encoding='ascii')
+            public_key_path.write_text('old-public', encoding='ascii')
+
+            call_command(
+                'generate_labhub_license_keypair',
+                '--private-key-file',
+                str(private_key_path),
+                '--public-key-module',
+                str(public_key_path),
+                '--force',
+            )
+
+            self.assertNotEqual(private_key_path.read_text(encoding='ascii'), 'old-private')
+            self.assertNotEqual(public_key_path.read_text(encoding='ascii'), 'old-public')
+            serialization.load_pem_private_key(private_key_path.read_bytes(), password=None)
+            public_module = public_key_path.read_text(encoding='ascii')
+            self.assertIn('PUBLIC_KEY_PEM', public_module)
+
+    def test_command_creates_nested_parent_directories(self):
+        with TemporaryDirectory() as temp_dir:
+            private_key_path, public_key_path = self.call_keypair_command(temp_dir)
+
+            self.assertTrue(private_key_path.is_file())
+            self.assertTrue(public_key_path.is_file())
+
+    @skipIf(os.name == 'nt', 'POSIX permission bits are not enforced on Windows')
+    def test_command_sets_private_key_mode_to_owner_only(self):
+        with TemporaryDirectory() as temp_dir:
+            private_key_path, _ = self.call_keypair_command(temp_dir)
+
+            self.assertEqual(stat.S_IMODE(private_key_path.stat().st_mode), 0o600)
+
+    def test_command_normalizes_output_io_errors(self):
+        with TemporaryDirectory() as temp_dir:
+            with (
+                patch(
+                    'apps.core.management.commands.generate_labhub_license_keypair.os.replace',
+                    side_effect=OSError('disk failure'),
+                ),
+                self.assertRaisesMessage(CommandError, 'Unable to write'),
+            ):
+                self.call_keypair_command(temp_dir)
+
+    def test_command_stages_both_outputs_before_publishing_either(self):
+        real_mkstemp = tempfile.mkstemp
+        calls = 0
+
+        def fail_second_temporary_file(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise OSError('disk failure')
+            return real_mkstemp(*args, **kwargs)
+
+        with TemporaryDirectory() as temp_dir:
+            private_key_path = Path(temp_dir) / 'license-private.pem'
+            public_key_path = Path(temp_dir) / 'license_public_key.py'
+            with (
+                patch(
+                    'apps.core.management.commands.generate_labhub_license_keypair.'
+                    'tempfile.mkstemp',
+                    side_effect=fail_second_temporary_file,
+                ),
+                self.assertRaises(CommandError),
+            ):
+                call_command(
+                    'generate_labhub_license_keypair',
+                    '--private-key-file',
+                    str(private_key_path),
+                    '--public-key-module',
+                    str(public_key_path),
+                )
+
+            self.assertFalse(private_key_path.exists())
+            self.assertFalse(public_key_path.exists())
 
 
 class LicenseStartupTests(SimpleTestCase):
