@@ -39,13 +39,10 @@
             }
 
             const contentType = (response.headers.get('content-type') || '').toLowerCase();
-            if (!contentType.includes('application/pdf')) {
-                throw new Error(`Respons bukan PDF (${contentType || 'tanpa content-type'})`);
-            }
-
             const pdfBytes = new Uint8Array(await response.arrayBuffer());
             if (pdfBytes.length < 5 || String.fromCharCode(...pdfBytes.slice(0, 5)) !== '%PDF-') {
-                throw new Error('Header file bukan PDF');
+                const responseInfo = contentType || 'tanpa content-type';
+                throw new Error(`Isi respons bukan PDF (${responseInfo})`);
             }
 
             const loadingTask = pdfjsLib.getDocument({
