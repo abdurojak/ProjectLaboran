@@ -170,6 +170,49 @@ class LicensingTests(SimpleTestCase):
         with self.assertRaisesMessage(LicenseError, 'expiration date'):
             self.validate_license(license_key)
 
+    def test_license_rejected_when_payload_base64url_retains_padding(self):
+        claims = {
+            'customer': 'Lab FTI',
+            'expires_on': '2030-01-31',
+            'fingerprint': 'server-utama',
+            'version': 2,
+        }
+        payload_bytes = json.dumps(
+            claims,
+            separators=(',', ':'),
+            sort_keys=True,
+        ).encode('utf-8')
+        payload = base64.urlsafe_b64encode(payload_bytes).decode('ascii')
+        self.assertTrue(payload.endswith('='))
+        signature = _b64encode(self.private_key.sign(payload.encode('ascii')))
+
+        with self.assertRaises(LicenseError):
+            self.validate_license(f'{payload}.{signature}')
+
+    def test_license_rejected_when_signature_base64url_retains_padding(self):
+        payload, signature = self.build_license().split('.')
+        padded_signature = signature + '=' * (-len(signature) % 4)
+        self.assertNotEqual(padded_signature, signature)
+
+        with self.assertRaises(LicenseError):
+            self.validate_license(f'{payload}.{padded_signature}')
+
+    def test_license_rejected_when_signature_uses_standard_base64_characters(self):
+        for customer_number in range(100):
+            payload, signature = self.build_license(
+                customer=f'Lab FTI {customer_number}',
+            ).split('.')
+            if '-' in signature or '_' in signature:
+                break
+        else:
+            self.fail('Could not produce a signature containing URL-safe characters.')
+
+        standard_signature = signature.replace('-', '+').replace('_', '/')
+        self.assertNotEqual(standard_signature, signature)
+
+        with self.assertRaises(LicenseError):
+            self.validate_license(f'{payload}.{standard_signature}')
+
     def test_license_rejected_for_different_fingerprint(self):
         with self.assertRaisesMessage(LicenseError, 'fingerprint'):
             self.validate_license(

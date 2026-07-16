@@ -162,7 +162,10 @@ def _b64decode(value):
     try:
         encoded = value.encode('ascii')
         padding = b'=' * (-len(encoded) % 4)
-        return base64.b64decode(encoded + padding, altchars=b'-_', validate=True)
+        decoded = base64.b64decode(encoded + padding, altchars=b'-_', validate=True)
+        if value != _b64encode(decoded):
+            raise ValueError('Base64url value is not canonical.')
+        return decoded
     except (AttributeError, UnicodeEncodeError, binascii.Error, ValueError) as exc:
         raise ValueError('Invalid base64url value.') from exc
 
