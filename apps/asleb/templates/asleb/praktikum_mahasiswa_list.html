@@ -13,24 +13,32 @@
     @media (min-width: 1180px) {
         .praktikum-shell {
             grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+            align-items: stretch;
         }
     }
 
     .matkul-nav {
         position: sticky;
         top: 1.25rem;
-        max-height: calc(100vh - 7rem);
+        display: flex;
+        flex-direction: column;
+        align-self: stretch;
+        height: calc(100vh - 3.25rem);
+        min-height: 720px;
+        max-height: calc(100vh - 3.25rem);
         overflow: hidden;
     }
 
     .matkul-nav-list {
-        max-height: calc(100vh - 15rem);
+        flex: 1 1 auto;
+        min-height: 320px;
         overflow-y: auto;
         padding-right: 0.35rem;
     }
 
     .matkul-nav-item {
         display: block;
+        position: relative;
         border-radius: 1.4rem;
         border: 1px solid rgba(148, 163, 184, 0.18);
         padding: 1rem 1rem 0.95rem;
@@ -48,6 +56,25 @@
         border-color: rgba(20, 184, 166, 0.34);
         background: linear-gradient(135deg, rgba(240, 253, 250, 0.96), rgba(236, 254, 255, 0.92));
         box-shadow: 0 22px 44px -28px rgba(13, 148, 136, 0.42);
+    }
+
+    .matkul-nav-item.is-active::before {
+        content: "";
+        position: absolute;
+        bottom: 1rem;
+        left: 1rem;
+        top: 1rem;
+        width: 4px;
+        border-radius: 999px;
+        background: linear-gradient(180deg, #2dd4bf, #2563eb);
+        box-shadow: 0 0 18px rgba(45, 212, 191, 0.45);
+    }
+
+    .matkul-focus-badge {
+        border: 1px solid rgba(16, 185, 129, 0.28);
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.16), rgba(45, 212, 191, 0.18));
+        color: #047857;
+        box-shadow: 0 12px 22px -18px rgba(5, 150, 105, 0.75);
     }
 
     .matkul-stat-chip {
@@ -106,6 +133,7 @@
     .praktikum-hero {
         position: relative;
         overflow: hidden;
+        transition: opacity 160ms ease, transform 160ms ease;
     }
 
     .praktikum-hero::after {
@@ -128,6 +156,12 @@
         border-color: rgba(45, 212, 191, 0.3);
         background: linear-gradient(135deg, rgba(13, 148, 136, 0.18), rgba(15, 23, 42, 0.92));
         box-shadow: 0 24px 48px -30px rgba(20, 184, 166, 0.28);
+    }
+
+    html[data-theme="dark"] .matkul-focus-badge {
+        border-color: rgba(94, 234, 212, 0.28);
+        background: linear-gradient(135deg, rgba(20, 184, 166, 0.22), rgba(37, 99, 235, 0.18));
+        color: #99f6e4;
     }
 
     html[data-theme="dark"] .matkul-stat-chip {
@@ -182,6 +216,32 @@
     }
 
     .participant-modal[aria-hidden="true"] { display: none; }
+
+    .participant-confirm-modal {
+        align-items: center;
+        display: none;
+        inset: 0;
+        justify-content: center;
+    }
+
+    .participant-confirm-modal[aria-hidden="false"] {
+        display: flex;
+    }
+
+    .participant-confirm-panel {
+        background:
+            radial-gradient(circle at top right, rgba(244, 63, 94, 0.12), transparent 42%),
+            rgba(255, 255, 255, 0.98);
+        color: #0f172a;
+    }
+
+    html[data-theme="dark"] .participant-confirm-panel {
+        border-color: rgba(244, 63, 94, 0.24);
+        background:
+            radial-gradient(circle at top right, rgba(244, 63, 94, 0.16), transparent 44%),
+            rgba(15, 23, 42, 0.96);
+        color: #e2e8f0;
+    }
 
     .participant-modal .participant-table-action {
         background: rgba(255, 255, 255, 0.82);
@@ -335,7 +395,7 @@
 
             <div class="matkul-nav-list mt-4 space-y-3">
                 {% for item in matkul_list %}
-                <a href="?{% if search_query %}q={{ search_query|urlencode }}&{% endif %}{% if selected_kelas %}kelas={{ selected_kelas|urlencode }}&{% endif %}matkul={{ item.pk }}" class="matkul-nav-item {% if rekap_matkul and item.pk == rekap_matkul.pk %}is-active{% endif %}" data-matkul-nav-item>
+                <a href="?{% if search_query %}q={{ search_query|urlencode }}&{% endif %}{% if selected_kelas %}kelas={{ selected_kelas|urlencode }}&{% endif %}matkul={{ item.pk }}" class="matkul-nav-item {% if rekap_matkul and item.pk == rekap_matkul.pk %}is-active{% endif %}" data-matkul-nav-item data-matkul-switch data-matkul-id="{{ item.pk }}">
                     <div class="flex items-start justify-between gap-3">
                         <div class="min-w-0">
                             <p class="truncate text-xs font-black uppercase tracking-[0.18em] text-brand-700">{{ item.kode_mk|default:item.kode }}</p>
@@ -346,9 +406,9 @@
                     </div>
                     <div class="mt-3 flex flex-wrap gap-2 text-[11px] font-bold">
                         <span class="praktikum-count-chip px-2.5 py-1">{{ item.modul_tersedia|length }} modul</span>
-                        {% if rekap_matkul and item.pk == rekap_matkul.pk %}
-                        <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">Sedang dibuka</span>
-                        {% endif %}
+                        <span class="matkul-focus-badge inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 {% if not rekap_matkul or item.pk != rekap_matkul.pk %}hidden{% endif %}" data-active-label>
+                            <i data-lucide="radio" class="h-3 w-3"></i>Fokus aktif
+                        </span>
                     </div>
                 </a>
                 {% empty %}
@@ -363,7 +423,7 @@
         </aside>
 
         <div class="min-w-0 space-y-6">
-            <section class="surface-card praktikum-hero p-5 md:p-6">
+            <section class="surface-card praktikum-hero p-5 md:p-6" data-matkul-focus>
                 <div class="flex flex-wrap items-start justify-between gap-4">
                     <div class="max-w-3xl">
                         <p class="text-xs font-black uppercase tracking-[0.18em] text-brand-700">Fokus Aktif</p>
@@ -426,6 +486,66 @@
                 </div>
                 {% endif %}
             </section>
+
+            <div class="hidden" aria-hidden="true">
+                {% for item in matkul_list %}
+                <template id="matkul-focus-template-{{ item.pk }}">
+                    <div class="flex flex-wrap items-start justify-between gap-4">
+                        <div class="max-w-3xl">
+                            <p class="text-xs font-black uppercase tracking-[0.18em] text-brand-700">Fokus Aktif</p>
+                            <h3 class="mt-2 text-2xl font-black text-slate-900">{{ item.nama }} - {{ item.kelas }}</h3>
+                            <p class="mt-2 text-sm text-slate-500">
+                                Pantau peserta, modul, dan rekap nilai untuk {{ item.nama }} dalam satu area tanpa perlu membuka semua matkul sekaligus.
+                            </p>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            <span class="matkul-stat-chip bg-brand-50 text-brand-800">{{ item.jumlah_peserta }} peserta</span>
+                            <span class="matkul-stat-chip bg-blue-50 text-blue-700">{{ item.modul_tersedia|length }} modul</span>
+                            <span class="matkul-stat-chip bg-emerald-50 text-emerald-700">Fokus aktif</span>
+                        </div>
+                    </div>
+
+                    <div class="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+                        <div class="praktikum-detail-card rounded-[1.75rem] p-4">
+                            <div class="flex items-start justify-between gap-3">
+                                <div>
+                                    <p class="praktikum-muted-text text-xs font-black uppercase tracking-[0.16em]">Modul Tersedia</p>
+                                    <h4 class="mt-2 text-lg font-black text-slate-900">Akses cepat per modul</h4>
+                                </div>
+                                {% if can_manage_peserta %}
+                                <button type="button" class="btn-secondary gap-2" data-participant-modal-open="participants-{{ item.pk }}">
+                                    <i data-lucide="list" class="h-4 w-4"></i>Daftar Peserta
+                                </button>
+                                {% endif %}
+                            </div>
+                            <div class="mt-4 flex flex-wrap gap-2">
+                                {% for modul in item.modul_tersedia %}
+                                <a class="praktikum-module-link inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-bold transition" href="{% url 'asleb:praktikum_nilai' item.pk modul.pk %}">
+                                    <i data-lucide="clipboard-pen-line" class="h-4 w-4"></i>Modul {{ modul.nomor }}
+                                </a>
+                                {% empty %}
+                                <span class="praktikum-muted-text text-sm">Belum ada modul praktikum.</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="praktikum-detail-card rounded-[1.75rem] p-4">
+                            <p class="praktikum-muted-text text-xs font-black uppercase tracking-[0.16em]">Info Pengajar</p>
+                            <h4 class="mt-2 text-lg font-black text-slate-900">{{ item.dosen }}</h4>
+                            <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                                <div class="praktikum-detail-tile rounded-2xl px-4 py-3">
+                                    <p class="praktikum-muted-text text-xs font-black uppercase tracking-[0.14em]">Kelas</p>
+                                    <p class="mt-2 text-base font-black text-slate-900">{{ item.kelas|default:"Tanpa kelas" }}</p>
+                                </div>
+                                <div class="praktikum-detail-tile rounded-2xl px-4 py-3">
+                                    <p class="praktikum-muted-text text-xs font-black uppercase tracking-[0.14em]">Kode</p>
+                                    <p class="mt-2 text-base font-black text-slate-900">{{ item.kode_mk|default:item.kode }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+                {% endfor %}
+            </div>
 
             <div class="surface-card overflow-hidden">
         <div class="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 p-5">
@@ -495,7 +615,7 @@
                         </div>
                         <div class="flex flex-wrap gap-2">
                             {% if item.peserta_modal_list %}
-                            <form method="post" action="{% url 'asleb:praktikum_peserta_delete_all' item.pk %}" data-confirm-message="Hapus semua peserta pada mata kuliah ini? Riwayat nilai tetap disimpan, tetapi daftar peserta aktif akan dikosongkan.">
+                            <form method="post" action="{% url 'asleb:praktikum_peserta_delete_all' item.pk %}" data-confirm-delete-form data-confirm-title="Hapus semua peserta?" data-confirm-message="Semua peserta pada {{ item.nama }}{% if item.kelas %} - {{ item.kelas }}{% endif %} akan dihapus atau dinonaktifkan. Riwayat nilai tetap disimpan.">
                                 {% csrf_token %}
                                 <button class="inline-flex items-center justify-center rounded-2xl border border-rose-200 px-4 py-3 text-sm font-black text-rose-700 transition hover:bg-rose-50" data-delete-all-button type="submit">
                                     <i data-lucide="trash-2" class="mr-2 h-4 w-4"></i>Hapus Semua
@@ -532,7 +652,7 @@
                                     <option value="belum">Belum terhubung</option>
                                 </select>
                             </div>
-                            <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-45" data-bulk-delete-button disabled onclick="return confirm('Hapus peserta yang dipilih? Peserta yang sudah memiliki riwayat nilai akan dinonaktifkan.');">
+                            <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-45" data-bulk-delete-button data-confirm-title="Hapus peserta terpilih?" data-confirm-message="Peserta yang dipilih akan dihapus atau dinonaktifkan. Riwayat nilai yang sudah ada tetap aman.">
                                 <i data-lucide="trash-2" class="mr-2 h-4 w-4"></i>Hapus Terpilih
                             </button>
                         </div>
@@ -566,7 +686,7 @@
                                                 <a class="participant-table-action inline-flex items-center justify-center rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-700 transition hover:border-brand-300 hover:text-brand-800" href="{% url 'asleb:praktikum_peserta_update' peserta.pk %}">
                                                     <i data-lucide="pencil" class="mr-1.5 h-3.5 w-3.5"></i>Edit
                                                 </a>
-                                                <button class="participant-table-action participant-danger-action inline-flex items-center justify-center rounded-xl border border-rose-200 px-3 py-2 text-xs font-black text-rose-700 transition hover:bg-rose-50" type="submit" formaction="{% url 'asleb:praktikum_peserta_delete' peserta.pk %}" onclick="return confirm('Hapus peserta {{ peserta.nama }}?');">
+                                                <button class="participant-table-action participant-danger-action inline-flex items-center justify-center rounded-xl border border-rose-200 px-3 py-2 text-xs font-black text-rose-700 transition hover:bg-rose-50" type="submit" formaction="{% url 'asleb:praktikum_peserta_delete' peserta.pk %}" data-confirm-title="Hapus peserta?" data-confirm-message="Yakin ingin menghapus {{ peserta.nama }} dari daftar peserta {{ item.nama }}?">
                                                     <i data-lucide="trash-2" class="mr-1.5 h-3.5 w-3.5"></i>Hapus
                                                 </button>
                                             </div>
@@ -584,6 +704,26 @@
             </div>
         </div>
         {% endfor %}
+        <div class="participant-confirm-modal fixed z-[70] bg-slate-950/65 p-4 backdrop-blur-sm" id="participant-delete-confirm" aria-hidden="true" role="dialog" aria-modal="true">
+            <div class="participant-confirm-panel w-full max-w-md rounded-[28px] border border-rose-200 p-6 shadow-2xl shadow-slate-950/30">
+                <div class="flex items-start gap-4">
+                    <span class="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-700">
+                        <i data-lucide="trash-2" class="h-5 w-5"></i>
+                    </span>
+                    <div>
+                        <p class="text-xs font-black uppercase tracking-[0.18em] text-rose-500">Konfirmasi</p>
+                        <h3 class="mt-2 text-xl font-black" data-confirm-title>Hapus peserta?</h3>
+                        <p class="mt-2 text-sm leading-6 text-slate-500" data-confirm-message>Data peserta akan dihapus dari daftar ini.</p>
+                    </div>
+                </div>
+                <div class="mt-6 flex flex-wrap justify-end gap-3">
+                    <button type="button" class="btn-secondary" data-confirm-cancel>Batal</button>
+                    <button type="button" class="inline-flex items-center justify-center rounded-2xl bg-rose-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-rose-600/25 transition hover:bg-rose-700" data-confirm-accept>
+                        Ya, hapus
+                    </button>
+                </div>
+            </div>
+        </div>
     {% endif %}
 </section>
 
@@ -592,6 +732,9 @@
         document.querySelectorAll('.participant-modal').forEach((modal) => {
             document.body.appendChild(modal);
         });
+        const confirmModal = document.getElementById('participant-delete-confirm');
+        if (confirmModal) document.body.appendChild(confirmModal);
+        let pendingDelete = null;
 
         const openModal = (modal) => {
             modal.setAttribute('aria-hidden', 'false');
@@ -605,6 +748,51 @@
             document.documentElement.classList.remove('overflow-hidden');
             document.body.classList.remove('overflow-hidden');
         };
+
+        const openDeleteConfirm = (form, submitter) => {
+            if (!confirmModal) return false;
+            pendingDelete = { form, submitter };
+            confirmModal.querySelector('[data-confirm-title]').textContent = submitter?.dataset.confirmTitle || form.dataset.confirmTitle || 'Hapus peserta?';
+            confirmModal.querySelector('[data-confirm-message]').textContent = submitter?.dataset.confirmMessage || form.dataset.confirmMessage || 'Data peserta akan dihapus dari daftar ini.';
+            const acceptButton = confirmModal.querySelector('[data-confirm-accept]');
+            if (acceptButton) {
+                acceptButton.disabled = false;
+                acceptButton.textContent = 'Ya, hapus';
+            }
+            confirmModal.setAttribute('aria-hidden', 'false');
+            confirmModal.querySelector('[data-confirm-accept]')?.focus();
+            return true;
+        };
+
+        const closeDeleteConfirm = () => {
+            if (!confirmModal) return;
+            confirmModal.setAttribute('aria-hidden', 'true');
+            pendingDelete = null;
+        };
+
+        confirmModal?.querySelector('[data-confirm-cancel]')?.addEventListener('click', closeDeleteConfirm);
+        confirmModal?.addEventListener('click', (event) => {
+            if (event.target === confirmModal) closeDeleteConfirm();
+        });
+        confirmModal?.querySelector('[data-confirm-accept]')?.addEventListener('click', () => {
+            if (!pendingDelete) return;
+            const { form, submitter } = pendingDelete;
+            const row = submitter?.closest('[data-participant-row]');
+            if (row) {
+                row.style.opacity = '0.45';
+                row.style.pointerEvents = 'none';
+            }
+            const acceptButton = confirmModal.querySelector('[data-confirm-accept]');
+            if (acceptButton) {
+                acceptButton.disabled = true;
+                acceptButton.textContent = 'Menghapus...';
+            }
+            if (submitter?.formAction) {
+                form.action = submitter.formAction;
+            }
+            form.dataset.confirmedDelete = '1';
+            form.requestSubmit();
+        });
 
         const updateBulkState = (form) => {
             const visibleRows = [...form.querySelectorAll('[data-participant-row]')].filter((row) => !row.classList.contains('hidden'));
@@ -637,11 +825,11 @@
             updateBulkState(form);
         };
 
-        document.querySelectorAll('[data-participant-modal-open]').forEach((button) => {
-            button.addEventListener('click', () => {
-                const modal = document.getElementById(button.dataset.participantModalOpen);
-                if (modal) openModal(modal);
-            });
+        document.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-participant-modal-open]');
+            if (!button) return;
+            const modal = document.getElementById(button.dataset.participantModalOpen);
+            if (modal) openModal(modal);
         });
 
         document.querySelectorAll('.participant-modal').forEach((modal) => {
@@ -654,6 +842,13 @@
         });
 
         document.querySelectorAll('[data-participant-form]').forEach((form) => {
+            form.addEventListener('submit', (event) => {
+                if (form.dataset.confirmedDelete === '1') return;
+                const submitter = event.submitter;
+                if (!submitter?.matches('[data-bulk-delete-button], .participant-danger-action')) return;
+                event.preventDefault();
+                openDeleteConfirm(form, submitter);
+            });
             form.querySelectorAll('[data-participant-search], [data-participant-status], [data-participant-account]').forEach((control) => {
                 control.addEventListener('input', () => applyFilters(form));
                 control.addEventListener('change', () => applyFilters(form));
@@ -672,8 +867,17 @@
 
         document.addEventListener('keydown', (event) => {
             if (event.key === 'Escape') {
+                closeDeleteConfirm();
                 document.querySelectorAll('.participant-modal[aria-hidden="false"]').forEach(closeModal);
             }
+        });
+
+        document.querySelectorAll('[data-confirm-delete-form]').forEach((form) => {
+            form.addEventListener('submit', (event) => {
+                if (form.dataset.confirmedDelete === '1') return;
+                event.preventDefault();
+                openDeleteConfirm(form, event.submitter);
+            });
         });
 
         const selectedMatkul = '{{ selected_matkul_id|escapejs }}';
@@ -702,6 +906,45 @@
         const matkulSearch = document.querySelector('[data-matkul-nav-search]');
         const matkulItems = Array.from(document.querySelectorAll('[data-matkul-nav-item]'));
         const matkulNoResult = document.querySelector('[data-matkul-nav-no-result]');
+        const focusPanel = document.querySelector('[data-matkul-focus]');
+        const setActiveMatkul = function (item, shouldPushState = true) {
+            if (!item || !focusPanel) return;
+            const matkulId = item.dataset.matkulId;
+            const template = document.getElementById(`matkul-focus-template-${matkulId}`);
+            if (!template) return;
+
+            matkulItems.forEach(function (navItem) {
+                const active = navItem === item;
+                navItem.classList.toggle('is-active', active);
+                navItem.querySelector('[data-active-label]')?.classList.toggle('hidden', !active);
+            });
+            focusPanel.style.opacity = '0';
+            focusPanel.style.transform = 'translateY(6px)';
+            window.setTimeout(function () {
+                focusPanel.innerHTML = template.innerHTML;
+                focusPanel.style.opacity = '1';
+                focusPanel.style.transform = 'translateY(0)';
+                if (window.lucide) window.lucide.createIcons();
+            }, 90);
+
+            const matkulInput = document.querySelector('input[name="matkul"]');
+            if (matkulInput) matkulInput.value = matkulId;
+            const rekapSelect = document.querySelector('select[name="matkul"]');
+            if (rekapSelect) rekapSelect.value = matkulId;
+            if (shouldPushState) {
+                const url = new URL(window.location.href);
+                url.searchParams.set('matkul', matkulId);
+                window.history.replaceState({}, '', url);
+            }
+        };
+
+        matkulItems.forEach(function (item) {
+            item.addEventListener('click', function (event) {
+                event.preventDefault();
+                setActiveMatkul(item);
+            });
+        });
+
         if (matkulSearch && matkulItems.length) {
             const filterMatkulItems = function () {
                 const keyword = matkulSearch.value.trim().toLowerCase();

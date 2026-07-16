@@ -19,11 +19,23 @@ from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, Per
 from apps.pendaftaran_asleb.services import sync_expired_asleb_periods
 from apps.kalender.models import Notifikasi
 from apps.pengguna.models import PengalamanPengguna, Pengguna
-from apps.jadwal.models import JadwalPraktikum
+from apps.jadwal.models import JadwalPraktikum, PermintaanPerubahanJadwal
 from apps.ruangan.models import RuanganLab
 
 from .forms import AbsensiAslebForm, ENABLE_CAMERA_LOCATION_CAPTURE, get_asleb_matkul
-from .models import AbsensiAsleb, Asleb, HasilPraktikumMahasiswa, HonorAsleb, ModulPraktikum, PengaturanAbsensiAsleb, PesertaPraktikum
+from .models import (
+    AbsensiAsleb,
+    AbsensiMasukAsleb,
+    Asleb,
+    HasilPraktikumMahasiswa,
+    HonorAsleb,
+    ModulPraktikum,
+    PengaturanAbsensiAsleb,
+    PengingatAbsensiAsleb,
+    PengumpulanLaporanPraktikum,
+    PesertaPraktikum,
+    TugasLaporanPraktikum,
+)
 from .views import get_praktikum_matkul_queryset
 from .surat_honor import LAB_SIGNATURES, build_lab_signature, build_lampiran_page, build_styles
 
@@ -723,6 +735,121 @@ class AslebViewTests(TestCase):
         self.assertEqual(hasil.peserta_nim, '0640020099')
         self.assertEqual(hasil.peserta_nama, 'Mahasiswa Nilai')
         self.assertEqual(hasil.nilai, 90)
+
+    def test_periode_berakhir_membersihkan_data_aslab_lama_kecuali_modul(self):
+        today = timezone.localdate()
+        period = PeriodeAsleb.objects.create(
+            tahun=today.year,
+            semester=1 if today.month <= 6 else 2,
+            mulai=today - timedelta(days=120),
+            selesai=today - timedelta(days=1),
+            pendaftaran_mulai=today - timedelta(days=150),
+            pendaftaran_selesai=today - timedelta(days=130),
+        )
+        akun_aslab = Pengguna.objects.create(
+            nama_pengguna=self.asleb.nama,
+            nim_nik=self.asleb.nim,
+            email='cleanup-aslab@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081234567899',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='asisten_lab',
+        )
+        self.asleb.periode_aktif = period
+        self.asleb.status = 'aktif'
+        self.asleb.matkul = str(self.matkul)
+        self.asleb.save(update_fields=['periode_aktif', 'status', 'matkul'])
+        PendaftaranAsleb.objects.create(
+            nama=self.asleb.nama,
+            nim=self.asleb.nim,
+            no_hp=self.asleb.no_hp,
+            email=self.asleb.email,
+            program_studi=self.asleb.program_studi,
+            semester=self.asleb.semester,
+            matkul=self.matkul,
+            periode=period,
+            status='digenerate',
+        )
+        peserta = PesertaPraktikum.objects.create(matkul=self.matkul, nim='0640020101', nama='Peserta Lama')
+        modul = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=3,
+            judul='Looping',
+            file=SimpleUploadedFile('modul3.pdf', b'%PDF-1.4', content_type='application/pdf'),
+        )
+        jadwal = JadwalPraktikum.objects.create(
+            mata_kuliah=str(self.matkul),
+            kelas=self.matkul.kelas,
+            ruangan=self.test_room,
+            pengampu=self.asleb.nama,
+            hari='senin',
+            waktu_mulai='08:00',
+            waktu_selesai='09:00',
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+        AbsensiAsleb.objects.create(
+            asleb=self.asleb,
+            jadwal=jadwal,
+            modul_praktikum=modul,
+            tanggal_praktikum=today - timedelta(days=5),
+            modul=3,
+            file_modul=SimpleUploadedFile('absensi-modul.pdf', b'%PDF-1.4', content_type='application/pdf'),
+            bukti_video=SimpleUploadedFile('video.mp4', b'video', content_type='video/mp4'),
+        )
+        AbsensiMasukAsleb.objects.create(
+            asleb=self.asleb,
+            jadwal=jadwal,
+            tanggal_absensi=today - timedelta(days=5),
+            foto_absensi=SimpleUploadedFile('foto.jpg', b'foto', content_type='image/jpeg'),
+        )
+        PengingatAbsensiAsleb.objects.create(
+            asleb=self.asleb,
+            jadwal=jadwal,
+            tanggal=today - timedelta(days=5),
+            tahap=1,
+        )
+        tugas = TugasLaporanPraktikum.objects.create(
+            judul='Laporan Modul 3',
+            matkul=self.matkul,
+            modul=modul,
+            batas_pengumpulan=timezone.now() + timedelta(days=1),
+            dibuat_oleh=akun_aslab,
+        )
+        PengumpulanLaporanPraktikum.objects.create(
+            tugas=tugas,
+            peserta=peserta,
+            file_laporan=SimpleUploadedFile('laporan.pdf', b'%PDF-1.4', content_type='application/pdf'),
+        )
+        PermintaanPerubahanJadwal.objects.create(
+            jadwal=jadwal,
+            matkul=self.matkul,
+            ruangan=self.test_room,
+            hari='selasa',
+            waktu_mulai='10:00',
+            waktu_selesai='11:00',
+            diajukan_oleh=akun_aslab,
+        )
+
+        sync_expired_asleb_periods(today)
+
+        akun_aslab.refresh_from_db()
+        self.asleb.refresh_from_db()
+        self.assertEqual(akun_aslab.role, 'mahasiswa')
+        self.assertEqual(self.asleb.status, 'nonaktif')
+        self.assertTrue(ModulPraktikum.objects.filter(pk=modul.pk).exists())
+        self.assertFalse(PesertaPraktikum.objects.exists())
+        self.assertFalse(AbsensiAsleb.objects.exists())
+        self.assertFalse(AbsensiMasukAsleb.objects.exists())
+        self.assertFalse(PengingatAbsensiAsleb.objects.exists())
+        self.assertFalse(TugasLaporanPraktikum.objects.exists())
+        self.assertFalse(PengumpulanLaporanPraktikum.objects.exists())
+        self.assertFalse(JadwalPraktikum.objects.filter(pk=jadwal.pk).exists())
+        self.assertFalse(PermintaanPerubahanJadwal.objects.exists())
+        pengalaman = PengalamanPengguna.objects.get(pengguna=akun_aslab, otomatis=True)
+        self.assertIn(str(self.matkul), pengalaman.deskripsi)
 
     def test_honor_asleb_mengikuti_rumus_excel(self):
         self.create_pendaftaran_history(self.asleb.nim, 3)

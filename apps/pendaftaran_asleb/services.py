@@ -6,12 +6,21 @@ from django.utils import timezone
 from django.db import transaction
 from django.urls import reverse
 
-from apps.asleb.models import Asleb, HonorAsleb, PesertaPraktikum
+from apps.asleb.models import (
+    AbsensiAsleb,
+    AbsensiMasukAsleb,
+    Asleb,
+    HonorAsleb,
+    PengingatAbsensiAsleb,
+    PengumpulanLaporanPraktikum,
+    PesertaPraktikum,
+    TugasLaporanPraktikum,
+)
 from apps.core.emails import send_branded_email
 from apps.kalender.realtime import send_user_notification
 from apps.pengguna.models import PengalamanPengguna, Pengguna
 
-from .models import PendaftaranAsleb, PengaturanPendaftaranAsleb, PeriodeAsleb, RiwayatAsleb
+from .models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb, PeriodeAsleb, RiwayatAsleb
 
 
 def get_current_period(value=None):
@@ -217,6 +226,24 @@ def sync_expired_asleb_periods(value=None):
     expired_rows = list(expired.select_related('periode_aktif'))
     expired_nims = [item.nim for item in expired_rows]
     affected_matkul = [item.matkul for item in expired_rows if item.matkul]
+    affected_matkul_ids = list(PendaftaranAsleb.objects.filter(
+        nim__in=expired_nims,
+        periode__in=[item.periode_aktif for item in expired_rows if item.periode_aktif_id],
+        matkul__isnull=False,
+    ).values_list('matkul_id', flat=True).distinct())
+    affected_matkul_ids.extend(RiwayatAsleb.objects.filter(
+        nim__in=expired_nims,
+        periode__in=[item.periode_aktif for item in expired_rows if item.periode_aktif_id],
+        matkul__isnull=False,
+    ).values_list('matkul_id', flat=True).distinct())
+    if affected_matkul:
+        affected_labels = set(affected_matkul)
+        affected_matkul_ids.extend([
+            matkul.pk
+            for matkul in MataKuliahAsleb.objects.all()
+            if str(matkul) in affected_labels
+        ])
+    affected_matkul_ids = list(set(affected_matkul_ids))
     expired.update(status='nonaktif')
 
     expired_honor_qs = HonorAsleb.objects.filter(asleb__nim__in=expired_nims).exclude(status='dibayar')
@@ -239,19 +266,22 @@ def sync_expired_asleb_periods(value=None):
         if changed_fields:
             honor.save(update_fields=changed_fields + ['diperbarui_pada'])
 
-    if affected_matkul:
+    if expired_rows:
+        expired_row_ids = [item.pk for item in expired_rows]
+        AbsensiAsleb.objects.filter(asleb_id__in=expired_row_ids).delete()
+        AbsensiMasukAsleb.objects.filter(asleb_id__in=expired_row_ids).delete()
+        PengingatAbsensiAsleb.objects.filter(asleb_id__in=expired_row_ids).delete()
+
+    if affected_matkul or affected_matkul_ids:
         from apps.jadwal.models import JadwalPraktikum, PermintaanPerubahanJadwal
+        PengumpulanLaporanPraktikum.objects.filter(tugas__matkul_id__in=affected_matkul_ids).delete()
+        TugasLaporanPraktikum.objects.filter(matkul_id__in=affected_matkul_ids).delete()
         JadwalPraktikum.objects.filter(
             mata_kuliah__in=affected_matkul,
-            status__in=[
-                JadwalPraktikum.STATUS_DIAJUKAN,
-                JadwalPraktikum.STATUS_DITERIMA,
-            ],
-        ).update(status=JadwalPraktikum.STATUS_DITOLAK)
+        ).delete()
         PermintaanPerubahanJadwal.objects.filter(
             diajukan_oleh__nim_nik__in=expired_nims,
-            status='diajukan',
-        ).update(status='ditolak', diproses_pada=timezone.now())
+        ).delete()
 
     users_by_nim = {
         item.nim_nik: item

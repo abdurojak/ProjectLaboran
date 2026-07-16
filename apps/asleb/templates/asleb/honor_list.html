@@ -75,13 +75,13 @@
                 <span>Generate Surat</span>
             </a>
             {% endif %}
-            {% if is_admin %}
+            {% if is_admin or is_laboran %}
             <form method="post" action="{% url 'asleb:honor_auto_assign_transfers' %}">
                 {% csrf_token %}
                 <input type="hidden" name="bulan" value="{{ selected_bulan }}">
                 <button type="submit" class="btn-secondary">
                     <i data-lucide="shuffle" class="h-4 w-4"></i>
-                    <span>Bagi Otomatis TF</span>
+                    <span>Bagi Rata TF</span>
                 </button>
             </form>
             {% endif %}

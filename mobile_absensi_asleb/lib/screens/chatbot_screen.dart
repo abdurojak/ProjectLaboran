@@ -118,7 +118,22 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
       return 'Honor bulan ini: Rp $amount. Total pertemuan: $meetings. Status: $status.';
     }
 
-    return null;
+    if (normalized.contains('halo') ||
+        normalized.contains('hai') ||
+        normalized.contains('hi') ||
+        normalized.contains('pagi') ||
+        normalized.contains('siang') ||
+        normalized.contains('sore') ||
+        normalized.contains('malam')) {
+      final name = provider.profile?.nama ?? 'Asisten Lab';
+      return 'Halo $name. Saya siap bantu. Coba tanyakan jadwal praktikum, status absensi, honor/gaji, atau riwayat absensi Anda.';
+    }
+
+    if (normalized.contains('absen') || normalized.contains('absensi')) {
+      return 'Untuk absensi, buka menu Jadwal, pilih jadwal praktikum yang sedang berlangsung, lalu tekan Absensi Masuk dan ambil foto bukti dari kamera.';
+    }
+
+    return 'Maaf, koneksi bot server sedang bermasalah. Saya masih bisa bantu pertanyaan dasar seperti jadwal praktikum, absensi, honor/gaji, dan riwayat absensi.';
   }
 
   @override

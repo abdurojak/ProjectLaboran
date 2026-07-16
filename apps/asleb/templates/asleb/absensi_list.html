@@ -12,12 +12,6 @@
             <p class="mt-2 text-sm text-slate-500">Laboran menyediakan modul per mata kuliah. Asisten lab mengunduh modul lalu mengisi absensi dan bukti video.</p>
         </div>
         <div class="flex w-full flex-wrap gap-3 sm:w-auto">
-            {% if can_manage_modul %}
-            <a class="btn-secondary w-full justify-center gap-2 sm:w-auto" href="{% url 'asleb:modul_create' %}">
-                <i data-lucide="file-plus-2" class="h-4 w-4"></i>
-                <span>Tambah Modul</span>
-            </a>
-            {% endif %}
             {% if current_pengguna.role == 'admin' or current_pengguna.role == 'laboran' %}
             <form method="post" action="{% url 'asleb:absensi_toggle_status' %}">
                 {% csrf_token %}
