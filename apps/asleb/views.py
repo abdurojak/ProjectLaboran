@@ -10,7 +10,7 @@ from django.core.files.base import ContentFile
 from django.db import IntegrityError, transaction
 from django.db.models import Avg, Count, Q, Sum
 from django.http import FileResponse, Http404, HttpResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.template.response import TemplateResponse
 from django.urls import reverse_lazy
 from django.utils.http import content_disposition_header
@@ -967,6 +967,7 @@ class PraktikumMahasiswaListView(PraktikumMahasiswaAccessMixin, TemplateView):
         total_modul = sum(len(item.modul_tersedia) for item in matkul_list)
         total_mahasiswa = sum(item.jumlah_peserta for item in matkul_list)
 
+        effective_selected_id = str(rekap_matkul.pk) if rekap_matkul else ''
         context.update({
             'matkul_list': matkul_list,
             'selected_matkul': selected_matkul,
@@ -983,7 +984,7 @@ class PraktikumMahasiswaListView(PraktikumMahasiswaAccessMixin, TemplateView):
             'selected_kelas': selected_kelas,
             'search_query': search_query,
             'peserta_list': peserta_list,
-            'selected_matkul_id': selected_id,
+            'selected_matkul_id': effective_selected_id,
             'can_manage_peserta': pengguna.role == LABORAN_ROLE,
             'is_asisten_lab': pengguna.role == ASISTEN_LAB_ROLE,
             'show_peserta_modal': self.request.GET.get('show_peserta') == '1',
@@ -1197,6 +1198,20 @@ def _serve_laporan_file(request, pk, *, inline=False):
 
 
 def preview_laporan_praktikum(request, pk):
+    laporan = get_object_or_404(
+        PengumpulanLaporanPraktikum.objects.select_related('tugas', 'peserta', 'peserta__pengguna'),
+        pk=pk,
+    )
+    if not can_access_laporan(getattr(request, 'current_pengguna', None), laporan):
+        messages.error(request, 'Anda tidak memiliki akses ke file laporan ini.')
+        return redirect('asleb:laporan_tugas_list')
+    if not laporan.file_laporan:
+        messages.error(request, 'File laporan tidak ditemukan.')
+        return redirect('asleb:laporan_tugas_list')
+    return render(request, 'asleb/laporan_preview.html', {'laporan': laporan})
+
+
+def preview_laporan_praktikum_file(request, pk):
     return _serve_laporan_file(request, pk, inline=True)
 
 
@@ -1839,7 +1854,7 @@ def auto_assign_honor_transfers(request):
         return redirect('asleb:honor_list')
 
     selected_bulan = request.POST.get('bulan', '').strip()
-    honor_qs = HonorAsleb.objects.select_related('asleb').filter(assigned_laboran__isnull=True).order_by('bulan', 'asleb__nama', 'pk')
+    honor_qs = HonorAsleb.objects.select_related('asleb').exclude(status='dibayar').order_by('bulan', 'asleb__nama', 'pk')
     if selected_bulan:
         try:
             year, month = selected_bulan.split('-')
@@ -1849,12 +1864,12 @@ def auto_assign_honor_transfers(request):
             return redirect('asleb:honor_list')
 
     with transaction.atomic():
-        assigned_count = assign_unassigned_honor_transfers(honor_qs)
+        assigned_count = rebalance_honor_transfers(honor_qs)
 
     if assigned_count:
-        messages.success(request, f'{assigned_count} tugas TF honor berhasil dibagi otomatis ke laboran.')
+        messages.success(request, f'{assigned_count} tugas TF honor berhasil dibagi rata otomatis ke laboran.')
     else:
-        messages.info(request, 'Tidak ada honor yang perlu dibagi, atau belum ada akun laboran terverifikasi.')
+        messages.info(request, 'Tidak ada honor belum dibayar yang perlu dibagi, atau belum ada akun laboran terverifikasi.')
     return redirect('asleb:honor_list')
 
 
@@ -1868,6 +1883,28 @@ def assign_unassigned_honor_transfers(honor_qs):
         honor.save(update_fields=['assigned_laboran', 'level', 'jumlah', 'diperbarui_pada'])
         assigned_count += 1
     return assigned_count
+
+
+def rebalance_honor_transfers(honor_qs):
+    laboran_list = list(Pengguna.objects.filter(role=LABORAN_ROLE, is_verified=True).order_by('nama_pengguna', 'pk'))
+    if not laboran_list:
+        return 0
+
+    honors_by_month = {}
+    for honor in honor_qs:
+        month_key = honor.bulan.replace(day=1)
+        honors_by_month.setdefault(month_key, []).append(honor)
+
+    changed_count = 0
+    for honors in honors_by_month.values():
+        for index, honor in enumerate(honors):
+            target_laboran = laboran_list[index % len(laboran_list)]
+            if honor.assigned_laboran_id == target_laboran.pk:
+                continue
+            honor.assigned_laboran = target_laboran
+            honor.save(update_fields=['assigned_laboran', 'level', 'jumlah', 'diperbarui_pada'])
+            changed_count += 1
+    return changed_count
 
 
 def cleanup_expired_surat_honor():

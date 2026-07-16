@@ -385,13 +385,22 @@ class SettingsView(TemplateView):
             })
 
         if pengguna.role == 'laboran':
-            cards.append({
-                'title': 'Bug & Error List',
-                'description': 'Ambil dan pantau bug/error yang sedang ditangani laboran.',
-                'url': 'core:bug_error_list',
-                'args': [],
-                'icon': 'bug',
-            })
+            cards.extend([
+                {
+                    'title': 'Upload Modul Praktikum',
+                    'description': 'Tambah, upload banyak file, preview, edit, dan hapus modul praktikum.',
+                    'url': 'asleb:modul_create',
+                    'args': [],
+                    'icon': 'file-plus-2',
+                },
+                {
+                    'title': 'Bug & Error List',
+                    'description': 'Ambil dan pantau bug/error yang sedang ditangani laboran.',
+                    'url': 'core:bug_error_list',
+                    'args': [],
+                    'icon': 'bug',
+                },
+            ])
 
         if pengguna.role == 'admin':
             cards.extend([

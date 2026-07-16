@@ -538,6 +538,13 @@ class DashboardView(TemplateView):
                 'tone': 'orange',
             },
             {
+                'label': 'Barang Dipinjam',
+                'value': peminjaman_qs.filter(status='dipinjam').count(),
+                'note': 'Barang yang masih dipinjam',
+                'icon': 'package-check',
+                'tone': 'emerald',
+            },
+            {
                 'label': 'Menunggu Jadwal',
                 'value': context['jadwal_diajukan'].count(),
                 'note': 'Jadwal yang perlu ditinjau',
