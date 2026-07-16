@@ -434,6 +434,14 @@ class GenerateLicenseCommandTests(SimpleTestCase):
 
 
 class GenerateLicenseKeypairCommandTests(SimpleTestCase):
+    def assert_no_transaction_artifacts(self, temp_dir):
+        artifacts = [
+            path
+            for path in Path(temp_dir).rglob('*')
+            if path.name.endswith(('.tmp', '.bak'))
+        ]
+        self.assertEqual(artifacts, [])
+
     def call_keypair_command(self, temp_dir, *extra_args):
         private_key_path = Path(temp_dir) / 'owner' / 'license-private.pem'
         public_key_path = Path(temp_dir) / 'app' / 'license_public_key.py'
@@ -452,6 +460,7 @@ class GenerateLicenseKeypairCommandTests(SimpleTestCase):
             private_key_path, public_key_path = self.call_keypair_command(temp_dir)
             private_pem = private_key_path.read_bytes()
             public_module = public_key_path.read_text(encoding='ascii')
+            self.assert_no_transaction_artifacts(temp_dir)
 
         private_key = serialization.load_pem_private_key(private_pem, password=None)
         assignment = 'PUBLIC_KEY_PEM = '
@@ -514,21 +523,21 @@ class GenerateLicenseKeypairCommandTests(SimpleTestCase):
             )
 
     def test_second_publication_failure_removes_both_new_outputs(self):
-        real_replace = os.replace
+        real_link = os.link
 
         with TemporaryDirectory() as temp_dir:
             private_key_path = Path(temp_dir) / 'license-private.pem'
             public_key_path = Path(temp_dir) / 'license_public_key.py'
 
             def fail_public_publication(source, destination):
-                if Path(destination) == public_key_path and str(source).endswith('.tmp'):
+                if Path(destination) == public_key_path:
                     raise OSError('public publication failed')
-                return real_replace(source, destination)
+                return real_link(source, destination)
 
             with (
                 patch(
                     'apps.core.management.commands.generate_labhub_license_keypair.'
-                    'os.replace',
+                    'os.link',
                     side_effect=fail_public_publication,
                 ),
                 self.assertRaisesMessage(CommandError, 'Unable to write'),
@@ -543,6 +552,43 @@ class GenerateLicenseKeypairCommandTests(SimpleTestCase):
 
             self.assertFalse(private_key_path.exists())
             self.assertFalse(public_key_path.exists())
+            self.assert_no_transaction_artifacts(temp_dir)
+
+    def test_non_force_race_never_overwrites_new_destination_and_rolls_back(self):
+        real_link = os.link
+
+        for raced_output in ('private', 'public'):
+            with self.subTest(raced_output=raced_output), TemporaryDirectory() as temp_dir:
+                private_key_path = Path(temp_dir) / 'license-private.pem'
+                public_key_path = Path(temp_dir) / 'license_public_key.py'
+                paths = {'private': private_key_path, 'public': public_key_path}
+                raced_path = paths[raced_output]
+
+                def create_destination_before_link(source, destination):
+                    if Path(destination) == raced_path:
+                        raced_path.write_text('created-by-racer', encoding='ascii')
+                    return real_link(source, destination)
+
+                with (
+                    patch(
+                        'apps.core.management.commands.generate_labhub_license_keypair.'
+                        'os.link',
+                        side_effect=create_destination_before_link,
+                    ),
+                    self.assertRaisesMessage(CommandError, 'Unable to write'),
+                ):
+                    call_command(
+                        'generate_labhub_license_keypair',
+                        '--private-key-file',
+                        str(private_key_path),
+                        '--public-key-module',
+                        str(public_key_path),
+                    )
+
+                self.assertEqual(raced_path.read_text(encoding='ascii'), 'created-by-racer')
+                other_output = 'public' if raced_output == 'private' else 'private'
+                self.assertFalse(paths[other_output].exists())
+                self.assert_no_transaction_artifacts(temp_dir)
 
     def test_force_publication_failure_restores_both_original_outputs(self):
         real_replace = os.replace
@@ -577,6 +623,7 @@ class GenerateLicenseKeypairCommandTests(SimpleTestCase):
 
             self.assertEqual(private_key_path.read_text(encoding='ascii'), 'old-private')
             self.assertEqual(public_key_path.read_text(encoding='ascii'), 'old-public')
+            self.assert_no_transaction_artifacts(temp_dir)
 
     def test_equivalent_output_paths_are_rejected_before_writes(self):
         with TemporaryDirectory() as temp_dir:
@@ -601,6 +648,86 @@ class GenerateLicenseKeypairCommandTests(SimpleTestCase):
             stage_write.assert_not_called()
             self.assertFalse(private_key_path.exists())
 
+    def test_hardlinked_output_paths_are_rejected_before_force_writes(self):
+        with TemporaryDirectory() as temp_dir:
+            private_key_path = Path(temp_dir) / 'license-private.pem'
+            public_key_path = Path(temp_dir) / 'license_public_key.py'
+            private_key_path.write_text('shared-original', encoding='ascii')
+            os.link(private_key_path, public_key_path)
+
+            with (
+                patch(
+                    'apps.core.management.commands.generate_labhub_license_keypair.'
+                    '_stage_write',
+                ) as stage_write,
+                self.assertRaisesMessage(CommandError, 'different files'),
+            ):
+                call_command(
+                    'generate_labhub_license_keypair',
+                    '--private-key-file',
+                    str(private_key_path),
+                    '--public-key-module',
+                    str(public_key_path),
+                    '--force',
+                )
+
+            stage_write.assert_not_called()
+            self.assertEqual(private_key_path.read_text(encoding='ascii'), 'shared-original')
+            self.assertEqual(public_key_path.read_text(encoding='ascii'), 'shared-original')
+            self.assert_no_transaction_artifacts(temp_dir)
+
+    def test_samefile_io_error_is_normalized_before_writes(self):
+        with TemporaryDirectory() as temp_dir:
+            private_key_path = Path(temp_dir) / 'license-private.pem'
+            public_key_path = Path(temp_dir) / 'license_public_key.py'
+            private_key_path.write_text('old-private', encoding='ascii')
+            public_key_path.write_text('old-public', encoding='ascii')
+
+            with (
+                patch(
+                    'apps.core.management.commands.generate_labhub_license_keypair.'
+                    'os.path.samefile',
+                    side_effect=PermissionError('inspection denied'),
+                ),
+                patch(
+                    'apps.core.management.commands.generate_labhub_license_keypair.'
+                    '_stage_write',
+                ) as stage_write,
+                self.assertRaisesMessage(CommandError, 'Unable to inspect'),
+            ):
+                call_command(
+                    'generate_labhub_license_keypair',
+                    '--private-key-file',
+                    str(private_key_path),
+                    '--public-key-module',
+                    str(public_key_path),
+                    '--force',
+                )
+
+            stage_write.assert_not_called()
+            self.assertEqual(private_key_path.read_text(encoding='ascii'), 'old-private')
+            self.assertEqual(public_key_path.read_text(encoding='ascii'), 'old-public')
+            self.assert_no_transaction_artifacts(temp_dir)
+
+    def test_command_requires_both_output_arguments(self):
+        cases = (
+            (
+                ('--public-key-module', 'license_public_key.py'),
+                '--private-key-file',
+            ),
+            (
+                ('--private-key-file', 'license-private.pem'),
+                '--public-key-module',
+            ),
+        )
+
+        for arguments, missing_argument in cases:
+            with self.subTest(missing_argument=missing_argument), self.assertRaisesMessage(
+                CommandError,
+                missing_argument,
+            ):
+                call_command('generate_labhub_license_keypair', *arguments)
+
     def test_command_creates_nested_parent_directories(self):
         with TemporaryDirectory() as temp_dir:
             private_key_path, public_key_path = self.call_keypair_command(temp_dir)
@@ -619,7 +746,7 @@ class GenerateLicenseKeypairCommandTests(SimpleTestCase):
         with TemporaryDirectory() as temp_dir:
             with (
                 patch(
-                    'apps.core.management.commands.generate_labhub_license_keypair.os.replace',
+                    'apps.core.management.commands.generate_labhub_license_keypair.os.link',
                     side_effect=OSError('disk failure'),
                 ),
                 self.assertRaisesMessage(CommandError, 'Unable to write'),
@@ -640,7 +767,7 @@ class GenerateLicenseKeypairCommandTests(SimpleTestCase):
             with (
                 patch(
                     'apps.core.management.commands.generate_labhub_license_keypair.'
-                    'os.replace',
+                    'os.link',
                     side_effect=OSError('publication failed'),
                 ),
                 patch(

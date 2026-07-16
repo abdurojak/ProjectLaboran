@@ -64,18 +64,25 @@ class Command(BaseCommand):
         try:
             private_key_path = Path(options['private_key_file']).resolve()
             public_key_path = Path(options['public_key_module']).resolve()
+            private_exists = private_key_path.exists()
+            public_exists = public_key_path.exists()
+            same_output = private_key_path == public_key_path
+            if not same_output and private_exists and public_exists:
+                same_output = os.path.samefile(private_key_path, public_key_path)
         except OSError as exc:
             raise CommandError('Unable to inspect license keypair output files.') from exc
 
-        if private_key_path == public_key_path:
+        if same_output:
             raise CommandError('Private and public outputs must be different files.')
 
-        try:
-            existing_paths = [
-                path for path in (private_key_path, public_key_path) if path.exists()
-            ]
-        except OSError as exc:
-            raise CommandError('Unable to inspect license keypair output files.') from exc
+        existing_paths = [
+            path
+            for path, exists in (
+                (private_key_path, private_exists),
+                (public_key_path, public_exists),
+            )
+            if exists
+        ]
 
         if existing_paths and not options['force']:
             raise CommandError(f'Output already exists: {existing_paths[0]}')
@@ -112,8 +119,13 @@ class Command(BaseCommand):
                     backups.append((backup_path, output_path))
 
             for staged_path, output_path in staged_outputs:
-                os.replace(staged_path, output_path)
+                if options['force']:
+                    os.replace(staged_path, output_path)
+                else:
+                    os.link(staged_path, output_path)
                 published_paths.append(output_path)
+                if not options['force']:
+                    _best_effort_unlink(staged_path)
         except OSError as exc:
             for published_path in reversed(published_paths):
                 _best_effort_unlink(published_path)
