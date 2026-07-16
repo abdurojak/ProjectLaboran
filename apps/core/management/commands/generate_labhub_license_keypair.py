@@ -7,6 +7,13 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from django.core.management.base import BaseCommand, CommandError
 
 
+def _best_effort_unlink(path):
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
+
+
 def _stage_write(path, content, *, mode=None):
     descriptor, temporary_name = tempfile.mkstemp(
         dir=path.parent,
@@ -27,11 +34,22 @@ def _stage_write(path, content, *, mode=None):
 
         return temporary_name
     except Exception:
-        try:
-            os.unlink(temporary_name)
-        except FileNotFoundError:
-            pass
+        _best_effort_unlink(temporary_name)
         raise
+
+
+def _reserve_backup(path):
+    descriptor, backup_name = tempfile.mkstemp(
+        dir=path.parent,
+        prefix=f'.{path.name}.',
+        suffix='.bak',
+    )
+    try:
+        os.close(descriptor)
+    except OSError:
+        _best_effort_unlink(backup_name)
+        raise
+    return backup_name
 
 
 class Command(BaseCommand):
@@ -43,8 +61,14 @@ class Command(BaseCommand):
         parser.add_argument('--force', action='store_true')
 
     def handle(self, *args, **options):
-        private_key_path = Path(options['private_key_file'])
-        public_key_path = Path(options['public_key_module'])
+        try:
+            private_key_path = Path(options['private_key_file']).resolve()
+            public_key_path = Path(options['public_key_module']).resolve()
+        except OSError as exc:
+            raise CommandError('Unable to inspect license keypair output files.') from exc
+
+        if private_key_path == public_key_path:
+            raise CommandError('Private and public outputs must be different files.')
 
         try:
             existing_paths = [
@@ -68,21 +92,39 @@ class Command(BaseCommand):
         )
         public_module = f'PUBLIC_KEY_PEM = {public_pem!r}\n'.encode('ascii')
 
-        staged_paths = []
+        staged_outputs = []
+        backup_paths = []
+        backups = []
+        published_paths = []
         try:
             private_key_path.parent.mkdir(parents=True, exist_ok=True)
             public_key_path.parent.mkdir(parents=True, exist_ok=True)
             staged_private = _stage_write(private_key_path, private_pem, mode=0o600)
-            staged_paths.append(staged_private)
+            staged_outputs.append((staged_private, private_key_path))
             staged_public = _stage_write(public_key_path, public_module)
-            staged_paths.append(staged_public)
-            os.replace(staged_private, private_key_path)
-            os.replace(staged_public, public_key_path)
+            staged_outputs.append((staged_public, public_key_path))
+
+            if options['force']:
+                for output_path in existing_paths:
+                    backup_path = _reserve_backup(output_path)
+                    backup_paths.append(backup_path)
+                    os.replace(output_path, backup_path)
+                    backups.append((backup_path, output_path))
+
+            for staged_path, output_path in staged_outputs:
+                os.replace(staged_path, output_path)
+                published_paths.append(output_path)
         except OSError as exc:
+            for published_path in reversed(published_paths):
+                _best_effort_unlink(published_path)
+            for backup_path, output_path in reversed(backups):
+                try:
+                    os.replace(backup_path, output_path)
+                except OSError:
+                    pass
             raise CommandError('Unable to write license keypair output files.') from exc
         finally:
-            for staged_path in staged_paths:
-                try:
-                    os.unlink(staged_path)
-                except FileNotFoundError:
-                    pass
+            for staged_path, _ in staged_outputs:
+                _best_effort_unlink(staged_path)
+            for backup_path in backup_paths:
+                _best_effort_unlink(backup_path)
