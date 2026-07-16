@@ -10,6 +10,7 @@ class PenggunaLoginRequiredMiddleware:
         'laporan_tugas_list',
         'laporan_submit',
         'laporan_preview',
+        'laporan_preview_page',
         'laporan_download',
     }
     MAHASISWA_ALLOWED_KALENDER_URLS = {
@@ -34,6 +35,7 @@ class PenggunaLoginRequiredMiddleware:
         'laporan_submit',
         'laporan_review',
         'laporan_preview',
+        'laporan_preview_page',
         'laporan_download',
     }
     ASISTEN_LAB_ALLOWED_KALENDER_URLS = {
