@@ -12,3 +12,8 @@ license.key
 staticfiles/
 media/
 hatch-pet-runs
+.secrets/
+*.ed25519.pem
+build/protected/
+dist/protected/
+*.protected.tar.gz

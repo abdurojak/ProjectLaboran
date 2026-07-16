@@ -1,11 +1,16 @@
 import base64
-import hashlib
-import hmac
+import binascii
 import json
 import os
 from datetime import date
 from pathlib import Path
 
+from cryptography.exceptions import InvalidSignature, UnsupportedAlgorithm
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+    Ed25519PrivateKey,
+    Ed25519PublicKey,
+)
 from django.core.exceptions import ImproperlyConfigured
 
 
@@ -13,36 +18,42 @@ class LicenseError(ImproperlyConfigured):
     pass
 
 
-def build_license_key(customer, fingerprint, expires_on, signing_secret):
-    if not signing_secret:
-        raise LicenseError('License signing secret is required.')
-
+def build_license_key(customer, fingerprint, expires_on, private_key_pem):
+    private_key = _load_private_key(private_key_pem)
     claims = {
         'customer': customer,
         'expires_on': expires_on.isoformat(),
         'fingerprint': fingerprint,
+        'version': 2,
     }
     payload = _b64encode(_json_dumps(claims))
-    signature = _sign(payload, signing_secret)
+    signature = _b64encode(private_key.sign(payload.encode('ascii')))
     return f'{payload}.{signature}'
 
 
-def validate_license_key(license_key, fingerprint, verification_secret, today=None):
+def validate_license_key(license_key, fingerprint, public_key_pem, today=None):
     if not license_key:
         raise LicenseError('License key is required.')
-    if not verification_secret:
-        raise LicenseError('License verification secret is required.')
 
     payload, signature = _split_license_key(license_key)
-    expected_signature = _sign(payload, verification_secret)
-    if not hmac.compare_digest(signature, expected_signature):
-        raise LicenseError('License signature is invalid.')
+    public_key = _load_public_key(public_key_pem)
+
+    try:
+        signature_bytes = _b64decode(signature)
+        public_key.verify(signature_bytes, payload.encode('ascii'))
+    except (InvalidSignature, UnicodeEncodeError, ValueError) as exc:
+        raise LicenseError('License signature is invalid.') from exc
 
     claims = _load_claims(payload)
-    if claims.get('fingerprint') != fingerprint:
+    if claims['version'] != 2:
+        raise LicenseError('License version is unsupported.')
+    if claims['fingerprint'] != fingerprint:
         raise LicenseError('License fingerprint does not match this server.')
 
-    expires_on = date.fromisoformat(claims['expires_on'])
+    try:
+        expires_on = date.fromisoformat(claims['expires_on'])
+    except (TypeError, ValueError) as exc:
+        raise LicenseError('License expiration date is invalid.') from exc
     if (today or date.today()) > expires_on:
         raise LicenseError('License has expired.')
 
@@ -65,42 +76,71 @@ def get_server_fingerprint():
 
 
 def enforce_configured_license():
+    from apps.core.license_public_key import PUBLIC_KEY_PEM
+
     validate_license_key(
         os.getenv('LABHUB_LICENSE_KEY', '').strip(),
         fingerprint=get_server_fingerprint(),
-        verification_secret=os.getenv('LABHUB_LICENSE_VERIFICATION_SECRET', '').strip(),
+        public_key_pem=PUBLIC_KEY_PEM,
     )
 
 
-def _split_license_key(license_key):
+def _load_private_key(private_key_pem):
+    if not private_key_pem:
+        raise LicenseError('License private key is required.')
     try:
-        payload, signature = license_key.split('.', 1)
-    except ValueError as exc:
-        raise LicenseError('License key format is invalid.') from exc
-    if not payload or not signature:
+        private_key = serialization.load_pem_private_key(private_key_pem, password=None)
+    except (TypeError, ValueError, UnsupportedAlgorithm) as exc:
+        raise LicenseError('License private key is invalid.') from exc
+    if not isinstance(private_key, Ed25519PrivateKey):
+        raise LicenseError('License signing requires an Ed25519 private key.')
+    return private_key
+
+
+def _load_public_key(public_key_pem):
+    if not public_key_pem:
+        raise LicenseError('License public key is required.')
+    if isinstance(public_key_pem, str):
+        public_key_pem = public_key_pem.encode('utf-8')
+    try:
+        public_key = serialization.load_pem_public_key(public_key_pem)
+    except (TypeError, ValueError, UnsupportedAlgorithm) as exc:
+        raise LicenseError('License public key is invalid.') from exc
+    if not isinstance(public_key, Ed25519PublicKey):
+        raise LicenseError('License verification requires an Ed25519 public key.')
+    return public_key
+
+
+def _split_license_key(license_key):
+    if not isinstance(license_key, str):
         raise LicenseError('License key format is invalid.')
-    return payload, signature
+    parts = license_key.split('.')
+    if len(parts) != 2 or not all(parts):
+        raise LicenseError('License key format is invalid.')
+    return parts
 
 
 def _load_claims(payload):
     try:
         claims = json.loads(_b64decode(payload).decode('utf-8'))
-    except (ValueError, json.JSONDecodeError) as exc:
+    except (UnicodeDecodeError, ValueError) as exc:
         raise LicenseError('License payload is invalid.') from exc
 
-    required_fields = {'customer', 'expires_on', 'fingerprint'}
+    if not isinstance(claims, dict):
+        raise LicenseError('License payload must be an object.')
+
+    required_fields = {'customer', 'expires_on', 'fingerprint', 'version'}
     if not required_fields.issubset(claims):
         raise LicenseError('License payload is incomplete.')
+    if not isinstance(claims['customer'], str):
+        raise LicenseError('License payload customer is invalid.')
+    if not isinstance(claims['expires_on'], str):
+        raise LicenseError('License payload expiration date is invalid.')
+    if not isinstance(claims['fingerprint'], str):
+        raise LicenseError('License payload fingerprint is invalid.')
+    if not isinstance(claims['version'], int):
+        raise LicenseError('License payload version is invalid.')
     return claims
-
-
-def _sign(payload, secret):
-    digest = hmac.new(
-        secret.encode('utf-8'),
-        payload.encode('ascii'),
-        hashlib.sha256,
-    ).digest()
-    return _b64encode(digest)
 
 
 def _json_dumps(value):
@@ -112,8 +152,12 @@ def _b64encode(value):
 
 
 def _b64decode(value):
-    padding = '=' * (-len(value) % 4)
-    return base64.urlsafe_b64decode(value + padding)
+    try:
+        encoded = value.encode('ascii')
+        padding = b'=' * (-len(encoded) % 4)
+        return base64.b64decode(encoded + padding, altchars=b'-_', validate=True)
+    except (AttributeError, UnicodeEncodeError, binascii.Error, ValueError) as exc:
+        raise ValueError('Invalid base64url value.') from exc
 
 
 def _read_first_existing(*paths):
