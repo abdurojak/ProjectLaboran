@@ -89,6 +89,8 @@ def _load_private_key(private_key_pem):
     if not private_key_pem:
         raise LicenseError('License private key is required.')
     try:
+        if isinstance(private_key_pem, str):
+            private_key_pem = private_key_pem.encode('ascii')
         private_key = serialization.load_pem_private_key(private_key_pem, password=None)
     except (TypeError, ValueError, UnsupportedAlgorithm) as exc:
         raise LicenseError('License private key is invalid.') from exc

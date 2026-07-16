@@ -77,6 +77,13 @@ class LicensingTests(SimpleTestCase):
             },
         )
 
+    def test_build_accepts_private_key_pem_as_text(self):
+        license_key = self.build_license(
+            private_key_pem=self.private_key_pem.decode('ascii'),
+        )
+
+        self.assertEqual(self.validate_license(license_key)['version'], 2)
+
     def test_license_rejected_for_wrong_public_key(self):
         other_public_key_pem = (
             ed25519.Ed25519PrivateKey.generate()
