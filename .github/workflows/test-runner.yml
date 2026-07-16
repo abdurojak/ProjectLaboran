@@ -1,4 +1,4 @@
-name: Test AlmaLinux Runner
+name: Deploy AlmaLinux
 
 on:
   workflow_dispatch:
@@ -7,14 +7,21 @@ on:
       - main
 
 jobs:
-  test:
+  deploy:
     runs-on: [self-hosted, linux, x64]
 
     steps:
-      - name: Tampilkan informasi server
+      - name: Deploy aplikasi
         run: |
-          echo "Runner berhasil dijalankan"
-          echo "User: $(whoami)"
-          echo "Folder: $(pwd)"
-          echo "Hostname: $(hostname)"
-          python3 --version
+          set -e
+          APP_DIR=/home/admin/LabTif/ProjectLaboran
+          cd "$APP_DIR"
+          git pull --ff-only origin main
+          source venv/bin/activate
+          pip install -r requirements.txt
+          python manage.py migrate --noinput
+          python manage.py collectstatic --noinput
+          sudo -n systemctl daemon-reload
+          sudo -n systemctl restart projectlaboran-daphne
+          systemctl is-active --quiet projectlaboran-daphne
+          echo "Deployment berhasil di $(hostname)"
