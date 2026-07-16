@@ -14,6 +14,7 @@ from django.views import View
 from django.views.generic import TemplateView
 
 from .bot_knowledge import BOT_FALLBACK, BOT_GUIDE_TOPICS, BOT_GUIDE_INTRO
+from apps.core.permissions import ADMIN_ROLE, LABORAN_ROLE
 from apps.pengguna.forms import PenggunaAppearanceForm
 from apps.asleb.models import Asleb, PesertaPraktikum
 from apps.jadwal.models import JadwalPraktikum
@@ -375,7 +376,7 @@ class SettingsView(TemplateView):
                 'icon': 'message-circle-question',
             })
 
-        if pengguna.role in {'admin', 'laboran'}:
+        if pengguna.role in {ADMIN_ROLE, LABORAN_ROLE}:
             cards.append({
                 'title': 'Pengguna',
                 'description': 'Lihat akun dan data pengguna sistem.',
@@ -384,14 +385,14 @@ class SettingsView(TemplateView):
                 'icon': 'users',
             })
 
-        if pengguna.role == 'laboran':
+        if pengguna.role == LABORAN_ROLE:
             cards.extend([
                 {
-                    'title': 'Upload Modul Praktikum',
-                    'description': 'Tambah, upload banyak file, preview, edit, dan hapus modul praktikum.',
+                    'title': 'Kelola Upload Modul',
+                    'description': 'Upload banyak modul sekaligus, preview PDF/Word, edit judul, dan hapus modul praktikum.',
                     'url': 'asleb:modul_create',
                     'args': [],
-                    'icon': 'file-plus-2',
+                    'icon': 'folder-up',
                 },
                 {
                     'title': 'Bug & Error List',
@@ -402,7 +403,7 @@ class SettingsView(TemplateView):
                 },
             ])
 
-        if pengguna.role == 'admin':
+        if pengguna.role == ADMIN_ROLE:
             cards.extend([
                 {
                     'title': 'Chat Bantuan Masuk',

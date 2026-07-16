@@ -9,7 +9,7 @@ from django.contrib import messages
 from django.core.files.base import ContentFile
 from django.db import IntegrityError, transaction
 from django.db.models import Avg, Count, Q, Sum
-from django.http import FileResponse, Http404, HttpResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.response import TemplateResponse
 from django.urls import reverse_lazy
@@ -831,6 +831,23 @@ def can_access_laporan(pengguna, laporan):
     return can_review_laporan(pengguna, laporan.tugas)
 
 
+def sync_laporan_score_to_praktikum_result(laporan, reviewer):
+    if laporan.nilai is None or not laporan.tugas.modul_id:
+        return None
+    hasil, _ = HasilPraktikumMahasiswa.objects.update_or_create(
+        peserta=laporan.peserta,
+        modul=laporan.tugas.modul,
+        defaults={
+            'tanggal_praktikum': timezone.localdate(),
+            'status_absensi': 'hadir',
+            'nilai_laporan': laporan.nilai,
+            'dicatat_oleh': reviewer,
+            'catatan': laporan.catatan_asisten[:250],
+        },
+    )
+    return hasil
+
+
 def log_praktikum_activity(pengguna, aksi, deskripsi='', matkul=None, peserta=None):
     LogAktivitasPraktikum.objects.create(
         pengguna=pengguna,
@@ -1053,13 +1070,27 @@ class LaporanPraktikumListView(TemplateView):
             PengumpulanLaporanPraktikum.objects
             .select_related('tugas', 'tugas__matkul', 'peserta', 'diperiksa_oleh')
             .filter(tugas__in=review_tasks)
-            .order_by('-dikumpulkan_pada')
+            .order_by('tugas__matkul__nama', 'tugas__modul__nomor', 'tugas__judul', '-dikumpulkan_pada')
         )
+        review_groups = []
+        group_index = {}
+        for laporan in submissions_for_review:
+            tugas = laporan.tugas
+            group_key = tugas.pk
+            if group_key not in group_index:
+                group_index[group_key] = len(review_groups)
+                review_groups.append({
+                    'tugas': tugas,
+                    'modul_label': f'Modul {tugas.modul.nomor}' if tugas.modul_id else 'Tanpa modul',
+                    'laporan_list': [],
+                })
+            review_groups[group_index[group_key]]['laporan_list'].append(laporan)
 
         context.update({
             'participant_cards': participant_cards,
             'review_tasks': review_tasks,
             'submissions_for_review': submissions_for_review,
+            'review_groups': review_groups,
             'can_create_task': pengguna.role == ASISTEN_LAB_ROLE,
             'is_participant': peserta_qs.exists(),
         })
@@ -1086,10 +1117,13 @@ class TugasLaporanPraktikumCreateView(PraktikumMahasiswaAccessMixin, CreateView)
 
     def form_valid(self, form):
         pengguna = self.request.current_pengguna
-        if pengguna.role == ASISTEN_LAB_ROLE and not get_active_asleb_for_matkul(pengguna, form.cleaned_data['matkul']):
+        active_asleb = get_active_asleb_for_matkul(pengguna, form.cleaned_data['matkul'])
+        if pengguna.role == ASISTEN_LAB_ROLE and not active_asleb:
             form.add_error('matkul', 'Anda hanya dapat membuat tugas pada mata kuliah yang ditugaskan kepada Anda.')
             return self.form_invalid(form)
         form.instance.dibuat_oleh = pengguna
+        # Biarkan kosong agar semua asisten aktif pada mata kuliah yang sama bisa memeriksa laporan.
+        form.instance.asisten_pemeriksa = None
         response = super().form_valid(form)
         log_praktikum_activity(pengguna, 'tugas_laporan_dibuat', self.object.judul, self.object.matkul)
         notify_task_created(self.object, self.request)
@@ -1161,7 +1195,9 @@ class ReviewLaporanPraktikumUpdateView(UpdateView):
     def form_valid(self, form):
         form.instance.diperiksa_oleh = self.request.current_pengguna
         form.instance.diperiksa_pada = timezone.now()
-        response = super().form_valid(form)
+        with transaction.atomic():
+            response = super().form_valid(form)
+            synced_result = sync_laporan_score_to_praktikum_result(self.object, self.request.current_pengguna)
         log_praktikum_activity(
             self.request.current_pengguna,
             'laporan_direview',
@@ -1176,7 +1212,10 @@ class ReviewLaporanPraktikumUpdateView(UpdateView):
             self.object.catatan_asisten or f'Laporan {self.object.tugas.judul} sudah diperbarui statusnya.',
             url=str(reverse_lazy('asleb:laporan_tugas_list')),
         )
-        messages.success(self.request, 'Status laporan berhasil diperbarui.')
+        if synced_result:
+            messages.success(self.request, 'Status laporan berhasil diperbarui dan nilai laporan otomatis masuk ke rekap nilai mahasiswa.')
+        else:
+            messages.success(self.request, 'Status laporan berhasil diperbarui.')
         return response
 
 
@@ -1271,6 +1310,10 @@ def delete_participant(peserta):
     return 'deleted'
 
 
+def wants_json_response(request):
+    return request.headers.get('x-requested-with') == 'XMLHttpRequest' or 'application/json' in request.headers.get('accept', '')
+
+
 @require_POST
 def delete_peserta_praktikum(request, pk):
     pengguna = getattr(request, 'current_pengguna', None)
@@ -1280,6 +1323,14 @@ def delete_peserta_praktikum(request, pk):
     peserta = get_object_or_404(PesertaPraktikum.objects.select_related('matkul'), pk=pk)
     matkul_id = peserta.matkul_id
     result = delete_participant(peserta)
+    if wants_json_response(request):
+        return JsonResponse({
+            'ok': True,
+            'result': result,
+            'message': 'Peserta dinonaktifkan agar riwayat nilai dan absensi tetap tersimpan.' if result == 'deactivated' else 'Peserta praktikum berhasil dihapus.',
+            'participant_id': pk,
+            'matkul_id': matkul_id,
+        })
     if result == 'deactivated':
         messages.success(request, 'Peserta dinonaktifkan agar riwayat nilai dan absensi tetap tersimpan.')
     else:
@@ -1300,10 +1351,21 @@ def bulk_delete_peserta_praktikum(request):
         peserta_queryset = peserta_queryset.filter(matkul_id=matkul_id)
     deleted = 0
     deactivated = 0
+    affected_ids = []
     for peserta in peserta_queryset:
+        affected_ids.append(peserta.pk)
         result = delete_participant(peserta)
         deleted += int(result == 'deleted')
         deactivated += int(result == 'deactivated')
+    if wants_json_response(request):
+        return JsonResponse({
+            'ok': bool(deleted or deactivated),
+            'deleted': deleted,
+            'deactivated': deactivated,
+            'affected_ids': affected_ids,
+            'matkul_id': matkul_id,
+            'message': f'{deleted} peserta dihapus dan {deactivated} peserta dinonaktifkan.' if deleted or deactivated else 'Pilih minimal satu peserta untuk dihapus.',
+        }, status=200 if deleted or deactivated else 400)
     if deleted or deactivated:
         messages.success(request, f'{deleted} peserta dihapus dan {deactivated} peserta dinonaktifkan.')
     else:
@@ -1325,6 +1387,14 @@ def delete_all_peserta_praktikum(request, matkul_pk):
         peserta_with_history = peserta_qs.filter(hasil_praktikum__isnull=False).distinct()
         peserta_with_history.update(aktif=False)
         peserta_qs.filter(hasil_praktikum__isnull=True).delete()
+    if wants_json_response(request):
+        return JsonResponse({
+            'ok': True,
+            'deleted_all': True,
+            'matkul_id': matkul.pk,
+            'total': total,
+            'message': f'{total} peserta praktikum berhasil dihapus dari daftar. Riwayat nilai tetap disimpan.',
+        })
     messages.success(request, f'{total} peserta praktikum berhasil dihapus dari daftar. Riwayat nilai tetap disimpan.')
     return redirect(f'{reverse_lazy("asleb:praktikum_mahasiswa_list")}?matkul={matkul.pk}')
 
