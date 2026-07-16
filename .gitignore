@@ -4,6 +4,10 @@ __pycache__/
 db.sqlite3
 .env
 .env.backup
+# Production license and deployment secrets.
+labhub.env
+license.key
+*.license
 staticfiles/
 media/
 hatch-pet-runs
