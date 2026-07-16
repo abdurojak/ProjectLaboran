@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import mimetypes
 import os
 from importlib.util import find_spec
 from pathlib import Path
@@ -19,6 +20,10 @@ from dotenv import load_dotenv
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / '.env')
+
+# Python on some Windows installations maps ES modules to text/plain, which
+# makes browsers reject the bundled PDF.js files.
+mimetypes.add_type('text/javascript', '.mjs')
 
 
 def env_path(name, default):

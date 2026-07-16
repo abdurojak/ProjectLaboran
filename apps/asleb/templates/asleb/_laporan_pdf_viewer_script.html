@@ -1,0 +1,88 @@
+{% load static %}
+<script type="module">
+    import * as pdfjsLib from '{% static "core/vendor/pdfjs/pdf.min.mjs" %}';
+
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '{% static "core/vendor/pdfjs/pdf.worker.min.mjs" %}';
+
+    function showPdfStatus(container, message, isError = false) {
+        container.innerHTML = '';
+
+        const status = document.createElement('div');
+        status.className = `flex min-h-[360px] flex-col items-center justify-center rounded-3xl border border-dashed p-8 text-center ${
+            isError
+                ? 'border-rose-300 bg-rose-50/80 text-rose-700'
+                : 'border-slate-200 bg-slate-50/70 text-slate-500'
+        }`;
+        status.innerHTML = `
+            <span class="flex h-14 w-14 items-center justify-center rounded-2xl ${isError ? 'bg-rose-100' : 'bg-cyan-50'}">
+                <i data-lucide="${isError ? 'file-warning' : 'loader-circle'}" class="h-7 w-7 ${isError ? '' : 'animate-spin'}"></i>
+            </span>
+            <p class="mt-4 max-w-xl text-sm font-bold leading-6">${message}</p>
+        `;
+        container.appendChild(status);
+        window.lucide?.createIcons();
+    }
+
+    async function renderPdf(container) {
+        showPdfStatus(container, 'Menyiapkan preview laporan...');
+
+        try {
+            const loadingTask = pdfjsLib.getDocument({
+                url: container.dataset.pdfUrl,
+                withCredentials: true,
+                disableRange: true,
+                disableStream: true,
+            });
+            const pdf = await loadingTask.promise;
+            container.innerHTML = '';
+
+            for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+                const page = await pdf.getPage(pageNumber);
+                const availableWidth = Math.max(280, Math.min(container.clientWidth - 32, 1080));
+                const baseViewport = page.getViewport({ scale: 1 });
+                const viewport = page.getViewport({ scale: availableWidth / baseViewport.width });
+                const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.floor(viewport.width * pixelRatio);
+                canvas.height = Math.floor(viewport.height * pixelRatio);
+                canvas.style.width = `${Math.floor(viewport.width)}px`;
+                canvas.style.height = `${Math.floor(viewport.height)}px`;
+                canvas.className = 'mx-auto block h-auto max-w-full rounded-xl bg-white shadow-lg';
+
+                const context = canvas.getContext('2d');
+                await page.render({
+                    canvasContext: context,
+                    viewport,
+                    transform: pixelRatio === 1 ? null : [pixelRatio, 0, 0, pixelRatio, 0, 0],
+                }).promise;
+
+                const pageCard = document.createElement('article');
+                pageCard.className = 'overflow-hidden rounded-3xl border border-slate-200 bg-slate-100/70 p-3 sm:p-4';
+
+                const pageLabel = document.createElement('div');
+                pageLabel.className = 'mb-3 text-xs font-black uppercase tracking-[0.14em] text-slate-500';
+                pageLabel.textContent = `Halaman ${pageNumber} dari ${pdf.numPages}`;
+
+                const canvasFrame = document.createElement('div');
+                canvasFrame.className = 'overflow-auto rounded-2xl';
+                canvasFrame.appendChild(canvas);
+
+                pageCard.appendChild(pageLabel);
+                pageCard.appendChild(canvasFrame);
+                container.appendChild(pageCard);
+            }
+        } catch (error) {
+            console.error('Gagal menampilkan preview laporan:', error);
+            showPdfStatus(
+                container,
+                'Preview PDF belum dapat ditampilkan. File mungkin rusak atau tidak dapat dibaca. Gunakan tombol Download untuk memeriksa file asli.',
+                true,
+            );
+        }
+    }
+
+    document.querySelectorAll('[data-laporan-pdf-viewer]').forEach((container) => {
+        renderPdf(container);
+    });
+</script>

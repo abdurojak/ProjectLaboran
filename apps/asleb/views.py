@@ -1310,9 +1310,16 @@ def _serve_laporan_file(request, pk, *, inline=False):
     if not laporan.file_laporan:
         messages.error(request, 'File laporan tidak ditemukan.')
         return redirect('asleb:laporan_tugas_list')
-    response = FileResponse(laporan.file_laporan.open('rb'), content_type=mimetypes.guess_type(laporan.nama_file_asli)[0] or 'application/octet-stream')
+    filename = laporan.nama_file_asli or laporan.file_laporan.name.rsplit('/', 1)[-1] or 'laporan-praktikum'
+    content_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+    response = FileResponse(laporan.file_laporan.open('rb'), content_type=content_type)
     disposition = 'inline' if inline and laporan.is_pdf else 'attachment'
-    response['Content-Disposition'] = f'{disposition}; filename="{laporan.nama_file_asli or "laporan-praktikum"}"'
+    response['Content-Disposition'] = (
+        content_disposition_header(disposition == 'attachment', filename)
+        or f'{disposition}; filename="laporan-praktikum"'
+    )
+    response['X-Content-Type-Options'] = 'nosniff'
+    response['Cache-Control'] = 'private, max-age=0, must-revalidate'
     if inline and laporan.is_pdf:
         response['X-Frame-Options'] = 'SAMEORIGIN'
     return response
