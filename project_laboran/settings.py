@@ -34,6 +34,7 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-dev-only-change-me')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
+LABHUB_LICENSE_ENFORCED = os.getenv('LABHUB_LICENSE_ENFORCED', 'False') == 'True'
 
 ALLOWED_HOSTS = [
     host.strip()
