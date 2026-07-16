@@ -24,11 +24,15 @@
             </div>
             <div class="p-4">
                 {% if object.is_pdf %}
-                <iframe
-                    src="{% url 'asleb:laporan_preview_file' object.pk %}#toolbar=1&navpanes=0"
-                    title="Preview PDF {{ object.tugas.judul }}"
-                    class="h-[72vh] min-h-[560px] w-full rounded-2xl border border-slate-200 bg-white"
-                ></iframe>
+                <div
+                    class="space-y-4"
+                    data-laporan-pdf-viewer
+                    data-pdf-url="{% url 'asleb:laporan_preview_file' object.pk %}"
+                >
+                    <div class="flex min-h-[560px] items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50/70 p-8 text-center text-sm font-bold text-slate-500">
+                        Menyiapkan preview PDF...
+                    </div>
+                </div>
                 {% else %}
                 <div class="flex min-h-[420px] flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50/70 p-8 text-center">
                     <span class="flex h-16 w-16 items-center justify-center rounded-3xl bg-blue-50 text-blue-700">
@@ -66,4 +70,9 @@
         </form>
     </div>
 </section>
+{% endblock %}
+
+{% block extra_script %}
+{{ block.super }}
+{% include "asleb/_laporan_pdf_viewer_script.html" %}
 {% endblock %}
