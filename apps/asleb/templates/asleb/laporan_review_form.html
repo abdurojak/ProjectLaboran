@@ -1,18 +1,58 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}Review Laporan{% endblock %}
+{% block extra_head %}
+{{ block.super }}
+<style>
+    @media (max-width: 767px) {
+        body:has(.laporan-review-page) .labhub-topbar {
+            position: relative !important;
+            top: auto !important;
+        }
+
+        .laporan-review-page {
+            padding-top: 0.25rem;
+        }
+
+        .laporan-review-page > [data-review-heading] {
+            padding-inline: 0.25rem;
+        }
+
+        .laporan-review-page [data-review-file-header] {
+            align-items: stretch;
+            padding: 1rem !important;
+        }
+
+        .laporan-review-page [data-review-file-header] > a {
+            width: 100%;
+            justify-content: center;
+        }
+
+        .laporan-review-page [data-review-pdf-shell] {
+            padding: 0.5rem !important;
+        }
+
+        body:has(.laporan-review-page) [data-help-floating] {
+            right: 0.25rem !important;
+            bottom: 0.5rem !important;
+            transform: scale(0.72);
+            transform-origin: right bottom;
+        }
+    }
+</style>
+{% endblock %}
 {% block content %}
-<section class="mx-auto max-w-7xl space-y-6 pb-28">
-    <div>
+<section class="laporan-review-page mx-auto max-w-7xl space-y-4 pb-28 sm:space-y-6">
+    <div data-review-heading>
         <p class="text-sm font-black uppercase tracking-[0.22em] text-brand-700">Review Laporan</p>
-        <h2 class="mt-2 text-3xl font-black text-slate-900">{{ object.peserta.nama }}</h2>
+        <h2 class="mt-2 text-2xl font-black text-slate-900 sm:text-3xl">{{ object.peserta.nama }}</h2>
         <p class="mt-2 text-sm text-slate-500">{{ object.tugas.judul }} - {{ object.tugas.matkul }} - Versi {{ object.versi }}</p>
     </div>
 
     <div class="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]">
         <article class="surface-card overflow-hidden">
-            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-5">
-                <div>
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-5" data-review-file-header>
+                <div class="min-w-0">
                     <p class="text-xs font-black uppercase tracking-[0.18em] text-cyan-700">Preview Laporan</p>
                     <h3 class="mt-1 break-words text-xl font-black text-slate-900">{{ object.nama_file_asli|default:"File laporan" }}</h3>
                     <p class="mt-1 text-xs font-semibold text-slate-500">{{ object.peserta.nim }} - v{{ object.versi }}</p>
@@ -22,7 +62,7 @@
                     <span>Download</span>
                 </a>
             </div>
-            <div class="p-4">
+            <div class="p-4" data-review-pdf-shell>
                 {% if object.is_pdf %}
                 <div
                     class="space-y-4"

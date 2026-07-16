@@ -38,10 +38,12 @@
 
             for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
                 const page = await pdf.getPage(pageNumber);
-                const availableWidth = Math.max(280, Math.min(container.clientWidth - 32, 1080));
+                const horizontalSpace = window.matchMedia('(max-width: 767px)').matches ? 12 : 32;
+                const availableWidth = Math.max(220, Math.min(container.clientWidth - horizontalSpace, 1080));
                 const baseViewport = page.getViewport({ scale: 1 });
                 const viewport = page.getViewport({ scale: availableWidth / baseViewport.width });
-                const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+                const maxPixelRatio = window.matchMedia('(max-width: 767px)').matches ? 1.5 : 2;
+                const pixelRatio = Math.min(window.devicePixelRatio || 1, maxPixelRatio);
 
                 const canvas = document.createElement('canvas');
                 canvas.width = Math.floor(viewport.width * pixelRatio);
@@ -58,7 +60,7 @@
                 }).promise;
 
                 const pageCard = document.createElement('article');
-                pageCard.className = 'overflow-hidden rounded-3xl border border-slate-200 bg-slate-100/70 p-3 sm:p-4';
+                pageCard.className = 'overflow-hidden rounded-2xl border border-slate-200 bg-slate-100/70 p-2 sm:rounded-3xl sm:p-4';
 
                 const pageLabel = document.createElement('div');
                 pageLabel.className = 'mb-3 text-xs font-black uppercase tracking-[0.14em] text-slate-500';
