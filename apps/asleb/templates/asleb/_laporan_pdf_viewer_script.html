@@ -27,11 +27,30 @@
         showPdfStatus(container, 'Menyiapkan preview laporan...');
 
         try {
+            const response = await fetch(container.dataset.pdfUrl, {
+                credentials: 'same-origin',
+                cache: 'no-store',
+                headers: {
+                    Accept: 'application/pdf',
+                },
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const contentType = (response.headers.get('content-type') || '').toLowerCase();
+            if (!contentType.includes('application/pdf')) {
+                throw new Error(`Respons bukan PDF (${contentType || 'tanpa content-type'})`);
+            }
+
+            const pdfBytes = new Uint8Array(await response.arrayBuffer());
+            if (pdfBytes.length < 5 || String.fromCharCode(...pdfBytes.slice(0, 5)) !== '%PDF-') {
+                throw new Error('Header file bukan PDF');
+            }
+
             const loadingTask = pdfjsLib.getDocument({
-                url: container.dataset.pdfUrl,
-                withCredentials: true,
-                disableRange: true,
-                disableStream: true,
+                data: pdfBytes,
+                isEvalSupported: false,
             });
             const pdf = await loadingTask.promise;
             container.innerHTML = '';
@@ -76,9 +95,12 @@
             }
         } catch (error) {
             console.error('Gagal menampilkan preview laporan:', error);
+            const errorHint = error instanceof Error && error.message
+                ? ` Detail: ${error.message}.`
+                : '';
             showPdfStatus(
                 container,
-                'Preview PDF belum dapat ditampilkan. File mungkin rusak atau tidak dapat dibaca. Gunakan tombol Download untuk memeriksa file asli.',
+                `Preview PDF belum dapat ditampilkan.${errorHint} Gunakan tombol Download untuk membuka file asli.`,
                 true,
             );
         }
