@@ -1478,6 +1478,79 @@ class AslebViewTests(TestCase):
         self.assertIn('1/3', mail.outbox[0].subject)
         self.assertIn('3/3', mail.outbox[2].subject)
 
+    def test_asisten_lab_dapat_menghapus_laporan_dan_nilai_sinkronnya(self):
+        asisten_user = Pengguna.objects.create(
+            nama_pengguna=self.asleb.nama,
+            nim_nik=self.asleb.nim,
+            email='asisten-hapus-laporan@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081234567891',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='asisten_lab',
+        )
+        self.asleb.matkul = str(self.matkul)
+        self.asleb.status = 'aktif'
+        self.asleb.save(update_fields=['matkul', 'status'])
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Mahasiswa Laporan',
+            nim_nik='0640020999',
+            email='mahasiswa-laporan@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081234567899',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+        )
+        peserta = PesertaPraktikum.objects.create(
+            matkul=self.matkul,
+            pengguna=mahasiswa,
+            nim=mahasiswa.nim_nik,
+            nama=mahasiswa.nama_pengguna,
+        )
+        modul = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=1,
+            judul='Pengenalan',
+            file=SimpleUploadedFile('modul-1.pdf', b'%PDF-1.4', content_type='application/pdf'),
+        )
+        tugas = TugasLaporanPraktikum.objects.create(
+            judul='Laporan Modul 1',
+            matkul=self.matkul,
+            modul=modul,
+            batas_pengumpulan=timezone.now() + timedelta(days=1),
+            dibuat_oleh=asisten_user,
+        )
+        laporan = PengumpulanLaporanPraktikum.objects.create(
+            tugas=tugas,
+            peserta=peserta,
+            file_laporan=SimpleUploadedFile('laporan-mahasiswa.pdf', b'%PDF-1.4', content_type='application/pdf'),
+            nilai=Decimal('88.00'),
+            diperiksa_oleh=asisten_user,
+        )
+        hasil = HasilPraktikumMahasiswa.objects.create(
+            peserta=peserta,
+            modul=modul,
+            nilai_laporan=Decimal('88.00'),
+            dicatat_oleh=asisten_user,
+        )
+        session = self.client.session
+        session['pengguna_id'] = asisten_user.pk
+        session.save()
+
+        response = self.client.post(reverse('asleb:laporan_delete', args=[laporan.pk]))
+
+        self.assertRedirects(response, reverse('asleb:laporan_tugas_list'))
+        self.assertFalse(PengumpulanLaporanPraktikum.objects.filter(pk=laporan.pk).exists())
+        hasil.refresh_from_db()
+        self.assertIsNone(hasil.nilai_laporan)
+        self.assertIsNone(hasil.nilai)
+        self.assertTrue(Notifikasi.objects.filter(pengguna=mahasiswa, source_key=f'laporan-deleted:{laporan.pk}').exists())
+
     def create_active_schedule(self):
         return JadwalPraktikum.objects.create(
             mata_kuliah=str(self.matkul),

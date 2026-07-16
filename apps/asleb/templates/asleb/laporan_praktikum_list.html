@@ -109,7 +109,7 @@
                                     <th>Status</th>
                                     <th>Nilai</th>
                                     <th>Versi</th>
-                                    <th class="w-40">Aksi</th>
+                                    <th class="w-32">Aksi</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -120,15 +120,18 @@
                                     <td>{{ laporan.nilai|default:"-" }}</td>
                                     <td>v{{ laporan.versi }}</td>
                                     <td class="align-middle">
-                                        <div class="flex min-w-32 flex-col gap-2">
-                                            <a class="inline-flex items-center justify-center gap-2 rounded-2xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-black text-cyan-800 transition hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-cyan-100" href="{% url 'asleb:laporan_preview' laporan.pk %}" target="_blank" rel="noreferrer">
-                                                <i data-lucide="eye" class="h-3.5 w-3.5"></i>
-                                                <span>Preview</span>
-                                            </a>
+                                        <div class="flex min-w-28 flex-col gap-2">
                                             <a class="inline-flex items-center justify-center gap-2 rounded-2xl border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-black text-violet-800 transition hover:-translate-y-0.5 hover:border-violet-300 hover:bg-violet-100" href="{% url 'asleb:laporan_review' laporan.pk %}">
                                                 <i data-lucide="clipboard-check" class="h-3.5 w-3.5"></i>
                                                 <span>Review</span>
                                             </a>
+                                            <form method="post" action="{% url 'asleb:laporan_delete' laporan.pk %}" data-confirm-message="Hapus laporan {{ laporan.peserta.nama }} untuk {{ group.tugas.judul }}? File dan nilai laporan yang tersinkron akan ikut dihapus.">
+                                                {% csrf_token %}
+                                                <button class="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 transition hover:-translate-y-0.5 hover:border-rose-300 hover:bg-rose-100" type="submit">
+                                                    <i data-lucide="trash-2" class="h-3.5 w-3.5"></i>
+                                                    <span>Hapus</span>
+                                                </button>
+                                            </form>
                                         </div>
                                     </td>
                                 </tr>
@@ -144,4 +147,5 @@
         </article>
     </div>
 </section>
+{% include "components/confirmation_modal.html" with title="Konfirmasi Hapus Laporan" confirm_label="Hapus Laporan" confirm_icon="trash-2" %}
 {% endblock %}
