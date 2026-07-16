@@ -438,7 +438,7 @@ class GenerateLicenseKeypairCommandTests(SimpleTestCase):
         artifacts = [
             path
             for path in Path(temp_dir).rglob('*')
-            if path.name.endswith(('.tmp', '.bak'))
+            if path.name.endswith(('.tmp', '.bak', '.lock', '.rollback'))
         ]
         self.assertEqual(artifacts, [])
 
@@ -565,9 +565,12 @@ class GenerateLicenseKeypairCommandTests(SimpleTestCase):
                 public_key_path = Path(temp_dir) / 'license_public_key.py'
                 paths = {'private': private_key_path, 'public': public_key_path}
                 raced_path = paths[raced_output]
+                destination_created = False
 
                 def create_destination_before_link(source, destination):
-                    if Path(destination) == raced_path:
+                    nonlocal destination_created
+                    if Path(destination) == raced_path and not destination_created:
+                        destination_created = True
                         raced_path.write_text('created-by-racer', encoding='ascii')
                     return real_link(source, destination)
 
@@ -613,6 +616,300 @@ class GenerateLicenseKeypairCommandTests(SimpleTestCase):
                     side_effect=fail_public_publication,
                 ),
                 self.assertRaisesMessage(CommandError, 'Unable to write'),
+            ):
+                call_command(
+                    'generate_labhub_license_keypair',
+                    '--private-key-file',
+                    str(private_key_path),
+                    '--public-key-module',
+                    str(public_key_path),
+                    '--force',
+                )
+
+            self.assertEqual(private_key_path.read_text(encoding='ascii'), 'old-private')
+            self.assertEqual(public_key_path.read_text(encoding='ascii'), 'old-public')
+            self.assert_no_transaction_artifacts(temp_dir)
+
+    def test_restore_failure_preserves_backup_and_reports_recovery_path(self):
+        real_replace = os.replace
+        real_link = os.link
+
+        with TemporaryDirectory() as temp_dir:
+            private_key_path = Path(temp_dir) / 'license-private.pem'
+            public_key_path = Path(temp_dir) / 'license_public_key.py'
+            private_key_path.write_text('old-private', encoding='ascii')
+            public_key_path.write_text('old-public', encoding='ascii')
+
+            def fail_publication_and_private_restore(source, destination):
+                if Path(destination) == public_key_path and str(source).endswith('.tmp'):
+                    raise OSError('public publication failed')
+                return real_replace(source, destination)
+
+            def fail_private_restore(source, destination):
+                if Path(destination) == private_key_path and str(source).endswith('.bak'):
+                    raise OSError('private restoration failed')
+                return real_link(source, destination)
+
+            with (
+                patch(
+                    'apps.core.management.commands.generate_labhub_license_keypair.'
+                    'os.replace',
+                    side_effect=fail_publication_and_private_restore,
+                ),
+                patch(
+                    'apps.core.management.commands.generate_labhub_license_keypair.'
+                    'os.link',
+                    side_effect=fail_private_restore,
+                ),
+                self.assertRaisesMessage(CommandError, 'recovery') as raised,
+            ):
+                call_command(
+                    'generate_labhub_license_keypair',
+                    '--private-key-file',
+                    str(private_key_path),
+                    '--public-key-module',
+                    str(public_key_path),
+                    '--force',
+                )
+
+            backups = list(Path(temp_dir).glob('*.bak'))
+            self.assertEqual(len(backups), 1)
+            self.assertIn(str(backups[0]), str(raised.exception))
+            self.assertEqual(backups[0].read_text(encoding='ascii'), 'old-private')
+            self.assertFalse(private_key_path.exists())
+            self.assertEqual(public_key_path.read_text(encoding='ascii'), 'old-public')
+
+    def test_rollback_preserves_foreign_replacement_and_original_backup(self):
+        real_replace = os.replace
+
+        with TemporaryDirectory() as temp_dir:
+            private_key_path = Path(temp_dir) / 'license-private.pem'
+            public_key_path = Path(temp_dir) / 'license_public_key.py'
+            private_key_path.write_text('old-private', encoding='ascii')
+            public_key_path.write_text('old-public', encoding='ascii')
+
+            def replace_private_then_fail_publication(source, destination):
+                if Path(destination) == public_key_path and str(source).endswith('.tmp'):
+                    foreign_path = Path(temp_dir) / 'foreign-private'
+                    foreign_path.write_text('foreign-private', encoding='ascii')
+                    real_replace(foreign_path, private_key_path)
+                    raise OSError('public publication failed')
+                return real_replace(source, destination)
+
+            with (
+                patch(
+                    'apps.core.management.commands.generate_labhub_license_keypair.'
+                    'os.replace',
+                    side_effect=replace_private_then_fail_publication,
+                ),
+                self.assertRaisesMessage(CommandError, 'recovery') as raised,
+            ):
+                call_command(
+                    'generate_labhub_license_keypair',
+                    '--private-key-file',
+                    str(private_key_path),
+                    '--public-key-module',
+                    str(public_key_path),
+                    '--force',
+                )
+
+            backups = list(Path(temp_dir).glob('*.bak'))
+            self.assertEqual(len(backups), 1)
+            self.assertIn(str(backups[0]), str(raised.exception))
+            self.assertEqual(private_key_path.read_text(encoding='ascii'), 'foreign-private')
+            self.assertEqual(backups[0].read_text(encoding='ascii'), 'old-private')
+            self.assertEqual(public_key_path.read_text(encoding='ascii'), 'old-public')
+
+    def test_rollback_does_not_unlink_replacement_swapped_after_identity_check(self):
+        from apps.core.management.commands.generate_labhub_license_keypair import (
+            _publication_state,
+        )
+
+        real_replace = os.replace
+        swapped = False
+
+        with TemporaryDirectory() as temp_dir:
+            private_key_path = Path(temp_dir) / 'license-private.pem'
+            public_key_path = Path(temp_dir) / 'license_public_key.py'
+            private_key_path.write_text('old-private', encoding='ascii')
+            public_key_path.write_text('old-public', encoding='ascii')
+
+            def fail_public_publication(source, destination):
+                if Path(destination) == public_key_path and str(source).endswith('.tmp'):
+                    raise OSError('public publication failed')
+                return real_replace(source, destination)
+
+            def swap_destination_after_check(path, expected_stat, expected_content):
+                nonlocal swapped
+                state = _publication_state(path, expected_stat, expected_content)
+                if not swapped:
+                    swapped = True
+                    foreign_path = Path(temp_dir) / 'foreign-private'
+                    foreign_path.write_text('foreign-private', encoding='ascii')
+                    real_replace(foreign_path, private_key_path)
+                return state
+
+            with (
+                patch(
+                    'apps.core.management.commands.generate_labhub_license_keypair.'
+                    'os.replace',
+                    side_effect=fail_public_publication,
+                ),
+                patch(
+                    'apps.core.management.commands.generate_labhub_license_keypair.'
+                    '_publication_state',
+                    side_effect=swap_destination_after_check,
+                ),
+                self.assertRaisesMessage(CommandError, 'recovery'),
+            ):
+                call_command(
+                    'generate_labhub_license_keypair',
+                    '--private-key-file',
+                    str(private_key_path),
+                    '--public-key-module',
+                    str(public_key_path),
+                    '--force',
+                )
+
+            backups = list(Path(temp_dir).glob('*.bak'))
+            self.assertEqual(len(backups), 1)
+            self.assertEqual(private_key_path.read_text(encoding='ascii'), 'foreign-private')
+            self.assertEqual(backups[0].read_text(encoding='ascii'), 'old-private')
+
+    def test_keyboard_interrupt_is_reraised_after_successful_rollback(self):
+        real_link = os.link
+
+        with TemporaryDirectory() as temp_dir:
+            private_key_path = Path(temp_dir) / 'license-private.pem'
+            public_key_path = Path(temp_dir) / 'license_public_key.py'
+
+            def interrupt_second_publication(source, destination):
+                if Path(destination) == public_key_path:
+                    raise KeyboardInterrupt()
+                return real_link(source, destination)
+
+            with (
+                patch(
+                    'apps.core.management.commands.generate_labhub_license_keypair.'
+                    'os.link',
+                    side_effect=interrupt_second_publication,
+                ),
+                self.assertRaises(KeyboardInterrupt),
+            ):
+                call_command(
+                    'generate_labhub_license_keypair',
+                    '--private-key-file',
+                    str(private_key_path),
+                    '--public-key-module',
+                    str(public_key_path),
+                )
+
+            self.assertFalse(private_key_path.exists())
+            self.assertFalse(public_key_path.exists())
+            self.assert_no_transaction_artifacts(temp_dir)
+
+    def test_system_exit_is_reraised_after_successful_rollback(self):
+        real_link = os.link
+
+        with TemporaryDirectory() as temp_dir:
+            private_key_path = Path(temp_dir) / 'license-private.pem'
+            public_key_path = Path(temp_dir) / 'license_public_key.py'
+
+            def exit_during_second_publication(source, destination):
+                if Path(destination) == public_key_path:
+                    raise SystemExit(23)
+                return real_link(source, destination)
+
+            with (
+                patch(
+                    'apps.core.management.commands.generate_labhub_license_keypair.'
+                    'os.link',
+                    side_effect=exit_during_second_publication,
+                ),
+                self.assertRaises(SystemExit) as raised,
+            ):
+                call_command(
+                    'generate_labhub_license_keypair',
+                    '--private-key-file',
+                    str(private_key_path),
+                    '--public-key-module',
+                    str(public_key_path),
+                )
+
+            self.assertEqual(raised.exception.code, 23)
+            self.assertFalse(private_key_path.exists())
+            self.assertFalse(public_key_path.exists())
+            self.assert_no_transaction_artifacts(temp_dir)
+
+    def test_keyboard_interrupt_with_failed_restore_reports_recovery_path(self):
+        real_replace = os.replace
+        real_link = os.link
+
+        with TemporaryDirectory() as temp_dir:
+            private_key_path = Path(temp_dir) / 'license-private.pem'
+            public_key_path = Path(temp_dir) / 'license_public_key.py'
+            private_key_path.write_text('old-private', encoding='ascii')
+            public_key_path.write_text('old-public', encoding='ascii')
+
+            def interrupt_publication_and_fail_restore(source, destination):
+                if Path(destination) == public_key_path and str(source).endswith('.tmp'):
+                    raise KeyboardInterrupt()
+                return real_replace(source, destination)
+
+            def fail_private_restore(source, destination):
+                if Path(destination) == private_key_path and str(source).endswith('.bak'):
+                    raise OSError('private restoration failed')
+                return real_link(source, destination)
+
+            with (
+                patch(
+                    'apps.core.management.commands.generate_labhub_license_keypair.'
+                    'os.replace',
+                    side_effect=interrupt_publication_and_fail_restore,
+                ),
+                patch(
+                    'apps.core.management.commands.generate_labhub_license_keypair.'
+                    'os.link',
+                    side_effect=fail_private_restore,
+                ),
+                self.assertRaisesMessage(CommandError, 'recovery') as raised,
+            ):
+                call_command(
+                    'generate_labhub_license_keypair',
+                    '--private-key-file',
+                    str(private_key_path),
+                    '--public-key-module',
+                    str(public_key_path),
+                    '--force',
+                )
+
+            backups = list(Path(temp_dir).glob('*.bak'))
+            self.assertEqual(len(backups), 1)
+            self.assertIn(str(backups[0]), str(raised.exception))
+            self.assertEqual(backups[0].read_text(encoding='ascii'), 'old-private')
+
+    def test_keyboard_interrupt_after_mutation_restores_originals_and_is_reraised(self):
+        real_replace = os.replace
+
+        with TemporaryDirectory() as temp_dir:
+            private_key_path = Path(temp_dir) / 'license-private.pem'
+            public_key_path = Path(temp_dir) / 'license_public_key.py'
+            private_key_path.write_text('old-private', encoding='ascii')
+            public_key_path.write_text('old-public', encoding='ascii')
+
+            def interrupt_after_private_publication(source, destination):
+                result = real_replace(source, destination)
+                if Path(destination) == private_key_path and str(source).endswith('.tmp'):
+                    raise KeyboardInterrupt()
+                return result
+
+            with (
+                patch(
+                    'apps.core.management.commands.generate_labhub_license_keypair.'
+                    'os.replace',
+                    side_effect=interrupt_after_private_publication,
+                ),
+                self.assertRaises(KeyboardInterrupt),
             ):
                 call_command(
                     'generate_labhub_license_keypair',
@@ -744,6 +1041,33 @@ class GenerateLicenseKeypairCommandTests(SimpleTestCase):
 
             self.assertEqual(stat.S_IMODE(private_key_path.stat().st_mode), 0o600)
 
+    @skipIf(os.name == 'nt', 'POSIX permission bits are not enforced on Windows')
+    def test_command_sets_public_module_mode_to_world_readable(self):
+        with TemporaryDirectory() as temp_dir:
+            _, public_key_path = self.call_keypair_command(temp_dir)
+
+            self.assertEqual(stat.S_IMODE(public_key_path.stat().st_mode), 0o644)
+
+    def test_command_refuses_existing_cooperative_lock(self):
+        with TemporaryDirectory() as temp_dir:
+            private_key_path = Path(temp_dir) / 'license-private.pem'
+            public_key_path = Path(temp_dir) / 'license_public_key.py'
+            private_lock_path = Path(temp_dir) / '.license-private.pem.lock'
+            private_lock_path.write_text('other command', encoding='ascii')
+
+            with self.assertRaisesMessage(CommandError, 'lock'):
+                call_command(
+                    'generate_labhub_license_keypair',
+                    '--private-key-file',
+                    str(private_key_path),
+                    '--public-key-module',
+                    str(public_key_path),
+                )
+
+            self.assertFalse(private_key_path.exists())
+            self.assertFalse(public_key_path.exists())
+            self.assertEqual(private_lock_path.read_text(encoding='ascii'), 'other command')
+
     def test_command_normalizes_output_io_errors(self):
         with TemporaryDirectory() as temp_dir:
             with (
@@ -755,38 +1079,50 @@ class GenerateLicenseKeypairCommandTests(SimpleTestCase):
             ):
                 self.call_keypair_command(temp_dir)
 
-    def test_cleanup_error_does_not_mask_publication_command_error(self):
+    def test_private_temp_cleanup_failure_is_sanitized_and_reported(self):
         real_unlink = os.unlink
+        real_chmod = os.chmod
+        real_truncate = os.truncate
 
-        def unlink_then_fail(path, *args, **kwargs):
-            try:
-                real_unlink(path, *args, **kwargs)
-            except FileNotFoundError:
-                pass
-            raise PermissionError('cleanup denied')
+        def refuse_private_temp_unlink(path, *args, **kwargs):
+            if Path(path).name.startswith('.license-private.pem.') and str(path).endswith('.tmp'):
+                raise PermissionError('cleanup denied')
+            return real_unlink(path, *args, **kwargs)
 
         with TemporaryDirectory() as temp_dir:
             with (
                 patch(
                     'apps.core.management.commands.generate_labhub_license_keypair.'
-                    'os.link',
-                    side_effect=OSError('publication failed'),
+                    'os.unlink',
+                    side_effect=refuse_private_temp_unlink,
                 ),
                 patch(
                     'apps.core.management.commands.generate_labhub_license_keypair.'
-                    'os.unlink',
-                    side_effect=unlink_then_fail,
-                ),
-                self.assertRaisesMessage(CommandError, 'Unable to write'),
+                    'os.chmod',
+                    wraps=real_chmod,
+                ) as chmod,
+                patch(
+                    'apps.core.management.commands.generate_labhub_license_keypair.'
+                    'os.truncate',
+                    wraps=real_truncate,
+                ) as truncate,
+                self.assertRaisesMessage(CommandError, '.tmp'),
             ):
                 self.call_keypair_command(temp_dir)
 
-    def test_cleanup_error_after_success_does_not_escape_or_leave_artifacts(self):
+            private_temps = list(Path(temp_dir).rglob('.license-private.pem.*.tmp'))
+            self.assertEqual(len(private_temps), 1)
+            self.assertEqual(private_temps[0].stat().st_size, 0)
+            self.assertIn((str(private_temps[0]), 0), [call.args for call in truncate.mock_calls])
+            self.assertTrue(any(call.args == (str(private_temps[0]), 0) for call in chmod.mock_calls))
+
+    def test_backup_cleanup_failure_after_success_is_preserved_and_reported(self):
         real_unlink = os.unlink
 
-        def unlink_then_fail(path, *args, **kwargs):
-            real_unlink(path, *args, **kwargs)
-            raise PermissionError('cleanup denied')
+        def refuse_backup_unlink(path, *args, **kwargs):
+            if str(path).endswith('.bak'):
+                raise PermissionError('cleanup denied')
+            return real_unlink(path, *args, **kwargs)
 
         with TemporaryDirectory() as temp_dir:
             private_key_path = Path(temp_dir) / 'license-private.pem'
@@ -794,10 +1130,13 @@ class GenerateLicenseKeypairCommandTests(SimpleTestCase):
             private_key_path.write_text('old-private', encoding='ascii')
             public_key_path.write_text('old-public', encoding='ascii')
 
-            with patch(
-                'apps.core.management.commands.generate_labhub_license_keypair.'
-                'os.unlink',
-                side_effect=unlink_then_fail,
+            with (
+                patch(
+                    'apps.core.management.commands.generate_labhub_license_keypair.'
+                    'os.unlink',
+                    side_effect=refuse_backup_unlink,
+                ),
+                self.assertRaisesMessage(CommandError, '.bak') as raised,
             ):
                 call_command(
                     'generate_labhub_license_keypair',
@@ -810,9 +1149,12 @@ class GenerateLicenseKeypairCommandTests(SimpleTestCase):
 
             self.assertTrue(private_key_path.is_file())
             self.assertTrue(public_key_path.is_file())
+            backups = list(Path(temp_dir).glob('*.bak'))
+            self.assertEqual(len(backups), 2)
+            self.assertTrue(all(str(path) in str(raised.exception) for path in backups))
             self.assertEqual(
-                sorted(path.name for path in Path(temp_dir).iterdir()),
-                ['license-private.pem', 'license_public_key.py'],
+                {path.read_text(encoding='ascii') for path in backups},
+                {'old-private', 'old-public'},
             )
 
     def test_command_stages_both_outputs_before_publishing_either(self):
