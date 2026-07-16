@@ -466,7 +466,9 @@ class GenerateLicenseKeypairCommandTests(SimpleTestCase):
         assignment = 'PUBLIC_KEY_PEM = '
         self.assertTrue(public_module.startswith(assignment))
         public_pem = ast.literal_eval(public_module.removeprefix(assignment))
-        public_key = serialization.load_pem_public_key(public_pem)
+        self.assertIsInstance(public_pem, str)
+        self.assertIn('BEGIN PUBLIC KEY', public_pem)
+        public_key = serialization.load_pem_public_key(public_pem.encode('ascii'))
         message = b'LabHub owner keypair test'
         public_key.verify(private_key.sign(message), message)
         self.assertIsInstance(private_key, ed25519.Ed25519PrivateKey)

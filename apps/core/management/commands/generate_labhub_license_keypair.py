@@ -96,7 +96,7 @@ class Command(BaseCommand):
         public_pem = private_key.public_key().public_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        )
+        ).decode('ascii')
         public_module = f'PUBLIC_KEY_PEM = {public_pem!r}\n'.encode('ascii')
 
         staged_outputs = []
