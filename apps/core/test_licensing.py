@@ -438,7 +438,7 @@ class GenerateLicenseKeypairCommandTests(SimpleTestCase):
         artifacts = [
             path
             for path in Path(temp_dir).rglob('*')
-            if path.name.endswith(('.tmp', '.bak', '.lock', '.rollback'))
+            if path.name.endswith(('.tmp', '.bak', '.rollback'))
         ]
         self.assertEqual(artifacts, [])
 
@@ -1048,25 +1048,28 @@ class GenerateLicenseKeypairCommandTests(SimpleTestCase):
 
             self.assertEqual(stat.S_IMODE(public_key_path.stat().st_mode), 0o644)
 
-    def test_command_refuses_existing_cooperative_lock(self):
+    def test_lock_shaped_output_path_is_treated_as_normal_output(self):
         with TemporaryDirectory() as temp_dir:
-            private_key_path = Path(temp_dir) / 'license-private.pem'
-            public_key_path = Path(temp_dir) / 'license_public_key.py'
-            private_lock_path = Path(temp_dir) / '.license-private.pem.lock'
-            private_lock_path.write_text('other command', encoding='ascii')
+            private_key_path = Path(temp_dir) / 'owner.pem'
+            public_key_path = Path(temp_dir) / '.owner.pem.lock'
 
-            with self.assertRaisesMessage(CommandError, 'lock'):
-                call_command(
-                    'generate_labhub_license_keypair',
-                    '--private-key-file',
-                    str(private_key_path),
-                    '--public-key-module',
-                    str(public_key_path),
-                )
+            call_command(
+                'generate_labhub_license_keypair',
+                '--private-key-file',
+                str(private_key_path),
+                '--public-key-module',
+                str(public_key_path),
+            )
 
-            self.assertFalse(private_key_path.exists())
-            self.assertFalse(public_key_path.exists())
-            self.assertEqual(private_lock_path.read_text(encoding='ascii'), 'other command')
+            serialization.load_pem_private_key(private_key_path.read_bytes(), password=None)
+            self.assertIn(
+                'BEGIN PUBLIC KEY',
+                public_key_path.read_text(encoding='ascii'),
+            )
+            self.assertEqual(
+                sorted(path.name for path in Path(temp_dir).iterdir()),
+                ['.owner.pem.lock', 'owner.pem'],
+            )
 
     def test_command_normalizes_output_io_errors(self):
         with TemporaryDirectory() as temp_dir:
@@ -1078,6 +1081,49 @@ class GenerateLicenseKeypairCommandTests(SimpleTestCase):
                 self.assertRaisesMessage(CommandError, 'Unable to write'),
             ):
                 self.call_keypair_command(temp_dir)
+
+    def test_cleanup_failure_does_not_mask_primary_command_error(self):
+        from apps.core.management.commands.generate_labhub_license_keypair import (
+            _stage_write,
+        )
+
+        real_unlink = os.unlink
+        stage_calls = 0
+
+        def fail_second_stage(*args, **kwargs):
+            nonlocal stage_calls
+            stage_calls += 1
+            if stage_calls == 2:
+                raise CommandError('primary staging failure')
+            return _stage_write(*args, **kwargs)
+
+        def refuse_private_temp_unlink(path, *args, **kwargs):
+            if Path(path).name.startswith('.license-private.pem.') and str(path).endswith('.tmp'):
+                raise PermissionError('cleanup denied')
+            return real_unlink(path, *args, **kwargs)
+
+        with TemporaryDirectory() as temp_dir:
+            with (
+                patch(
+                    'apps.core.management.commands.generate_labhub_license_keypair.'
+                    '_stage_write',
+                    side_effect=fail_second_stage,
+                ),
+                patch(
+                    'apps.core.management.commands.generate_labhub_license_keypair.'
+                    'os.unlink',
+                    side_effect=refuse_private_temp_unlink,
+                ),
+                self.assertRaisesMessage(CommandError, 'primary staging failure') as raised,
+            ):
+                self.call_keypair_command(temp_dir)
+
+            self.assertEqual(str(raised.exception), 'primary staging failure')
+            notes = '\n'.join(getattr(raised.exception, '__notes__', []))
+            private_temps = list(Path(temp_dir).rglob('.license-private.pem.*.tmp'))
+            self.assertEqual(len(private_temps), 1)
+            self.assertIn(str(private_temps[0]), notes)
+            self.assertEqual(private_temps[0].stat().st_size, 0)
 
     def test_private_temp_cleanup_failure_is_sanitized_and_reported(self):
         real_unlink = os.unlink

@@ -1,8 +1,8 @@
 """Generate a keypair with compensating rollback, not cross-path crash atomicity.
 
 The two outputs may live in different directories, so no filesystem primitive can
-commit them crash-atomically. Lock files serialize cooperating command instances;
-publication identity checks protect rollback from unrelated external writers.
+commit them crash-atomically. Exclusive publication and identity checks protect
+rollback from unrelated external writers.
 """
 
 import os
@@ -89,10 +89,6 @@ def _reserve_backup(path):
     return _reserve_artifact(path, '.bak')
 
 
-def _lock_path(path):
-    return path.with_name(f'.{path.name}.lock')
-
-
 def _publication_state(path, expected_stat, expected_content):
     try:
         current_stat = os.stat(path)
@@ -119,6 +115,17 @@ def _path_list(paths):
     return ', '.join(str(path) for path in _unique_paths(paths))
 
 
+def _recovery_message(recovery_paths, cleanup_paths, rollback_problems):
+    preserved = _unique_paths(recovery_paths + cleanup_paths)
+    message = 'Unable to complete safe rollback; recovery is required.'
+    if preserved:
+        message += f' Preserved recovery paths: {_path_list(preserved)}.'
+    affected = [path for path in rollback_problems if Path(path) not in preserved]
+    if affected:
+        message += f' Affected paths: {_path_list(affected)}.'
+    return message
+
+
 class Command(BaseCommand):
     help = 'Generate the LabHub owner Ed25519 license keypair.'
 
@@ -138,11 +145,6 @@ class Command(BaseCommand):
             raise CommandError('Private and public outputs must be different files.')
 
         output_paths = (private_key_path, public_key_path)
-        lock_paths = sorted(
-            (_lock_path(path) for path in output_paths),
-            key=lambda path: os.path.normcase(str(path)),
-        )
-        acquired_locks = []
         staged_outputs = []
         backup_paths = []
         backups = []
@@ -154,20 +156,6 @@ class Command(BaseCommand):
         try:
             for path in output_paths:
                 path.parent.mkdir(parents=True, exist_ok=True)
-
-            for lock_path in lock_paths:
-                try:
-                    descriptor = os.open(
-                        lock_path,
-                        os.O_CREAT | os.O_EXCL | os.O_WRONLY,
-                        0o600,
-                    )
-                except OSError as exc:
-                    raise CommandError(
-                        f'Unable to acquire license keypair lock: {lock_path}'
-                    ) from exc
-                acquired_locks.append(lock_path)
-                os.close(descriptor)
 
             try:
                 private_exists = private_key_path.exists()
@@ -355,25 +343,19 @@ class Command(BaseCommand):
             if failed_path is not None:
                 cleanup_paths.append(failed_path)
 
-        for lock_path in reversed(acquired_locks):
-            failed_path = _unlink_artifact(lock_path)
-            if failed_path is not None:
-                cleanup_paths.append(failed_path)
-
         unresolved_paths = _unique_paths(
             recovery_paths + rollback_problems + cleanup_paths
         )
         if primary_error is not None:
             if unresolved_paths:
-                preserved = _unique_paths(recovery_paths + cleanup_paths)
-                message = 'Unable to complete safe rollback; recovery is required.'
-                if preserved:
-                    message += f' Preserved recovery paths: {_path_list(preserved)}.'
-                affected = [
-                    path for path in rollback_problems if Path(path) not in preserved
-                ]
-                if affected:
-                    message += f' Affected paths: {_path_list(affected)}.'
+                message = _recovery_message(
+                    recovery_paths,
+                    cleanup_paths,
+                    rollback_problems,
+                )
+                if isinstance(primary_error, CommandError):
+                    primary_error.add_note(message)
+                    raise primary_error
                 raise CommandError(message) from primary_error
             if isinstance(primary_error, CommandError):
                 raise primary_error
