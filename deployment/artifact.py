@@ -1,4 +1,4 @@
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 
 FORBIDDEN_NAMES = {
@@ -55,13 +55,17 @@ def load_protected_modules(allowlist_path):
         Path(allowlist_path).read_text(encoding="utf-8").splitlines(),
         start=1,
     ):
-        entry = raw_entry.strip().replace("\\", "/")
+        entry = raw_entry.strip()
         if not entry:
             continue
 
         path = PurePosixPath(entry)
-        has_windows_drive = bool(path.parts and path.parts[0].endswith(":"))
-        if path.is_absolute() or has_windows_drive or ".." in path.parts:
+        has_windows_semantics = (
+            "\\" in entry
+            or bool(PureWindowsPath(entry).drive)
+            or any(":" in part for part in path.parts)
+        )
+        if path.is_absolute() or has_windows_semantics or ".." in path.parts:
             raise ValueError(
                 f"Invalid protected module at line {line_number}: {raw_entry!r}"
             )

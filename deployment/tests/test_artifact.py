@@ -17,7 +17,7 @@ class LoadProtectedModulesTests(unittest.TestCase):
             allowlist = Path(temp_dir) / "protected_modules.txt"
             allowlist.write_text(
                 "\napps/core/./licensing.py\n"
-                "apps\\mobile_api\\jwt_service.py\n",
+                "apps/mobile_api/./jwt_service.py\n",
                 encoding="utf-8",
             )
 
@@ -49,6 +49,48 @@ class LoadProtectedModulesTests(unittest.TestCase):
 
             with self.assertRaises(ValueError):
                 load_protected_modules(allowlist)
+
+    def test_rejects_windows_drive_colon_and_backslash_semantics(self):
+        invalid_entries = (
+            "D:outside.py",
+            "apps/D:outside.py",
+            "D:\\outside.py",
+            "apps\\D:outside.py",
+            "\\\\server\\share\\outside.py",
+            "apps\\core\\licensing.py",
+        )
+
+        for entry in invalid_entries:
+            with self.subTest(entry=entry), tempfile.TemporaryDirectory() as temp_dir:
+                allowlist = Path(temp_dir) / "protected_modules.txt"
+                allowlist.write_text(f"{entry}\n", encoding="utf-8")
+
+                with self.assertRaises(ValueError):
+                    load_protected_modules(allowlist)
+
+    def test_invalid_allowlist_is_rejected_before_staging_deletion(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "source"
+            source.mkdir()
+            staging = root / "staging"
+            staging.mkdir()
+            sentinel = staging / "keep.txt"
+            sentinel.write_text("keep", encoding="utf-8")
+            allowlist = root / "allowlist.txt"
+            allowlist.write_text("D:outside.py\n", encoding="utf-8")
+
+            with patch.object(builder.shutil, "rmtree") as rmtree:
+                with self.assertRaises(ValueError):
+                    builder.build_artifact(
+                        source,
+                        staging,
+                        root / "artifact.tar.gz",
+                        allowlist,
+                    )
+
+            rmtree.assert_not_called()
+            self.assertTrue(sentinel.is_file())
 
 
 class InspectReleaseTreeTests(unittest.TestCase):
