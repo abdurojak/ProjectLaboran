@@ -254,11 +254,18 @@ sudo -u nginx test -r /var/lib/labhub/media
 
 ## Nginx, SELinux, dan maintenance
 
-Django/Daphne dengan `DEBUG=False` tidak melayani media production. Di dalam server
-block production, gunakan alias persistent dan root-owned maintenance include:
+Django/Daphne dengan `DEBUG=False` tidak melayani static **atau** media production.
+Di dalam server block production, gunakan static dari release aktif, alias media
+persistent, dan root-owned maintenance include:
 
 ```nginx
 include /etc/nginx/labhub-maintenance.conf;
+
+location /static/ {
+    alias /home/admin/LabTif/current/staticfiles/;
+    autoindex off;
+    add_header X-Content-Type-Options nosniff always;
+}
 
 location /media/ {
     alias /var/lib/labhub/media/;
@@ -270,10 +277,21 @@ location /media/ {
 ```bash
 sudo test -e /etc/nginx/labhub-maintenance.conf || sudo install -o root -g root -m 0644 /dev/null /etc/nginx/labhub-maintenance.conf
 sudo semanage fcontext -a -t httpd_sys_content_t '/var/lib/labhub/media(/.*)?'
+sudo semanage fcontext -a -t httpd_sys_content_t '/home/admin/LabTif/releases/[0-9a-f]{40}/staticfiles(/.*)?'
+sudo setsebool -P httpd_enable_homedirs 1
 sudo restorecon -Rv /var/lib/labhub/media
+if sudo test -d /home/admin/LabTif/releases; then
+    sudo restorecon -RFv /home/admin/LabTif/releases
+fi
 sudo nginx -t
 sudo systemctl reload nginx
 ```
+
+Rule fcontext static bersifat persistent untuk semua release SHA. Launcher menjalankan
+`restorecon` pada static tree setelah candidate sealed dipublish ke path final. Boolean
+home-directory hanya memberi izin SELinux; DAC tetap membatasi Nginx ke traversal
+`/home/admin` dan read-only static tree yang root-owned. Audit home lain agar tidak
+world-readable.
 
 Port 8000 tidak boleh externally reachable. Hapus exposure firewalld dan verifikasi
 dari host lain bahwa koneksi ke `<server-private-address>:8000` gagal:
@@ -385,7 +403,7 @@ sudo install -d -o admin -g admin -m 0750 /home/admin/LabTif/actions-runner
 if ! sudo test -e /home/admin/LabTif/.deploy-history; then
     sudo install -o root -g root -m 0600 /dev/null /home/admin/LabTif/.deploy-history
 fi
-sudo setfacl -m u:labhub-app:--x,u:labhub-build:--x /home/admin
+sudo setfacl -m u:labhub-app:--x,u:labhub-build:--x,u:nginx:--x /home/admin
 if test -e /home/admin/LabTif/production-venv.shared-backup; then
     sudo chown -R root:root /home/admin/LabTif/production-venv.shared-backup
     sudo chmod -R u=rwX,go=rX /home/admin/LabTif/production-venv.shared-backup
@@ -453,13 +471,16 @@ Owner review `deployment/deploy_release.sh`, lalu install sekali. Workflow **tid
 boleh** menjalankan copy script yang di-download atau copy dalam workspace runner:
 
 ```bash
+test -x /usr/bin/bash
 sudo install -o root -g root -m 0755 deployment/deploy_release.sh /usr/local/sbin/projectlaboran-deploy
 sudo test "$(stat -c '%U:%G %a' /usr/local/sbin/projectlaboran-deploy)" = 'root:root 755'
+test "$(sed -n '1p' /usr/local/sbin/projectlaboran-deploy)" = '#!/usr/bin/bash'
 sudo /usr/bin/bash -n /usr/local/sbin/projectlaboran-deploy
 ```
 
 Launcher wajib `EUID=0`, tidak memakai `sudo`, menerima satu envelope normal, dan
-hanya berjalan dari installed path. Sebelum parse, launcher stream-copy incoming
+hanya berjalan dari installed path. Shebang absolute `/usr/bin/bash` tidak bergantung
+pada `PATH` atau `/usr/bin/env`. Sebelum parse, launcher stream-copy incoming
 runner ke regular file `O_EXCL` dalam temp root-only dengan batas 800 MiB. Snapshot
 immutable selama proses itulah yang diparse dan diverifikasi, sehingga perubahan
 concurrent pada source runner tidak mengubah input setelah snapshot. Parser tar
@@ -516,11 +537,13 @@ tanpa password:
 
 ```bash
 printf '%s\n' \
+  'Defaults:admin secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"' \
   'admin ALL=(root) NOPASSWD: /usr/local/sbin/projectlaboran-deploy /home/admin/LabTif/incoming/projectlaboran.deploy.tar' \
   | sudo tee /etc/sudoers.d/projectlaboran-deploy >/dev/null
 sudo chown root:root /etc/sudoers.d/projectlaboran-deploy
 sudo chmod 0440 /etc/sudoers.d/projectlaboran-deploy
 sudo /usr/sbin/visudo -cf /etc/sudoers.d/projectlaboran-deploy
+sudo grep -Fx 'Defaults:admin secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"' /etc/sudoers.d/projectlaboran-deploy
 sudo -n -l /usr/local/sbin/projectlaboran-deploy /home/admin/LabTif/incoming/projectlaboran.deploy.tar >/dev/null
 ```
 
@@ -528,6 +551,8 @@ Jangan grant systemctl, shell, manage.py, arbitrary launcher path, wildcard argu
 atau bentuk `--rollback` kepada runner. Periksa bahwa output `sudo -n -l` hanya memuat
 exact normal command di atas. Owner rollback memakai authenticated sudo dari sesi
 owner dan **tidak boleh** ditambahkan ke sudoers NOPASSWD runner.
+Scoped `secure_path` adalah defense in depth untuk command internal, bukan pengganti
+shebang absolute dan absolute executable paths milik launcher.
 Self-hosted runner wajib dedicated hanya untuk repository ini. Workflow deployment
 wajib memakai GitHub Environment approval dengan required reviewer, protected `main`
 yang melarang direct push, serta CODEOWNERS required review untuk
@@ -547,6 +572,35 @@ memanggil installed launcher:
 sudo -n /usr/local/sbin/projectlaboran-deploy /home/admin/LabTif/incoming/projectlaboran.deploy.tar
 ```
 
+Setelah protected deployment pertama, validasi Nginx terhadap asset release aktif
+tanpa public IP. Ganti `SERVER_NAME` dengan `server_name` TLS production yang sudah
+memiliki certificate valid:
+
+```bash
+CURRENT_RELEASE=$(readlink -f /home/admin/LabTif/current)
+[[ "$CURRENT_RELEASE" =~ ^/home/admin/LabTif/releases/[0-9a-f]{40}$ ]]
+STATIC_ASSET="$CURRENT_RELEASE/staticfiles/admin/css/base.css"
+sudo test -f "$STATIC_ASSET"
+sudo restorecon -F "$CURRENT_RELEASE"
+sudo restorecon -RF "$CURRENT_RELEASE/staticfiles"
+sudo -u nginx test -x /home/admin
+sudo -u nginx test -x /home/admin/LabTif
+sudo -u nginx test -x "$CURRENT_RELEASE"
+sudo -u nginx test -r "$STATIC_ASSET"
+if sudo -u nginx test -w "$CURRENT_RELEASE/staticfiles"; then exit 1; fi
+if sudo -u nginx test -w "$STATIC_ASSET"; then exit 1; fi
+sudo nginx -t
+sudo systemctl reload nginx
+SERVER_NAME='<production-server-name>'
+curl --fail --silent --show-error \
+  --resolve "${SERVER_NAME}:443:127.0.0.1" \
+  "https://${SERVER_NAME}/static/admin/css/base.css" >/dev/null
+```
+
+Nginx alias mengikuti `current/staticfiles`; atomic current switch saat deploy atau
+rollback otomatis memilih static asset dari release code yang sama. Nginx tidak
+mendapat write pada releases atau staticfiles.
+
 ## Transaction dan rollback
 
 Launcher memegang `/home/admin/LabTif/.deploy.lock`. Journal root-owned mencatat kind,
@@ -559,18 +613,21 @@ Protected release diekstrak streaming dengan jumlah entry, size per-entry, dan t
 uncompressed yang dibatasi. Candidate berada di temp private `root:labhub-build 0710`.
 Root membuat directory `venv` milik `labhub-build`; user tersebut menjalankan
 `python3 -m venv` dan install hanya dari wheelhouse dengan `--no-index` serta
-`--require-hashes`. Candidate kemudian recursively di-seal `root:root`, seluruh
-group/other write dihapus, top directory menjadi root-only `0700`, dan tree
-divalidasi sebelum rename publication; mode release menjadi `0755` hanya setelah
-berada pada path final root-owned.
+`--require-hashes`. Masih di candidate private, `labhub-build` menjalankan
+`collectstatic` dengan `env -i`, safe PATH/HOME, placeholder `SECRET_KEY`,
+`DEBUG=False`, dan `LABHUB_LICENSE_ENFORCED=False`. Tidak ada v1/v2 env, database
+credential, license key, atau production secret yang dibaca. Static output wajib
+hanya regular file/directory milik build UID,
+tanpa symlink/device/hardlink, dan lolos batas entry, per-file, serta total size.
 
-Baru setelah code dan interpreter sealed serta dipublish, root membaca v2 env dan
-menjalankan trusted management command melalui `runuser labhub-app`. `collectstatic`
-menulis hanya ke empty `staticfiles/` terkontrol yang sementara writable oleh
-`labhub-app`; output ditolak bila mengandung link/device/hardlink lalu segera di-seal
-root-owned sebelum `check`, migration, dan activation. Runtime UID tidak pernah dapat
-menulis source code atau venv. Console script venv tidak dipakai setelah candidate
-rename; systemd dan launcher selalu memanggil `venv/bin/python` secara langsung.
+Setelah itu seluruh candidate recursively di-seal `root:root`, group/other write
+dihapus, top directory menjadi root-only `0700`, dan tree divalidasi sebelum rename
+publication; mode release menjadi `0755` hanya setelah berada pada path final
+root-owned. `labhub-app` tidak pernah memiliki candidate/staticfiles atau menerima FD
+writable. Baru setelah publication dan SELinux relabel, root membaca v2 env untuk
+read-only `check` dan migration melalui `runuser labhub-app`. Console script venv
+tidak dipakai setelah candidate rename; systemd dan launcher selalu memanggil
+`venv/bin/python` secara langsung.
 
 Sebelum build, sebelum publication, dan tepat sebelum activation, live GitHub
 main-head harus tetap sama dengan SHA envelope. Record `consumed` ditulis setelah

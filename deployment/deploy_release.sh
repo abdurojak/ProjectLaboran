@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/bash
 
 set -Eeuo pipefail
 umask 022
@@ -36,6 +36,7 @@ GH=/usr/bin/gh
 CURL=/usr/bin/curl
 SHA256SUM=/usr/bin/sha256sum
 PYTHON3=/usr/bin/python3
+RESTORECON=/usr/sbin/restorecon
 
 REPOSITORY=abdurojak/ProjectLaboran
 SIGNER_WORKFLOW=abdurojak/ProjectLaboran/.github/workflows/test-runner.yml
@@ -186,6 +187,9 @@ atomic_switch() {
     TEMP_LINK=$candidate
     mv -Tf -- "$TEMP_LINK" "$link"
     TEMP_LINK=""
+    if [[ "$link" == "$CURRENT_LINK" ]]; then
+        "$RESTORECON" -F "$link"
+    fi
     sync -f "$parent"
 }
 
@@ -550,7 +554,6 @@ run_manage() {
     case "$operation" in
         check) args=(check --deploy) ;;
         migrate) args=(migrate --noinput) ;;
-        collectstatic) args=(collectstatic --noinput) ;;
         *) return 1 ;;
     esac
     (
@@ -1030,6 +1033,7 @@ for raw_line in text.splitlines():
         raise ValueError("requirements lock may not expand environment or config values")
 PY
     [[ ! -e "$TEMP_RELEASE/venv" && ! -L "$TEMP_RELEASE/venv" ]] || return 1
+    [[ ! -e "$TEMP_RELEASE/staticfiles" && ! -L "$TEMP_RELEASE/staticfiles" ]] || return 1
     [[ ! -e "$TEMP_RELEASE/.deploy-success" && ! -L "$TEMP_RELEASE/.deploy-success" ]] || return 1
     [[ ! -e "$TEMP_RELEASE/.env" && ! -L "$TEMP_RELEASE/.env" ]] || return 1
     [[ ! -e "$TEMP_RELEASE/media" && ! -L "$TEMP_RELEASE/media" ]] || return 1
@@ -1054,6 +1058,7 @@ lock_release_tree() {
 build_candidate() {
     local candidate=$TEMP_RELEASE
     local python="$TEMP_RELEASE/venv/bin/python"
+    local build_uid build_gid
 
     [[ -d "$candidate" && ! -L "$candidate" ]] || return 1
     [[ "$(stat -c '%U:%G %a' -- "$candidate")" == "root:$BUILD_GROUP 710" ]] || return 1
@@ -1073,6 +1078,60 @@ build_candidate() {
             --find-links "$candidate/wheelhouse" --require-hashes \
             -r "$candidate/requirements.lock"
     )
+    install -d -o "$BUILD_USER" -g "$BUILD_GROUP" -m 0700 "$candidate/staticfiles"
+    (
+        cd -- "$candidate"
+        exec "$RUNUSER" --user "$BUILD_USER" -- /usr/bin/env -i \
+            HOME=/var/lib/labhub-build PATH=/usr/local/bin:/usr/bin:/bin \
+            PYTHONDONTWRITEBYTECODE=1 \
+            SECRET_KEY=collectstatic-non-production-placeholder \
+            DEBUG=False \
+            LABHUB_LICENSE_ENFORCED=False \
+            "$python" manage.py collectstatic --noinput
+    )
+    build_uid=$(id -u "$BUILD_USER")
+    build_gid=$(getent group "$BUILD_GROUP" | cut -d: -f3)
+    "$PYTHON3" -I - "$candidate/staticfiles" "$build_uid" "$build_gid" <<'PY'
+import os
+import stat
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+expected_uid = int(sys.argv[2])
+expected_gid = int(sys.argv[3])
+max_entries = 100_000
+max_total_size = 1024 * 1024 * 1024
+max_file_size = 64 * 1024 * 1024
+entries = 0
+total_size = 0
+
+root_stat = root.lstat()
+if not stat.S_ISDIR(root_stat.st_mode) or root_stat.st_uid != expected_uid or root_stat.st_gid != expected_gid:
+    raise ValueError("unsafe static root")
+
+for current, directories, files in os.walk(root, topdown=True, followlinks=False):
+    current_path = Path(current)
+    for name in directories + files:
+        path = current_path / name
+        item = path.lstat()
+        entries += 1
+        if entries > max_entries:
+            raise ValueError("static tree contains too many entries")
+        if item.st_uid != expected_uid or item.st_gid != expected_gid:
+            raise ValueError("static tree has unexpected ownership")
+        if stat.S_ISDIR(item.st_mode):
+            continue
+        if not stat.S_ISREG(item.st_mode) or item.st_nlink != 1:
+            raise ValueError("static tree contains an unsafe entry")
+        if item.st_size > max_file_size:
+            raise ValueError("static file is too large")
+        total_size += item.st_size
+        if total_size > max_total_size:
+            raise ValueError("static tree is too large")
+if entries == 0:
+    raise ValueError("static tree is empty")
+PY
     chown -R root:root -- "$candidate"
     chmod -R u=rwX,go=rX -- "$candidate"
     chmod 0700 "$candidate"
@@ -1081,18 +1140,13 @@ build_candidate() {
 
 prepare_published_release() {
     release_tree_is_locked "$RELEASE_DIR" || return 1
-    install -d -o "$APP_USER" -g "$APP_GROUP" -m 0750 "$RELEASE_DIR/staticfiles"
-    run_manage "$RELEASE_DIR" "$V2_ENV" collectstatic
-    if find "$RELEASE_DIR/staticfiles" -xdev ! -type d ! -type f -print -quit | grep -q .; then
-        return 1
-    fi
-    if find "$RELEASE_DIR/staticfiles" -xdev -type f -links +1 -print -quit | grep -q .; then
-        return 1
-    fi
-    lock_release_tree "$RELEASE_DIR/staticfiles"
+    [[ -d "$RELEASE_DIR/staticfiles" && ! -L "$RELEASE_DIR/staticfiles" ]] || return 1
+    "$RESTORECON" -F "$RELEASE_DIR"
+    "$RESTORECON" -RF "$RELEASE_DIR/staticfiles"
+    release_tree_is_locked "$RELEASE_DIR" || return 1
     run_manage "$RELEASE_DIR" "$V2_ENV" check
     run_manage "$RELEASE_DIR" "$V2_ENV" migrate
-    lock_release_tree "$RELEASE_DIR"
+    release_tree_is_locked "$RELEASE_DIR"
 }
 
 reconcile_stale_artifacts() {
@@ -1184,7 +1238,7 @@ preflight_root_installation() {
     require_root_owned "$RELEASES_DIR" 755 || fail 'RELEASES_DIR must be root:root mode 0755.'
     require_root_owned "$ENV_DIR" 700 || fail 'The environment directory must be root:root mode 0700.'
     [[ -x "$SYSTEMCTL" && -x "$RUNUSER" && -x "$GH" && -x "$CURL" && \
-        -x "$SHA256SUM" && -x "$PYTHON3" ]] || \
+        -x "$SHA256SUM" && -x "$PYTHON3" && -x "$RESTORECON" ]] || \
         fail 'Required system executables are missing.'
     getent passwd "$APP_USER" >/dev/null || fail 'The dedicated application user is missing.'
     [[ "$(id -gn "$APP_USER")" == "$APP_GROUP" ]] || fail 'The application user has an unexpected primary group.'
