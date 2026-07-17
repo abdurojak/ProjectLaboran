@@ -364,6 +364,19 @@ test "$(readlink -f /home/admin/LabTif/current)" = /home/admin/LabTif/ProjectLab
 test "$(readlink -f /home/admin/LabTif/production-venv)" = /home/admin/LabTif/ProjectLaboran/venv
 ```
 
+Verifikasi ABI server menggunakan stable production interpreter. Saat bootstrap,
+path ini resolve ke venv checkout lama; setelah deployment, path yang sama resolve
+ke venv per-release melalui `current`:
+
+```bash
+/home/admin/LabTif/production-venv/bin/python -c 'import sys; print(f"cp{sys.version_info.major}{sys.version_info.minor}-cp{sys.version_info.major}{sys.version_info.minor}")'
+```
+
+Output harus sama persis dengan GitHub repository variable `DEPLOY_PYTHON_ABI` dan
+ABI interpreter manylinux yang dipakai untuk membangun protected artifact sebelum
+rollout. Sebagai contoh saja, Python 3.11 menghasilkan `cp311-cp311`; jangan memakai
+nilai contoh tersebut jika interpreter build atau server berbeda.
+
 Jangan hapus checkout lama, v1 env, media backup, atau shared venv backup.
 
 ## Install launcher root-owned
