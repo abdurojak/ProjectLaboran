@@ -37,20 +37,26 @@ memuat license production atau private key sebenarnya.
 
 Artifact release tidak pernah berisi upload pada direktori `media/`. Semua upload
 harus berada di luar release agar pergantian atau cleanup release tidak menghapus
-data pengguna. Buat lokasi persistent berikut satu kali:
+data pengguna. Buat group baca khusus untuk runtime `admin` dan Nginx, lalu buat
+lokasi persistent dengan setgid. Perintah berikut mengasumsikan user proxy AlmaLinux
+adalah `nginx`:
 
 ```bash
-sudo install -d -o admin -g admin -m 0750 /var/lib/labhub
-sudo install -d -o admin -g admin -m 0750 /var/lib/labhub/media
+getent group labhub-media >/dev/null || sudo groupadd --system labhub-media
+sudo usermod -aG labhub-media admin
+sudo usermod -aG labhub-media nginx
+sudo install -d -o root -g labhub-media -m 0750 /var/lib/labhub
+sudo install -d -o admin -g labhub-media -m 2750 /var/lib/labhub/media
 sudo test -d /home/admin/LabTif/ProjectLaboran/media
-sudo rsync -a --ignore-existing --chown=admin:admin --chmod=D750,F640 -- /home/admin/LabTif/ProjectLaboran/media/ /var/lib/labhub/media/
+sudo rsync -a --chown=admin:labhub-media --chmod=D2750,F640 -- /home/admin/LabTif/ProjectLaboran/media/ /var/lib/labhub/media/
 sudo find /var/lib/labhub/media -maxdepth 1 -printf '%M %u:%g %p\n'
 ```
 
 Trailing slash pada sumber `media/` penting: isinya disalin langsung ke direktori
-tujuan. Jangan hapus `/home/admin/LabTif/ProjectLaboran/media/` setelah copy. Owner
-harus memverifikasi jumlah file, upload baru, backup, dan rollback terlebih dahulu;
-penghapusan sumber lama adalah keputusan manual terpisah.
+tujuan. Copy awal boleh dilakukan saat aplikasi masih aktif dan sengaja tidak
+memakai `--delete`. Cutover authoritative tetap wajib dilakukan dalam maintenance
+window setelah konfigurasi proxy dan systemd siap. Jangan hapus sumber lama; owner
+harus menyetujui cleanup secara terpisah setelah backup dan rollback diverifikasi.
 
 ## Environment production
 
@@ -97,12 +103,41 @@ sudoedit /etc/labhub/labhub.env
 sudo grep -q '^MEDIA_ROOT=/var/lib/labhub/media$' /etc/labhub/labhub.env
 ```
 
-Proses deployment yang menjalankan migration harus menerima environment runtime
-yang sama. Pada self-hosted runner khusus deployment, tambahkan
-`EnvironmentFile=/etc/labhub/labhub.env` melalui systemd drop-in unit runner, lalu
-restart runner sebelum rollout. Jangan mencetak environment ke log. Script deploy
-akan berhenti sebelum publication jika `MEDIA_ROOT` tidak bernilai
-`/var/lib/labhub/media` atau tidak writable oleh `admin`.
+Jangan menambahkan `/etc/labhub/labhub.env` atau nilainya ke service self-hosted
+runner, workflow, artifact, maupun log. Hanya unit Daphne dan restricted launcher
+root-owned di bawah yang boleh memuat file tersebut.
+
+## Serving media dengan Nginx dan SELinux
+
+Django/Daphne dengan `DEBUG=False` tidak melayani `/media/` untuk production.
+Reverse proxy harus melayani file dari `/var/lib/labhub/media/`. Contoh blok Nginx:
+
+```nginx
+location /media/ {
+    alias /var/lib/labhub/media/;
+    autoindex off;
+    add_header X-Content-Type-Options nosniff always;
+}
+```
+
+Persistenkan label SELinux yang mengizinkan Nginx membaca media. Package
+`policycoreutils-python-utils` menyediakan `semanage` pada AlmaLinux:
+
+```bash
+sudo dnf install -y policycoreutils-python-utils
+sudo semanage fcontext -a -t httpd_sys_content_t '/var/lib/labhub/media(/.*)?'
+sudo restorecon -Rv /var/lib/labhub/media
+sudo -u nginx test -x /var/lib/labhub/media
+sudo -u nginx find /var/lib/labhub/media -type f -print -quit | xargs -r sudo -u nginx test -r
+sudo nginx -t
+sudo systemctl restart nginx
+sudo systemctl reload nginx
+curl --fail --head -H 'Host: <production-hostname>' 'http://127.0.0.1/media/<known-test-file>'
+```
+
+Gunakan hostname virtual host production, bukan public IP. Jika server tidak memakai
+Nginx, konfigurasi proxy atau media server ekuivalen, permission group, dan policy
+SELinux yang setara wajib selesai dan tervalidasi sebelum rollout.
 
 ## Baseline symlink tanpa outage
 
@@ -143,6 +178,71 @@ workflow build, misalnya `cp312-cp312`:
 python3 -c "import sys; print(f'cp{sys.version_info.major}{sys.version_info.minor}-cp{sys.version_info.major}{sys.version_info.minor}')"
 ```
 
+## Restricted manage launcher
+
+Runner tidak boleh membaca environment production. Owner memasang launcher berikut
+secara manual sebagai root di `/usr/local/sbin/projectlaboran-manage`. Launcher hanya
+menerima release direct-child dengan nama SHA 40 hex dan operasi `migrate` atau
+`collectstatic`. Environment dimuat oleh systemd untuk transient process, lalu
+Python dijalankan sebagai user/group `admin`; tidak ada secret yang dicetak.
+
+```bash
+sudo tee /usr/local/sbin/projectlaboran-manage >/dev/null <<'LAUNCHER'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+BASE_DIR=/home/admin/LabTif
+RELEASES_DIR="$BASE_DIR/releases"
+ENV_FILE=/etc/labhub/labhub.env
+RUNTIME_USER=admin
+RUNTIME_GROUP=admin
+
+[[ $# -eq 2 ]] || { printf 'Usage: projectlaboran-manage <release> <operation>\n' >&2; exit 2; }
+release=$1
+operation=$2
+[[ "$release" =~ ^/home/admin/LabTif/releases/[0-9a-fA-F]{40}$ ]] || exit 2
+[[ "$(dirname -- "$release")" == "$RELEASES_DIR" ]] || exit 2
+[[ -d "$release" && ! -L "$release" ]] || exit 2
+[[ "$(readlink -f -- "$release")" == "$release" ]] || exit 2
+[[ -f "$release/manage.py" && -x "$release/venv/bin/python" ]] || exit 2
+[[ -f "$ENV_FILE" && ! -L "$ENV_FILE" ]] || exit 2
+[[ "$(stat -c '%U:%G' "$ENV_FILE")" == root:root ]] || exit 2
+[[ "$(stat -c '%a' "$ENV_FILE")" == 600 ]] || exit 2
+[[ -x /usr/bin/systemd-run ]] || exit 2
+
+case "$operation" in
+    migrate) manage_args=(migrate --noinput) ;;
+    collectstatic) manage_args=(collectstatic --noinput) ;;
+    *) exit 2 ;;
+esac
+
+run_with_environment=(
+    /usr/bin/systemd-run --quiet --wait --pipe --collect
+    --uid="$RUNTIME_USER" --gid="$RUNTIME_GROUP"
+    --working-directory="$release"
+    --property="EnvironmentFile=$ENV_FILE"
+)
+
+"${run_with_environment[@]}" "$release/venv/bin/python" -c '
+import os
+from pathlib import Path
+
+media = Path("/var/lib/labhub/media")
+if os.environ.get("MEDIA_ROOT") != str(media) or not media.is_dir() or not os.access(media, os.W_OK):
+    raise SystemExit("production media configuration is invalid")
+'
+exec "${run_with_environment[@]}" "$release/venv/bin/python" manage.py "${manage_args[@]}"
+LAUNCHER
+sudo chown root:root /usr/local/sbin/projectlaboran-manage
+sudo chmod 0755 /usr/local/sbin/projectlaboran-manage
+sudo bash -n /usr/local/sbin/projectlaboran-manage
+sudo test "$(stat -c '%U:%G %a' /usr/local/sbin/projectlaboran-manage)" = 'root:root 755'
+```
+
+Runner hanya dapat mengeksekusi launcher; file root-owned ini tidak boleh berada di
+workspace runner dan tidak dapat diubah oleh user `admin`.
+
 ## Sudo least privilege
 
 Script memakai executable AlmaLinux `/usr/bin/systemctl`. Verifikasi path sebelum
@@ -150,6 +250,7 @@ memasang rule:
 
 ```bash
 test "$(command -v systemctl)" = /usr/bin/systemctl
+test "$(command -v systemd-run)" = /usr/bin/systemd-run
 test "$(command -v visudo)" = /usr/sbin/visudo
 ```
 
@@ -162,6 +263,7 @@ printf '%s\n' \
   'admin ALL=(root) NOPASSWD: /usr/bin/systemctl stop projectlaboran-daphne' \
   'admin ALL=(root) NOPASSWD: /usr/bin/systemctl is-active --quiet projectlaboran-daphne' \
   'admin ALL=(root) NOPASSWD: /usr/bin/systemctl show projectlaboran-daphne --property=LoadState --value' \
+  'admin ALL=(root) NOPASSWD: /usr/local/sbin/projectlaboran-manage *' \
   | sudo tee /etc/sudoers.d/projectlaboran-deploy >/dev/null
 sudo chown root:root /etc/sudoers.d/projectlaboran-deploy
 sudo chmod 0440 /etc/sudoers.d/projectlaboran-deploy
@@ -177,11 +279,15 @@ sudo -n -l /usr/bin/systemctl restart projectlaboran-daphne >/dev/null
 sudo -n -l /usr/bin/systemctl stop projectlaboran-daphne >/dev/null
 sudo -n -l /usr/bin/systemctl is-active --quiet projectlaboran-daphne >/dev/null
 sudo -n -l /usr/bin/systemctl show projectlaboran-daphne --property=LoadState --value >/dev/null
+sudo -n -l /usr/local/sbin/projectlaboran-manage /home/admin/LabTif/releases/0000000000000000000000000000000000000000 migrate >/dev/null
+sudo -n -l /usr/local/sbin/projectlaboran-manage /home/admin/LabTif/releases/0000000000000000000000000000000000000000 collectstatic >/dev/null
 test "$(sudo -n /usr/bin/systemctl show projectlaboran-daphne --property=LoadState --value)" = loaded
 ```
 
-Jangan gunakan `NOPASSWD: ALL`. Deploy melakukan seluruh preflight sudo di atas
-sebelum publication, migration, atau pergantian `current`.
+Wildcard sudoers hanya memilih argumen untuk executable launcher root-owned; launcher
+sendiri menolak jumlah argumen, path, dan operasi di luar allowlist. Jangan gunakan
+`NOPASSWD: ALL`. Deploy melakukan seluruh preflight sudo sebelum publication,
+migration, atau pergantian `current`.
 
 ## Konfigurasi systemd
 
@@ -192,6 +298,7 @@ Setelah baseline symlink dan environment siap, ubah
 [Service]
 User=admin
 Group=admin
+UMask=0027
 WorkingDirectory=/home/admin/LabTif/current
 EnvironmentFile=/etc/labhub/labhub.env
 ExecStart=/home/admin/LabTif/production-venv/bin/python -m daphne -b 0.0.0.0 -p 8000 project_laboran.asgi:application
@@ -206,13 +313,64 @@ readlink -f /home/admin/LabTif/current
 readlink -f /home/admin/LabTif/production-venv
 ```
 
+## Maintenance window untuk cutover media
+
+Setelah environment, baseline symlink, systemd, Nginx, permission, dan SELinux siap,
+jadwalkan maintenance singkat. Copy awal boleh dilakukan live, tetapi final sync
+harus dilakukan saat checkout lama sudah berhenti menerima upload:
+
+```bash
+sudo /usr/bin/systemctl stop projectlaboran-daphne
+sudo rsync -a --chown=admin:labhub-media --chmod=D2750,F640 -- /home/admin/LabTif/ProjectLaboran/media/ /var/lib/labhub/media/
+sudo rsync -a --dry-run --itemize-changes --chown=admin:labhub-media --chmod=D2750,F640 -- /home/admin/LabTif/ProjectLaboran/media/ /var/lib/labhub/media/ | tee /tmp/labhub-media-final-delta.txt
+test ! -s /tmp/labhub-media-final-delta.txt
+sudo grep -q '^MEDIA_ROOT=/var/lib/labhub/media$' /etc/labhub/labhub.env
+sudo -u admin test -w /var/lib/labhub/media
+sudo restorecon -Rv /var/lib/labhub/media
+sudo /usr/bin/systemctl daemon-reload
+sudo /usr/bin/systemctl restart projectlaboran-daphne
+sudo /usr/bin/systemctl is-active --quiet projectlaboran-daphne
+test "$(readlink -f /home/admin/LabTif/current)" = /home/admin/LabTif/ProjectLaboran
+curl --fail --max-time 5 -H 'Host: <production-hostname>' http://127.0.0.1/
+```
+
+Perintah rsync final bersifat authoritative dari sumber lama ke target, tetapi tidak
+memakai `--delete`, sehingga file target-only tidak dihapus. Setelah restart, lakukan
+satu upload uji melalui UI/API checkout lama, pastikan file baru muncul di
+`/var/lib/labhub/media`, lalu validasi URL-nya melalui proxy:
+
+```bash
+sudo find /var/lib/labhub/media -type f -mmin -10 -printf '%TY-%Tm-%Td %TH:%TM:%TS %p\n'
+curl --fail --head -H 'Host: <production-hostname>' 'http://127.0.0.1/media/<uploaded-test-file>'
+```
+
+Jangan lanjut ke protected rollout sampai upload dan serving media berhasil. Jangan
+hapus source media lama. Migration database adalah proses terpisah dan tidak dibalik
+oleh rsync, deploy rollback, atau media rollback.
+
+## Isolasi self-hosted runner
+
+Self-hosted runner deployment harus dedicated hanya untuk repository ini. Batasi
+workflow deploy dengan GitHub Environment approval, protected branch/tag, dan akses
+runner group. Jangan izinkan pull request fork, third-party workflow, atau job
+arbitrary menjalankan command pada runner ini. Runner tidak menerima secret runtime
+aplikasi di service environment; akses privileged-nya hanya sudoers systemctl dan
+restricted launcher yang tercantum di atas.
+
 ## Model deployment dan rollback otomatis
 
-Script memegang `flock` pada `/home/admin/LabTif/.deploy.lock`, memvalidasi archive,
-dan mempublikasikan candidate ke `/home/admin/LabTif/releases/<github-sha>` tanpa
-mengubah runtime aktif. Candidate membuat venv final di `venv/`, menginstal
-requirements, menjalankan migration, dan menjalankan `collectstatic`. Hanya setelah
-semua langkah tersebut berhasil, symlink `current` diganti secara atomik.
+Script memegang `flock` pada `/home/admin/LabTif/.deploy.lock`. Transaksi durable
+ditulis atomik ke `/home/admin/LabTif/.deploy-transaction` dengan SHA, release path,
+prior `current`, replacement backup, dan phase. File tidak pernah di-`source` atau
+di-`eval`; parser menerima tepat enam field dan memvalidasi setiap path. Phase
+`ready` ditulis sebelum switch, sehingga crash antara switch dan update phase tetap
+terdeteksi dengan membandingkan `current` terhadap release transaksi.
+
+Candidate dipublikasikan ke `/home/admin/LabTif/releases/<github-sha>` tanpa
+mengubah runtime aktif. Candidate membuat venv final di `venv/` dan menginstal
+requirements. Migration dan `collectstatic` hanya dijalankan lewat restricted
+launcher; runner tidak menerima environment production. Hanya setelah langkah
+pre-switch berhasil, symlink `current` diganti secara atomik.
 
 Sesudah switch, script menjalankan `daemon-reload`, restart, `is-active`, lalu
 mencoba `http://127.0.0.1:8000/` hingga 15 kali. Respons HTTP di bawah 500 dianggap
@@ -221,13 +379,22 @@ sehat; network failure atau status 500 ke atas memicu rollback. Error maupun sig
 atomik dan me-restart service. Signal sebelum switch tidak menyentuh service aktif.
 
 Sisa `.deploy-*`, `.failed-*`, dan `.replaced-*` direkonsiliasi hanya saat lock
-dipegang. Cleanup tidak pernah menghapus target `current`, path di luar `releases`,
-atau release yang sedang dideploy. Setelah deployment sehat, release aktif dan dua
-release inactive terbaru dipertahankan. Cleanup failure hanya menjadi warning.
+dipegang. `.replaced-*` hanya boleh dipulihkan/dihapus dengan provenance dari
+transaction journal; orphan backup menghentikan deployment untuk inspeksi operator.
+Startup dengan transaksi incomplete selalu memulihkan prior target secara atomik,
+restart, `is-active`, dan health-check sebelum deployment baru boleh berjalan.
 
-Rerun SHA yang sudah aktif bersifat idempotent: script memverifikasi `is-active` dan
-health endpoint lalu sukses tanpa mengganti atau menghapus release. SHA yang ada
-tetapi inactive diganti melalui staging dengan backup yang dapat dipulihkan.
+Setelah restart dan health berhasil, release mendapat marker `.deploy-success` yang
+terikat ke SHA, transaksi ditandai `committed`, replacement backup dihapus secara
+tervalidasi, lalu journal dihapus. Crash setelah health tetapi sebelum `committed`
+di-rollback secara konservatif. Cleanup tidak pernah menghapus target `current`,
+path di luar `releases`, atau release yang sedang dideploy. Setelah deployment sehat,
+release aktif dan dua release inactive terbaru dipertahankan.
+
+Rerun SHA yang sudah aktif menjadi no-op hanya jika tidak ada transaction incomplete
+dan marker sukses cocok dengan SHA. Tanpa marker, script me-restart dan memverifikasi
+release lebih dahulu sebelum membuat marker; service lama yang sekadar masih aktif
+tidak cukup. SHA inactive diganti melalui staging dengan backup berprovenance.
 
 Migration dijalankan sebelum switch dan tidak di-rollback otomatis. Gunakan
 migration yang backward-compatible. Rollback kode tidak sama dengan rollback schema
@@ -253,6 +420,7 @@ check. Jika langkah setelah switch gagal, trap mengembalikan target sebelumnya:
 
     exec 9>"$BASE_DIR/.deploy.lock"
     flock -n 9
+    test ! -e "$BASE_DIR/.deploy-transaction" && test ! -L "$BASE_DIR/.deploy-transaction"
     [[ "$ROLLBACK_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
     test "$(dirname -- "$TARGET")" = "$BASE_DIR/releases"
     test -d "$TARGET" && test ! -L "$TARGET"

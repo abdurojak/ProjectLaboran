@@ -10,17 +10,21 @@ VENV_DIR="$BASE_DIR/production-venv"
 SERVICE=projectlaboran-daphne
 
 SYSTEMCTL=/usr/bin/systemctl
+MANAGE_LAUNCHER=/usr/local/sbin/projectlaboran-manage
 LOCK_FILE="$BASE_DIR/.deploy.lock"
+TRANSACTION_FILE="$BASE_DIR/.deploy-transaction"
 TEMP_RELEASE=""
 TEMP_LINK=""
+TRANSACTION_TEMP=""
 REPLACED_RELEASE_BACKUP=""
-FAILED_RELEASE=""
 PREVIOUS_CURRENT=""
 RELEASE_DIR=""
-PUBLICATION_STARTED=false
-PUBLISHED=false
-CURRENT_SWITCHED=false
 HANDLING_FAILURE=false
+TX_SHA=""
+TX_RELEASE=""
+TX_PREVIOUS=""
+TX_BACKUP=""
+TX_PHASE=""
 
 usage() {
     printf 'Usage: %s <protected-release.tar.gz>\n' "$0" >&2
@@ -72,18 +76,6 @@ safe_remove_release() {
     rm -rf --one-file-system -- "$resolved"
 }
 
-safe_remove_deployed_release() {
-    local active
-
-    [[ -n "$RELEASE_DIR" ]] || return 1
-    [[ "$(dirname -- "$RELEASE_DIR")" == "$RELEASES_DIR" ]] || return 1
-    [[ "$(basename -- "$RELEASE_DIR")" =~ ^[0-9a-fA-F]{40}$ ]] || return 1
-    [[ -d "$RELEASE_DIR" && ! -L "$RELEASE_DIR" ]] || return 1
-    active=$(current_target_path 2>/dev/null || true)
-    [[ "$RELEASE_DIR" != "$active" ]] || return 1
-    rm -rf --one-file-system -- "$RELEASE_DIR"
-}
-
 atomic_switch_current() {
     local target=$1
     local candidate
@@ -95,6 +87,7 @@ atomic_switch_current() {
     TEMP_LINK="$candidate"
     mv -Tf -- "$TEMP_LINK" "$CURRENT_LINK"
     TEMP_LINK=""
+    sync -f "$BASE_DIR"
 }
 
 cleanup_ephemeral() {
@@ -105,69 +98,252 @@ cleanup_ephemeral() {
     if [[ -n "$TEMP_RELEASE" && -d "$TEMP_RELEASE" && ! -L "$TEMP_RELEASE" ]]; then
         safe_remove_internal_tree "$TEMP_RELEASE"
     fi
+    if [[ -n "$TRANSACTION_TEMP" && -f "$TRANSACTION_TEMP" && ! -L "$TRANSACTION_TEMP" ]]; then
+        rm -f -- "$TRANSACTION_TEMP"
+    fi
     return 0
 }
 
-restore_publication() {
-    local backup_exists=false
+validate_journal_path() {
+    local path=$1
 
-    if [[ -n "$REPLACED_RELEASE_BACKUP" && -d "$REPLACED_RELEASE_BACKUP" && ! -L "$REPLACED_RELEASE_BACKUP" ]]; then
-        backup_exists=true
+    [[ "$path" =~ ^/[A-Za-z0-9._/-]+$ ]] || return 1
+    [[ "$path" != *"/../"* && "$path" != */.. && "$path" != *"//"* ]] || return 1
+    [[ "$(readlink -m -- "$path")" == "$path" ]]
+}
+
+write_transaction() {
+    local phase=$1
+    local backup=${2:--}
+    local previous=${PREVIOUS_CURRENT:--}
+
+    [[ "$phase" =~ ^(building|ready|switched|rolling-back|committed)$ ]] || return 1
+    [[ ! -L "$TRANSACTION_FILE" ]] || return 1
+    validate_journal_path "$RELEASE_DIR" || return 1
+    if [[ "$previous" != - ]]; then
+        validate_journal_path "$previous" || return 1
+    fi
+    if [[ "$backup" != - ]]; then
+        validate_journal_path "$backup" || return 1
     fi
 
-    if [[ "$backup_exists" == true ]]; then
-        if [[ -e "$RELEASE_DIR" || -L "$RELEASE_DIR" ]]; then
-            [[ -d "$RELEASE_DIR" && ! -L "$RELEASE_DIR" ]] || return 1
-            [[ "$(current_target_path 2>/dev/null || true)" != "$RELEASE_DIR" ]] || return 1
-            FAILED_RELEASE="$RELEASES_DIR/.failed-${GITHUB_SHA}.$$"
-            [[ ! -e "$FAILED_RELEASE" && ! -L "$FAILED_RELEASE" ]] || return 1
-            mv -- "$RELEASE_DIR" "$FAILED_RELEASE" || return 1
+    TRANSACTION_TEMP=$(mktemp "$BASE_DIR/.deploy-transaction.tmp.XXXXXX")
+    chmod 0600 "$TRANSACTION_TEMP"
+    printf 'version=1\nsha=%s\nrelease=%s\nprevious=%s\nbackup=%s\nphase=%s\n' \
+        "$GITHUB_SHA" "$RELEASE_DIR" "$previous" "$backup" "$phase" >"$TRANSACTION_TEMP"
+    sync -f "$TRANSACTION_TEMP"
+    mv -Tf -- "$TRANSACTION_TEMP" "$TRANSACTION_FILE"
+    TRANSACTION_TEMP=""
+    sync -f "$BASE_DIR"
+}
+
+rewrite_loaded_transaction() {
+    local phase=$1
+    local previous=${TX_PREVIOUS:--}
+    local backup=${TX_BACKUP:--}
+
+    [[ "$phase" == rolling-back ]] || return 1
+    TRANSACTION_TEMP=$(mktemp "$BASE_DIR/.deploy-transaction.tmp.XXXXXX")
+    chmod 0600 "$TRANSACTION_TEMP"
+    printf 'version=1\nsha=%s\nrelease=%s\nprevious=%s\nbackup=%s\nphase=%s\n' \
+        "$TX_SHA" "$TX_RELEASE" "$previous" "$backup" "$phase" >"$TRANSACTION_TEMP"
+    sync -f "$TRANSACTION_TEMP"
+    mv -Tf -- "$TRANSACTION_TEMP" "$TRANSACTION_FILE"
+    TRANSACTION_TEMP=""
+    sync -f "$BASE_DIR"
+    TX_PHASE=$phase
+}
+
+read_transaction() {
+    local line key value count=0
+    local seen_version=false seen_sha=false seen_release=false
+    local seen_previous=false seen_backup=false seen_phase=false
+    local version="" previous="" backup=""
+
+    [[ -f "$TRANSACTION_FILE" && ! -L "$TRANSACTION_FILE" ]] || return 1
+    [[ "$(stat -c '%a' "$TRANSACTION_FILE")" == 600 ]] || return 1
+    TX_SHA=""; TX_RELEASE=""; TX_PREVIOUS=""; TX_BACKUP=""; TX_PHASE=""
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ "$line" == *=* && "$line" != *$'\r'* ]] || return 1
+        key=${line%%=*}
+        value=${line#*=}
+        case "$key" in
+            version) [[ "$seen_version" == false ]] || return 1; seen_version=true; version=$value ;;
+            sha) [[ "$seen_sha" == false ]] || return 1; seen_sha=true; TX_SHA=$value ;;
+            release) [[ "$seen_release" == false ]] || return 1; seen_release=true; TX_RELEASE=$value ;;
+            previous) [[ "$seen_previous" == false ]] || return 1; seen_previous=true; previous=$value ;;
+            backup) [[ "$seen_backup" == false ]] || return 1; seen_backup=true; backup=$value ;;
+            phase) [[ "$seen_phase" == false ]] || return 1; seen_phase=true; TX_PHASE=$value ;;
+            *) return 1 ;;
+        esac
+        ((count += 1))
+    done <"$TRANSACTION_FILE"
+
+    [[ "$count" -eq 6 && "$version" == 1 ]] || return 1
+    [[ "$TX_SHA" =~ ^[0-9a-fA-F]{40}$ ]] || return 1
+    [[ "$TX_RELEASE" == "$RELEASES_DIR/$TX_SHA" ]] || return 1
+    validate_journal_path "$TX_RELEASE" || return 1
+    [[ "$TX_PHASE" =~ ^(building|ready|switched|rolling-back|committed)$ ]] || return 1
+
+    if [[ "$previous" != - ]]; then
+        validate_journal_path "$previous" || return 1
+        [[ -d "$previous" && -x "$previous/venv/bin/python" ]] || return 1
+        TX_PREVIOUS=$previous
+    fi
+    if [[ "$backup" != - ]]; then
+        validate_journal_path "$backup" || return 1
+        [[ "$(dirname -- "$backup")" == "$RELEASES_DIR" ]] || return 1
+        [[ "$(basename -- "$backup")" =~ ^\.replaced-${TX_SHA}\.[A-Za-z0-9]+$ ]] || return 1
+        [[ ! -L "$backup" ]] || return 1
+        TX_BACKUP=$backup
+    fi
+}
+
+remove_transaction() {
+    [[ -f "$TRANSACTION_FILE" && ! -L "$TRANSACTION_FILE" ]] || return 1
+    rm -f -- "$TRANSACTION_FILE"
+    sync -f "$BASE_DIR"
+}
+
+remove_provenanced_backup() {
+    local expected=$1
+
+    read_transaction || return 1
+    [[ "$TX_PHASE" == committed && -n "$TX_BACKUP" && "$TX_BACKUP" == "$expected" ]] || return 1
+    safe_remove_internal_tree "$expected"
+}
+
+write_success_marker() {
+    local marker="$RELEASE_DIR/.deploy-success"
+    local temp
+
+    [[ ! -L "$marker" ]] || return 1
+    temp=$(mktemp "$RELEASE_DIR/.deploy-success.tmp.XXXXXX")
+    printf 'version=1\nsha=%s\n' "$GITHUB_SHA" >"$temp"
+    chmod 0644 "$temp"
+    sync -f "$temp"
+    mv -Tf -- "$temp" "$marker"
+    sync -f "$RELEASE_DIR"
+}
+
+has_success_marker() {
+    local release=$1
+    local sha=$2
+    local marker="$release/.deploy-success"
+    local content
+
+    [[ -f "$marker" && ! -L "$marker" ]] || return 1
+    content=$(<"$marker")
+    [[ "$content" == $'version=1\nsha='"$sha" ]]
+}
+
+safe_remove_transaction_release() {
+    local active
+
+    [[ "$TX_RELEASE" == "$RELEASES_DIR/$TX_SHA" ]] || return 1
+    [[ -d "$TX_RELEASE" && ! -L "$TX_RELEASE" ]] || return 1
+    active=$(current_target_path 2>/dev/null || true)
+    [[ "$active" != "$TX_RELEASE" ]] || return 1
+    rm -rf --one-file-system -- "$TX_RELEASE"
+}
+
+restore_transaction_publication() {
+    local failed
+
+    if [[ -n "$TX_BACKUP" && -d "$TX_BACKUP" && ! -L "$TX_BACKUP" ]]; then
+        if [[ -e "$TX_RELEASE" || -L "$TX_RELEASE" ]]; then
+            [[ -d "$TX_RELEASE" && ! -L "$TX_RELEASE" ]] || return 1
+            [[ "$(current_target_path 2>/dev/null || true)" != "$TX_RELEASE" ]] || return 1
+            failed="$RELEASES_DIR/.failed-${TX_SHA}.recovery$$"
+            [[ ! -e "$failed" && ! -L "$failed" ]] || return 1
+            mv -- "$TX_RELEASE" "$failed" || return 1
+        else
+            failed=""
         fi
-        if ! mv -- "$REPLACED_RELEASE_BACKUP" "$RELEASE_DIR"; then
-            if [[ -n "$FAILED_RELEASE" && -d "$FAILED_RELEASE" ]]; then
-                mv -- "$FAILED_RELEASE" "$RELEASE_DIR" || true
-            fi
+        if ! mv -- "$TX_BACKUP" "$TX_RELEASE"; then
+            [[ -z "$failed" ]] || mv -- "$failed" "$TX_RELEASE" || true
             return 1
         fi
-        REPLACED_RELEASE_BACKUP=""
-        if [[ -n "$FAILED_RELEASE" ]]; then
-            safe_remove_internal_tree "$FAILED_RELEASE" || return 1
-            FAILED_RELEASE=""
-        fi
-        PUBLISHED=false
-        PUBLICATION_STARTED=false
+        [[ -z "$failed" ]] || safe_remove_internal_tree "$failed" || return 1
         return 0
     fi
 
-    if [[ -n "$REPLACED_RELEASE_BACKUP" ]]; then
-        if [[ -d "$RELEASE_DIR" && ! -L "$RELEASE_DIR" && "$PUBLICATION_STARTED" == false ]]; then
-            REPLACED_RELEASE_BACKUP=""
+    if [[ -n "$TX_BACKUP" ]]; then
+        if [[ "$TX_PHASE" == building && -d "$TX_RELEASE" && ! -L "$TX_RELEASE" ]]; then
             return 0
         fi
+        [[ "$TX_PHASE" =~ ^(rolling-back|committed)$ ]] && return 0
         return 1
     fi
 
-    if [[ "$PUBLICATION_STARTED" == true && -d "$RELEASE_DIR" && ! -L "$RELEASE_DIR" ]]; then
-        safe_remove_deployed_release || return 1
+    if [[ -d "$TX_RELEASE" && ! -L "$TX_RELEASE" ]]; then
+        safe_remove_transaction_release || return 1
     fi
-    PUBLISHED=false
-    PUBLICATION_STARTED=false
 }
 
-deployment_has_switched() {
+rollback_transaction() {
     local active
 
-    [[ -n "$RELEASE_DIR" ]] || return 1
+    read_transaction || { printf 'Transaction journal is malformed; refusing recovery.\n' >&2; return 1; }
     active=$(current_target_path 2>/dev/null || true)
-    [[ "$CURRENT_SWITCHED" == true || ( "$active" == "$RELEASE_DIR" && "$PREVIOUS_CURRENT" != "$RELEASE_DIR" ) ]]
+    if [[ "$active" == "$TX_RELEASE" ]]; then
+        printf 'Incomplete transaction switched current to %s; restoring prior target.\n' "$TX_SHA" >&2
+    fi
+    if [[ -n "$TX_PREVIOUS" ]]; then
+        atomic_switch_current "$TX_PREVIOUS" || return 1
+    elif [[ "$active" == "$TX_RELEASE" && -L "$CURRENT_LINK" ]]; then
+        rm -f -- "$CURRENT_LINK" || return 1
+        sync -f "$BASE_DIR" || return 1
+    fi
+
+    rewrite_loaded_transaction rolling-back || return 1
+    restore_transaction_publication || return 1
+    if [[ -n "$TX_PREVIOUS" ]]; then
+        sudo -n "$SYSTEMCTL" daemon-reload || return 1
+        sudo -n "$SYSTEMCTL" restart "$SERVICE" || return 1
+        sudo -n "$SYSTEMCTL" is-active --quiet "$SERVICE" || return 1
+        probe_service || return 1
+        remove_transaction || return 1
+        return 0
+    fi
+
+    sudo -n "$SYSTEMCTL" stop "$SERVICE" || return 1
+    printf 'Recovered without a prior target; service is stopped and operator action is required.\n' >&2
+    return 1
+}
+
+finalize_committed_transaction() {
+    local active
+
+    active=$(current_target_path 2>/dev/null || true)
+    [[ "$active" == "$TX_RELEASE" ]] || return 1
+    has_success_marker "$TX_RELEASE" "$TX_SHA" || return 1
+    sudo -n "$SYSTEMCTL" is-active --quiet "$SERVICE" || return 1
+    probe_service || return 1
+    if [[ -n "$TX_BACKUP" && -d "$TX_BACKUP" && ! -L "$TX_BACKUP" ]]; then
+        remove_provenanced_backup "$TX_BACKUP" || return 1
+    elif [[ -n "$TX_BACKUP" && ( -e "$TX_BACKUP" || -L "$TX_BACKUP" ) ]]; then
+        return 1
+    fi
+    remove_transaction
+}
+
+recover_transaction() {
+    read_transaction || { printf 'Transaction journal is malformed; refusing deployment.\n' >&2; return 1; }
+    printf 'Recovering deployment transaction for %s at phase %s.\n' "$TX_SHA" "$TX_PHASE" >&2
+    if [[ "$TX_PHASE" == committed ]]; then
+        if finalize_committed_transaction; then
+            return 0
+        fi
+        read_transaction || return 1
+    fi
+    rollback_transaction
 }
 
 handle_failure() {
     local original_status=$1
     local reason=$2
     local rollback_failed=false
-    local switched=false
-    local current_restored=false
 
     if [[ "$HANDLING_FAILURE" == true ]]; then
         exit "$original_status"
@@ -177,49 +353,12 @@ handle_failure() {
     trap '' TERM INT HUP
     set +e
     printf 'Deployment aborted by %s; preserving exit status %d.\n' "$reason" "$original_status" >&2
-
-    if deployment_has_switched; then
-        switched=true
-        if [[ -n "$PREVIOUS_CURRENT" ]]; then
-            if atomic_switch_current "$PREVIOUS_CURRENT"; then
-                current_restored=true
-            else
-                printf 'Rollback warning: could not restore the previous current symlink.\n' >&2
-                rollback_failed=true
-            fi
-        else
-            if [[ -L "$CURRENT_LINK" && "$(current_target_path 2>/dev/null || true)" == "$RELEASE_DIR" ]]; then
-                rm -f -- "$CURRENT_LINK" || rollback_failed=true
-                current_restored=true
-            else
-                printf 'Rollback warning: failed current path is not the deployed symlink.\n' >&2
-                rollback_failed=true
-            fi
-        fi
+    if [[ -e "$TRANSACTION_FILE" || -L "$TRANSACTION_FILE" ]]; then
+        recover_transaction || rollback_failed=true
     fi
-
-    if ! restore_publication; then
-        printf 'Rollback warning: could not restore publication state safely.\n' >&2
-        rollback_failed=true
-    fi
-
-    if [[ "$switched" == true && -n "$PREVIOUS_CURRENT" && "$current_restored" == true ]]; then
-        if ! sudo -n "$SYSTEMCTL" restart "$SERVICE"; then
-            printf 'Rollback warning: restored current but service restart failed.\n' >&2
-            rollback_failed=true
-        fi
-    elif [[ "$switched" == true && -z "$PREVIOUS_CURRENT" && "$current_restored" == true ]]; then
-        if ! sudo -n "$SYSTEMCTL" stop "$SERVICE"; then
-            printf 'Rollback warning: no prior release exists and the service could not be stopped.\n' >&2
-            rollback_failed=true
-        else
-            printf 'No prior release exists; removed current and stopped %s.\n' "$SERVICE" >&2
-        fi
-    fi
-
     cleanup_ephemeral
     if [[ "$rollback_failed" == true ]]; then
-        printf 'Rollback was incomplete; operator intervention is required.\n' >&2
+        printf 'Rollback was incomplete; transaction journal retained for recovery.\n' >&2
     fi
     exit "$original_status"
 }
@@ -251,7 +390,7 @@ probe_service() {
     return 1
 }
 
-preflight_sudo() {
+preflight_systemctl_sudo() {
     local load_state
 
     [[ -x "$SYSTEMCTL" ]] || {
@@ -270,13 +409,25 @@ preflight_sudo() {
     }
 }
 
+preflight_manage_sudo() {
+    [[ -x "$MANAGE_LAUNCHER" && ! -L "$MANAGE_LAUNCHER" ]] || {
+        printf 'Restricted manage launcher is missing or unsafe: %s\n' "$MANAGE_LAUNCHER" >&2
+        return 1
+    }
+    [[ "$(stat -c '%U:%G %a' "$MANAGE_LAUNCHER")" == 'root:root 755' ]] || {
+        printf 'Restricted manage launcher ownership or mode is unsafe.\n' >&2
+        return 1
+    }
+    sudo -n -l "$MANAGE_LAUNCHER" "$RELEASE_DIR" migrate >/dev/null
+    sudo -n -l "$MANAGE_LAUNCHER" "$RELEASE_DIR" collectstatic >/dev/null
+}
+
 reconcile_stale_artifacts() {
-    local line name path active sha target
+    local name path active
 
     active=$(current_target_path 2>/dev/null || true)
-    while IFS= read -r line; do
-        [[ -n "$line" ]] || continue
-        name=${line#* }
+    while IFS= read -r name; do
+        [[ -n "$name" ]] || continue
         path="$RELEASES_DIR/$name"
         [[ -d "$path" && ! -L "$path" ]] || return 1
         [[ "$path" != "$active" ]] || {
@@ -284,24 +435,20 @@ reconcile_stale_artifacts() {
             return 1
         }
 
-        if [[ "$name" =~ ^\.replaced-([0-9a-fA-F]{40})\.[A-Za-z0-9]+$ ]]; then
-            sha=${BASH_REMATCH[1]}
-            target="$RELEASES_DIR/$sha"
-            if [[ -e "$target" || -L "$target" ]]; then
-                [[ -d "$target" && ! -L "$target" && "$(readlink -f -- "$target")" == "$target" ]] || return 1
-                safe_remove_internal_tree "$path" || return 1
-            else
-                mv -- "$path" "$target" || return 1
-            fi
-        else
-            safe_remove_internal_tree "$path" || return 1
-        fi
+        safe_remove_internal_tree "$path" || return 1
     done < <(
         find "$RELEASES_DIR" -mindepth 1 -maxdepth 1 -type d \
             -regextype posix-extended \
-            -regex '.*/\.(deploy|replaced|failed)-[0-9a-fA-F]{40}\.[A-Za-z0-9]+' \
-            -printf '%T@ %f\n' | sort -rn
+            -regex '.*/\.(deploy|failed)-[0-9a-fA-F]{40}\.[A-Za-z0-9]+' \
+            -printf '%f\n'
     )
+
+    if find "$RELEASES_DIR" -mindepth 1 -maxdepth 1 -type d \
+        -regextype posix-extended \
+        -regex '.*/\.replaced-[0-9a-fA-F]{40}\.[A-Za-z0-9]+' -print -quit | grep -q .; then
+        printf 'Orphan replacement backup lacks transaction provenance; refusing deployment.\n' >&2
+        return 1
+    fi
 
     while IFS= read -r name; do
         [[ -n "$name" ]] || continue
@@ -312,6 +459,16 @@ reconcile_stale_artifacts() {
         find "$BASE_DIR" -mindepth 1 -maxdepth 1 -type l \
             -regextype posix-extended \
             -regex '.*/\.current\.[0-9a-fA-F]{40}\.[0-9]+' -printf '%f\n'
+    )
+
+    while IFS= read -r name; do
+        [[ -n "$name" ]] || continue
+        path="$BASE_DIR/$name"
+        [[ -f "$path" && ! -L "$path" ]] || return 1
+        rm -f -- "$path" || return 1
+    done < <(
+        find "$BASE_DIR" -mindepth 1 -maxdepth 1 -type f \
+            -regextype posix-extended -regex '.*/\.deploy-transaction\.tmp\.[A-Za-z0-9]+' -printf '%f\n'
     )
 }
 
@@ -385,6 +542,15 @@ trap 'on_signal INT 130' INT
 trap 'on_signal TERM 143' TERM
 trap cleanup_ephemeral EXIT
 
+[[ -L "$VENV_DIR" && "$(readlink -- "$VENV_DIR")" == "$CURRENT_LINK/venv" ]] || {
+    printf 'Production venv path must be a symlink to %s/venv.\n' "$CURRENT_LINK" >&2
+    false
+}
+
+preflight_systemctl_sudo
+if [[ -e "$TRANSACTION_FILE" || -L "$TRANSACTION_FILE" ]]; then
+    recover_transaction
+fi
 reconcile_stale_artifacts
 
 if [[ -L "$CURRENT_LINK" ]]; then
@@ -398,10 +564,6 @@ elif [[ -e "$CURRENT_LINK" ]]; then
     false
 fi
 
-[[ -L "$VENV_DIR" && "$(readlink -- "$VENV_DIR")" == "$CURRENT_LINK/venv" ]] || {
-    printf 'Production venv path must be a symlink to %s/venv.\n' "$CURRENT_LINK" >&2
-    false
-}
 if [[ -n "$PREVIOUS_CURRENT" ]]; then
     [[ -x "$PREVIOUS_CURRENT/venv/bin/python" ]] || {
         printf 'Current target does not contain a usable per-release venv.\n' >&2
@@ -409,24 +571,23 @@ if [[ -n "$PREVIOUS_CURRENT" ]]; then
     }
 fi
 
-preflight_sudo
-
 if [[ "$PREVIOUS_CURRENT" == "$RELEASE_DIR" ]]; then
-    sudo -n "$SYSTEMCTL" is-active --quiet "$SERVICE"
-    probe_service
+    if has_success_marker "$RELEASE_DIR" "$GITHUB_SHA"; then
+        sudo -n "$SYSTEMCTL" is-active --quiet "$SERVICE"
+        probe_service
+    else
+        sudo -n "$SYSTEMCTL" daemon-reload
+        sudo -n "$SYSTEMCTL" restart "$SERVICE"
+        sudo -n "$SYSTEMCTL" is-active --quiet "$SERVICE"
+        probe_service
+        write_success_marker
+    fi
     trap - ERR TERM INT HUP
     printf 'Release %s is already active and healthy.\n' "$GITHUB_SHA"
     exit 0
 fi
 
-[[ "${MEDIA_ROOT:-}" == /var/lib/labhub/media ]] || {
-    printf 'MEDIA_ROOT must be exported as /var/lib/labhub/media for deployment commands.\n' >&2
-    false
-}
-[[ -d "$MEDIA_ROOT" && -w "$MEDIA_ROOT" ]] || {
-    printf 'Persistent MEDIA_ROOT is missing or not writable.\n' >&2
-    false
-}
+preflight_manage_sudo
 
 TEMP_RELEASE=$(mktemp -d "$RELEASES_DIR/.deploy-${GITHUB_SHA}.XXXXXX")
 chmod 0700 "$TEMP_RELEASE"
@@ -493,6 +654,10 @@ PY
     printf 'Archive must not contain a virtual environment.\n' >&2
     false
 }
+[[ ! -e "$TEMP_RELEASE/.deploy-success" && ! -L "$TEMP_RELEASE/.deploy-success" ]] || {
+    printf 'Archive must not contain a deployment success marker.\n' >&2
+    false
+}
 
 if [[ -e "$RELEASE_DIR" || -L "$RELEASE_DIR" ]]; then
     [[ -d "$RELEASE_DIR" && ! -L "$RELEASE_DIR" ]] || {
@@ -506,27 +671,26 @@ if [[ -e "$RELEASE_DIR" || -L "$RELEASE_DIR" ]]; then
     BACKUP_CANDIDATE="$RELEASES_DIR/.replaced-${GITHUB_SHA}.$$"
     [[ ! -e "$BACKUP_CANDIDATE" && ! -L "$BACKUP_CANDIDATE" ]] || false
     REPLACED_RELEASE_BACKUP="$BACKUP_CANDIDATE"
-    mv -- "$RELEASE_DIR" "$REPLACED_RELEASE_BACKUP"
 fi
 
-PUBLICATION_STARTED=true
+write_transaction building "${REPLACED_RELEASE_BACKUP:--}"
+if [[ -n "$REPLACED_RELEASE_BACKUP" ]]; then
+    mv -- "$RELEASE_DIR" "$REPLACED_RELEASE_BACKUP"
+fi
 mv -- "$TEMP_RELEASE" "$RELEASE_DIR"
 TEMP_RELEASE=""
-PUBLISHED=true
 
 python3 -m venv "$RELEASE_DIR/venv"
 RELEASE_PYTHON="$RELEASE_DIR/venv/bin/python"
 [[ -x "$RELEASE_PYTHON" ]] || { printf 'Per-release virtual environment is invalid.\n' >&2; false; }
 "$RELEASE_PYTHON" -m pip install --disable-pip-version-check \
     --requirement "$RELEASE_DIR/requirements.txt"
-(
-    cd "$RELEASE_DIR"
-    "$RELEASE_PYTHON" manage.py migrate --noinput
-    "$RELEASE_PYTHON" manage.py collectstatic --noinput
-)
+sudo -n "$MANAGE_LAUNCHER" "$RELEASE_DIR" migrate
+sudo -n "$MANAGE_LAUNCHER" "$RELEASE_DIR" collectstatic
 
+write_transaction ready "${REPLACED_RELEASE_BACKUP:--}"
 atomic_switch_current "$RELEASE_DIR"
-CURRENT_SWITCHED=true
+write_transaction switched "${REPLACED_RELEASE_BACKUP:--}"
 [[ "$(readlink -f -- "$VENV_DIR")" == "$RELEASE_DIR/venv" ]] || {
     printf 'Stable production venv did not follow the current switch.\n' >&2
     false
@@ -536,15 +700,14 @@ sudo -n "$SYSTEMCTL" daemon-reload
 sudo -n "$SYSTEMCTL" restart "$SERVICE"
 sudo -n "$SYSTEMCTL" is-active --quiet "$SERVICE"
 probe_service
+write_success_marker
+write_transaction committed "${REPLACED_RELEASE_BACKUP:--}"
 
 if [[ -n "$REPLACED_RELEASE_BACKUP" ]]; then
-    if safe_remove_internal_tree "$REPLACED_RELEASE_BACKUP"; then
-        REPLACED_RELEASE_BACKUP=""
-    else
-        printf 'Cleanup warning: retained replaced release backup %s.\n' \
-            "$REPLACED_RELEASE_BACKUP" >&2
-    fi
+    remove_provenanced_backup "$REPLACED_RELEASE_BACKUP"
+    REPLACED_RELEASE_BACKUP=""
 fi
+remove_transaction
 if ! cleanup_old_releases; then
     printf 'Cleanup warning: deployment succeeded but old-release cleanup was incomplete.\n' >&2
 fi
