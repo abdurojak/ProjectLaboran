@@ -3,22 +3,140 @@ name: Deploy AlmaLinux
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: projectlaboran-production
+  cancel-in-progress: false
+
 jobs:
-  deploy:
-    runs-on: [self-hosted, linux, x64]
+  build:
+    if: github.repository == 'abdurojak/ProjectLaboran' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
 
     steps:
-      - name: Deploy aplikasi
+      - name: Checkout source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+
+      - name: Build protected release
+        shell: bash
         run: |
-          set -e
-          APP_DIR=/home/admin/LabTif/ProjectLaboran
-          cd "$APP_DIR"
-          git pull --ff-only origin main
-          source venv/bin/activate
-          pip install -r requirements.txt
-          python manage.py migrate --noinput
-          python manage.py collectstatic --noinput
-          sudo -n systemctl daemon-reload
-          sudo -n systemctl restart projectlaboran-daphne
-          systemctl is-active --quiet projectlaboran-daphne
-          echo "Deployment berhasil di $(hostname)"
+          set -euo pipefail
+          docker run --rm \
+            --env HOST_UID="$(id -u)" \
+            --env HOST_GID="$(id -g)" \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --workdir /workspace \
+            quay.io/pypa/manylinux_2_28_x86_64@sha256:b04887b645dde99b9e955aeae3ff4da414992d0bd88259f046295b56361c5614 \
+            /bin/bash -euo pipefail -c '
+              PYTHON=/opt/python/cp311-cp311/bin/python
+              "$PYTHON" -m pip install --disable-pip-version-check -r requirements-build.txt
+              "$PYTHON" -m piptools compile \
+                --generate-hashes \
+                --no-emit-index-url \
+                --no-emit-trusted-host \
+                --output-file requirements.lock \
+                requirements.txt
+              rm -rf wheelhouse
+              mkdir -p wheelhouse
+              "$PYTHON" -m pip download \
+                --disable-pip-version-check \
+                --require-hashes \
+                --only-binary=:all: \
+                --dest wheelhouse \
+                -r requirements.lock
+              "$PYTHON" deployment/build_protected_artifact.py \
+                --source . \
+                --staging build/protected/release \
+                --output dist/protected/projectlaboran.protected.tar.gz \
+                --allowlist deployment/protected_modules.txt
+              chown -R "$HOST_UID:$HOST_GID" build dist requirements.lock wheelhouse
+            '
+
+      - name: Sign and package release
+        shell: bash
+        env:
+          SIGNING_KEY: ${{ secrets.PRODUCTION_ARTIFACT_SIGNING_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          PYTHON=/usr/bin/python3
+          OPENSSL=/usr/bin/openssl
+          KEY_FILE="$RUNNER_TEMP/projectlaboran-artifact-signing.pem"
+          DERIVED_PUBLIC="$RUNNER_TEMP/projectlaboran-artifact-signing.pub.pem"
+          cleanup() {
+            /usr/bin/shred -u -- "$KEY_FILE" 2>/dev/null || /usr/bin/rm -f -- "$KEY_FILE"
+            /usr/bin/rm -f -- "$DERIVED_PUBLIC"
+          }
+          trap cleanup EXIT
+          if [[ -z "${SIGNING_KEY:-}" ]]; then
+            echo "PRODUCTION_ARTIFACT_SIGNING_PRIVATE_KEY is not configured." >&2
+            exit 1
+          fi
+          umask 077
+          printf '%s\n' "$SIGNING_KEY" > "$KEY_FILE"
+          unset SIGNING_KEY
+          "$OPENSSL" pkey -in "$KEY_FILE" -pubout -out "$DERIVED_PUBLIC"
+          cmp -s "$DERIVED_PUBLIC" deployment/artifact_signing_public.pem || {
+            echo "Signing secret does not match the committed production public key." >&2
+            exit 1
+          }
+          "$PYTHON" deployment/package_release.py manifest \
+            --archive dist/protected/projectlaboran.protected.tar.gz \
+            --output dist/protected/deployment-manifest.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-number "$GITHUB_RUN_NUMBER" \
+            --source-ref "$GITHUB_REF" \
+            --source-sha "$GITHUB_SHA" \
+            --workflow .github/workflows/test-runner.yml
+          "$OPENSSL" pkeyutl -sign \
+            -inkey "$KEY_FILE" \
+            -rawin \
+            -in dist/protected/deployment-manifest.json \
+            -out dist/protected/deployment-manifest.sig
+          "$PYTHON" deployment/package_release.py envelope \
+            --archive dist/protected/projectlaboran.protected.tar.gz \
+            --manifest dist/protected/deployment-manifest.json \
+            --signature dist/protected/deployment-manifest.sig \
+            --output dist/protected/projectlaboran.deploy.tar
+
+      - name: Upload signed deployment envelope
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: projectlaboran-production-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/protected/projectlaboran.deploy.tar
+          if-no-files-found: error
+          retention-days: 1
+
+  deploy:
+    if: github.repository == 'abdurojak/ProjectLaboran' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 30
+
+    steps:
+      - name: Download signed deployment envelope
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: projectlaboran-production-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/projectlaboran-deploy
+
+      - name: Deploy signed release
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE="$RUNNER_TEMP/projectlaboran-deploy/projectlaboran.deploy.tar"
+          INCOMING=/home/admin/LabTif/incoming
+          TARGET="$INCOMING/projectlaboran.deploy.tar"
+          TEMPORARY="$INCOMING/.projectlaboran.deploy.${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}.tmp"
+          test -f "$SOURCE"
+          umask 077
+          mkdir -p "$INCOMING"
+          install -m 0600 "$SOURCE" "$TEMPORARY"
+          mv -fT "$TEMPORARY" "$TARGET"
+          sudo -n /usr/local/sbin/projectlaboran-deploy /home/admin/LabTif/incoming/projectlaboran.deploy.tar
