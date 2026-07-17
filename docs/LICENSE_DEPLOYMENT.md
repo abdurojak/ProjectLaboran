@@ -55,7 +55,7 @@ sudo find /var/lib/labhub/media -maxdepth 1 -printf '%M %u:%g %p\n'
 Trailing slash pada sumber `media/` penting: isinya disalin langsung ke direktori
 tujuan. Copy awal boleh dilakukan saat aplikasi masih aktif dan sengaja tidak
 memakai `--delete`. Cutover authoritative tetap wajib dilakukan dalam maintenance
-window setelah konfigurasi proxy dan systemd siap. Jangan hapus sumber lama; owner
+window setelah konfigurasi proxy siap. Jangan hapus sumber lama; owner
 harus menyetujui cleanup secara terpisah setelah backup dan rollback diverifikasi.
 
 ## Environment production
@@ -113,6 +113,9 @@ Django/Daphne dengan `DEBUG=False` tidak melayani `/media/` untuk production.
 Reverse proxy harus melayani file dari `/var/lib/labhub/media/`. Contoh blok Nginx:
 
 ```nginx
+# Di dalam server block production:
+include /etc/nginx/labhub-maintenance.conf;
+
 location /media/ {
     alias /var/lib/labhub/media/;
     autoindex off;
@@ -125,12 +128,12 @@ Persistenkan label SELinux yang mengizinkan Nginx membaca media. Package
 
 ```bash
 sudo dnf install -y policycoreutils-python-utils
+sudo test -e /etc/nginx/labhub-maintenance.conf || sudo install -o root -g root -m 0644 /dev/null /etc/nginx/labhub-maintenance.conf
 sudo semanage fcontext -a -t httpd_sys_content_t '/var/lib/labhub/media(/.*)?'
 sudo restorecon -Rv /var/lib/labhub/media
 sudo -u nginx test -x /var/lib/labhub/media
 sudo -u nginx find /var/lib/labhub/media -type f -print -quit | xargs -r sudo -u nginx test -r
 sudo nginx -t
-sudo systemctl restart nginx
 sudo systemctl reload nginx
 curl --fail --head -H 'Host: <production-hostname>' 'http://127.0.0.1/media/<known-test-file>'
 ```
@@ -138,6 +141,135 @@ curl --fail --head -H 'Host: <production-hostname>' 'http://127.0.0.1/media/<kno
 Gunakan hostname virtual host production, bukan public IP. Jika server tidak memakai
 Nginx, konfigurasi proxy atau media server ekuivalen, permission group, dan policy
 SELinux yang setara wajib selesai dan tervalidasi sebelum rollout.
+
+## Maintenance window untuk cutover media
+
+Daphne checkout lama harus tetap berjalan tanpa stop atau restart. Jadwalkan window
+write-free dan blok traffic pada reverse proxy. Pastikan port Daphne `8000` tidak
+dipublikasikan oleh firewalld; dari host lain di jaringan, koneksi langsung ke
+`http://<server-private-address>:8000/` juga harus gagal. Hanya Nginx lokal yang boleh
+mengakses port tersebut:
+
+```bash
+if sudo firewall-cmd --query-port=8000/tcp; then
+    sudo firewall-cmd --remove-port=8000/tcp
+fi
+if sudo firewall-cmd --permanent --query-port=8000/tcp; then
+    sudo firewall-cmd --permanent --remove-port=8000/tcp
+fi
+sudo firewall-cmd --reload
+if sudo firewall-cmd --query-port=8000/tcp; then
+    printf 'Port 8000 is still exposed.\n' >&2
+    exit 1
+fi
+curl --fail --max-time 5 http://127.0.0.1:8000/ >/dev/null
+```
+
+Dari host lain pada jaringan server, perintah berikut wajib gagal:
+
+```bash
+if curl --silent --show-error --max-time 3 'http://<server-private-address>:8000/' >/dev/null; then
+    printf 'Direct Daphne port is externally reachable.\n' >&2
+    exit 1
+fi
+```
+
+Aktifkan maintenance response pada production server block. Perintah ini memblokir
+request melalui Nginx dengan status 503 tanpa menghentikan Daphne:
+
+```bash
+printf 'return 503;\n' | sudo tee /etc/nginx/labhub-maintenance.conf >/dev/null
+sudo nginx -t
+sudo systemctl reload nginx
+status=$(curl --silent --output /dev/null --write-out '%{http_code}' -H 'Host: <production-hostname>' http://127.0.0.1/)
+test "$status" = 503
+```
+
+Dengan traffic tetap diblokir, lakukan final authoritative sync dan wajib pastikan
+dry-run tidak menghasilkan delta. Lalu rename direktori media lama menjadi backup
+tetap dan publish symlink dengan rename pada filesystem checkout yang sama. Trap
+mengembalikan direktori lama jika cutover lokal gagal sebelum blok selesai:
+
+```bash
+(
+    set -Eeuo pipefail
+    OLD_MEDIA=/home/admin/LabTif/ProjectLaboran/media
+    MEDIA_BACKUP=/home/admin/LabTif/ProjectLaboran/media.pre-persistent
+    TEMP_MEDIA_LINK=/home/admin/LabTif/ProjectLaboran/.media.persistent.$$
+    OLD_MEDIA_MOVED=false
+
+    rollback_local_cutover() {
+        status=${1:-$?}
+        trap - ERR INT TERM HUP
+        set +e
+        test ! -L "$TEMP_MEDIA_LINK" || rm -f -- "$TEMP_MEDIA_LINK"
+        if [[ "$OLD_MEDIA_MOVED" == true ]]; then
+            test ! -L "$OLD_MEDIA" || rm -f -- "$OLD_MEDIA"
+            test -e "$OLD_MEDIA" || mv -- "$MEDIA_BACKUP" "$OLD_MEDIA"
+        fi
+        exit "$status"
+    }
+    trap 'rollback_local_cutover $?' ERR
+    trap 'rollback_local_cutover 129' HUP
+    trap 'rollback_local_cutover 130' INT
+    trap 'rollback_local_cutover 143' TERM
+
+    test -d "$OLD_MEDIA" && test ! -L "$OLD_MEDIA"
+    test ! -e "$MEDIA_BACKUP" && test ! -L "$MEDIA_BACKUP"
+    test ! -e "$TEMP_MEDIA_LINK" && test ! -L "$TEMP_MEDIA_LINK"
+    sudo rsync -a --chown=admin:labhub-media --chmod=D2750,F640 -- "$OLD_MEDIA/" /var/lib/labhub/media/
+    sudo rsync -a --dry-run --itemize-changes --chown=admin:labhub-media --chmod=D2750,F640 -- "$OLD_MEDIA/" /var/lib/labhub/media/ | tee /tmp/labhub-media-final-delta.txt
+    test ! -s /tmp/labhub-media-final-delta.txt
+    ln -s -- /var/lib/labhub/media "$TEMP_MEDIA_LINK"
+    mv -- "$OLD_MEDIA" "$MEDIA_BACKUP"
+    OLD_MEDIA_MOVED=true
+    mv -T -- "$TEMP_MEDIA_LINK" "$OLD_MEDIA"
+    test "$(readlink -f -- "$OLD_MEDIA")" = /var/lib/labhub/media
+    sudo -u admin test -w "$OLD_MEDIA"
+    sudo restorecon -Rv /var/lib/labhub/media
+    trap - ERR INT TERM HUP
+)
+```
+
+Jangan gunakan `--delete`: source lama tetap tersimpan sebagai
+`media.pre-persistent` sampai owner menyetujui penghapusan. Kosongkan maintenance
+include dan reload Nginx untuk membuka traffic, tetapi pertahankan maintenance window
+agar hanya owner melakukan upload/read uji terhadap checkout **lama yang masih
+berjalan**:
+
+```bash
+sudo truncate -s 0 /etc/nginx/labhub-maintenance.conf
+sudo nginx -t
+sudo systemctl reload nginx
+curl --fail --max-time 5 -H 'Host: <production-hostname>' http://127.0.0.1/ >/dev/null
+sudo find /var/lib/labhub/media -type f -mmin -10 -printf '%TY-%Tm-%Td %TH:%TM:%TS %p\n'
+curl --fail --head -H 'Host: <production-hostname>' 'http://127.0.0.1/media/<uploaded-test-file>'
+```
+
+Lakukan satu upload terkontrol melalui UI/API dan pastikan file dapat dibaca kembali
+melalui URL Nginx di atas. Jangan buka window untuk user lain sebelum validasi selesai.
+Jika upload/read gagal, blok traffic lagi lalu rollback symlink selama maintenance
+window. Sync balik tanpa `--delete` mempertahankan upload uji yang mungkin sudah
+masuk ke persistent target:
+
+```bash
+printf 'return 503;\n' | sudo tee /etc/nginx/labhub-maintenance.conf >/dev/null
+sudo nginx -t
+sudo systemctl reload nginx
+OLD_MEDIA=/home/admin/LabTif/ProjectLaboran/media
+MEDIA_BACKUP=/home/admin/LabTif/ProjectLaboran/media.pre-persistent
+test "$(readlink -f -- "$OLD_MEDIA")" = /var/lib/labhub/media
+test -d "$MEDIA_BACKUP" && test ! -L "$MEDIA_BACKUP"
+sudo rsync -a --chown=admin:labhub-media --chmod=D2750,F640 -- /var/lib/labhub/media/ "$MEDIA_BACKUP/"
+rm -f -- "$OLD_MEDIA"
+mv -- "$MEDIA_BACKUP" "$OLD_MEDIA"
+sudo truncate -s 0 /etc/nginx/labhub-maintenance.conf
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+Protected rollout hanya boleh dilanjutkan setelah upload/read checkout lama berhasil.
+Migration database terpisah dan tidak dibalik oleh media rollback.
 
 ## Baseline symlink tanpa outage
 
@@ -301,63 +433,31 @@ Group=admin
 UMask=0027
 WorkingDirectory=/home/admin/LabTif/current
 EnvironmentFile=/etc/labhub/labhub.env
-ExecStart=/home/admin/LabTif/production-venv/bin/python -m daphne -b 0.0.0.0 -p 8000 project_laboran.asgi:application
+ExecStart=/home/admin/LabTif/production-venv/bin/python -m daphne -b 127.0.0.1 -p 8000 project_laboran.asgi:application
 ```
 
-Unit baru **dilarang** di-reload atau di-restart sampai `current` menunjuk checkout
-lama, `production-venv` menunjuk `current/venv`, final sync persistent media selesai,
-dan `/etc/labhub/labhub.env` root-owned mode `0600` berisi `MEDIA_ROOT` yang benar.
-Pada tahap ini hanya periksa path baseline; maintenance window berikut menyelesaikan
-sync dan melakukan satu controlled reload/restart:
+Media cutover dan validasi checkout lama harus sudah berhasil sebelum tahap ini.
+Verifikasi seluruh baseline, lalu lakukan `daemon-reload` saja. **Jangan stop atau
+restart Daphne sebelum protected rollout pertama**:
 
 ```bash
 test "$(readlink -f /home/admin/LabTif/current)" = /home/admin/LabTif/ProjectLaboran
 test "$(readlink -f /home/admin/LabTif/production-venv)" = /home/admin/LabTif/ProjectLaboran/venv
-```
-
-## Maintenance window untuk cutover media
-
-Setelah environment, baseline symlink, systemd, Nginx, permission, dan SELinux siap,
-jadwalkan maintenance singkat. Copy awal boleh dilakukan live, tetapi final sync
-harus dilakukan saat checkout lama sudah berhenti menerima upload:
-
-```bash
-sudo /usr/bin/systemctl stop projectlaboran-daphne
-sudo rsync -a --chown=admin:labhub-media --chmod=D2750,F640 -- /home/admin/LabTif/ProjectLaboran/media/ /var/lib/labhub/media/
-sudo rsync -a --dry-run --itemize-changes --chown=admin:labhub-media --chmod=D2750,F640 -- /home/admin/LabTif/ProjectLaboran/media/ /var/lib/labhub/media/ | tee /tmp/labhub-media-final-delta.txt
-test ! -s /tmp/labhub-media-final-delta.txt
 sudo grep -q '^MEDIA_ROOT=/var/lib/labhub/media$' /etc/labhub/labhub.env
 sudo test "$(stat -c '%U:%G %a' /etc/labhub/labhub.env)" = 'root:root 600'
-sudo -u admin test -w /var/lib/labhub/media
-sudo restorecon -Rv /var/lib/labhub/media
-test "$(readlink -f /home/admin/LabTif/current)" = /home/admin/LabTif/ProjectLaboran
-test "$(readlink -f /home/admin/LabTif/production-venv)" = /home/admin/LabTif/ProjectLaboran/venv
+test "$(readlink -f /home/admin/LabTif/ProjectLaboran/media)" = /var/lib/labhub/media
 sudo /usr/bin/systemctl daemon-reload
-sudo /usr/bin/systemctl restart projectlaboran-daphne
 sudo /usr/bin/systemctl is-active --quiet projectlaboran-daphne
-test "$(readlink -f /home/admin/LabTif/current)" = /home/admin/LabTif/ProjectLaboran
 curl --fail --max-time 5 -H 'Host: <production-hostname>' http://127.0.0.1/
 ```
 
-Restart ini menjalankan checkout **lama** melalui path baseline yang sudah valid,
-bukan protected release. Langkah ini membuktikan checkout lama dapat memakai
-persistent `MEDIA_ROOT` melalui konfigurasi unit baru sebelum protected rollout,
-sekaligus menghilangkan outage window karena systemd tidak pernah menunjuk path
-`current` atau interpreter yang belum ada.
-
-Perintah rsync final bersifat authoritative dari sumber lama ke target, tetapi tidak
-memakai `--delete`, sehingga file target-only tidak dihapus. Setelah restart, lakukan
-satu upload uji melalui UI/API checkout lama, pastikan file baru muncul di
-`/var/lib/labhub/media`, lalu validasi URL-nya melalui proxy:
-
-```bash
-sudo find /var/lib/labhub/media -type f -mmin -10 -printf '%TY-%Tm-%Td %TH:%TM:%TS %p\n'
-curl --fail --head -H 'Host: <production-hostname>' 'http://127.0.0.1/media/<uploaded-test-file>'
-```
-
-Jangan lanjut ke protected rollout sampai upload dan serving media berhasil. Jangan
-hapus source media lama. Migration database adalah proses terpisah dan tidak dibalik
-oleh rsync, deploy rollback, atau media rollback.
+`daemon-reload` hanya memuat definisi unit; proses Daphne lama tetap berjalan dengan
+command dan environment lamanya. Symlink media membuat relative media path checkout
+lama langsung menuju persistent storage tanpa restart. Karena `current` menunjuk
+checkout lama dan `production-venv` resolve ke venv lamanya, restart tak terduga
+setelah tahap ini tetap memiliki path valid. Restart yang direncanakan pertama hanya
+dilakukan oleh deploy script setelah protected release diekstrak, venv selesai,
+migration/collectstatic berhasil, dan `current` sudah berpindah atomik ke release itu.
 
 ## Isolasi self-hosted runner
 
