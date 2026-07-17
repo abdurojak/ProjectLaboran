@@ -1,6 +1,9 @@
 import argparse
+import gzip
+import os
 import shutil
 import tarfile
+import tempfile
 from pathlib import Path
 
 from Cython.Build import cythonize
@@ -125,11 +128,81 @@ def _compile_protected_modules(staging, protected):
             generated_c.unlink()
 
 
+def _normalized_ustar_info(info):
+    if info.type not in {tarfile.REGTYPE, tarfile.AREGTYPE, tarfile.DIRTYPE}:
+        raise ValueError(
+            f"USTAR archive entry must be a regular file or directory: {info.name!r}"
+        )
+
+    info.uid = 0
+    info.gid = 0
+    info.uname = ""
+    info.gname = ""
+    info.mtime = 0
+    info.mode = 0o755 if info.isdir() else 0o644
+    info.pax_headers = {}
+    info.linkname = ""
+    info.devmajor = 0
+    info.devminor = 0
+    try:
+        info.tobuf(
+            format=tarfile.USTAR_FORMAT,
+            encoding="utf-8",
+            errors="strict",
+        )
+    except (UnicodeError, ValueError) as error:
+        raise ValueError(
+            f"Path or metadata is not safely representable in USTAR: {info.name!r}"
+        ) from error
+    return info
+
+
 def _write_archive(staging, output):
+    staging = Path(staging)
+    output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(output, "w:gz") as archive:
-        for path in sorted(staging.iterdir()):
-            archive.add(path, arcname=path.name)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{output.name}.",
+        suffix=".tmp",
+        dir=output.parent,
+    )
+    os.close(descriptor)
+    temporary = Path(temporary_name)
+    try:
+        with temporary.open("wb") as raw_output:
+            with gzip.GzipFile(
+                filename="",
+                mode="wb",
+                fileobj=raw_output,
+                compresslevel=9,
+                mtime=0,
+            ) as compressed:
+                with tarfile.open(
+                    fileobj=compressed,
+                    mode="w|",
+                    format=tarfile.USTAR_FORMAT,
+                    dereference=False,
+                    encoding="utf-8",
+                    errors="strict",
+                ) as archive:
+                    for path in sorted(staging.iterdir()):
+                        archive.add(
+                            path,
+                            arcname=path.name,
+                            recursive=True,
+                            filter=_normalized_ustar_info,
+                        )
+            raw_output.flush()
+            os.fsync(raw_output.fileno())
+        os.replace(temporary, output)
+    except ValueError:
+        temporary.unlink(missing_ok=True)
+        raise
+    except (OSError, tarfile.TarError) as error:
+        temporary.unlink(missing_ok=True)
+        raise ValueError(
+            f"Unable to create safe deterministic USTAR archive: {error}"
+        ) from error
 
 
 def build_artifact(source, staging, output, allowlist):

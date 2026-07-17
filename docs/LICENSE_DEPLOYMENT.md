@@ -121,6 +121,15 @@ wheelhouse/<distribution-wheels>.whl
 ...
 ```
 
+Builder resmi menulis protected archive sebagai deterministic gzip-wrapped USTAR,
+bukan format default PAX/GNU. Gzip header memakai `mtime=0` tanpa output filename;
+setiap USTAR entry memakai `uid/gid=0`, empty `uname/gname`, `mtime=0`, directory
+mode `0755`, dan regular-file mode `0644`. Link/device serta path atau metadata yang
+tidak dapat direpresentasikan langsung oleh USTAR menggagalkan build. Builder menulis
+ke temporary file pada directory output yang sama dan hanya melakukan atomic replace
+setelah seluruh archive selesai dan `fsync`, sehingga kegagalan tidak mempublikasikan
+partial artifact atau memakai extension fallback.
+
 Task 7 menjalankan interpreter manylinux dengan ABI yang sama, meng-install versi
 `pip-tools` yang dipin di workflow, menghasilkan fully resolved
 `requirements.lock` memakai `pip-compile --generate-hashes`, lalu menjalankan

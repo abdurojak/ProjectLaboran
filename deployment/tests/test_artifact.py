@@ -1,5 +1,8 @@
 import io
+import os
 import shutil
+import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -9,6 +12,15 @@ from unittest.mock import patch
 from deployment import build_protected_artifact as builder
 from deployment.artifact import inspect_release_tree, load_protected_modules
 from deployment.verify_protected_artifact import _extract_archive, verify_artifact
+
+
+def _launcher_python_helper(function_name):
+    launcher = Path(__file__).parents[1] / "deploy_release.sh"
+    script = launcher.read_text(encoding="utf-8")
+    function_start = script.index(f"{function_name}() {{")
+    helper_start = script.index("<<'PY'\n", function_start) + len("<<'PY'\n")
+    helper_end = script.index("\nPY\n", helper_start)
+    return script[helper_start:helper_end]
 
 
 class LoadProtectedModulesTests(unittest.TestCase):
@@ -416,6 +428,100 @@ class BuilderIgnorePolicyTests(unittest.TestCase):
 
 
 class ArchiveCreationTests(unittest.TestCase):
+    def test_fractional_mtime_ustar_is_accepted_by_launcher_helper(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            staging = root / "release"
+            staging.mkdir()
+            source = staging / "manage.py"
+            source.write_text("application", encoding="utf-8")
+            fractional_ns = 1_700_000_000_123_456_789
+            os.utime(source, ns=(fractional_ns, fractional_ns))
+            output = root / "artifact.tar.gz"
+            extracted = root / "extracted"
+            extracted.mkdir()
+
+            builder._write_archive(staging, output)
+            with tarfile.open(output, "r:gz") as archive:
+                member = archive.getmember("manage.py")
+                self.assertEqual(member.uid, 0)
+                self.assertEqual(member.gid, 0)
+                self.assertEqual(member.uname, "")
+                self.assertEqual(member.gname, "")
+                self.assertEqual(member.mode, 0o644)
+                self.assertEqual(member.mtime, 0)
+                self.assertEqual(member.pax_headers, {})
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-I",
+                    "-",
+                    str(output),
+                    str(extracted),
+                ],
+                input=_launcher_python_helper("extract_protected_release"),
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                (extracted / "manage.py").read_text(encoding="utf-8"),
+                "application",
+            )
+
+    def test_archive_bytes_are_deterministic(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            staging = root / "release"
+            staging.mkdir()
+            (staging / "manage.py").write_text("application", encoding="utf-8")
+            first = root / "first.tar.gz"
+            second = root / "second.tar.gz"
+
+            builder._write_archive(staging, first)
+            builder._write_archive(staging, second)
+
+            first_bytes = first.read_bytes()
+            second_bytes = second.read_bytes()
+
+        self.assertEqual(first_bytes, second_bytes)
+        self.assertEqual(first_bytes[4:8], b"\0\0\0\0")
+
+    def test_unrepresentable_ustar_path_does_not_replace_output(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            staging = root / "release"
+            staging.mkdir()
+            (staging / ("x" * 101)).write_text("unsafe", encoding="utf-8")
+            output = root / "artifact.tar.gz"
+            output.write_bytes(b"existing artifact")
+
+            with self.assertRaisesRegex(ValueError, "USTAR"):
+                builder._write_archive(staging, output)
+
+            published = output.read_bytes()
+
+        self.assertEqual(published, b"existing artifact")
+
+    def test_hard_link_does_not_replace_output(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            staging = root / "release"
+            staging.mkdir()
+            source = staging / "source.txt"
+            source.write_text("linked", encoding="utf-8")
+            os.link(source, staging / "hard-link.txt")
+            output = root / "artifact.tar.gz"
+            output.write_bytes(b"existing artifact")
+
+            with self.assertRaisesRegex(ValueError, "USTAR archive entry"):
+                builder._write_archive(staging, output)
+
+            published = output.read_bytes()
+
+        self.assertEqual(published, b"existing artifact")
+
     def test_writes_release_contents_at_archive_root_and_verifies_them(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
