@@ -2,9 +2,13 @@
 .worktrees/
 __pycache__/
 *.py[cod]
-db.sqlite3
+*.sqlite3
 .env
 .env.backup
+.env.*
+!.env.example
+.codex-remote-attachments/
+tmp/
 # Production license and deployment secrets.
 labhub.env
 license.key
