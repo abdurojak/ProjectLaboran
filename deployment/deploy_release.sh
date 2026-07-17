@@ -312,7 +312,7 @@ rollback_transaction() {
     return 1
 }
 
-finalize_committed_transaction() {
+committed_release_is_healthy() {
     local active
 
     active=$(current_target_path 2>/dev/null || true)
@@ -320,6 +320,11 @@ finalize_committed_transaction() {
     has_success_marker "$TX_RELEASE" "$TX_SHA" || return 1
     sudo -n "$SYSTEMCTL" is-active --quiet "$SERVICE" || return 1
     probe_service || return 1
+}
+
+finish_committed_cleanup() {
+    read_transaction || return 1
+    [[ "$TX_PHASE" == committed ]] || return 1
     if [[ -n "$TX_BACKUP" && -d "$TX_BACKUP" && ! -L "$TX_BACKUP" ]]; then
         remove_provenanced_backup "$TX_BACKUP" || return 1
     elif [[ -n "$TX_BACKUP" && ( -e "$TX_BACKUP" || -L "$TX_BACKUP" ) ]]; then
@@ -332,8 +337,12 @@ recover_transaction() {
     read_transaction || { printf 'Transaction journal is malformed; refusing deployment.\n' >&2; return 1; }
     printf 'Recovering deployment transaction for %s at phase %s.\n' "$TX_SHA" "$TX_PHASE" >&2
     if [[ "$TX_PHASE" == committed ]]; then
-        if finalize_committed_transaction; then
-            return 0
+        if committed_release_is_healthy; then
+            if finish_committed_cleanup; then
+                return 0
+            fi
+            printf 'Cleanup warning: healthy committed release retained with its transaction journal.\n' >&2
+            return 1
         fi
         read_transaction || return 1
     fi
@@ -702,15 +711,15 @@ sudo -n "$SYSTEMCTL" is-active --quiet "$SERVICE"
 probe_service
 write_success_marker
 write_transaction committed "${REPLACED_RELEASE_BACKUP:--}"
-
-if [[ -n "$REPLACED_RELEASE_BACKUP" ]]; then
-    remove_provenanced_backup "$REPLACED_RELEASE_BACKUP"
-    REPLACED_RELEASE_BACKUP=""
-fi
-remove_transaction
-if ! cleanup_old_releases; then
-    printf 'Cleanup warning: deployment succeeded but old-release cleanup was incomplete.\n' >&2
-fi
-
 trap - ERR TERM INT HUP
+
+if finish_committed_cleanup; then
+    REPLACED_RELEASE_BACKUP=""
+    if ! cleanup_old_releases; then
+        printf 'Cleanup warning: deployment succeeded but old-release cleanup was incomplete.\n' >&2
+    fi
+else
+    printf 'Cleanup warning: deployment succeeded; committed cleanup will be retried on the next run.\n' >&2
+fi
+
 printf 'Deployment completed for release %s.\n' "$GITHUB_SHA"

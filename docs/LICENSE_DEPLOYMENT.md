@@ -291,8 +291,8 @@ migration, atau pergantian `current`.
 
 ## Konfigurasi systemd
 
-Setelah baseline symlink dan environment siap, ubah
-`/etc/systemd/system/projectlaboran-daphne.service`:
+Siapkan perubahan `/etc/systemd/system/projectlaboran-daphne.service` berikut,
+tetapi jangan menjalankan `daemon-reload` atau restart unit berbasis `current` dulu:
 
 ```ini
 [Service]
@@ -304,13 +304,15 @@ EnvironmentFile=/etc/labhub/labhub.env
 ExecStart=/home/admin/LabTif/production-venv/bin/python -m daphne -b 0.0.0.0 -p 8000 project_laboran.asgi:application
 ```
 
-Reload unit, tetapi jangan restart Daphne sebelum artifact pertama. Baseline
-`current` tetap menunjuk checkout lama sehingga tidak ada window path yang hilang:
+Unit baru **dilarang** di-reload atau di-restart sampai `current` menunjuk checkout
+lama, `production-venv` menunjuk `current/venv`, final sync persistent media selesai,
+dan `/etc/labhub/labhub.env` root-owned mode `0600` berisi `MEDIA_ROOT` yang benar.
+Pada tahap ini hanya periksa path baseline; maintenance window berikut menyelesaikan
+sync dan melakukan satu controlled reload/restart:
 
 ```bash
-sudo /usr/bin/systemctl daemon-reload
-readlink -f /home/admin/LabTif/current
-readlink -f /home/admin/LabTif/production-venv
+test "$(readlink -f /home/admin/LabTif/current)" = /home/admin/LabTif/ProjectLaboran
+test "$(readlink -f /home/admin/LabTif/production-venv)" = /home/admin/LabTif/ProjectLaboran/venv
 ```
 
 ## Maintenance window untuk cutover media
@@ -325,14 +327,23 @@ sudo rsync -a --chown=admin:labhub-media --chmod=D2750,F640 -- /home/admin/LabTi
 sudo rsync -a --dry-run --itemize-changes --chown=admin:labhub-media --chmod=D2750,F640 -- /home/admin/LabTif/ProjectLaboran/media/ /var/lib/labhub/media/ | tee /tmp/labhub-media-final-delta.txt
 test ! -s /tmp/labhub-media-final-delta.txt
 sudo grep -q '^MEDIA_ROOT=/var/lib/labhub/media$' /etc/labhub/labhub.env
+sudo test "$(stat -c '%U:%G %a' /etc/labhub/labhub.env)" = 'root:root 600'
 sudo -u admin test -w /var/lib/labhub/media
 sudo restorecon -Rv /var/lib/labhub/media
+test "$(readlink -f /home/admin/LabTif/current)" = /home/admin/LabTif/ProjectLaboran
+test "$(readlink -f /home/admin/LabTif/production-venv)" = /home/admin/LabTif/ProjectLaboran/venv
 sudo /usr/bin/systemctl daemon-reload
 sudo /usr/bin/systemctl restart projectlaboran-daphne
 sudo /usr/bin/systemctl is-active --quiet projectlaboran-daphne
 test "$(readlink -f /home/admin/LabTif/current)" = /home/admin/LabTif/ProjectLaboran
 curl --fail --max-time 5 -H 'Host: <production-hostname>' http://127.0.0.1/
 ```
+
+Restart ini menjalankan checkout **lama** melalui path baseline yang sudah valid,
+bukan protected release. Langkah ini membuktikan checkout lama dapat memakai
+persistent `MEDIA_ROOT` melalui konfigurasi unit baru sebelum protected rollout,
+sekaligus menghilangkan outage window karena systemd tidak pernah menunjuk path
+`current` atau interpreter yang belum ada.
 
 Perintah rsync final bersifat authoritative dari sumber lama ke target, tetapi tidak
 memakai `--delete`, sehingga file target-only tidak dihapus. Setelah restart, lakukan
