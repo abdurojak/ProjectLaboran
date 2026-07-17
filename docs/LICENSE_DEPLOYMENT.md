@@ -76,12 +76,17 @@ sudo test "$(sha256sum /etc/labhub/artifact-signing-public.pem | cut -d' ' -f1)"
   c794ff86b66e9138a0ca6ba729e6e11911c69cf5cc40a16c264a55793b6170bc
 ```
 
-Install OpenSSL dari package OS dan lakukan one-time check bahwa absolute binary
-mengenali public key Ed25519 dan menyediakan operasi raw Ed25519:
+Install package prerequisite OpenSSL dan curl dari repository AlmaLinux. Launcher
+memakai absolute `/usr/bin/openssl` untuk signature dan `/usr/bin/curl` untuk local
+service health probe. Lakukan one-time check bahwa OpenSSL mengenali public key
+Ed25519 dan menyediakan operasi raw Ed25519:
 
 ```bash
+sudo dnf install -y openssl curl
 test -x /usr/bin/openssl
+test -x /usr/bin/curl
 /usr/bin/openssl version
+/usr/bin/curl --version
 /usr/bin/openssl pkey -pubin \
   -in /etc/labhub/artifact-signing-public.pem -text -noout | grep -F ED25519
 /usr/bin/openssl list -public-key-methods | grep -F ED25519
@@ -645,8 +650,16 @@ phase. Sebelum restart, launcher switch `current` dan `/etc/labhub/current.env`
 secara terpisah tetapi di dalam transaction yang sama. Crash/signal di antaranya
 mengembalikan **keduanya**, lalu restart dan identity/health-check target lama.
 
-Protected release diekstrak streaming dengan jumlah entry, size per-entry, dan total
-uncompressed yang dibatasi. Candidate berada di temp private `root:labhub-build 0710`.
+Protected release memakai dua bounded streaming pass atas gzip tar. Pass pertama
+memeriksa raw 512-byte headers sebelum `tarfile` extraction dan menolak PAX,
+GNU long-name/long-link/sparse, link, serta device sebelum membaca payload entry itu.
+Scanner membatasi 100.000 raw header, 512 MiB per regular file, 1 GiB cumulative
+declared file data, cumulative decompressed/raw bytes termasuk padding, dan maksimal
+1 MiB trailing zero padding. Tepat dua zero blocks wajib mengakhiri tar dan trailing
+nonzero content ditolak. Payload entry normal dibuang dalam chunk maksimal 1 MiB,
+bukan dimuat penuh ke memory; highly-compressible extension bomb ditolak dari
+header-nya. Pass kedua mempertahankan validasi path, duplicate, mode, type, per-entry,
+dan total extraction. Candidate berada di temp private `root:labhub-build 0710`.
 Root membuat directory `venv` milik `labhub-build`; user tersebut menjalankan
 `python3 -m venv` dan install hanya dari wheelhouse dengan `--no-index` serta
 `--require-hashes`. Masih di candidate private, `labhub-build` menjalankan

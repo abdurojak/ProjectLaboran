@@ -32,6 +32,7 @@ BUILD_GROUP=labhub-build
 SERVICE=projectlaboran-daphne
 SYSTEMCTL=/usr/bin/systemctl
 RUNUSER=/usr/sbin/runuser
+CURL=/usr/bin/curl
 OPENSSL=/usr/bin/openssl
 SHA256SUM=/usr/bin/sha256sum
 PYTHON3=/usr/bin/python3
@@ -672,7 +673,7 @@ probe_service() {
     local attempt status
 
     for attempt in {1..15}; do
-        if status=$(curl --silent --show-error --output /dev/null \
+        if status=$("$CURL" --silent --show-error --output /dev/null \
             --write-out '%{http_code}' --connect-timeout 2 --max-time 5 \
             'http://127.0.0.1:8000/'); then
             if [[ "$status" =~ ^[0-9]{3}$ ]] && ((10#$status < 500)); then
@@ -1114,6 +1115,7 @@ extract_protected_release() {
     TEMP_RELEASE=$(mktemp -d "$RELEASES_DIR/.deploy-${SHA}.XXXXXX")
     chmod 0700 "$TEMP_RELEASE"
     "$PYTHON3" -I - "$archive" "$TEMP_RELEASE" <<'PY'
+import gzip
 import os
 import sys
 import tarfile
@@ -1124,6 +1126,85 @@ destination = Path(sys.argv[2])
 max_entries = 100_000
 max_total_size = 1024 * 1024 * 1024
 max_member_size = 512 * 1024 * 1024
+max_trailing_size = 1024 * 1024
+max_raw_size = (
+    max_total_size
+    + (max_entries * 2 * tarfile.BLOCKSIZE)
+    + (2 * tarfile.BLOCKSIZE)
+    + max_trailing_size
+)
+zero_block = b"\0" * tarfile.BLOCKSIZE
+extension_types = {
+    tarfile.XHDTYPE,
+    tarfile.XGLTYPE,
+    tarfile.GNUTYPE_LONGNAME,
+    tarfile.GNUTYPE_LONGLINK,
+    tarfile.GNUTYPE_SPARSE,
+}
+
+with gzip.open(archive_path, "rb") as raw_archive:
+    raw_header_count = 0
+    raw_file_data = 0
+    raw_bytes_processed = 0
+
+    def bounded_read(size):
+        global raw_bytes_processed
+        data = raw_archive.read(size)
+        raw_bytes_processed += len(data)
+        if raw_bytes_processed > max_raw_size:
+            raise ValueError("protected archive decompressed data is too large")
+        return data
+
+    def discard_exact(size):
+        remaining = size
+        while remaining:
+            chunk = bounded_read(min(1024 * 1024, remaining))
+            if not chunk:
+                raise ValueError("truncated protected archive raw entry")
+            remaining -= len(chunk)
+
+    while True:
+        header = bounded_read(tarfile.BLOCKSIZE)
+        if len(header) != tarfile.BLOCKSIZE:
+            raise ValueError("protected archive is truncated before its tar end marker")
+        if header == zero_block:
+            if bounded_read(tarfile.BLOCKSIZE) != zero_block:
+                raise ValueError("protected archive has an incomplete tar end marker")
+            trailing_size = 0
+            while True:
+                chunk = bounded_read(1024 * 1024)
+                if not chunk:
+                    break
+                trailing_size += len(chunk)
+                if trailing_size > max_trailing_size:
+                    raise ValueError("protected archive has excessive trailing padding")
+                if chunk.strip(b"\0"):
+                    raise ValueError("protected archive has nonzero trailing content")
+            break
+        raw_header_count += 1
+        if raw_header_count > max_entries:
+            raise ValueError("protected archive contains too many raw headers")
+        try:
+            raw_member = tarfile.TarInfo.frombuf(header, encoding="utf-8", errors="strict")
+        except (tarfile.HeaderError, UnicodeError, ValueError) as error:
+            raise ValueError("protected archive contains an invalid raw tar header") from error
+        if raw_member.type in extension_types:
+            raise ValueError("protected archive contains forbidden PAX or GNU extension metadata")
+        if raw_member.type not in {tarfile.REGTYPE, tarfile.AREGTYPE, tarfile.DIRTYPE}:
+            raise ValueError("protected archive contains an unsafe raw entry type")
+        if raw_member.isdir():
+            if raw_member.size != 0:
+                raise ValueError("protected archive raw directory has data")
+        else:
+            if raw_member.size < 0 or raw_member.size > max_member_size:
+                raise ValueError("protected archive raw member size is unsafe")
+            raw_file_data += raw_member.size
+            if raw_file_data > max_total_size:
+                raise ValueError("protected archive declared file data is too large")
+        padded_size = (
+            (raw_member.size + tarfile.BLOCKSIZE - 1) // tarfile.BLOCKSIZE
+        ) * tarfile.BLOCKSIZE
+        discard_exact(padded_size)
 
 with tarfile.open(archive_path, "r|gz") as archive:
     kinds = {}
@@ -1426,7 +1507,7 @@ preflight_root_installation() {
     require_root_owned "$BASE_DIR" 755 || fail 'BASE_DIR must be root:root mode 0755.'
     require_root_owned "$RELEASES_DIR" 755 || fail 'RELEASES_DIR must be root:root mode 0755.'
     require_root_owned "$ENV_DIR" 700 || fail 'The environment directory must be root:root mode 0700.'
-    [[ -x "$SYSTEMCTL" && -x "$RUNUSER" && -x "$OPENSSL" && \
+    [[ -x "$SYSTEMCTL" && -x "$RUNUSER" && -x "$CURL" && -x "$OPENSSL" && \
         -x "$SHA256SUM" && -x "$PYTHON3" && -x "$RESTORECON" ]] || \
         fail 'Required system executables are missing.'
     getent passwd "$APP_USER" >/dev/null || fail 'The dedicated application user is missing.'
