@@ -1,9 +1,13 @@
 # LabHub Protected Deployment
 
-Deployment production memakai root-owned launcher, GitHub-hosted artifact provenance,
+Deployment production memakai root-owned launcher, owner-controlled artifact signature,
 release immutable, dedicated runtime user, dan transaction journal untuk code serta
 environment. Self-hosted runner hanya boleh menaruh satu envelope pada direktori
 incoming dan meminta launcher terpasang untuk memprosesnya.
+
+**Ubah repository menjadi private sebelum rollout ini.** Source protection tidak
+tercapai selama repository masih public. Setelah perubahan visibility, audit akses
+collaborator dan pastikan hanya owner yang memiliki write/admin access.
 
 ## License v2 di laptop owner
 
@@ -19,65 +23,89 @@ python manage.py generate_labhub_license --customer "Lab FTI" --fingerprint "<ma
 Output menjadi `LABHUB_LICENSE_KEY` v2. Server tidak menyimpan private key, signing
 secret, atau verification secret v2.
 
-## Trust artifact GitHub
+## Trust artifact owner
 
-GitHub menjelaskan bahwa artifact attestation mengikat artifact ke repository,
-commit, dan workflow pembuatnya; public repository memakai Sigstore Public Good
-Instance. Verifikasi lokal memerlukan GitHub CLI, artifact, bundle, serta trusted
-root. Lihat dokumentasi resmi [artifact attestations](https://docs.github.com/en/actions/concepts/security/artifact-attestations),
-[offline verification](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/verify-attestations-offline),
-dan [`gh attestation verify`](https://cli.github.com/manual/gh_attestation_verify).
+Repository private biasa pada GitHub Free/Pro/Team tidak dapat mengandalkan
+GitHub-hosted artifact provenance tanpa GitHub Enterprise Cloud. Trust anchor
+deployment karena itu adalah key Ed25519 khusus artifact milik owner. Signature
+detached membuktikan bahwa manifest dan digest artifact diotorisasi oleh pemegang
+private key; signature tidak membuktikan bahwa workflow GitHub tertentu berjalan.
 
-Attestation membuktikan provenance, bukan freshness. Karena repository public,
-launcher root juga mengambil
-`https://api.github.com/repos/abdurojak/ProjectLaboran/commits/main` melalui HTTPS
-terverifikasi (`--disable`, `--noproxy '*'`, `--proto '=https'`, TLS minimum 1.2),
-parse JSON tanpa `eval`, dan
-mewajibkan `source-sha` sama persis dengan HEAD `main`. Network, DNS, TLS, API,
-format JSON, dan rate-limit error semuanya fail closed. Check dilakukan setelah
-attestation, setelah build sebelum publication, dan tepat sebelum activation setelah
-management command. Masih ada race kecil bila `main` bergerak tepat setelah check
-terakhir; bila `main` berubah selama build/deploy, hasilkan ulang dan deploy build
-HEAD terbaru.
+Private key artifact signing dibuat dan disimpan hanya di storage owner di luar
+repository. Jangan print, commit, upload sebagai artifact, salin ke runner permanen,
+atau install private key pada server. Tambahkan seluruh PEM private key sebagai
+GitHub Actions secret bernama `PRODUCTION_ARTIFACT_SIGNING_PRIVATE_KEY`:
 
-Install GitHub CLI dari repository package resmi GitHub CLI untuk AlmaLinux, lalu
-pastikan executable root-installed tersedia pada path yang dipakai launcher:
+- GitHub Pro: gunakan environment secret private-repository bila tersedia; ini
+  membatasi secret ke job yang mereferensikan environment.
+- GitHub Free private repository: environment secret private-repository tidak
+  tersedia. Gunakan repository Actions secret.
+- Free/Pro/Team private repository tidak menyediakan required reviewers untuk
+  environment. Jangan menganggap environment secret sebagai approval gate.
+
+GitHub mendokumentasikan bahwa repository dan environment secrets tersedia sebagai
+jenis Actions secrets, sementara environment secrets pada private repository
+memerlukan Pro/Team/Enterprise. Required reviewers pada Free/Pro/Team hanya tersedia
+untuk public repository. Lihat [Secrets](https://docs.github.com/en/actions/concepts/security/secrets),
+[Deployments and environments](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments),
+dan [Managing environments](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments).
+
+Untuk GitHub Free, compensating controls wajib: hanya owner memiliki write access,
+workflow deployment hanya `workflow_dispatch`, 2FA aktif, dan owner membaca diff
+`.github/workflows/test-runner.yml` sebelum setiap dispatch. GitHub merekomendasikan
+TOTP dan security key dibanding SMS; lihat [configuring 2FA](https://docs.github.com/en/authentication/securing-your-account-with-two-factor-authentication-2fa/configuring-two-factor-authentication).
+Pada plan yang mendukung private-repository rulesets/branch protection, lindungi
+`main`, larang force push/direct push, dan wajibkan review workflow. GitHub
+mendokumentasikan private-repository rulesets untuk Pro/Team/Enterprise, sehingga
+control ini direkomendasikan ketika plan mendukung dan bukan asumsi universal untuk
+private personal repository Free; lihat [About rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets).
+
+Public key yang tracked aman didistribusikan. Verifikasi checkout lalu install
+root-owned pada server:
 
 ```bash
-test "$(command -v gh)" = /usr/bin/gh
-test "$(command -v curl)" = /usr/bin/curl
-sudo test "$(stat -c '%U:%G' /usr/bin/gh)" = root:root
-/usr/bin/gh version
-/usr/bin/curl --version
-```
-
-Ambil trusted root dengan GitHub CLI dan install sebagai file immutable bagi runner:
-
-```bash
+test "$(sha256sum deployment/artifact_signing_public.pem | cut -d' ' -f1)" = \
+  c794ff86b66e9138a0ca6ba729e6e11911c69cf5cc40a16c264a55793b6170bc
 sudo install -d -o root -g root -m 0700 /etc/labhub
-TRUST_TMP=$(sudo mktemp /etc/labhub/.trusted-root.XXXXXX)
-sudo /usr/bin/gh attestation trusted-root | sudo tee "$TRUST_TMP" >/dev/null
-sudo chown root:root "$TRUST_TMP"
-sudo chmod 0644 "$TRUST_TMP"
-sudo mv -Tf "$TRUST_TMP" /etc/labhub/trusted_root.jsonl
-sudo test "$(stat -c '%U:%G %a' /etc/labhub/trusted_root.jsonl)" = 'root:root 644'
+sudo install -o root -g root -m 0644 \
+  deployment/artifact_signing_public.pem \
+  /etc/labhub/artifact-signing-public.pem
+sudo test "$(stat -c '%U:%G %a' /etc/labhub/artifact-signing-public.pem)" = \
+  'root:root 644'
+sudo test "$(sha256sum /etc/labhub/artifact-signing-public.pem | cut -d' ' -f1)" = \
+  c794ff86b66e9138a0ca6ba729e6e11911c69cf5cc40a16c264a55793b6170bc
 ```
 
-Perbarui trusted root saat owner mengimpor artifact baru, sesuai panduan GitHub.
-Task 7 membuat dan mengunduh bundle attestation lalu membungkus tiga file berikut
-tepat di root tar envelope:
+Install OpenSSL dari package OS dan lakukan one-time check bahwa absolute binary
+mengenali public key Ed25519 dan menyediakan operasi raw Ed25519:
+
+```bash
+test -x /usr/bin/openssl
+/usr/bin/openssl version
+/usr/bin/openssl pkey -pubin \
+  -in /etc/labhub/artifact-signing-public.pem -text -noout | grep -F ED25519
+/usr/bin/openssl list -public-key-methods | grep -F ED25519
+```
+
+Task 7 menandatangani byte canonical manifest dengan private key dari secret, lalu
+membungkus tepat tiga file berikut di root tar envelope:
 
 ```text
 projectlaboran.protected.tar.gz
-attestation.jsonl
-source-sha
+deployment-manifest.json
+deployment-manifest.sig
 ```
 
 Envelope adalah tar **tanpa kompresi** dengan tepat tiga regular file mode `0644`,
-tanpa directory entry tambahan. `source-sha` berisi tepat 40 lowercase hex plus
-optional final newline.
+tanpa directory entry tambahan. Signature detached harus tepat 64 byte. Manifest
+harus UTF-8 canonical JSON dengan sorted keys, separator `,`/`:`, `ensure_ascii=true`,
+dan tepat satu final newline. Schema version 1 persis:
 
-`projectlaboran.protected.tar.gz` yang ter-attest wajib memuat `requirements.lock`
+```json
+{"archive_name":"projectlaboran.protected.tar.gz","archive_sha256":"<64-lowercase-hex>","repository":"abdurojak/ProjectLaboran","run_attempt":1,"run_id":123,"run_number":123,"source_ref":"refs/heads/main","source_sha":"<40-lowercase-hex>","version":1,"workflow":".github/workflows/test-runner.yml"}
+```
+
+`projectlaboran.protected.tar.gz` yang signed wajib memuat `requirements.lock`
 dan `wheelhouse/` selain source aplikasi. Keduanya berada di dalam protected archive,
 bukan sebagai file envelope tambahan:
 
@@ -92,8 +120,8 @@ Task 7 menjalankan interpreter manylinux dengan ABI yang sama, meng-install vers
 `pip-tools` yang dipin di workflow, menghasilkan fully resolved
 `requirements.lock` memakai `pip-compile --generate-hashes`, lalu menjalankan
 `pip download --only-binary=:all: --require-hashes -r requirements.lock` untuk
-mengunduh tepat dependency wheels ke `wheelhouse/` sebelum protected archive dan
-attestation final dibuat. Launcher tidak mengakses index package dan hanya menjalankan:
+mengunduh tepat dependency wheels ke `wheelhouse/` sebelum protected archive,
+manifest, dan signature dibuat. Launcher tidak mengakses index package dan hanya menjalankan:
 
 ```bash
 python -m pip install --no-index --find-links /root-owned/candidate/wheelhouse --require-hashes -r /root-owned/candidate/requirements.lock
@@ -106,26 +134,26 @@ direct reference, editable/local path, index/find-links override, atau ekspansi 
 juga ditolak; `PIP_CONFIG_FILE=/dev/null` dan `PIP_NO_INDEX=1` memastikan install
 candidate tidak melakukan akses network.
 
-Launcher mengeksekusi policy berikut dan menyembunyikan detail output attestation
-dari deployment log:
+Launcher memverifikasi signature sebelum membaca claims manifest dan menyembunyikan
+raw output crypto dari deployment log:
 
 ```bash
-gh attestation verify projectlaboran.protected.tar.gz \
-  --repo abdurojak/ProjectLaboran \
-  --bundle attestation.jsonl \
-  --custom-trusted-root /etc/labhub/trusted_root.jsonl \
-  --signer-workflow abdurojak/ProjectLaboran/.github/workflows/test-runner.yml \
-  --source-digest '<40-lowercase-hex-source-sha>' \
-  --source-ref refs/heads/main \
-  --deny-self-hosted-runners
+/usr/bin/openssl pkeyutl -verify -pubin \
+  -inkey /etc/labhub/artifact-signing-public.pem \
+  -rawin -in deployment-manifest.json \
+  -sigfile deployment-manifest.sig
 ```
 
-Build provenance GitHub-hosted adalah trust anchor. Output job self-hosted tidak
-dipercaya dan `--deny-self-hosted-runners` wajib tetap aktif. Root launcher merekam
-digest snapshot envelope, digest protected archive, dan SHA sebagai record
-`consumed`/`deployed` append-only pada `/home/admin/LabTif/.deploy-history`. Replay
-envelope atau archive yang pernah consumed ditolak; downgrade hanya boleh melalui
-rollback manual owner.
+Setelah signature valid, launcher menolak duplicate key, key kurang/lebih,
+noncanonical bytes, boolean sebagai integer, unsafe claim, dan digest archive yang
+berbeda. Signed `source_sha` menjadi nama release. State root-owned
+`/home/admin/LabTif/.deploy-history` menyimpan deployment sukses secara atomik.
+Normal deploy wajib memiliki signed `run_number` lebih besar dari highest committed
+run number dan menolak pasangan `run_id`/`run_attempt`, envelope, atau archive digest
+yang sudah committed. Build/deploy gagal tidak mengubah state sehingga envelope yang
+sama dapat dicoba lagi. Signature memberi authorization/integrity; signed monotonic
+`run_number` plus root state mencegah replay envelope lama. Rollback manual owner
+tetap dapat memilih release lama dan tidak pernah menurunkan highest signed run number.
 
 ## Dedicated runtime dan build user
 
@@ -415,9 +443,9 @@ sudo test "$(stat -c '%U:%G' /home/admin/LabTif/incoming)" = admin:admin
 sudo test "$(stat -c '%U:%G' /home/admin/LabTif/actions-runner)" = admin:admin
 ```
 
-Launcher membuka `.deploy-history` dengan `O_APPEND`, menulis satu record tervalidasi
-per operasi, lalu `fsync`; file ini tidak di-truncate, dirotasi, atau dihapus oleh
-cleanup deployment. Candidate build memakai directory sementara mode `0710`
+Launcher hanya menambahkan record deployment sukses ke `.deploy-history` melalui
+temporary root-owned mode `0600`, `fsync`, dan atomic replace; cleanup deployment
+tidak merotasi atau menghapus state ini. Candidate build memakai directory sementara mode `0710`
 `root:labhub-build` di bawah `releases`, sehingga `labhub-build` dapat traverse tetapi
 `admin` dan `labhub-app` tidak dapat membaca atau menjalankannya.
 
@@ -487,8 +515,8 @@ concurrent pada source runner tidak mengubah input setelah snapshot. Parser tar
 streaming berhenti pada header keempat dan menolak link, device, duplicate, traversal,
 extra entry, sparse/PAX metadata, truncated content, size/mode tidak aman, serta total
 di atas batas. Root Python helper memakai `/usr/bin/python3 -I` agar tidak import dari
-workspace runner; `gh` dan `curl` berjalan dengan environment bersih. Protected archive
-baru diekstrak setelah policy attestation sukses.
+workspace runner. Protected archive baru diekstrak setelah signature, manifest
+canonical, signed policy claims, archive digest, dan anti-replay state valid.
 
 ## Preflight v1 sebagai labhub-app
 
@@ -554,9 +582,11 @@ owner dan **tidak boleh** ditambahkan ke sudoers NOPASSWD runner.
 Scoped `secure_path` adalah defense in depth untuk command internal, bukan pengganti
 shebang absolute dan absolute executable paths milik launcher.
 Self-hosted runner wajib dedicated hanya untuk repository ini. Workflow deployment
-wajib memakai GitHub Environment approval dengan required reviewer, protected `main`
-yang melarang direct push, serta CODEOWNERS required review untuk
-`.github/workflows/`; workflow harus menolak fork/third-party arbitrary jobs. Runner tidak
+wajib manual-only dan menolak fork/third-party arbitrary jobs. Gunakan environment
+secret pada plan yang mendukung private repository, selain itu repository secret.
+Aktifkan protected `main`, CODEOWNERS, dan required workflow review ketika plan
+mendukung; required environment reviewers tidak tersedia untuk private repository
+Free/Pro/Team. Runner tidak
 menerima production env dan tidak dapat menulis executed release code. Dedicated
 `labhub-app` UID mencegah `admin` membaca `/proc/<app-pid>/environ`.
 
@@ -564,8 +594,9 @@ menerima production env dan tidak dapat menulis executed release code. Dedicated
 
 Task 7 mem-pin `pip-tools`, membuat hash-locked `requirements.lock`, mengunduh exact
 manylinux wheels ke `wheelhouse/`, lalu memasukkan keduanya ke protected archive
-sebelum GitHub-hosted attestation dibuat. Task tersebut menulis lowercase source SHA,
-membuat envelope, lalu menaruhnya atomik pada fixed incoming path. Workflow hanya
+sebelum membuat canonical manifest dan detached Ed25519 signature. Task tersebut
+memasukkan source SHA dan GitHub run claims ke manifest, membuat envelope, lalu
+menaruhnya atomik pada fixed incoming path. Workflow hanya
 memanggil installed launcher:
 
 ```bash
@@ -629,12 +660,12 @@ read-only `check` dan migration melalui `runuser labhub-app`. Console script ven
 tidak dipakai setelah candidate rename; systemd dan launcher selalu memanggil
 `venv/bin/python` secara langsung.
 
-Sebelum build, sebelum publication, dan tepat sebelum activation, live GitHub
-main-head harus tetap sama dengan SHA envelope. Record `consumed` ditulis setelah
-attestation/freshness awal dan tidak
-dihapus saat build gagal, sehingga exact envelope/archive tidak dapat dicoba ulang;
-Task 7 harus menghasilkan envelope baru dari HEAD terbaru. Record `deployed` dan
-marker digest ditulis setelah restart sehat. Normal deploy juga menolak SHA yang
+Signature dan manifest diverifikasi sebelum build. Tidak ada network freshness call
+dari launcher; authorization dan freshness berasal dari owner-controlled signature,
+signed monotonically increasing `run_number`, dan root-owned committed state.
+State serta marker digest baru ditulis setelah restart sehat. Kegagalan sebelum
+commit tidak memakai run number atau digest, sehingga exact envelope dapat dicoba
+ulang. Normal deploy juga menolak SHA yang
 sudah aktif; pemeriksaan/rollback release aktif memakai protocol owner, bukan replay
 envelope runner.
 

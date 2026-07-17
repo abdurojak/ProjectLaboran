@@ -23,7 +23,7 @@ ENV_DIR=/etc/labhub
 V1_ENV="$ENV_DIR/labhub-v1.env"
 V2_ENV="$ENV_DIR/labhub-v2.env"
 CURRENT_ENV="$ENV_DIR/current.env"
-TRUSTED_ROOT="$ENV_DIR/trusted_root.jsonl"
+ARTIFACT_SIGNING_PUBLIC_KEY="$ENV_DIR/artifact-signing-public.pem"
 
 APP_USER=labhub-app
 APP_GROUP=labhub-app
@@ -32,16 +32,14 @@ BUILD_GROUP=labhub-build
 SERVICE=projectlaboran-daphne
 SYSTEMCTL=/usr/bin/systemctl
 RUNUSER=/usr/sbin/runuser
-GH=/usr/bin/gh
-CURL=/usr/bin/curl
+OPENSSL=/usr/bin/openssl
 SHA256SUM=/usr/bin/sha256sum
 PYTHON3=/usr/bin/python3
 RESTORECON=/usr/sbin/restorecon
 
 REPOSITORY=abdurojak/ProjectLaboran
-SIGNER_WORKFLOW=abdurojak/ProjectLaboran/.github/workflows/test-runner.yml
+WORKFLOW=.github/workflows/test-runner.yml
 SOURCE_REF=refs/heads/main
-MAIN_HEAD_API=https://api.github.com/repos/abdurojak/ProjectLaboran/commits/main
 MAX_ENVELOPE_BYTES=838860800
 
 MODE=""
@@ -56,6 +54,9 @@ TEMP_ENVELOPE_DIR=""
 ENVELOPE_SNAPSHOT=""
 ENVELOPE_DIGEST=""
 ARCHIVE_DIGEST=""
+RUN_ATTEMPT=""
+RUN_ID=""
+RUN_NUMBER=""
 TEMP_RELEASE=""
 TEMP_LINK=""
 TRANSACTION_TEMP=""
@@ -350,8 +351,12 @@ write_success_marker() {
     temp=$(mktemp "$RELEASE_DIR/.deploy-success.tmp.XXXXXX")
     [[ "$ENVELOPE_DIGEST" =~ ^[0-9a-f]{64}$ ]] || return 1
     [[ "$ARCHIVE_DIGEST" =~ ^[0-9a-f]{64}$ ]] || return 1
-    printf 'version=3\nsha=%s\nenvironment=%s\nenvelope_sha256=%s\narchive_sha256=%s\n' \
-        "$SHA" "$V2_ENV" "$ENVELOPE_DIGEST" "$ARCHIVE_DIGEST" >"$temp"
+    [[ "$RUN_NUMBER" =~ ^[1-9][0-9]*$ ]] || return 1
+    [[ "$RUN_ID" =~ ^[1-9][0-9]*$ ]] || return 1
+    [[ "$RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]] || return 1
+    printf 'version=4\nsha=%s\nenvironment=%s\nenvelope_sha256=%s\narchive_sha256=%s\nrun_number=%s\nrun_id=%s\nrun_attempt=%s\n' \
+        "$SHA" "$V2_ENV" "$ENVELOPE_DIGEST" "$ARCHIVE_DIGEST" \
+        "$RUN_NUMBER" "$RUN_ID" "$RUN_ATTEMPT" >"$temp"
     chown root:root "$temp"
     chmod 0644 "$temp"
     sync -f "$temp"
@@ -369,15 +374,22 @@ has_success_marker() {
     require_root_owned "$marker" 644 || return 1
     mapfile -t lines <"$marker"
     [[ "${lines[*]}" != *$'\r'* ]] || return 1
-    [[ "${#lines[@]}" -eq 3 || "${#lines[@]}" -eq 5 ]] || return 1
-    [[ "${lines[0]}" == version=2 || "${lines[0]}" == version=3 ]] || return 1
+    [[ "${#lines[@]}" -eq 3 || "${#lines[@]}" -eq 5 || "${#lines[@]}" -eq 8 ]] || return 1
+    [[ "${lines[0]}" == version=2 || "${lines[0]}" == version=3 || "${lines[0]}" == version=4 ]] || return 1
     [[ "${lines[1]}" == "sha=$sha" && "${lines[2]}" == "environment=$V2_ENV" ]] || return 1
     if [[ "${lines[0]}" == version=2 ]]; then
         [[ "${#lines[@]}" -eq 3 ]]
-    else
+    elif [[ "${lines[0]}" == version=3 ]]; then
         [[ "${#lines[@]}" -eq 5 ]] || return 1
         [[ "${lines[3]}" =~ ^envelope_sha256=[0-9a-f]{64}$ ]] || return 1
         [[ "${lines[4]}" =~ ^archive_sha256=[0-9a-f]{64}$ ]]
+    else
+        [[ "${#lines[@]}" -eq 8 ]] || return 1
+        [[ "${lines[3]}" =~ ^envelope_sha256=[0-9a-f]{64}$ ]] || return 1
+        [[ "${lines[4]}" =~ ^archive_sha256=[0-9a-f]{64}$ ]] || return 1
+        [[ "${lines[5]}" =~ ^run_number=[1-9][0-9]*$ ]] || return 1
+        [[ "${lines[6]}" =~ ^run_id=[1-9][0-9]*$ ]] || return 1
+        [[ "${lines[7]}" =~ ^run_attempt=[1-9][0-9]*$ ]]
     fi
 }
 
@@ -417,11 +429,19 @@ deployment_state_contains() {
 
     ensure_deployment_state || return 1
     while IFS= read -r line || [[ -n "$line" ]]; do
-        [[ "$line" =~ ^version=1\ state=(consumed|deployed)\ sha=([0-9a-f]{40})\ envelope_sha256=([0-9a-f]{64})\ archive_sha256=([0-9a-f]{64})$ ]] || return 2
-        state=${BASH_REMATCH[1]}
-        sha=${BASH_REMATCH[2]}
-        envelope=${BASH_REMATCH[3]}
-        archive=${BASH_REMATCH[4]}
+        if [[ "$line" =~ ^version=1\ state=(consumed|deployed)\ sha=([0-9a-f]{40})\ envelope_sha256=([0-9a-f]{64})\ archive_sha256=([0-9a-f]{64})$ ]]; then
+            state=${BASH_REMATCH[1]}
+            sha=${BASH_REMATCH[2]}
+            envelope=${BASH_REMATCH[3]}
+            archive=${BASH_REMATCH[4]}
+        elif [[ "$line" =~ ^version=2\ run_number=([1-9][0-9]*)\ run_id=([1-9][0-9]*)\ run_attempt=([1-9][0-9]*)\ sha=([0-9a-f]{40})\ envelope_sha256=([0-9a-f]{64})\ archive_sha256=([0-9a-f]{64})$ ]]; then
+            state=deployed
+            sha=${BASH_REMATCH[4]}
+            envelope=${BASH_REMATCH[5]}
+            archive=${BASH_REMATCH[6]}
+        else
+            return 2
+        fi
         if [[ "$state" == "$wanted_state" && "$sha" == "$wanted_sha" && \
             "$envelope" == "$wanted_envelope" && "$archive" == "$wanted_archive" ]]; then
             return 0
@@ -430,83 +450,164 @@ deployment_state_contains() {
     return 1
 }
 
-reject_consumed_artifact() {
-    local line envelope archive
-
+reject_replayed_artifact() {
     ensure_deployment_state || return 1
-    while IFS= read -r line || [[ -n "$line" ]]; do
-        [[ "$line" =~ ^version=1\ state=(consumed|deployed)\ sha=([0-9a-f]{40})\ envelope_sha256=([0-9a-f]{64})\ archive_sha256=([0-9a-f]{64})$ ]] || \
-            fail 'Deployment state is malformed; refusing deployment.'
-        envelope=${BASH_REMATCH[3]}
-        archive=${BASH_REMATCH[4]}
-        if [[ "$envelope" == "$ENVELOPE_DIGEST" || "$archive" == "$ARCHIVE_DIGEST" ]]; then
-            fail 'This deployment envelope or protected archive was already consumed.'
-        fi
-    done <"$DEPLOYMENT_STATE"
+    "$PYTHON3" -I - "$DEPLOYMENT_STATE" "$RUN_NUMBER" "$RUN_ID" "$RUN_ATTEMPT" \
+        "$ENVELOPE_DIGEST" "$ARCHIVE_DIGEST" <<'PY'
+import hmac
+import re
+import sys
+
+path, run_number_text, run_id_text, run_attempt_text, envelope_digest, archive_digest = sys.argv[1:]
+run_number = int(run_number_text)
+run_id = int(run_id_text)
+run_attempt = int(run_attempt_text)
+legacy = re.compile(
+    r"version=1 state=(consumed|deployed) sha=([0-9a-f]{40}) "
+    r"envelope_sha256=([0-9a-f]{64}) archive_sha256=([0-9a-f]{64})"
+)
+current = re.compile(
+    r"version=2 run_number=([1-9][0-9]*) run_id=([1-9][0-9]*) "
+    r"run_attempt=([1-9][0-9]*) sha=([0-9a-f]{40}) "
+    r"envelope_sha256=([0-9a-f]{64}) archive_sha256=([0-9a-f]{64})"
+)
+highest_run_number = 0
+for raw_line in open(path, "rb"):
+    try:
+        line = raw_line.decode("ascii")
+        if line.endswith("\n"):
+            line = line[:-1]
+    except UnicodeDecodeError as error:
+        raise ValueError("deployment state is not ASCII") from error
+    legacy_match = legacy.fullmatch(line)
+    current_match = current.fullmatch(line)
+    if legacy_match is None and current_match is None:
+        raise ValueError("deployment state is malformed")
+    if legacy_match is not None:
+        old_envelope, old_archive = legacy_match.group(3, 4)
+    else:
+        old_run_number, old_run_id, old_run_attempt = map(int, current_match.group(1, 2, 3))
+        old_envelope, old_archive = current_match.group(5, 6)
+        highest_run_number = max(highest_run_number, old_run_number)
+        if old_run_id == run_id and old_run_attempt == run_attempt:
+            raise ValueError("signed workflow run and attempt were already deployed")
+    if hmac.compare_digest(old_envelope, envelope_digest):
+        raise ValueError("deployment envelope was already deployed")
+    if hmac.compare_digest(old_archive, archive_digest):
+        raise ValueError("protected archive was already deployed")
+if run_number <= highest_run_number:
+    raise ValueError("signed run_number is not newer than the committed deployment state")
+PY
 }
 
-append_deployment_state() {
-    local state=$1
-
-    [[ "$state" == consumed || "$state" == deployed ]] || return 1
+record_deployment_state() {
     validate_sha "$SHA" || return 1
+    [[ "$RUN_NUMBER" =~ ^[1-9][0-9]*$ ]] || return 1
+    [[ "$RUN_ID" =~ ^[1-9][0-9]*$ ]] || return 1
+    [[ "$RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]] || return 1
     [[ "$ENVELOPE_DIGEST" =~ ^[0-9a-f]{64}$ ]] || return 1
     [[ "$ARCHIVE_DIGEST" =~ ^[0-9a-f]{64}$ ]] || return 1
     ensure_deployment_state || return 1
-    "$PYTHON3" -I - "$DEPLOYMENT_STATE" "$state" "$SHA" "$ENVELOPE_DIGEST" "$ARCHIVE_DIGEST" <<'PY'
+    "$PYTHON3" -I - "$DEPLOYMENT_STATE" "$RUN_NUMBER" "$RUN_ID" "$RUN_ATTEMPT" \
+        "$SHA" "$ENVELOPE_DIGEST" "$ARCHIVE_DIGEST" <<'PY'
 import os
 import re
 import stat
 import sys
+import tempfile
 
-path, state, sha, envelope_digest, archive_digest = sys.argv[1:]
-if state not in {"consumed", "deployed"}:
-    raise ValueError("invalid deployment state")
+path, run_number, run_id, run_attempt, sha, envelope_digest, archive_digest = sys.argv[1:]
+for name, value in (("run_number", run_number), ("run_id", run_id), ("run_attempt", run_attempt)):
+    if re.fullmatch(r"[1-9][0-9]*", value) is None:
+        raise ValueError(f"invalid {name}")
 if re.fullmatch(r"[0-9a-f]{40}", sha) is None:
     raise ValueError("invalid deployment sha")
 if any(re.fullmatch(r"[0-9a-f]{64}", value) is None for value in (envelope_digest, archive_digest)):
     raise ValueError("invalid deployment digest")
-flags = os.O_WRONLY | os.O_APPEND | getattr(os, "O_BINARY", 0)
-if hasattr(os, "O_NOFOLLOW"):
-    flags |= os.O_NOFOLLOW
-fd = os.open(path, flags)
+state_path = os.path.abspath(path)
+with open(state_path, "rb") as source:
+    existing = source.read()
+if existing and not existing.endswith(b"\n"):
+    raise ValueError("deployment state has a truncated final record")
+record = (
+    f"version=2 run_number={run_number} run_id={run_id} run_attempt={run_attempt} "
+    f"sha={sha} envelope_sha256={envelope_digest} archive_sha256={archive_digest}\n"
+).encode("ascii")
+fd, temporary = tempfile.mkstemp(prefix=".deploy-history.tmp.", dir=os.path.dirname(state_path))
 try:
-    st = os.fstat(fd)
-    if not stat.S_ISREG(st.st_mode) or st.st_uid != 0 or st.st_gid != 0:
-        raise ValueError("unsafe deployment state file")
-    if stat.S_IMODE(st.st_mode) != 0o600 or st.st_nlink != 1:
-        raise ValueError("unsafe deployment state permissions")
-    record = (
-        f"version=1 state={state} sha={sha} envelope_sha256={envelope_digest} "
-        f"archive_sha256={archive_digest}\n"
-    ).encode("ascii")
-    if os.write(fd, record) != len(record):
-        raise OSError("short deployment state write")
-    os.fsync(fd)
-finally:
-    os.close(fd)
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_uid != 0 or st.st_gid != 0:
+            raise ValueError("unsafe temporary deployment state file")
+        os.fchmod(fd, 0o600)
+        payload = existing + record
+        view = memoryview(payload)
+        while view:
+            written = os.write(fd, view)
+            if written <= 0:
+                raise OSError("short deployment state write")
+            view = view[written:]
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    os.replace(temporary, state_path)
+    directory_fd = os.open(os.path.dirname(state_path), os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
+except BaseException:
+    try:
+        os.unlink(temporary)
+    except FileNotFoundError:
+        pass
+    raise
 PY
-    sync -f "$BASE_DIR"
 }
 
 marker_matches_deployment_state() {
     local release=$1
     local sha=$2
     local marker="$release/.deploy-success"
-    local envelope archive
+    local envelope archive state_status
     local -a lines=()
 
     [[ -f "$marker" && ! -L "$marker" ]] || return 1
     require_root_owned "$marker" 644 || return 1
     mapfile -t lines <"$marker"
-    [[ "${#lines[@]}" -eq 5 && "${lines[*]}" != *$'\r'* ]] || return 1
-    [[ "${lines[0]}" == version=3 && "${lines[1]}" == "sha=$sha" ]] || return 1
+    [[ "${#lines[@]}" -eq 5 || "${#lines[@]}" -eq 8 ]] || return 1
+    [[ "${lines[*]}" != *$'\r'* ]] || return 1
+    [[ "${lines[0]}" == version=3 || "${lines[0]}" == version=4 ]] || return 1
+    [[ "${lines[1]}" == "sha=$sha" ]] || return 1
     [[ "${lines[2]}" == "environment=$V2_ENV" ]] || return 1
     [[ "${lines[3]}" =~ ^envelope_sha256=([0-9a-f]{64})$ ]] || return 1
     envelope=${BASH_REMATCH[1]}
     [[ "${lines[4]}" =~ ^archive_sha256=([0-9a-f]{64})$ ]] || return 1
     archive=${BASH_REMATCH[1]}
-    deployment_state_contains deployed "$sha" "$envelope" "$archive"
+    if [[ "${lines[0]}" == version=3 ]]; then
+        [[ "${#lines[@]}" -eq 5 ]] || return 1
+    else
+        [[ "${#lines[@]}" -eq 8 ]] || return 1
+        [[ "${lines[5]}" =~ ^run_number=[1-9][0-9]*$ ]] || return 1
+        [[ "${lines[6]}" =~ ^run_id=[1-9][0-9]*$ ]] || return 1
+        [[ "${lines[7]}" =~ ^run_attempt=[1-9][0-9]*$ ]] || return 1
+    fi
+    if deployment_state_contains deployed "$sha" "$envelope" "$archive"; then
+        return 0
+    else
+        state_status=$?
+    fi
+    [[ "$state_status" -eq 1 && "${lines[0]}" == version=4 && "${#lines[@]}" -eq 8 ]] || return "$state_status"
+    [[ "${lines[5]}" =~ ^run_number=([1-9][0-9]*)$ ]] || return 1
+    RUN_NUMBER=${BASH_REMATCH[1]}
+    [[ "${lines[6]}" =~ ^run_id=([1-9][0-9]*)$ ]] || return 1
+    RUN_ID=${BASH_REMATCH[1]}
+    [[ "${lines[7]}" =~ ^run_attempt=([1-9][0-9]*)$ ]] || return 1
+    RUN_ATTEMPT=${BASH_REMATCH[1]}
+    SHA=$sha
+    ENVELOPE_DIGEST=$envelope
+    ARCHIVE_DIGEST=$archive
+    record_deployment_state
 }
 
 load_runtime_environment() {
@@ -765,8 +866,8 @@ destination = Path(sys.argv[3])
 max_envelope_bytes = int(sys.argv[4])
 expected = {
     "projectlaboran.protected.tar.gz": 768 * 1024 * 1024,
-    "attestation.jsonl": 16 * 1024 * 1024,
-    "source-sha": 41,
+    "deployment-manifest.json": 4096,
+    "deployment-manifest.sig": 64,
 }
 
 source_flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
@@ -805,7 +906,8 @@ finally:
 seen = set()
 total_size = 0
 header_count = 0
-with tarfile.open(snapshot_path, "r|*") as archive:
+last_data_end = 0
+with tarfile.open(snapshot_path, "r|") as archive:
     for member in archive:
         header_count += 1
         if header_count > 3:
@@ -824,6 +926,8 @@ with tarfile.open(snapshot_path, "r|*") as archive:
             raise ValueError("unsafe deployment envelope entry")
         if member.mode != 0o644 or member.size < 1 or member.size > expected[member.name]:
             raise ValueError("unsafe deployment envelope mode or size")
+        if member.name == "deployment-manifest.sig" and member.size != 64:
+            raise ValueError("deployment manifest signature must be exactly 64 bytes")
         total_size += member.size
         if total_size > sum(expected.values()):
             raise ValueError("deployment envelope content is too large")
@@ -846,77 +950,120 @@ with tarfile.open(snapshot_path, "r|*") as archive:
             output.flush()
             os.fsync(output.fileno())
         seen.add(member.name)
+        last_data_end = member.offset_data + ((member.size + tarfile.BLOCKSIZE - 1) // tarfile.BLOCKSIZE) * tarfile.BLOCKSIZE
 
 if header_count != 3 or seen != set(expected):
     raise ValueError("deployment envelope must contain exactly the expected files")
-
-sha_bytes = (destination / "source-sha").read_bytes()
-if re.fullmatch(rb"[0-9a-f]{40}\n?", sha_bytes) is None:
-    raise ValueError("invalid source-sha")
+with open(snapshot_path, "rb") as raw_envelope:
+    raw_envelope.seek(last_data_end)
+    if raw_envelope.read(2 * tarfile.BLOCKSIZE) != b"\0" * (2 * tarfile.BLOCKSIZE):
+        raise ValueError("deployment envelope is truncated or lacks a tar end marker")
+    for chunk in iter(lambda: raw_envelope.read(1024 * 1024), b""):
+        if chunk.strip(b"\0"):
+            raise ValueError("deployment envelope has nonzero trailing content")
 PY
-    SHA=$(<"$TEMP_ENVELOPE_DIR/source-sha")
-    validate_sha "$SHA"
     ENVELOPE_DIGEST=$($SHA256SUM -- "$ENVELOPE_SNAPSHOT")
     ENVELOPE_DIGEST=${ENVELOPE_DIGEST%% *}
-    ARCHIVE_DIGEST=$($SHA256SUM -- "$TEMP_ENVELOPE_DIR/projectlaboran.protected.tar.gz")
-    ARCHIVE_DIGEST=${ARCHIVE_DIGEST%% *}
-    [[ "$ENVELOPE_DIGEST" =~ ^[0-9a-f]{64}$ && "$ARCHIVE_DIGEST" =~ ^[0-9a-f]{64}$ ]]
+    [[ "$ENVELOPE_DIGEST" =~ ^[0-9a-f]{64}$ ]]
 }
 
-verify_attestation() {
-    local archive="$TEMP_ENVELOPE_DIR/projectlaboran.protected.tar.gz"
-    local bundle="$TEMP_ENVELOPE_DIR/attestation.jsonl"
+verify_manifest_signature() {
+    local manifest="$TEMP_ENVELOPE_DIR/deployment-manifest.json"
+    local signature="$TEMP_ENVELOPE_DIR/deployment-manifest.sig"
 
-    if /usr/bin/env -i HOME=/root PATH=/usr/sbin:/usr/bin:/sbin:/bin LC_ALL=C \
-        "$GH" attestation verify "$archive" \
-        --repo "$REPOSITORY" \
-        --bundle "$bundle" \
-        --custom-trusted-root "$TRUSTED_ROOT" \
-        --signer-workflow "$SIGNER_WORKFLOW" \
-        --source-digest "$SHA" \
-        --source-ref "$SOURCE_REF" \
-        --deny-self-hosted-runners >/dev/null 2>&1; then
-        printf 'Artifact attestation verification succeeded.\n'
+    if "$OPENSSL" pkeyutl -verify -pubin -inkey "$ARTIFACT_SIGNING_PUBLIC_KEY" \
+        -rawin -in "$manifest" -sigfile "$signature" >/dev/null 2>&1; then
+        printf 'Artifact manifest signature verification succeeded.\n'
     else
-        printf 'Artifact attestation verification failed.\n' >&2
+        printf 'Artifact manifest signature verification failed.\n' >&2
         return 1
     fi
 }
 
-verify_current_main_head() {
-    local response head
+parse_signed_manifest() {
+    local archive="$TEMP_ENVELOPE_DIR/projectlaboran.protected.tar.gz"
+    local manifest="$TEMP_ENVELOPE_DIR/deployment-manifest.json"
+    local claims
+    local -a fields=()
 
-    response="$TEMP_ENVELOPE_DIR/main-head.json"
-    [[ ! -e "$response" && ! -L "$response" ]] || rm -f -- "$response"
-    install -o root -g root -m 0600 /dev/null "$response"
-    if ! /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LC_ALL=C \
-        "$CURL" --disable --noproxy '*' --proto '=https' --proto-redir '=https' --tlsv1.2 \
-        --silent --show-error --fail --connect-timeout 5 --max-time 20 \
-        --max-filesize 1048576 --header 'Accept: application/vnd.github+json' \
-        --header 'X-GitHub-Api-Version: 2022-11-28' \
-        --user-agent 'projectlaboran-root-deployer/1' \
-        --output "$response" "$MAIN_HEAD_API"; then
-        printf 'GitHub main-head freshness check failed.\n' >&2
-        return 1
-    fi
-    head=$("$PYTHON3" -I - "$response" <<'PY'
+    claims=$("$PYTHON3" -I - "$manifest" "$archive" "$REPOSITORY" "$WORKFLOW" "$SOURCE_REF" <<'PY'
+import hashlib
+import hmac
 import json
 import re
 import sys
 
-with open(sys.argv[1], "rb") as source:
-    payload = json.load(source)
-if not isinstance(payload, dict):
-    raise ValueError("unexpected GitHub API response")
-sha = payload.get("sha")
-if not isinstance(sha, str) or re.fullmatch(r"[0-9a-f]{40}", sha) is None:
-    raise ValueError("GitHub API response lacks a valid commit sha")
-print(sha)
+manifest_path, archive_path, repository, workflow, source_ref = sys.argv[1:]
+manifest_bytes = open(manifest_path, "rb").read()
+if not manifest_bytes or len(manifest_bytes) > 4096:
+    raise ValueError("deployment manifest has an unsafe size")
+try:
+    manifest_text = manifest_bytes.decode("utf-8", "strict")
+except UnicodeDecodeError as error:
+    raise ValueError("deployment manifest is not valid UTF-8") from error
+
+def object_without_duplicates(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("deployment manifest contains a duplicate JSON key")
+        result[key] = value
+    return result
+
+try:
+    payload = json.loads(manifest_text, object_pairs_hook=object_without_duplicates)
+except json.JSONDecodeError as error:
+    raise ValueError("deployment manifest is not valid JSON") from error
+expected_keys = {
+    "archive_name", "archive_sha256", "repository", "run_attempt", "run_id",
+    "run_number", "source_ref", "source_sha", "version", "workflow",
+}
+if type(payload) is not dict or set(payload) != expected_keys:
+    raise ValueError("deployment manifest schema is invalid")
+canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8") + b"\n"
+if not hmac.compare_digest(manifest_bytes, canonical):
+    raise ValueError("deployment manifest is not canonical JSON")
+if payload["archive_name"] != "projectlaboran.protected.tar.gz":
+    raise ValueError("deployment manifest archive_name is invalid")
+if payload["repository"] != repository:
+    raise ValueError("deployment manifest repository is invalid")
+if payload["workflow"] != workflow:
+    raise ValueError("deployment manifest workflow is invalid")
+if payload["source_ref"] != source_ref:
+    raise ValueError("deployment manifest source_ref is invalid")
+if type(payload["version"]) is not int or payload["version"] != 1:
+    raise ValueError("deployment manifest version is invalid")
+for key in ("run_attempt", "run_id", "run_number"):
+    if type(payload[key]) is not int or payload[key] <= 0:
+        raise ValueError(f"deployment manifest {key} is invalid")
+if type(payload["source_sha"]) is not str or re.fullmatch(r"[0-9a-f]{40}", payload["source_sha"]) is None:
+    raise ValueError("deployment manifest source_sha is invalid")
+if type(payload["archive_sha256"]) is not str or re.fullmatch(r"[0-9a-f]{64}", payload["archive_sha256"]) is None:
+    raise ValueError("deployment manifest archive_sha256 is invalid")
+digest = hashlib.sha256()
+with open(archive_path, "rb") as archive:
+    for chunk in iter(lambda: archive.read(1024 * 1024), b""):
+        digest.update(chunk)
+actual_digest = digest.hexdigest()
+if not hmac.compare_digest(actual_digest, payload["archive_sha256"]):
+    raise ValueError("protected archive digest does not match signed manifest")
+print(payload["source_sha"])
+print(payload["archive_sha256"])
+print(payload["run_attempt"])
+print(payload["run_id"])
+print(payload["run_number"])
 PY
     ) || return 1
-    rm -f -- "$response"
-    [[ "$head" == "$SHA" ]] || fail 'Envelope source-sha is not the current main HEAD; build and deploy the latest main commit.'
-    printf 'GitHub main-head freshness check succeeded.\n'
+    mapfile -t fields <<<"$claims"
+    [[ "${#fields[@]}" -eq 5 ]] || return 1
+    SHA=${fields[0]}
+    ARCHIVE_DIGEST=${fields[1]}
+    RUN_ATTEMPT=${fields[2]}
+    RUN_ID=${fields[3]}
+    RUN_NUMBER=${fields[4]}
+    validate_sha "$SHA"
+    [[ "$ARCHIVE_DIGEST" =~ ^[0-9a-f]{64}$ ]]
+    [[ "$RUN_ATTEMPT" =~ ^[1-9][0-9]*$ && "$RUN_ID" =~ ^[1-9][0-9]*$ && "$RUN_NUMBER" =~ ^[1-9][0-9]*$ ]]
 }
 
 extract_protected_release() {
@@ -1237,7 +1384,7 @@ preflight_root_installation() {
     require_root_owned "$BASE_DIR" 755 || fail 'BASE_DIR must be root:root mode 0755.'
     require_root_owned "$RELEASES_DIR" 755 || fail 'RELEASES_DIR must be root:root mode 0755.'
     require_root_owned "$ENV_DIR" 700 || fail 'The environment directory must be root:root mode 0700.'
-    [[ -x "$SYSTEMCTL" && -x "$RUNUSER" && -x "$GH" && -x "$CURL" && \
+    [[ -x "$SYSTEMCTL" && -x "$RUNUSER" && -x "$OPENSSL" && \
         -x "$SHA256SUM" && -x "$PYTHON3" && -x "$RESTORECON" ]] || \
         fail 'Required system executables are missing.'
     getent passwd "$APP_USER" >/dev/null || fail 'The dedicated application user is missing.'
@@ -1254,7 +1401,9 @@ preflight_root_installation() {
         require_root_owned "$V1_ENV" 600 || fail 'The v1 environment is unsafe.'
     fi
     require_root_owned "$V2_ENV" 600 || fail 'The v2 environment is missing or unsafe.'
-    require_root_owned "$TRUSTED_ROOT" 644 || fail 'The GitHub trusted root is missing or unsafe.'
+    require_root_owned "$ARTIFACT_SIGNING_PUBLIC_KEY" 644 || fail 'The artifact signing public key is missing or unsafe.'
+    "$OPENSSL" pkey -pubin -in "$ARTIFACT_SIGNING_PUBLIC_KEY" -noout >/dev/null 2>&1 || \
+        fail 'The artifact signing public key or OpenSSL Ed25519 support is invalid.'
     [[ -L "$CURRENT_LINK" && "$(stat -c '%U:%G' -- "$CURRENT_LINK")" == root:root ]] || fail 'current must be a root-owned symlink.'
     [[ -L "$CURRENT_ENV" && "$(stat -c '%U:%G' -- "$CURRENT_ENV")" == root:root ]] || fail 'current.env must be a root-owned symlink.'
     [[ -L "$VENV_LINK" && "$(readlink -- "$VENV_LINK")" == "$CURRENT_LINK/venv" ]] || fail 'production-venv is not the stable current/venv symlink.'
@@ -1288,9 +1437,11 @@ activate_release() {
     restart_and_verify "$RELEASE_DIR"
     if [[ "$MODE" == deploy ]]; then
         write_success_marker
-        append_deployment_state deployed
     fi
     write_transaction committed
+    if [[ "$MODE" == deploy ]]; then
+        record_deployment_state
+    fi
     trap - ERR TERM INT HUP
     if ! finish_committed_cleanup; then
         printf 'Cleanup warning: healthy committed state retained for the next run.\n' >&2
@@ -1306,8 +1457,8 @@ deploy_envelope() {
     [[ -f "$ENVELOPE" && ! -L "$ENVELOPE" && -r "$ENVELOPE" ]] || fail 'Deployment envelope is missing or unsafe.'
     [[ "$(stat -c '%s' -- "$ENVELOPE")" -le "$MAX_ENVELOPE_BYTES" ]] || fail 'Deployment envelope is too large.'
     extract_envelope
-    verify_attestation
-    verify_current_main_head
+    verify_manifest_signature
+    parse_signed_manifest
     RELEASE_DIR="$RELEASES_DIR/$SHA"
     PREVIOUS_CURRENT=$(current_target_path) || fail 'current is missing or invalid.'
     PREVIOUS_ENV=$(current_environment_path) || fail 'current.env is missing or invalid.'
@@ -1315,11 +1466,9 @@ deploy_envelope() {
     if [[ "$PREVIOUS_CURRENT" == "$RELEASE_DIR" ]]; then
         fail 'The current main SHA is already active; normal redeployment of an active SHA is prohibited.'
     fi
-    reject_consumed_artifact
-    append_deployment_state consumed
+    reject_replayed_artifact
     extract_protected_release
     build_candidate
-    verify_current_main_head
 
     if [[ -e "$RELEASE_DIR" || -L "$RELEASE_DIR" ]]; then
         [[ -d "$RELEASE_DIR" && ! -L "$RELEASE_DIR" && "$(readlink -e -- "$RELEASE_DIR")" == "$RELEASE_DIR" ]] || \
@@ -1338,7 +1487,6 @@ deploy_envelope() {
     sync -f "$RELEASES_DIR"
     prepare_published_release
     sync -f "$RELEASE_DIR"
-    verify_current_main_head
     activate_release
     printf 'Deployment completed for release %s.\n' "$SHA"
 }
