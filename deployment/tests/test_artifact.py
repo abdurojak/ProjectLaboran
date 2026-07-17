@@ -114,6 +114,16 @@ class InspectReleaseTreeTests(unittest.TestCase):
 
         self.assertTrue(any("native extension" in error.lower() for error in errors), errors)
 
+    def test_rejects_directory_named_like_native_extension(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            release_root = Path(temp_dir)
+            fake_extension = release_root / "apps/core/licensing.fake.so"
+            fake_extension.mkdir(parents=True)
+
+            errors = inspect_release_tree(release_root, self.protected)
+
+        self.assertTrue(any("native extension" in error.lower() for error in errors), errors)
+
     def test_accepts_native_extension_without_protected_source(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             release_root = Path(temp_dir)

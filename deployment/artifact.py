@@ -49,9 +49,9 @@ def inspect_release_tree(release_root, protected):
 
         stem = protected_path.stem
         extension_dir = source_path.parent
-        has_extension = any(extension_dir.glob(f"{stem}.*.so")) or (
-            extension_dir / f"{stem}.pyd"
-        ).is_file()
+        has_extension = any(
+            extension.is_file() for extension in extension_dir.glob(f"{stem}.*.so")
+        ) or (extension_dir / f"{stem}.pyd").is_file()
         if not has_extension:
             errors.append(
                 f"Native extension is missing for: {protected_path.as_posix()}"
