@@ -28,13 +28,27 @@ root. Lihat dokumentasi resmi [artifact attestations](https://docs.github.com/en
 [offline verification](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/verify-attestations-offline),
 dan [`gh attestation verify`](https://cli.github.com/manual/gh_attestation_verify).
 
+Attestation membuktikan provenance, bukan freshness. Karena repository public,
+launcher root juga mengambil
+`https://api.github.com/repos/abdurojak/ProjectLaboran/commits/main` melalui HTTPS
+terverifikasi (`--disable`, `--noproxy '*'`, `--proto '=https'`, TLS minimum 1.2),
+parse JSON tanpa `eval`, dan
+mewajibkan `source-sha` sama persis dengan HEAD `main`. Network, DNS, TLS, API,
+format JSON, dan rate-limit error semuanya fail closed. Check dilakukan setelah
+attestation, setelah build sebelum publication, dan tepat sebelum activation setelah
+management command. Masih ada race kecil bila `main` bergerak tepat setelah check
+terakhir; bila `main` berubah selama build/deploy, hasilkan ulang dan deploy build
+HEAD terbaru.
+
 Install GitHub CLI dari repository package resmi GitHub CLI untuk AlmaLinux, lalu
 pastikan executable root-installed tersedia pada path yang dipakai launcher:
 
 ```bash
 test "$(command -v gh)" = /usr/bin/gh
+test "$(command -v curl)" = /usr/bin/curl
 sudo test "$(stat -c '%U:%G' /usr/bin/gh)" = root:root
 /usr/bin/gh version
+/usr/bin/curl --version
 ```
 
 Ambil trusted root dengan GitHub CLI dan install sebagai file immutable bagi runner:
@@ -63,6 +77,35 @@ Envelope adalah tar **tanpa kompresi** dengan tepat tiga regular file mode `0644
 tanpa directory entry tambahan. `source-sha` berisi tepat 40 lowercase hex plus
 optional final newline.
 
+`projectlaboran.protected.tar.gz` yang ter-attest wajib memuat `requirements.lock`
+dan `wheelhouse/` selain source aplikasi. Keduanya berada di dalam protected archive,
+bukan sebagai file envelope tambahan:
+
+```text
+manage.py
+requirements.lock
+wheelhouse/<distribution-wheels>.whl
+...
+```
+
+Task 7 menjalankan interpreter manylinux dengan ABI yang sama, meng-install versi
+`pip-tools` yang dipin di workflow, menghasilkan fully resolved
+`requirements.lock` memakai `pip-compile --generate-hashes`, lalu menjalankan
+`pip download --only-binary=:all: --require-hashes -r requirements.lock` untuk
+mengunduh tepat dependency wheels ke `wheelhouse/` sebelum protected archive dan
+attestation final dibuat. Launcher tidak mengakses index package dan hanya menjalankan:
+
+```bash
+python -m pip install --no-index --find-links /root-owned/candidate/wheelhouse --require-hashes -r /root-owned/candidate/requirements.lock
+```
+
+Path di atas menjelaskan bentuk command; launcher menggantinya dengan path candidate
+root-owned aktual. Missing lock, wheel non-regular, link/device, sdist, hash mismatch,
+atau dependency yang tidak lengkap menggagalkan deployment. Lock yang mencoba URL,
+direct reference, editable/local path, index/find-links override, atau ekspansi env
+juga ditolak; `PIP_CONFIG_FILE=/dev/null` dan `PIP_NO_INDEX=1` memastikan install
+candidate tidak melakukan akses network.
+
 Launcher mengeksekusi policy berikut dan menyembunyikan detail output attestation
 dari deployment log:
 
@@ -78,19 +121,34 @@ gh attestation verify projectlaboran.protected.tar.gz \
 ```
 
 Build provenance GitHub-hosted adalah trust anchor. Output job self-hosted tidak
-dipercaya dan `--deny-self-hosted-runners` wajib tetap aktif.
+dipercaya dan `--deny-self-hosted-runners` wajib tetap aktif. Root launcher merekam
+digest snapshot envelope, digest protected archive, dan SHA sebagai record
+`consumed`/`deployed` append-only pada `/home/admin/LabTif/.deploy-history`. Replay
+envelope atau archive yang pernah consumed ditolak; downgrade hanya boleh melalui
+rollback manual owner.
 
-## Dedicated runtime user
+## Dedicated runtime dan build user
 
-Buat dedicated runtime user tanpa login. `admin` tetap menjalankan runner, tetapi
-tidak menjalankan protected code:
+Buat dua system user locked tanpa login. `labhub-build` hanya membuat venv dan
+memasang wheel offline di candidate private; `labhub-app` hanya menjalankan code yang
+sudah sealed. `admin` tetap menjalankan runner tetapi tidak memakai salah satu UID:
 
 ```bash
 getent group labhub-app >/dev/null || sudo groupadd --system labhub-app
 id labhub-app >/dev/null 2>&1 || sudo useradd --system --gid labhub-app --home-dir /var/lib/labhub-app --create-home --shell /sbin/nologin labhub-app
+getent group labhub-build >/dev/null || sudo groupadd --system labhub-build
+id labhub-build >/dev/null 2>&1 || sudo useradd --system --gid labhub-build --home-dir /var/lib/labhub-build --create-home --shell /sbin/nologin labhub-build
+sudo passwd -l labhub-app
+sudo passwd -l labhub-build
 sudo chown root:root /var/lib/labhub-app
+sudo chown root:root /var/lib/labhub-build
 sudo chmod 0755 /var/lib/labhub-app
+sudo chmod 0755 /var/lib/labhub-build
 test "$(id -gn labhub-app)" = labhub-app
+test "$(id -gn labhub-build)" = labhub-build
+test "$(id -u labhub-app)" != "$(id -u labhub-build)"
+! id -nG admin | tr ' ' '\n' | grep -Fx labhub-build
+! id -nG labhub-app | tr ' ' '\n' | grep -Fx labhub-build
 ```
 
 Ownership base baru diubah setelah media cutover dan validasi checkout lama selesai.
@@ -324,16 +382,26 @@ sudo chmod 0755 /home/admin/LabTif
 sudo install -d -o root -g root -m 0755 /home/admin/LabTif/releases
 sudo install -d -o admin -g admin -m 0750 /home/admin/LabTif/incoming
 sudo install -d -o admin -g admin -m 0750 /home/admin/LabTif/actions-runner
-sudo setfacl -m u:labhub-app:--x /home/admin
+if ! sudo test -e /home/admin/LabTif/.deploy-history; then
+    sudo install -o root -g root -m 0600 /dev/null /home/admin/LabTif/.deploy-history
+fi
+sudo setfacl -m u:labhub-app:--x,u:labhub-build:--x /home/admin
 if test -e /home/admin/LabTif/production-venv.shared-backup; then
     sudo chown -R root:root /home/admin/LabTif/production-venv.shared-backup
     sudo chmod -R u=rwX,go=rX /home/admin/LabTif/production-venv.shared-backup
 fi
 sudo test "$(stat -c '%U:%G %a' /home/admin/LabTif)" = 'root:root 755'
 sudo test "$(stat -c '%U:%G %a' /home/admin/LabTif/releases)" = 'root:root 755'
+sudo test "$(stat -c '%U:%G %a' /home/admin/LabTif/.deploy-history)" = 'root:root 600'
 sudo test "$(stat -c '%U:%G' /home/admin/LabTif/incoming)" = admin:admin
 sudo test "$(stat -c '%U:%G' /home/admin/LabTif/actions-runner)" = admin:admin
 ```
+
+Launcher membuka `.deploy-history` dengan `O_APPEND`, menulis satu record tervalidasi
+per operasi, lalu `fsync`; file ini tidak di-truncate, dirotasi, atau dihapus oleh
+cleanup deployment. Candidate build memakai directory sementara mode `0710`
+`root:labhub-build` di bawah `releases`, sehingga `labhub-build` dapat traverse tetapi
+`admin` dan `labhub-app` tidak dapat membaca atau menjalankannya.
 
 Jadikan checkout lama read-only bagi admin/labhub-app, kecuali media external yang
 dicapai melalui symlink:
@@ -391,8 +459,14 @@ sudo /usr/bin/bash -n /usr/local/sbin/projectlaboran-deploy
 ```
 
 Launcher wajib `EUID=0`, tidak memakai `sudo`, menerima satu envelope normal, dan
-hanya berjalan dari installed path. Envelope diekstrak ke root-owned temp; link,
-device, duplicate, traversal, extra entry, dan unsafe mode ditolak. Protected archive
+hanya berjalan dari installed path. Sebelum parse, launcher stream-copy incoming
+runner ke regular file `O_EXCL` dalam temp root-only dengan batas 800 MiB. Snapshot
+immutable selama proses itulah yang diparse dan diverifikasi, sehingga perubahan
+concurrent pada source runner tidak mengubah input setelah snapshot. Parser tar
+streaming berhenti pada header keempat dan menolak link, device, duplicate, traversal,
+extra entry, sparse/PAX metadata, truncated content, size/mode tidak aman, serta total
+di atas batas. Root Python helper memakai `/usr/bin/python3 -I` agar tidak import dari
+workspace runner; `gh` dan `curl` berjalan dengan environment bersih. Protected archive
 baru diekstrak setelah policy attestation sukses.
 
 ## Preflight v1 sebagai labhub-app
@@ -450,19 +524,24 @@ sudo /usr/sbin/visudo -cf /etc/sudoers.d/projectlaboran-deploy
 sudo -n -l /usr/local/sbin/projectlaboran-deploy /home/admin/LabTif/incoming/projectlaboran.deploy.tar >/dev/null
 ```
 
-Jangan grant systemctl, shell, manage.py, arbitrary launcher path, atau wildcard
-argument kepada runner. Owner rollback memakai authenticated sudo, bukan NOPASSWD.
+Jangan grant systemctl, shell, manage.py, arbitrary launcher path, wildcard argument,
+atau bentuk `--rollback` kepada runner. Periksa bahwa output `sudo -n -l` hanya memuat
+exact normal command di atas. Owner rollback memakai authenticated sudo dari sesi
+owner dan **tidak boleh** ditambahkan ke sudoers NOPASSWD runner.
 Self-hosted runner wajib dedicated hanya untuk repository ini. Workflow deployment
-wajib memakai GitHub Environment approval, protected main branch, CODEOWNERS review
-untuk `.github/workflows/`, dan menolak fork/third-party arbitrary jobs. Runner tidak
+wajib memakai GitHub Environment approval dengan required reviewer, protected `main`
+yang melarang direct push, serta CODEOWNERS required review untuk
+`.github/workflows/`; workflow harus menolak fork/third-party arbitrary jobs. Runner tidak
 menerima production env dan tidak dapat menulis executed release code. Dedicated
 `labhub-app` UID mencegah `admin` membaca `/proc/<app-pid>/environ`.
 
 ## Task 7 handoff
 
-Task 7 menghasilkan protected archive dan GitHub-hosted attestation bundle, menulis
-lowercase source SHA, membuat envelope, lalu menaruhnya atomik pada fixed incoming
-path. Workflow hanya memanggil installed launcher:
+Task 7 mem-pin `pip-tools`, membuat hash-locked `requirements.lock`, mengunduh exact
+manylinux wheels ke `wheelhouse/`, lalu memasukkan keduanya ke protected archive
+sebelum GitHub-hosted attestation dibuat. Task tersebut menulis lowercase source SHA,
+membuat envelope, lalu menaruhnya atomik pada fixed incoming path. Workflow hanya
+memanggil installed launcher:
 
 ```bash
 sudo -n /usr/local/sbin/projectlaboran-deploy /home/admin/LabTif/incoming/projectlaboran.deploy.tar
@@ -476,20 +555,40 @@ phase. Sebelum restart, launcher switch `current` dan `/etc/labhub/current.env`
 secara terpisah tetapi di dalam transaction yang sama. Crash/signal di antaranya
 mengembalikan **keduanya**, lalu restart dan identity/health-check target lama.
 
-Protected release diekstrak ke temp root-owned di `releases` dan venv dibuat per
-release. Hanya venv baru yang sementara diberikan kepada `labhub-app` selama
-`pip install`, sehingga package build hook tidak berjalan sebagai root dan tidak dapat
-menulis source release. Management commands juga berjalan sebagai `labhub-app`
-dengan v2 env yang diparse tanpa `source`/`eval`. Setelah collectstatic, seluruh
-release dikunci kembali root:root tanpa admin-write sebelum activation.
+Protected release diekstrak streaming dengan jumlah entry, size per-entry, dan total
+uncompressed yang dibatasi. Candidate berada di temp private `root:labhub-build 0710`.
+Root membuat directory `venv` milik `labhub-build`; user tersebut menjalankan
+`python3 -m venv` dan install hanya dari wheelhouse dengan `--no-index` serta
+`--require-hashes`. Candidate kemudian recursively di-seal `root:root`, seluruh
+group/other write dihapus, top directory menjadi root-only `0700`, dan tree
+divalidasi sebelum rename publication; mode release menjadi `0755` hanya setelah
+berada pada path final root-owned.
+
+Baru setelah code dan interpreter sealed serta dipublish, root membaca v2 env dan
+menjalankan trusted management command melalui `runuser labhub-app`. `collectstatic`
+menulis hanya ke empty `staticfiles/` terkontrol yang sementara writable oleh
+`labhub-app`; output ditolak bila mengandung link/device/hardlink lalu segera di-seal
+root-owned sebelum `check`, migration, dan activation. Runtime UID tidak pernah dapat
+menulis source code atau venv. Console script venv tidak dipakai setelah candidate
+rename; systemd dan launcher selalu memanggil `venv/bin/python` secara langsung.
+
+Sebelum build, sebelum publication, dan tepat sebelum activation, live GitHub
+main-head harus tetap sama dengan SHA envelope. Record `consumed` ditulis setelah
+attestation/freshness awal dan tidak
+dihapus saat build gagal, sehingga exact envelope/archive tidak dapat dicoba ulang;
+Task 7 harus menghasilkan envelope baru dari HEAD terbaru. Record `deployed` dan
+marker digest ditulis setelah restart sehat. Normal deploy juga menolak SHA yang
+sudah aktif; pemeriksaan/rollback release aktif memakai protocol owner, bukan replay
+envelope runner.
 
 Health menerima HTTP status di bawah 500. Service identity memerlukan active
 `MainPID`, UID `labhub-app`, root-owned non-writable executable, Daphne cmdline, dan
-`/proc/<MainPID>/cwd` yang sama dengan target `current`. Same-SHA sukses hanya jika
-marker root-owned, current env v2, identity, dan health semuanya cocok.
+`/proc/<MainPID>/cwd` yang sama dengan target `current`. Rollback owner ke target yang
+sudah aktif sukses hanya jika marker root-owned, current env v2, identity, dan health
+semuanya cocok.
 
 Phase `committed` tidak pernah eligible untuk rollback. Startup hanya memverifikasi
-identity/marker/health dan menyelesaikan cleanup; kegagalan mempertahankan journal
+identity/marker/deployment-state/health dan menyelesaikan cleanup; kegagalan mempertahankan journal
 dan return nonzero. Phase incomplete mengembalikan previous code **dan** previous env.
 Signal HUP/INT/TERM mempertahankan status nonzero.
 

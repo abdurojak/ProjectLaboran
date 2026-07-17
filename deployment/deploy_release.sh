@@ -16,6 +16,7 @@ VENV_LINK="$BASE_DIR/production-venv"
 INCOMING_ENVELOPE="$BASE_DIR/incoming/projectlaboran.deploy.tar"
 LOCK_FILE="$BASE_DIR/.deploy.lock"
 TRANSACTION_FILE="$BASE_DIR/.deploy-transaction"
+DEPLOYMENT_STATE="$BASE_DIR/.deploy-history"
 OLD_CHECKOUT="$BASE_DIR/ProjectLaboran"
 
 ENV_DIR=/etc/labhub
@@ -26,14 +27,21 @@ TRUSTED_ROOT="$ENV_DIR/trusted_root.jsonl"
 
 APP_USER=labhub-app
 APP_GROUP=labhub-app
+BUILD_USER=labhub-build
+BUILD_GROUP=labhub-build
 SERVICE=projectlaboran-daphne
 SYSTEMCTL=/usr/bin/systemctl
 RUNUSER=/usr/sbin/runuser
 GH=/usr/bin/gh
+CURL=/usr/bin/curl
+SHA256SUM=/usr/bin/sha256sum
+PYTHON3=/usr/bin/python3
 
 REPOSITORY=abdurojak/ProjectLaboran
 SIGNER_WORKFLOW=abdurojak/ProjectLaboran/.github/workflows/test-runner.yml
 SOURCE_REF=refs/heads/main
+MAIN_HEAD_API=https://api.github.com/repos/abdurojak/ProjectLaboran/commits/main
+MAX_ENVELOPE_BYTES=838860800
 
 MODE=""
 ENVELOPE=""
@@ -44,6 +52,9 @@ PREVIOUS_ENV=""
 TARGET_ENV="$V2_ENV"
 REPLACED_BACKUP=""
 TEMP_ENVELOPE_DIR=""
+ENVELOPE_SNAPSHOT=""
+ENVELOPE_DIGEST=""
+ARCHIVE_DIGEST=""
 TEMP_RELEASE=""
 TEMP_LINK=""
 TRANSACTION_TEMP=""
@@ -333,7 +344,10 @@ write_success_marker() {
     [[ "$RELEASE_DIR" == "$RELEASES_DIR/$SHA" && -d "$RELEASE_DIR" && ! -L "$RELEASE_DIR" ]] || return 1
     [[ ! -L "$marker" ]] || return 1
     temp=$(mktemp "$RELEASE_DIR/.deploy-success.tmp.XXXXXX")
-    printf 'version=2\nsha=%s\nenvironment=%s\n' "$SHA" "$V2_ENV" >"$temp"
+    [[ "$ENVELOPE_DIGEST" =~ ^[0-9a-f]{64}$ ]] || return 1
+    [[ "$ARCHIVE_DIGEST" =~ ^[0-9a-f]{64}$ ]] || return 1
+    printf 'version=3\nsha=%s\nenvironment=%s\nenvelope_sha256=%s\narchive_sha256=%s\n' \
+        "$SHA" "$V2_ENV" "$ENVELOPE_DIGEST" "$ARCHIVE_DIGEST" >"$temp"
     chown root:root "$temp"
     chmod 0644 "$temp"
     sync -f "$temp"
@@ -345,12 +359,150 @@ has_success_marker() {
     local release=$1
     local sha=$2
     local marker="$release/.deploy-success"
-    local content
+    local -a lines=()
 
     [[ -f "$marker" && ! -L "$marker" ]] || return 1
     require_root_owned "$marker" 644 || return 1
-    content=$(<"$marker")
-    [[ "$content" == $'version=2\nsha='"$sha"$'\nenvironment='"$V2_ENV" ]]
+    mapfile -t lines <"$marker"
+    [[ "${lines[*]}" != *$'\r'* ]] || return 1
+    [[ "${#lines[@]}" -eq 3 || "${#lines[@]}" -eq 5 ]] || return 1
+    [[ "${lines[0]}" == version=2 || "${lines[0]}" == version=3 ]] || return 1
+    [[ "${lines[1]}" == "sha=$sha" && "${lines[2]}" == "environment=$V2_ENV" ]] || return 1
+    if [[ "${lines[0]}" == version=2 ]]; then
+        [[ "${#lines[@]}" -eq 3 ]]
+    else
+        [[ "${#lines[@]}" -eq 5 ]] || return 1
+        [[ "${lines[3]}" =~ ^envelope_sha256=[0-9a-f]{64}$ ]] || return 1
+        [[ "${lines[4]}" =~ ^archive_sha256=[0-9a-f]{64}$ ]]
+    fi
+}
+
+ensure_deployment_state() {
+    "$PYTHON3" -I - "$DEPLOYMENT_STATE" <<'PY'
+import errno
+import os
+import stat
+import sys
+
+path = sys.argv[1]
+flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+if hasattr(os, "O_NOFOLLOW"):
+    flags |= os.O_NOFOLLOW
+try:
+    fd = os.open(path, flags, 0o600)
+except OSError as error:
+    if error.errno != errno.EEXIST:
+        raise
+else:
+    os.close(fd)
+
+st = os.lstat(path)
+if not stat.S_ISREG(st.st_mode) or st.st_uid != 0 or st.st_gid != 0:
+    raise ValueError("unsafe deployment state file")
+if stat.S_IMODE(st.st_mode) != 0o600 or st.st_nlink != 1:
+    raise ValueError("unsafe deployment state permissions")
+PY
+}
+
+deployment_state_contains() {
+    local wanted_state=$1
+    local wanted_sha=$2
+    local wanted_envelope=$3
+    local wanted_archive=$4
+    local line state sha envelope archive
+
+    ensure_deployment_state || return 1
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ "$line" =~ ^version=1\ state=(consumed|deployed)\ sha=([0-9a-f]{40})\ envelope_sha256=([0-9a-f]{64})\ archive_sha256=([0-9a-f]{64})$ ]] || return 2
+        state=${BASH_REMATCH[1]}
+        sha=${BASH_REMATCH[2]}
+        envelope=${BASH_REMATCH[3]}
+        archive=${BASH_REMATCH[4]}
+        if [[ "$state" == "$wanted_state" && "$sha" == "$wanted_sha" && \
+            "$envelope" == "$wanted_envelope" && "$archive" == "$wanted_archive" ]]; then
+            return 0
+        fi
+    done <"$DEPLOYMENT_STATE"
+    return 1
+}
+
+reject_consumed_artifact() {
+    local line envelope archive
+
+    ensure_deployment_state || return 1
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ "$line" =~ ^version=1\ state=(consumed|deployed)\ sha=([0-9a-f]{40})\ envelope_sha256=([0-9a-f]{64})\ archive_sha256=([0-9a-f]{64})$ ]] || \
+            fail 'Deployment state is malformed; refusing deployment.'
+        envelope=${BASH_REMATCH[3]}
+        archive=${BASH_REMATCH[4]}
+        if [[ "$envelope" == "$ENVELOPE_DIGEST" || "$archive" == "$ARCHIVE_DIGEST" ]]; then
+            fail 'This deployment envelope or protected archive was already consumed.'
+        fi
+    done <"$DEPLOYMENT_STATE"
+}
+
+append_deployment_state() {
+    local state=$1
+
+    [[ "$state" == consumed || "$state" == deployed ]] || return 1
+    validate_sha "$SHA" || return 1
+    [[ "$ENVELOPE_DIGEST" =~ ^[0-9a-f]{64}$ ]] || return 1
+    [[ "$ARCHIVE_DIGEST" =~ ^[0-9a-f]{64}$ ]] || return 1
+    ensure_deployment_state || return 1
+    "$PYTHON3" -I - "$DEPLOYMENT_STATE" "$state" "$SHA" "$ENVELOPE_DIGEST" "$ARCHIVE_DIGEST" <<'PY'
+import os
+import re
+import stat
+import sys
+
+path, state, sha, envelope_digest, archive_digest = sys.argv[1:]
+if state not in {"consumed", "deployed"}:
+    raise ValueError("invalid deployment state")
+if re.fullmatch(r"[0-9a-f]{40}", sha) is None:
+    raise ValueError("invalid deployment sha")
+if any(re.fullmatch(r"[0-9a-f]{64}", value) is None for value in (envelope_digest, archive_digest)):
+    raise ValueError("invalid deployment digest")
+flags = os.O_WRONLY | os.O_APPEND | getattr(os, "O_BINARY", 0)
+if hasattr(os, "O_NOFOLLOW"):
+    flags |= os.O_NOFOLLOW
+fd = os.open(path, flags)
+try:
+    st = os.fstat(fd)
+    if not stat.S_ISREG(st.st_mode) or st.st_uid != 0 or st.st_gid != 0:
+        raise ValueError("unsafe deployment state file")
+    if stat.S_IMODE(st.st_mode) != 0o600 or st.st_nlink != 1:
+        raise ValueError("unsafe deployment state permissions")
+    record = (
+        f"version=1 state={state} sha={sha} envelope_sha256={envelope_digest} "
+        f"archive_sha256={archive_digest}\n"
+    ).encode("ascii")
+    if os.write(fd, record) != len(record):
+        raise OSError("short deployment state write")
+    os.fsync(fd)
+finally:
+    os.close(fd)
+PY
+    sync -f "$BASE_DIR"
+}
+
+marker_matches_deployment_state() {
+    local release=$1
+    local sha=$2
+    local marker="$release/.deploy-success"
+    local envelope archive
+    local -a lines=()
+
+    [[ -f "$marker" && ! -L "$marker" ]] || return 1
+    require_root_owned "$marker" 644 || return 1
+    mapfile -t lines <"$marker"
+    [[ "${#lines[@]}" -eq 5 && "${lines[*]}" != *$'\r'* ]] || return 1
+    [[ "${lines[0]}" == version=3 && "${lines[1]}" == "sha=$sha" ]] || return 1
+    [[ "${lines[2]}" == "environment=$V2_ENV" ]] || return 1
+    [[ "${lines[3]}" =~ ^envelope_sha256=([0-9a-f]{64})$ ]] || return 1
+    envelope=${BASH_REMATCH[1]}
+    [[ "${lines[4]}" =~ ^archive_sha256=([0-9a-f]{64})$ ]] || return 1
+    archive=${BASH_REMATCH[1]}
+    deployment_state_contains deployed "$sha" "$envelope" "$archive"
 }
 
 load_runtime_environment() {
@@ -460,7 +612,10 @@ restore_deploy_publication() {
     if [[ -n "$TX_BACKUP" && -d "$TX_BACKUP" && ! -L "$TX_BACKUP" ]]; then
         if [[ -e "$TX_RELEASE" || -L "$TX_RELEASE" ]]; then
             [[ -d "$TX_RELEASE" && ! -L "$TX_RELEASE" ]] || return 1
-            [[ "$(current_target_path 2>/dev/null || true)" != "$TX_RELEASE" ]] || return 1
+            if [[ "$(current_target_path 2>/dev/null || true)" == "$TX_RELEASE" && \
+                "$TX_PREVIOUS" != "$TX_RELEASE" ]]; then
+                return 1
+            fi
             failed="$RELEASES_DIR/.failed-${TX_SHA}.recovery$$"
             [[ ! -e "$failed" && ! -L "$failed" ]] || return 1
             mv -- "$TX_RELEASE" "$failed"
@@ -484,14 +639,38 @@ restore_deploy_publication() {
 }
 
 rollback_transaction() {
+    local original_phase current_code current_env
+    local restart_required=false
+    local publication_restored=false
+
     read_transaction || { printf 'Transaction journal is malformed; refusing recovery.\n' >&2; return 1; }
     [[ "$TX_PHASE" != committed ]] || return 1
+    original_phase=$TX_PHASE
+    current_code=$(current_target_path 2>/dev/null || true)
+    current_env=$(current_environment_path 2>/dev/null || true)
+    if [[ "$original_phase" == switched || "$original_phase" == rolling-back || \
+        "$current_code" != "$TX_PREVIOUS" || \
+        "$current_env" != "$TX_PREVIOUS_ENV" ]]; then
+        restart_required=true
+    fi
     rewrite_transaction_phase rolling-back || return 1
     SHA=$TX_SHA
-    atomic_switch "$CURRENT_LINK" "$TX_PREVIOUS" current || return 1
-    atomic_switch "$CURRENT_ENV" "$TX_PREVIOUS_ENV" environment || return 1
-    restore_deploy_publication || return 1
-    restart_and_verify "$TX_PREVIOUS" || return 1
+    if [[ "$TX_KIND" == deploy && "$TX_PREVIOUS" == "$TX_RELEASE" ]]; then
+        restore_deploy_publication || return 1
+        publication_restored=true
+    fi
+    if [[ "$current_code" != "$TX_PREVIOUS" ]]; then
+        atomic_switch "$CURRENT_LINK" "$TX_PREVIOUS" current || return 1
+    fi
+    if [[ "$current_env" != "$TX_PREVIOUS_ENV" ]]; then
+        atomic_switch "$CURRENT_ENV" "$TX_PREVIOUS_ENV" environment || return 1
+    fi
+    if [[ "$publication_restored" == false ]]; then
+        restore_deploy_publication || return 1
+    fi
+    if [[ "$restart_required" == true ]]; then
+        restart_and_verify "$TX_PREVIOUS" || return 1
+    fi
     remove_transaction
 }
 
@@ -507,13 +686,20 @@ finish_committed_cleanup() {
 }
 
 recover_transaction() {
+    local marker_valid=false
+
     read_transaction || { printf 'Transaction journal is malformed; refusing deployment.\n' >&2; return 1; }
     printf 'Recovering %s transaction for %s at phase %s.\n' "$TX_KIND" "$TX_SHA" "$TX_PHASE" >&2
     SHA=$TX_SHA
     if [[ "$TX_PHASE" == committed ]]; then
+        if [[ "$TX_KIND" == deploy ]]; then
+            marker_matches_deployment_state "$TX_RELEASE" "$TX_SHA" && marker_valid=true
+        else
+            has_success_marker "$TX_RELEASE" "$TX_SHA" && marker_valid=true
+        fi
         if [[ "$(current_target_path 2>/dev/null || true)" != "$TX_RELEASE" ]] || \
             [[ "$(current_environment_path 2>/dev/null || true)" != "$TX_TARGET_ENV" ]] || \
-            ! has_success_marker "$TX_RELEASE" "$TX_SHA" || \
+            [[ "$marker_valid" != true ]] || \
             ! verify_service_identity "$TX_RELEASE" || ! probe_service; then
             printf 'Committed deployment identity or health verification failed; journal retained without rollback.\n' >&2
             return 1
@@ -561,42 +747,105 @@ on_signal() {
 extract_envelope() {
     TEMP_ENVELOPE_DIR=$(mktemp -d "$BASE_DIR/.envelope.XXXXXX")
     chmod 0700 "$TEMP_ENVELOPE_DIR"
-    python3 - "$ENVELOPE" "$TEMP_ENVELOPE_DIR" <<'PY'
+    ENVELOPE_SNAPSHOT="$TEMP_ENVELOPE_DIR/envelope.snapshot.tar"
+    "$PYTHON3" -I - "$ENVELOPE" "$ENVELOPE_SNAPSHOT" "$TEMP_ENVELOPE_DIR" "$MAX_ENVELOPE_BYTES" <<'PY'
 import os
 import re
+import stat
 import sys
 import tarfile
 from pathlib import Path
 
-archive_path = Path(sys.argv[1])
-destination = Path(sys.argv[2])
+source_path = Path(sys.argv[1])
+snapshot_path = Path(sys.argv[2])
+destination = Path(sys.argv[3])
+max_envelope_bytes = int(sys.argv[4])
 expected = {
-    "projectlaboran.protected.tar.gz": 2 * 1024 * 1024 * 1024,
-    "attestation.jsonl": 64 * 1024 * 1024,
-    "source-sha": 128,
+    "projectlaboran.protected.tar.gz": 768 * 1024 * 1024,
+    "attestation.jsonl": 16 * 1024 * 1024,
+    "source-sha": 41,
 }
 
-with tarfile.open(archive_path, "r:") as archive:
-    members = archive.getmembers()
-    names = [member.name for member in members]
-    if len(names) != len(set(names)) or set(names) != set(expected):
-        raise ValueError("deployment envelope must contain exactly the expected files")
-    for member in members:
-        if not member.isfile() or member.name.startswith(("/", "\\")) or "/" in member.name or "\\" in member.name:
+source_flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+if hasattr(os, "O_NOFOLLOW"):
+    source_flags |= os.O_NOFOLLOW
+source_fd = os.open(source_path, source_flags)
+snapshot_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+if hasattr(os, "O_NOFOLLOW"):
+    snapshot_flags |= os.O_NOFOLLOW
+snapshot_fd = os.open(snapshot_path, snapshot_flags, 0o600)
+try:
+    source_stat = os.fstat(source_fd)
+    if not stat.S_ISREG(source_stat.st_mode):
+        raise ValueError("deployment envelope source is not a regular file")
+    copied = 0
+    while True:
+        chunk = os.read(source_fd, 1024 * 1024)
+        if not chunk:
+            break
+        copied += len(chunk)
+        if copied > max_envelope_bytes:
+            raise ValueError("deployment envelope snapshot is too large")
+        view = memoryview(chunk)
+        while view:
+            written = os.write(snapshot_fd, view)
+            if written <= 0:
+                raise OSError("short deployment envelope snapshot write")
+            view = view[written:]
+    if copied == 0:
+        raise ValueError("deployment envelope snapshot is empty")
+    os.fsync(snapshot_fd)
+finally:
+    os.close(source_fd)
+    os.close(snapshot_fd)
+
+seen = set()
+total_size = 0
+header_count = 0
+with tarfile.open(snapshot_path, "r|*") as archive:
+    for member in archive:
+        header_count += 1
+        if header_count > 3:
+            raise ValueError("deployment envelope contains more than three entries")
+        if member.name not in expected or member.name in seen:
+            raise ValueError("deployment envelope contains a duplicate or unexpected entry")
+        if (
+            not member.isfile()
+            or member.name.startswith(("/", "\\"))
+            or "/" in member.name
+            or "\\" in member.name
+            or member.pax_headers
+            or getattr(member, "sparse", None) is not None
+            or member.offset_data != member.offset + tarfile.BLOCKSIZE
+        ):
             raise ValueError("unsafe deployment envelope entry")
-        if member.mode not in {0o600, 0o640, 0o644} or member.size < 1 or member.size > expected[member.name]:
+        if member.mode != 0o644 or member.size < 1 or member.size > expected[member.name]:
             raise ValueError("unsafe deployment envelope mode or size")
+        total_size += member.size
+        if total_size > sum(expected.values()):
+            raise ValueError("deployment envelope content is too large")
         source = archive.extractfile(member)
         if source is None:
             raise ValueError("unreadable deployment envelope entry")
         target = destination / member.name
-        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
         if hasattr(os, "O_NOFOLLOW"):
             flags |= os.O_NOFOLLOW
         fd = os.open(target, flags, 0o600)
         with source, os.fdopen(fd, "wb") as output:
-            while chunk := source.read(1024 * 1024):
+            remaining = member.size
+            while remaining:
+                chunk = source.read(min(1024 * 1024, remaining))
+                if not chunk:
+                    raise ValueError("truncated deployment envelope member")
                 output.write(chunk)
+                remaining -= len(chunk)
+            output.flush()
+            os.fsync(output.fileno())
+        seen.add(member.name)
+
+if header_count != 3 or seen != set(expected):
+    raise ValueError("deployment envelope must contain exactly the expected files")
 
 sha_bytes = (destination / "source-sha").read_bytes()
 if re.fullmatch(rb"[0-9a-f]{40}\n?", sha_bytes) is None:
@@ -604,13 +853,19 @@ if re.fullmatch(rb"[0-9a-f]{40}\n?", sha_bytes) is None:
 PY
     SHA=$(<"$TEMP_ENVELOPE_DIR/source-sha")
     validate_sha "$SHA"
+    ENVELOPE_DIGEST=$($SHA256SUM -- "$ENVELOPE_SNAPSHOT")
+    ENVELOPE_DIGEST=${ENVELOPE_DIGEST%% *}
+    ARCHIVE_DIGEST=$($SHA256SUM -- "$TEMP_ENVELOPE_DIR/projectlaboran.protected.tar.gz")
+    ARCHIVE_DIGEST=${ARCHIVE_DIGEST%% *}
+    [[ "$ENVELOPE_DIGEST" =~ ^[0-9a-f]{64}$ && "$ARCHIVE_DIGEST" =~ ^[0-9a-f]{64}$ ]]
 }
 
 verify_attestation() {
     local archive="$TEMP_ENVELOPE_DIR/projectlaboran.protected.tar.gz"
     local bundle="$TEMP_ENVELOPE_DIR/attestation.jsonl"
 
-    if "$GH" attestation verify "$archive" \
+    if /usr/bin/env -i HOME=/root PATH=/usr/sbin:/usr/bin:/sbin:/bin LC_ALL=C \
+        "$GH" attestation verify "$archive" \
         --repo "$REPOSITORY" \
         --bundle "$bundle" \
         --custom-trusted-root "$TRUSTED_ROOT" \
@@ -625,31 +880,67 @@ verify_attestation() {
     fi
 }
 
+verify_current_main_head() {
+    local response head
+
+    response="$TEMP_ENVELOPE_DIR/main-head.json"
+    [[ ! -e "$response" && ! -L "$response" ]] || rm -f -- "$response"
+    install -o root -g root -m 0600 /dev/null "$response"
+    if ! /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LC_ALL=C \
+        "$CURL" --disable --noproxy '*' --proto '=https' --proto-redir '=https' --tlsv1.2 \
+        --silent --show-error --fail --connect-timeout 5 --max-time 20 \
+        --max-filesize 1048576 --header 'Accept: application/vnd.github+json' \
+        --header 'X-GitHub-Api-Version: 2022-11-28' \
+        --user-agent 'projectlaboran-root-deployer/1' \
+        --output "$response" "$MAIN_HEAD_API"; then
+        printf 'GitHub main-head freshness check failed.\n' >&2
+        return 1
+    fi
+    head=$("$PYTHON3" -I - "$response" <<'PY'
+import json
+import re
+import sys
+
+with open(sys.argv[1], "rb") as source:
+    payload = json.load(source)
+if not isinstance(payload, dict):
+    raise ValueError("unexpected GitHub API response")
+sha = payload.get("sha")
+if not isinstance(sha, str) or re.fullmatch(r"[0-9a-f]{40}", sha) is None:
+    raise ValueError("GitHub API response lacks a valid commit sha")
+print(sha)
+PY
+    ) || return 1
+    rm -f -- "$response"
+    [[ "$head" == "$SHA" ]] || fail 'Envelope source-sha is not the current main HEAD; build and deploy the latest main commit.'
+    printf 'GitHub main-head freshness check succeeded.\n'
+}
+
 extract_protected_release() {
     local archive="$TEMP_ENVELOPE_DIR/projectlaboran.protected.tar.gz"
 
     TEMP_RELEASE=$(mktemp -d "$RELEASES_DIR/.deploy-${SHA}.XXXXXX")
     chmod 0700 "$TEMP_RELEASE"
-    python3 - "$archive" "$TEMP_RELEASE" <<'PY'
+    "$PYTHON3" -I - "$archive" "$TEMP_RELEASE" <<'PY'
 import os
-import shutil
 import sys
 import tarfile
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 archive_path = Path(sys.argv[1])
 destination = Path(sys.argv[2])
-max_entries = 200_000
-max_total_size = 4 * 1024 * 1024 * 1024
+max_entries = 100_000
+max_total_size = 1024 * 1024 * 1024
+max_member_size = 512 * 1024 * 1024
 
-with tarfile.open(archive_path, "r:gz") as archive:
-    members = archive.getmembers()
-    if len(members) > max_entries:
-        raise ValueError("protected archive contains too many entries")
-    validated = []
+with tarfile.open(archive_path, "r|gz") as archive:
     kinds = {}
     total_size = 0
-    for member in members:
+    entry_count = 0
+    for member in archive:
+        entry_count += 1
+        if entry_count > max_entries:
+            raise ValueError("protected archive contains too many entries")
         name = member.name
         normalized = name.replace("\\", "/")
         member_path = PurePosixPath(normalized)
@@ -668,7 +959,9 @@ with tarfile.open(archive_path, "r:gz") as archive:
             raise ValueError("unsafe protected archive path")
         if member.type not in {tarfile.REGTYPE, tarfile.AREGTYPE, tarfile.DIRTYPE}:
             raise ValueError("unsafe protected archive entry type")
-        if member.mode & 0o7022:
+        if member.pax_headers or getattr(member, "sparse", None) is not None:
+            raise ValueError("unsupported protected archive metadata")
+        if member.mode & 0o7022 or member.size > max_member_size:
             raise ValueError("unsafe protected archive mode")
         key = tuple(member_path.parts)
         if key in kinds:
@@ -680,9 +973,6 @@ with tarfile.open(archive_path, "r:gz") as archive:
         total_size += member.size
         if total_size > max_total_size:
             raise ValueError("protected archive is too large")
-        validated.append((member, member_path))
-
-    for member, member_path in validated:
         target = destination.joinpath(*member_path.parts)
         if member.isdir():
             target.mkdir(mode=0o755, parents=True, exist_ok=True)
@@ -691,20 +981,66 @@ with tarfile.open(archive_path, "r:gz") as archive:
         source = archive.extractfile(member)
         if source is None:
             raise ValueError("unreadable protected archive entry")
-        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
         if hasattr(os, "O_NOFOLLOW"):
             flags |= os.O_NOFOLLOW
         fd = os.open(target, flags, 0o644)
         with source, os.fdopen(fd, "wb") as output:
-            shutil.copyfileobj(source, output, length=1024 * 1024)
+            remaining = member.size
+            while remaining:
+                chunk = source.read(min(1024 * 1024, remaining))
+                if not chunk:
+                    raise ValueError("truncated protected archive member")
+                output.write(chunk)
+                remaining -= len(chunk)
+            output.flush()
+            os.fsync(output.fileno())
 PY
-    [[ -f "$TEMP_RELEASE/manage.py" && -f "$TEMP_RELEASE/requirements.txt" ]] || return 1
+    [[ -f "$TEMP_RELEASE/manage.py" && ! -L "$TEMP_RELEASE/manage.py" ]] || return 1
+    [[ -s "$TEMP_RELEASE/requirements.lock" && ! -L "$TEMP_RELEASE/requirements.lock" ]] || return 1
+    [[ -d "$TEMP_RELEASE/wheelhouse" && ! -L "$TEMP_RELEASE/wheelhouse" ]] || return 1
+    find "$TEMP_RELEASE/wheelhouse" -xdev -type f -name '*.whl' -print -quit | grep -q . || return 1
+    if find "$TEMP_RELEASE/wheelhouse" -xdev -type f ! -name '*.whl' -print -quit | grep -q .; then
+        return 1
+    fi
+    if find "$TEMP_RELEASE/wheelhouse" -mindepth 1 -xdev ! -type f -print -quit | grep -q .; then
+        return 1
+    fi
+    "$PYTHON3" -I - "$TEMP_RELEASE/requirements.lock" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+lock_path = Path(sys.argv[1])
+if lock_path.stat().st_size > 4 * 1024 * 1024:
+    raise ValueError("requirements lock is too large")
+lock = lock_path.read_bytes()
+if not lock or b"\x00" in lock or b"\r" in lock:
+    raise ValueError("unsafe requirements lock")
+text = lock.decode("utf-8")
+for raw_line in text.splitlines():
+    line = raw_line.split("#", 1)[0].strip()
+    if not line:
+        continue
+    if re.search(r"(?i)(?:https?|ftp)://|file:|--(?:extra-)?index-url|--find-links|--trusted-host|--editable", line):
+        raise ValueError("requirements lock may not select a network or external source")
+    if re.search(r"(^|\s)-e(?:\s|=|$)|\s@\s|(^|\s)(?:\.\.?/|/)", line):
+        raise ValueError("requirements lock may not select a local or direct source")
+    if "${" in line or "%(" in line:
+        raise ValueError("requirements lock may not expand environment or config values")
+PY
     [[ ! -e "$TEMP_RELEASE/venv" && ! -L "$TEMP_RELEASE/venv" ]] || return 1
     [[ ! -e "$TEMP_RELEASE/.deploy-success" && ! -L "$TEMP_RELEASE/.deploy-success" ]] || return 1
     [[ ! -e "$TEMP_RELEASE/.env" && ! -L "$TEMP_RELEASE/.env" ]] || return 1
     [[ ! -e "$TEMP_RELEASE/media" && ! -L "$TEMP_RELEASE/media" ]] || return 1
     chown -R root:root -- "$TEMP_RELEASE"
     chmod -R u=rwX,go=rX -- "$TEMP_RELEASE"
+    [[ "$(stat -c '%U:%G' -- "$TEMP_RELEASE/requirements.lock")" == root:root ]] || return 1
+    if find "$TEMP_RELEASE/wheelhouse" -xdev \( -not -user root -o -not -group root \) -print -quit | grep -q .; then
+        return 1
+    fi
+    chown root:"$BUILD_GROUP" "$TEMP_RELEASE"
+    chmod 0710 "$TEMP_RELEASE"
 }
 
 lock_release_tree() {
@@ -715,27 +1051,47 @@ lock_release_tree() {
     release_tree_is_locked "$release"
 }
 
-prepare_release() {
-    local python
+build_candidate() {
+    local candidate=$TEMP_RELEASE
+    local python="$TEMP_RELEASE/venv/bin/python"
 
-    python3 -m venv "$RELEASE_DIR/venv"
-    python="$RELEASE_DIR/venv/bin/python"
+    [[ -d "$candidate" && ! -L "$candidate" ]] || return 1
+    [[ "$(stat -c '%U:%G %a' -- "$candidate")" == "root:$BUILD_GROUP 710" ]] || return 1
+    install -d -o "$BUILD_USER" -g "$BUILD_GROUP" -m 0700 "$candidate/venv"
+    "$RUNUSER" --user "$BUILD_USER" -- /usr/bin/env -i \
+        HOME=/var/lib/labhub-build PATH=/usr/local/bin:/usr/bin:/bin \
+        PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 \
+        "$PYTHON3" -I -m venv "$candidate/venv"
     [[ -x "$python" ]] || return 1
-    chown -R "$APP_USER:$APP_GROUP" -- "$RELEASE_DIR/venv"
     (
-        cd -- "$RELEASE_DIR"
-        exec "$RUNUSER" --user "$APP_USER" -- /usr/bin/env -i \
-            HOME=/var/lib/labhub-app PATH=/usr/local/bin:/usr/bin:/bin \
+        cd -- "$candidate"
+        exec "$RUNUSER" --user "$BUILD_USER" -- /usr/bin/env -i \
+            HOME=/var/lib/labhub-build PATH=/usr/local/bin:/usr/bin:/bin \
+            PIP_CONFIG_FILE=/dev/null PIP_NO_INDEX=1 \
             PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 \
-            "$python" -m pip install --disable-pip-version-check \
-            --requirement "$RELEASE_DIR/requirements.txt"
+            "$python" -m pip install --no-index \
+            --find-links "$candidate/wheelhouse" --require-hashes \
+            -r "$candidate/requirements.lock"
     )
-    chown -R root:root -- "$RELEASE_DIR/venv"
-    chmod -R u=rwX,go=rX -- "$RELEASE_DIR/venv"
-    release_tree_is_locked "$RELEASE_DIR"
-    run_manage "$RELEASE_DIR" "$V2_ENV" migrate
+    chown -R root:root -- "$candidate"
+    chmod -R u=rwX,go=rX -- "$candidate"
+    chmod 0700 "$candidate"
+    release_tree_is_locked "$candidate"
+}
+
+prepare_published_release() {
+    release_tree_is_locked "$RELEASE_DIR" || return 1
     install -d -o "$APP_USER" -g "$APP_GROUP" -m 0750 "$RELEASE_DIR/staticfiles"
     run_manage "$RELEASE_DIR" "$V2_ENV" collectstatic
+    if find "$RELEASE_DIR/staticfiles" -xdev ! -type d ! -type f -print -quit | grep -q .; then
+        return 1
+    fi
+    if find "$RELEASE_DIR/staticfiles" -xdev -type f -links +1 -print -quit | grep -q .; then
+        return 1
+    fi
+    lock_release_tree "$RELEASE_DIR/staticfiles"
+    run_manage "$RELEASE_DIR" "$V2_ENV" check
+    run_manage "$RELEASE_DIR" "$V2_ENV" migrate
     lock_release_tree "$RELEASE_DIR"
 }
 
@@ -819,15 +1175,26 @@ cleanup_old_releases() {
 }
 
 preflight_root_installation() {
+    local build_gid
+
     [[ "$EUID" -eq 0 ]] || fail 'The deployment launcher must run as root.'
     [[ "$(readlink -e -- "$0")" == "$INSTALL_PATH" ]] || fail "Run the reviewed root-installed launcher at $INSTALL_PATH."
     require_root_owned "$INSTALL_PATH" 755 || fail 'The installed launcher must be root:root mode 0755.'
     require_root_owned "$BASE_DIR" 755 || fail 'BASE_DIR must be root:root mode 0755.'
     require_root_owned "$RELEASES_DIR" 755 || fail 'RELEASES_DIR must be root:root mode 0755.'
     require_root_owned "$ENV_DIR" 700 || fail 'The environment directory must be root:root mode 0700.'
-    [[ -x "$SYSTEMCTL" && -x "$RUNUSER" ]] || fail 'Required system executables are missing.'
+    [[ -x "$SYSTEMCTL" && -x "$RUNUSER" && -x "$GH" && -x "$CURL" && \
+        -x "$SHA256SUM" && -x "$PYTHON3" ]] || \
+        fail 'Required system executables are missing.'
     getent passwd "$APP_USER" >/dev/null || fail 'The dedicated application user is missing.'
     [[ "$(id -gn "$APP_USER")" == "$APP_GROUP" ]] || fail 'The application user has an unexpected primary group.'
+    getent passwd "$BUILD_USER" >/dev/null || fail 'The dedicated build user is missing.'
+    [[ "$(id -gn "$BUILD_USER")" == "$BUILD_GROUP" ]] || fail 'The build user has an unexpected primary group.'
+    [[ "$BUILD_USER" != "$APP_USER" ]] || fail 'Build and runtime users must be distinct.'
+    build_gid=$(getent group "$BUILD_GROUP" | cut -d: -f3)
+    [[ "$build_gid" =~ ^[0-9]+$ ]] || fail 'The build group is invalid.'
+    [[ " $(id -G admin) " != *" $build_gid "* ]] || fail 'Runner admin must not belong to the build group.'
+    [[ " $(id -G "$APP_USER") " != *" $build_gid "* ]] || fail 'Runtime user must not belong to the build group.'
     [[ "$("$SYSTEMCTL" show "$SERVICE" --property=LoadState --value)" == loaded ]] || fail 'The service unit is not loaded.'
     if [[ -e "$V1_ENV" || -L "$V1_ENV" ]]; then
         require_root_owned "$V1_ENV" 600 || fail 'The v1 environment is unsafe.'
@@ -838,6 +1205,7 @@ preflight_root_installation() {
     [[ -L "$CURRENT_ENV" && "$(stat -c '%U:%G' -- "$CURRENT_ENV")" == root:root ]] || fail 'current.env must be a root-owned symlink.'
     [[ -L "$VENV_LINK" && "$(readlink -- "$VENV_LINK")" == "$CURRENT_LINK/venv" ]] || fail 'production-venv is not the stable current/venv symlink.'
     [[ "$(stat -c '%U:%G' -- "$VENV_LINK")" == root:root ]] || fail 'production-venv must be root-owned.'
+    ensure_deployment_state || fail 'The root-owned deployment state is unsafe.'
 }
 
 baseline_check() {
@@ -864,7 +1232,10 @@ activate_release() {
     write_transaction switched
     [[ "$(readlink -e -- "$VENV_LINK")" == "$RELEASE_DIR/venv" ]] || return 1
     restart_and_verify "$RELEASE_DIR"
-    write_success_marker
+    if [[ "$MODE" == deploy ]]; then
+        write_success_marker
+        append_deployment_state deployed
+    fi
     write_transaction committed
     trap - ERR TERM INT HUP
     if ! finish_committed_cleanup; then
@@ -879,24 +1250,22 @@ deploy_envelope() {
 
     [[ "$ENVELOPE" == "$INCOMING_ENVELOPE" ]] || fail "Envelope path must be $INCOMING_ENVELOPE."
     [[ -f "$ENVELOPE" && ! -L "$ENVELOPE" && -r "$ENVELOPE" ]] || fail 'Deployment envelope is missing or unsafe.'
-    [[ "$(stat -c '%s' -- "$ENVELOPE")" -le 3221225472 ]] || fail 'Deployment envelope is too large.'
-    [[ -x "$GH" ]] || fail 'Root-installed GitHub CLI is missing.'
+    [[ "$(stat -c '%s' -- "$ENVELOPE")" -le "$MAX_ENVELOPE_BYTES" ]] || fail 'Deployment envelope is too large.'
     extract_envelope
     verify_attestation
-    extract_protected_release
+    verify_current_main_head
     RELEASE_DIR="$RELEASES_DIR/$SHA"
     PREVIOUS_CURRENT=$(current_target_path) || fail 'current is missing or invalid.'
     PREVIOUS_ENV=$(current_environment_path) || fail 'current.env is missing or invalid.'
     validate_release_path "$PREVIOUS_CURRENT"
-
     if [[ "$PREVIOUS_CURRENT" == "$RELEASE_DIR" ]]; then
-        [[ "$PREVIOUS_ENV" == "$V2_ENV" ]] || fail 'Active release uses an unexpected environment.'
-        has_success_marker "$RELEASE_DIR" "$SHA" || fail 'Active same-SHA release lacks its durable success marker.'
-        verify_service_identity "$RELEASE_DIR" || fail 'Active same-SHA service identity does not match current.'
-        probe_service
-        printf 'Release %s is already active, identified, and healthy.\n' "$SHA"
-        return 0
+        fail 'The current main SHA is already active; normal redeployment of an active SHA is prohibited.'
     fi
+    reject_consumed_artifact
+    append_deployment_state consumed
+    extract_protected_release
+    build_candidate
+    verify_current_main_head
 
     if [[ -e "$RELEASE_DIR" || -L "$RELEASE_DIR" ]]; then
         [[ -d "$RELEASE_DIR" && ! -L "$RELEASE_DIR" && "$(readlink -e -- "$RELEASE_DIR")" == "$RELEASE_DIR" ]] || \
@@ -911,9 +1280,11 @@ deploy_envelope() {
     fi
     mv -- "$TEMP_RELEASE" "$RELEASE_DIR"
     TEMP_RELEASE=""
+    chmod 0755 "$RELEASE_DIR"
     sync -f "$RELEASES_DIR"
-    prepare_release
+    prepare_published_release
     sync -f "$RELEASE_DIR"
+    verify_current_main_head
     activate_release
     printf 'Deployment completed for release %s.\n' "$SHA"
 }
