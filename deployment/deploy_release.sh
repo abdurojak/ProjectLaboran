@@ -491,6 +491,8 @@ for raw_line in open(path, "rb"):
         highest_run_number = max(highest_run_number, old_run_number)
         if old_run_id == run_id and old_run_attempt == run_attempt:
             raise ValueError("signed workflow run and attempt were already deployed")
+        if old_run_id == run_id:
+            raise ValueError("signed workflow run_id was already deployed")
     if hmac.compare_digest(old_envelope, envelope_digest):
         raise ValueError("deployment envelope was already deployed")
     if hmac.compare_digest(old_archive, archive_digest):
@@ -903,10 +905,58 @@ finally:
     os.close(source_fd)
     os.close(snapshot_fd)
 
+raw_seen = set()
+raw_header_count = 0
+raw_size = snapshot_path.stat().st_size
+zero_block = b"\0" * tarfile.BLOCKSIZE
+extension_types = {
+    tarfile.XHDTYPE,
+    tarfile.XGLTYPE,
+    tarfile.GNUTYPE_LONGNAME,
+    tarfile.GNUTYPE_LONGLINK,
+    tarfile.GNUTYPE_SPARSE,
+}
+with open(snapshot_path, "rb") as raw_envelope:
+    while True:
+        header = raw_envelope.read(tarfile.BLOCKSIZE)
+        if len(header) != tarfile.BLOCKSIZE:
+            raise ValueError("deployment envelope is truncated before its tar end marker")
+        if header == zero_block:
+            if raw_envelope.read(tarfile.BLOCKSIZE) != zero_block:
+                raise ValueError("deployment envelope has an incomplete tar end marker")
+            for chunk in iter(lambda: raw_envelope.read(1024 * 1024), b""):
+                if chunk.strip(b"\0"):
+                    raise ValueError("deployment envelope has nonzero trailing content")
+            break
+        raw_header_count += 1
+        if raw_header_count > 3:
+            raise ValueError("deployment envelope contains more than three raw entries")
+        try:
+            raw_member = tarfile.TarInfo.frombuf(header, encoding="ascii", errors="strict")
+        except (tarfile.HeaderError, UnicodeError, ValueError) as error:
+            raise ValueError("deployment envelope contains an invalid raw tar header") from error
+        if raw_member.type in extension_types:
+            raise ValueError("deployment envelope contains forbidden PAX or GNU extension metadata")
+        if raw_member.type not in {tarfile.REGTYPE, tarfile.AREGTYPE}:
+            raise ValueError("deployment envelope raw entry is not a regular file")
+        if raw_member.name not in expected or raw_member.name in raw_seen:
+            raise ValueError("deployment envelope contains a duplicate or unexpected raw entry")
+        if raw_member.size < 1 or raw_member.size > expected[raw_member.name]:
+            raise ValueError("deployment envelope raw entry has an unsafe size")
+        padded_size = (
+            (raw_member.size + tarfile.BLOCKSIZE - 1) // tarfile.BLOCKSIZE
+        ) * tarfile.BLOCKSIZE
+        if raw_envelope.tell() + padded_size + (2 * tarfile.BLOCKSIZE) > raw_size:
+            raise ValueError("deployment envelope raw entry is truncated")
+        raw_envelope.seek(padded_size, os.SEEK_CUR)
+        raw_seen.add(raw_member.name)
+
+if raw_header_count != 3 or raw_seen != set(expected):
+    raise ValueError("deployment envelope must contain exactly three raw regular entries")
+
 seen = set()
 total_size = 0
 header_count = 0
-last_data_end = 0
 with tarfile.open(snapshot_path, "r|") as archive:
     for member in archive:
         header_count += 1
@@ -950,17 +1000,9 @@ with tarfile.open(snapshot_path, "r|") as archive:
             output.flush()
             os.fsync(output.fileno())
         seen.add(member.name)
-        last_data_end = member.offset_data + ((member.size + tarfile.BLOCKSIZE - 1) // tarfile.BLOCKSIZE) * tarfile.BLOCKSIZE
 
 if header_count != 3 or seen != set(expected):
     raise ValueError("deployment envelope must contain exactly the expected files")
-with open(snapshot_path, "rb") as raw_envelope:
-    raw_envelope.seek(last_data_end)
-    if raw_envelope.read(2 * tarfile.BLOCKSIZE) != b"\0" * (2 * tarfile.BLOCKSIZE):
-        raise ValueError("deployment envelope is truncated or lacks a tar end marker")
-    for chunk in iter(lambda: raw_envelope.read(1024 * 1024), b""):
-        if chunk.strip(b"\0"):
-            raise ValueError("deployment envelope has nonzero trailing content")
 PY
     ENVELOPE_DIGEST=$($SHA256SUM -- "$ENVELOPE_SNAPSHOT")
     ENVELOPE_DIGEST=${ENVELOPE_DIGEST%% *}

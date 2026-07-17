@@ -149,9 +149,10 @@ noncanonical bytes, boolean sebagai integer, unsafe claim, dan digest archive ya
 berbeda. Signed `source_sha` menjadi nama release. State root-owned
 `/home/admin/LabTif/.deploy-history` menyimpan deployment sukses secara atomik.
 Normal deploy wajib memiliki signed `run_number` lebih besar dari highest committed
-run number dan menolak pasangan `run_id`/`run_attempt`, envelope, atau archive digest
-yang sudah committed. Build/deploy gagal tidak mengubah state sehingga envelope yang
-sama dapat dicoba lagi. Signature memberi authorization/integrity; signed monotonic
+run number. Setiap `run_id` yang sudah committed ditolak walaupun `run_attempt`
+berbeda; pasangan `run_id`/`run_attempt`, envelope digest, dan archive digest yang
+sudah committed juga ditolak. Build/deploy gagal tidak mengubah state sehingga
+envelope yang sama dapat dicoba lagi. Signature memberi authorization/integrity; signed monotonic
 `run_number` plus root state mencegah replay envelope lama. Rollback manual owner
 tetap dapat memilih release lama dan tidak pernah menurunkan highest signed run number.
 
@@ -511,11 +512,15 @@ hanya berjalan dari installed path. Shebang absolute `/usr/bin/bash` tidak berga
 pada `PATH` atau `/usr/bin/env`. Sebelum parse, launcher stream-copy incoming
 runner ke regular file `O_EXCL` dalam temp root-only dengan batas 800 MiB. Snapshot
 immutable selama proses itulah yang diparse dan diverifikasi, sehingga perubahan
-concurrent pada source runner tidak mengubah input setelah snapshot. Parser tar
-streaming berhenti pada header keempat dan menolak link, device, duplicate, traversal,
-extra entry, sparse/PAX metadata, truncated content, size/mode tidak aman, serta total
-di atas batas. Root Python helper memakai `/usr/bin/python3 -I` agar tidak import dari
-workspace runner. Protected archive baru diekstrak setelah signature, manifest
+concurrent pada source runner tidak mengubah input setelah snapshot. Parser melakukan
+bounded pre-scan atas raw tar header 512-byte sebelum memakai `tarfile`; hanya tiga
+raw regular-file header yang diizinkan, sehingga empty global/local PAX dan seluruh
+GNU extension metadata tetap ditolak walaupun tidak ditampilkan sebagai member oleh
+`tarfile`. Streaming extraction berhenti pada header keempat dan menolak link, device,
+duplicate, traversal, extra entry, truncated content, size/mode tidak aman, trailing
+nonzero bytes, serta total di atas batas. Root Python helper memakai
+`/usr/bin/python3 -I` agar tidak import dari workspace runner. Protected archive baru
+diekstrak setelah signature, manifest
 canonical, signed policy claims, archive digest, dan anti-replay state valid.
 
 ## Preflight v1 sebagai labhub-app
