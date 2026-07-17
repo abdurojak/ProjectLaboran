@@ -8,9 +8,17 @@ from setuptools import Distribution, Extension
 from setuptools.command.build_ext import build_ext
 
 try:
-    from deployment.artifact import inspect_release_tree, load_protected_modules
+    from deployment.artifact import (
+        forbidden_release_reason,
+        inspect_release_tree,
+        load_protected_modules,
+    )
 except ModuleNotFoundError:
-    from artifact import inspect_release_tree, load_protected_modules
+    from artifact import (
+        forbidden_release_reason,
+        inspect_release_tree,
+        load_protected_modules,
+    )
 
 
 EXCLUDED_NAMES = {
@@ -36,15 +44,48 @@ EXCLUDED_NAMES = {
 def _ignore_source_entries(_directory, names):
     ignored = set()
     for name in names:
-        if name in EXCLUDED_NAMES:
+        if name in EXCLUDED_NAMES or forbidden_release_reason(name):
             ignored.add(name)
-        elif name.endswith((".pyc", ".pyo", ".pem")):
+        elif name.endswith((".pyc", ".pyo")):
             ignored.add(name)
         elif name == "tests.py" or name.startswith("test_") and name.endswith(".py"):
             ignored.add(name)
         elif name.endswith("_test.py"):
             ignored.add(name)
     return ignored
+
+
+def _validate_build_paths(source, staging, output):
+    source = Path(source).resolve()
+    staging = Path(staging).resolve()
+    output = Path(output).resolve()
+
+    if not source.is_dir():
+        raise ValueError(f"source must be an existing directory: {source}")
+    if staging == source or source.is_relative_to(staging):
+        raise ValueError("staging cannot equal or contain source")
+    if staging.exists() and not staging.is_dir():
+        raise ValueError(f"staging must be a directory path: {staging}")
+    if staging.is_relative_to(source):
+        relative_staging = staging.relative_to(source)
+        if not relative_staging.parts or relative_staging.parts[0] != "build":
+            raise ValueError("staging inside source must be under the build directory")
+
+    if output.exists() and output.is_dir():
+        raise ValueError(f"output cannot be a directory: {output}")
+    if output in {source, staging}:
+        raise ValueError("output cannot equal source or staging")
+    if output.is_relative_to(staging) or staging.is_relative_to(output):
+        raise ValueError("output cannot contain or be contained by staging")
+    if output.is_relative_to(source):
+        relative_output = output.relative_to(source)
+        if not relative_output.parts or relative_output.parts[0] not in {
+            "build",
+            "dist",
+        }:
+            raise ValueError("output inside source must be under build or dist")
+
+    return source, staging, output
 
 
 def _compile_protected_modules(staging, protected):
@@ -84,10 +125,15 @@ def _compile_protected_modules(staging, protected):
             generated_c.unlink()
 
 
+def _write_archive(staging, output):
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(output, "w:gz") as archive:
+        for path in sorted(staging.iterdir()):
+            archive.add(path, arcname=path.name)
+
+
 def build_artifact(source, staging, output, allowlist):
-    source = Path(source).resolve()
-    staging = Path(staging).resolve()
-    output = Path(output).resolve()
+    source, staging, output = _validate_build_paths(source, staging, output)
     protected = load_protected_modules(allowlist)
 
     if staging.exists():
@@ -100,10 +146,7 @@ def build_artifact(source, staging, output, allowlist):
     if errors:
         raise RuntimeError("\n".join(errors))
 
-    output.parent.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(output, "w:gz") as archive:
-        for path in sorted(staging.iterdir()):
-            archive.add(path, arcname=path.name)
+    _write_archive(staging, output)
 
 
 def _parse_args():

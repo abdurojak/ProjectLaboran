@@ -1,8 +1,52 @@
 from pathlib import Path, PurePosixPath
 
 
-FORBIDDEN_NAMES = {".env", ".env.backup", ".git", ".secrets"}
-FORBIDDEN_SUFFIXES = {".pem"}
+FORBIDDEN_NAMES = {
+    ".env",
+    ".env.backup",
+    ".git",
+    ".secrets",
+    "id_dsa",
+    "id_ecdsa",
+    "id_ed25519",
+    "id_rsa",
+    "labhub.env",
+    "license.key",
+    "private-key",
+    "private_key",
+    "privatekey",
+    "tmp",
+}
+FORBIDDEN_PREFIXES = (".codex", ".env", ".git", ".secrets")
+FORBIDDEN_SUFFIXES = {
+    ".cer",
+    ".cert",
+    ".crt",
+    ".csr",
+    ".der",
+    ".jks",
+    ".key",
+    ".keystore",
+    ".license",
+    ".p12",
+    ".p7b",
+    ".pem",
+    ".pfx",
+    ".ppk",
+}
+
+
+def forbidden_release_reason(relative_path):
+    path = PurePosixPath(str(relative_path).replace("\\", "/"))
+    for part in path.parts:
+        normalized_part = part.casefold()
+        if normalized_part in FORBIDDEN_NAMES:
+            return f"forbidden name {part}"
+        if normalized_part.startswith(FORBIDDEN_PREFIXES):
+            return f"forbidden metadata name {part}"
+        if PurePosixPath(normalized_part).suffix in FORBIDDEN_SUFFIXES:
+            return f"forbidden sensitive suffix in {part}"
+    return None
 
 
 def load_protected_modules(allowlist_path):
@@ -37,10 +81,9 @@ def inspect_release_tree(release_root, protected):
 
     for path in sorted(release_root.rglob("*")):
         relative_path = path.relative_to(release_root).as_posix()
-        if path.name in FORBIDDEN_NAMES:
-            errors.append(f"Forbidden release entry: {relative_path}")
-        if path.suffix in FORBIDDEN_SUFFIXES:
-            errors.append(f"Forbidden release suffix: {relative_path}")
+        reason = forbidden_release_reason(relative_path)
+        if reason:
+            errors.append(f"Forbidden release entry: {relative_path} ({reason})")
 
     for protected_path in protected:
         source_path = release_root.joinpath(*protected_path.parts)

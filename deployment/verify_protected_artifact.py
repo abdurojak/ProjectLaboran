@@ -1,7 +1,8 @@
 import argparse
+import shutil
 import tarfile
 import tempfile
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 try:
     from deployment.artifact import inspect_release_tree, load_protected_modules
@@ -10,15 +11,14 @@ except ModuleNotFoundError:
 
 
 def _validate_archive(archive):
+    validated_members = []
     for member in archive.getmembers():
         normalized_name = member.name.replace("\\", "/")
         member_path = PurePosixPath(normalized_name)
-        has_windows_drive = bool(
-            member_path.parts and member_path.parts[0].endswith(":")
-        )
         if (
             member_path.is_absolute()
-            or has_windows_drive
+            or PureWindowsPath(normalized_name).drive
+            or any(":" in part for part in member_path.parts)
             or ".." in member_path.parts
         ):
             raise ValueError(f"Unsafe archive path: {member.name}")
@@ -26,12 +26,26 @@ def _validate_archive(archive):
             raise ValueError(f"Unsafe archive link: {member.name}")
         if not (member.isfile() or member.isdir()):
             raise ValueError(f"Unsafe archive entry: {member.name}")
+        validated_members.append((member, member_path))
+    return validated_members
 
 
 def _extract_archive(artifact, destination):
+    destination = Path(destination)
     with tarfile.open(artifact, "r:gz") as archive:
-        _validate_archive(archive)
-        archive.extractall(destination)
+        validated_members = _validate_archive(archive)
+        for member, member_path in validated_members:
+            target = destination.joinpath(*member_path.parts)
+            if member.isdir():
+                target.mkdir(parents=True, exist_ok=True)
+                continue
+
+            target.parent.mkdir(parents=True, exist_ok=True)
+            source = archive.extractfile(member)
+            if source is None:
+                raise ValueError(f"Unreadable archive entry: {member.name}")
+            with source, target.open("wb") as extracted_file:
+                shutil.copyfileobj(source, extracted_file)
 
 
 def verify_artifact(artifact, allowlist):
