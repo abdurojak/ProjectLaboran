@@ -48,6 +48,9 @@ ALLOWED_HOSTS = [
 ]
 
 PUBLIC_ACCESS_BASE_URL = os.getenv('PUBLIC_ACCESS_BASE_URL', 'http://127.0.0.1:8000')
+URL_PREFIX = os.getenv('FORCE_SCRIPT_NAME', '').strip().rstrip('/')
+FORCE_SCRIPT_NAME = URL_PREFIX or None
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '').strip()
 OPENAI_CHATBOT_MODEL = os.getenv('OPENAI_CHATBOT_MODEL', 'gpt-4o-mini').strip() or 'gpt-4o-mini'
@@ -195,10 +198,10 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = f'{URL_PREFIX}/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 WHITENOISE_USE_FINDERS = DEBUG
-MEDIA_URL = os.getenv('MEDIA_URL', '/media/')
+MEDIA_URL = os.getenv('MEDIA_URL', f'{URL_PREFIX}/media/')
 MEDIA_ROOT = env_path('MEDIA_ROOT', 'media')
 
 ABSENSI_CENTER_LATITUDE = float(os.getenv('ABSENSI_CENTER_LATITUDE', '-6.1680678'))
@@ -233,6 +236,11 @@ CORS_ALLOWED_ORIGINS = [
     if origin.strip()
 ]
 CORS_ALLOW_ALL_ORIGINS = DEBUG and not CORS_ALLOWED_ORIGINS
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',')
+    if origin.strip()
+]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

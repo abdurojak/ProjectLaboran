@@ -50,6 +50,7 @@ class PenggunaLoginRequiredMiddleware:
     EXEMPT_PREFIXES = (
         '/api/',
         '/admin/',
+        '/health/',
         '/media/',
         '/pendaftaran-asleb/daftar/',
         '/pendaftaran-asleb/berhasil/',
@@ -62,6 +63,7 @@ class PenggunaLoginRequiredMiddleware:
 
     def __call__(self, request):
         forgot_password_url = reverse('pengguna:forgot_password')
+        health_url = reverse('health')
         login_url = reverse('pengguna:login')
         register_url = reverse('pengguna:register')
         reset_password_url = reverse('pengguna:reset_password')
@@ -69,7 +71,7 @@ class PenggunaLoginRequiredMiddleware:
         path = request.path
 
         is_exempt = (
-            path in [forgot_password_url, login_url, register_url, reset_password_url, verify_register_url]
+            path in [forgot_password_url, health_url, login_url, register_url, reset_password_url, verify_register_url]
             or any(path.startswith(prefix) for prefix in self.EXEMPT_PREFIXES)
         )
 

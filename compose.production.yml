@@ -1,0 +1,21 @@
+services:
+  web:
+    image: ghcr.io/abdurojak/projectlaboran:production
+    restart: unless-stopped
+    env_file:
+      - .env.container
+    environment:
+      FORCE_SCRIPT_NAME: /labhub
+      LABHUB_LICENSE_ENFORCED: "True"
+      LABHUB_LICENSE_FINGERPRINT: 39b5f1bf350c4355a0d52ff36a10a482
+      MEDIA_ROOT: /app/media
+    ports:
+      - "127.0.0.1:18000:8000"
+    volumes:
+      - /home/labhub/media:/app/media
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

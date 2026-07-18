@@ -1,0 +1,15 @@
+.git
+.github
+.worktrees
+.env
+.env.*
+.codex-remote-attachments
+build
+dist
+media
+staticfiles
+venv
+__pycache__
+*.pyc
+*.pyo
+*.sqlite3

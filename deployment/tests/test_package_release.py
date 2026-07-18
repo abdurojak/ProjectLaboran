@@ -153,7 +153,7 @@ class WorkflowContractTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         self.assertIn("workflow_dispatch:", workflow)
-        self.assertNotIn("push:", workflow)
+        self.assertNotIn("\n  push:\n", workflow)
         self.assertIn("PRODUCTION_ARTIFACT_SIGNING_PRIVATE_KEY", workflow)
         self.assertIn("docker run --rm", workflow)
         self.assertNotIn("    container:\n", workflow)
@@ -163,23 +163,49 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotIn("git pull", workflow)
         self.assertNotIn("manage.py migrate", workflow)
         self.assertNotIn("systemctl restart", workflow)
-        self.assertEqual(
-            workflow.count(
-                "sudo -n /usr/local/sbin/projectlaboran-deploy "
-                "/home/admin/LabTif/incoming/projectlaboran.deploy.tar"
-            ),
-            1,
-        )
+        self.assertIn("ghcr.io/abdurojak/projectlaboran", workflow)
 
-    def test_self_hosted_job_does_not_checkout_or_receive_signing_secret(self):
+    def test_workflow_does_not_use_self_hosted_runner(self):
         workflow = (
             Path(__file__).parents[2] / ".github/workflows/test-runner.yml"
         ).read_text(encoding="utf-8")
-        deploy_job = workflow.split("  deploy:", 1)[1]
+        self.assertNotIn("runs-on: [self-hosted, linux, x64]", workflow)
+        self.assertEqual(workflow.count("PRODUCTION_ARTIFACT_SIGNING_PRIVATE_KEY"), 2)
 
-        self.assertIn("runs-on: [self-hosted, linux, x64]", deploy_job)
-        self.assertNotIn("actions/checkout", deploy_job)
-        self.assertNotIn("PRODUCTION_ARTIFACT_SIGNING_PRIVATE_KEY", deploy_job)
+
+class ContainerDeploymentContractTests(unittest.TestCase):
+    def test_runtime_image_uses_protected_release_and_non_root_user(self):
+        root = Path(__file__).parents[2]
+        dockerfile = (root / "Dockerfile").read_text(encoding="utf-8")
+
+        self.assertIn("deployment/build_protected_artifact.py", dockerfile)
+        self.assertIn("USER labhub", dockerfile)
+        self.assertIn("HEALTHCHECK", dockerfile)
+        self.assertIn("deployment/container-entrypoint.sh", dockerfile)
+        self.assertNotIn("COPY . /app", dockerfile)
+
+    def test_container_defaults_to_labhub_prefix(self):
+        root = Path(__file__).parents[2]
+        entrypoint = (root / "deployment/container-entrypoint.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("FORCE_SCRIPT_NAME:=/labhub", entrypoint)
+        self.assertIn("LABHUB_LICENSE_ENFORCED:=True", entrypoint)
+        self.assertIn("manage.py migrate --noinput", entrypoint)
+        self.assertIn("manage.py collectstatic --noinput", entrypoint)
+
+    def test_workflow_publishes_private_ghcr_image_without_self_hosted_runner(self):
+        workflow = (
+            Path(__file__).parents[2] / ".github/workflows/test-runner.yml"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("packages: write", workflow)
+        self.assertIn("ghcr.io", workflow)
+        self.assertIn("docker/build-push-action", workflow)
+        self.assertIn("push: true", workflow)
+        self.assertNotIn("runs-on: [self-hosted, linux, x64]", workflow)
+        self.assertNotIn("/home/admin/LabTif", workflow)
 
 
 if __name__ == "__main__":

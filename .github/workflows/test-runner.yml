@@ -1,10 +1,11 @@
-name: Deploy AlmaLinux
+name: Publish Production Container
 
 on:
   workflow_dispatch:
 
 permissions:
   contents: read
+  packages: write
 
 concurrency:
   group: projectlaboran-production
@@ -113,30 +114,18 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  deploy:
-    if: github.repository == 'abdurojak/ProjectLaboran' && github.ref == 'refs/heads/main'
-    needs: build
-    runs-on: [self-hosted, linux, x64]
-    timeout-minutes: 30
-
-    steps:
-      - name: Download signed deployment envelope
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
         with:
-          name: projectlaboran-production-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/projectlaboran-deploy
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Deploy signed release
-        shell: bash
-        run: |
-          set -euo pipefail
-          SOURCE="$RUNNER_TEMP/projectlaboran-deploy/projectlaboran.deploy.tar"
-          INCOMING=/home/admin/LabTif/incoming
-          TARGET="$INCOMING/projectlaboran.deploy.tar"
-          TEMPORARY="$INCOMING/.projectlaboran.deploy.${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}.tmp"
-          test -f "$SOURCE"
-          umask 077
-          mkdir -p "$INCOMING"
-          install -m 0600 "$SOURCE" "$TEMPORARY"
-          mv -fT "$TEMPORARY" "$TARGET"
-          sudo -n /usr/local/sbin/projectlaboran-deploy /home/admin/LabTif/incoming/projectlaboran.deploy.tar
+      - name: Build and publish protected container
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/abdurojak/projectlaboran:${{ github.sha }}
+            ghcr.io/abdurojak/projectlaboran:production
