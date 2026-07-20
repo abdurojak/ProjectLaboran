@@ -4,9 +4,10 @@ from unittest.mock import patch
 from django.contrib.auth.hashers import check_password
 from django import forms
 from django.conf import settings
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -15,6 +16,15 @@ from apps.asleb.models import PesertaPraktikum
 from apps.kalender.models import KegiatanKalender
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb
 from .models import Fakultas, PengalamanPengguna, Pengguna, Prodi
+
+
+def registration_photo(name='wajah.gif'):
+    content = (
+        b'GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00'
+        b'\xff\xff\xff!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00'
+        b'\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;'
+    )
+    return SimpleUploadedFile(name, content, content_type='image/gif')
 
 
 class PenggunaModelTests(TestCase):
@@ -789,6 +799,48 @@ class PenggunaViewTests(TestCase):
         self.assertRedirects(response, reverse('pengguna:detail', args=[self.pengguna.pk]))
         self.assertEqual(self.pengguna.password, password_lama)
 
+    def test_laboran_tidak_bisa_mengganti_password_akun_lain(self):
+        self.pengguna.role = 'laboran'
+        self.pengguna.save(update_fields=['role'])
+        target = Pengguna.objects.create(
+            nama_pengguna='Target Mahasiswa', nim_nik='2201999999',
+            email='target-password@std.trisakti.ac.id', password='rahasia123',
+            no_hp='081111111111', alamat='Jakarta', fakultas='Teknologi Industri',
+            prodi='Informatika', gender='perempuan', role='mahasiswa',
+        )
+        password_lama = target.password
+
+        response = self.client.post(reverse('pengguna:change_password', args=[target.pk]), {
+            'password': 'passwordbaru123',
+            'password_confirmation': 'passwordbaru123',
+        })
+
+        target.refresh_from_db()
+        self.assertRedirects(response, reverse('dashboard:home'))
+        self.assertEqual(target.password, password_lama)
+
+    def test_laboran_tidak_bisa_mengubah_profil_akun_lain(self):
+        self.pengguna.role = 'laboran'
+        self.pengguna.save(update_fields=['role'])
+        target = Pengguna.objects.create(
+            nama_pengguna='Target Profil', nim_nik='2201888888',
+            email='target-profile@std.trisakti.ac.id', password='rahasia123',
+            no_hp='082222222222', alamat='Jakarta', fakultas='Teknologi Industri',
+            prodi='Informatika', gender='perempuan', role='mahasiswa',
+        )
+
+        response = self.client.post(reverse('pengguna:update_profile', args=[target.pk]), {
+            'nama_pengguna': 'Nama Diambil Alih', 'nim_nik': target.nim_nik,
+            'email': target.email, 'gender': target.gender, 'no_hp': target.no_hp,
+            'alamat': target.alamat, 'fakultas': target.fakultas,
+            'prodi': target.prodi, 'role': 'admin',
+        })
+
+        target.refresh_from_db()
+        self.assertRedirects(response, reverse('dashboard:home'))
+        self.assertEqual(target.nama_pengguna, 'Target Profil')
+        self.assertEqual(target.role, 'mahasiswa')
+
     def test_delete_pengguna(self):
         response = self.client.post(reverse('pengguna:delete', args=[self.pengguna.pk]))
 
@@ -798,6 +850,7 @@ class PenggunaViewTests(TestCase):
 
 class PenggunaAuthTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.pengguna = Pengguna.objects.create(
             nama_pengguna='Andi Pratama',
             nim_nik='2201001',
@@ -849,6 +902,39 @@ class PenggunaAuthTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'NIM/NIK atau password tidak sesuai.')
         self.assertNotIn('pengguna_id', self.client.session)
+
+    @override_settings(LOGIN_MAX_ATTEMPTS=3, LOGIN_LOCKOUT_SECONDS=60)
+    def test_login_dikunci_setelah_batas_percobaan_gagal(self):
+        payload = {
+            'jenis_login': 'mahasiswa',
+            'nim_nik': self.pengguna.nim_nik,
+            'password': 'password-salah',
+        }
+        for _ in range(3):
+            self.client.post(reverse('pengguna:login'), payload)
+
+        payload['password'] = 'rahasia123'
+        response = self.client.post(reverse('pengguna:login'), payload)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Terlalu banyak percobaan login')
+        self.assertNotIn('pengguna_id', self.client.session)
+
+    @override_settings(LOGIN_MAX_ATTEMPTS=3, LOGIN_LOCKOUT_SECONDS=60)
+    def test_login_berhasil_menghapus_hitungan_percobaan(self):
+        login_url = reverse('pengguna:login')
+        self.client.post(login_url, {
+            'jenis_login': 'mahasiswa',
+            'nim_nik': self.pengguna.nim_nik,
+            'password': 'password-salah',
+        })
+        response = self.client.post(login_url, {
+            'jenis_login': 'mahasiswa',
+            'nim_nik': self.pengguna.nim_nik,
+            'password': 'rahasia123',
+        })
+
+        self.assertRedirects(response, reverse('dashboard:home'))
 
     def test_login_nim_belum_terdaftar_tidak_membuat_pengguna_baru(self):
         jumlah_awal = Pengguna.objects.count()
@@ -1064,7 +1150,8 @@ class PenggunaAuthTests(TestCase):
         self.assertContains(response, 'Fakultas Baru')
         self.assertContains(response, 'Prodi Baru')
 
-    def test_register_membuat_pengguna_lalu_verifikasi_otp(self):
+    @patch('apps.pengguna.forms.validate_human_face_photo')
+    def test_register_membuat_pengguna_lalu_verifikasi_otp(self, _mock_validate_face):
         response = self.client.post(
             reverse('pengguna:register'),
             {
@@ -1078,6 +1165,7 @@ class PenggunaAuthTests(TestCase):
                 'fakultas': 'Teknologi Industri',
                 'prodi': 'Informatika',
                 'gender': 'perempuan',
+                'foto': registration_photo(),
             },
             follow=True,
         )
@@ -1100,7 +1188,8 @@ class PenggunaAuthTests(TestCase):
         self.assertTrue(pengguna.is_verified)
         self.assertEqual(self.client.session['pengguna_id'], pengguna.pk)
 
-    def test_register_menambahkan_domain_std_trisakti_otomatis(self):
+    @patch('apps.pengguna.forms.validate_human_face_photo')
+    def test_register_menambahkan_domain_std_trisakti_otomatis(self, _mock_validate_face):
         response = self.client.post(
             reverse('pengguna:register'),
             {
@@ -1114,13 +1203,15 @@ class PenggunaAuthTests(TestCase):
                 'fakultas': 'Teknologi Industri',
                 'prodi': 'Informatika',
                 'gender': 'perempuan',
+                'foto': registration_photo('email.gif'),
             },
         )
 
         self.assertRedirects(response, reverse('pengguna:verify_register'))
         self.assertTrue(Pengguna.objects.filter(email='email.otomatis@std.trisakti.ac.id').exists())
 
-    def test_register_link_verifikasi_langsung_mengaktifkan_akun(self):
+    @patch('apps.pengguna.forms.validate_human_face_photo')
+    def test_register_link_verifikasi_langsung_mengaktifkan_akun(self, _mock_validate_face):
         response = self.client.post(
             reverse('pengguna:register'),
             {
@@ -1134,6 +1225,7 @@ class PenggunaAuthTests(TestCase):
                 'fakultas': 'Teknologi Industri',
                 'prodi': 'Informatika',
                 'gender': 'laki_laki',
+                'foto': registration_photo('link.gif'),
             },
         )
 
@@ -1307,6 +1399,27 @@ class PenggunaAuthTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'NIM harus terdiri dari minimal 10 digit.')
+
+    def test_register_menolak_data_tanpa_foto_wajah(self):
+        response = self.client.post(
+            reverse('pengguna:register'),
+            {
+                'nama_pengguna': 'Tanpa Foto',
+                'nim_nik': '0642201999',
+                'email': 'tanpa.foto',
+                'password': 'passwordku123',
+                'password_confirmation': 'passwordku123',
+                'no_hp': '081234567800',
+                'alamat': 'Jakarta',
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Informatika',
+                'gender': 'laki_laki',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Foto wajah wajib diunggah untuk melakukan registrasi.')
+        self.assertFalse(Pengguna.objects.filter(nim_nik='0642201999').exists())
         self.assertFalse(Pengguna.objects.filter(nim_nik='123456789').exists())
 
     def test_forgot_password_mengganti_password_dengan_otp(self):
@@ -1345,6 +1458,31 @@ class PenggunaAuthTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Password baru tidak boleh sama dengan password yang sedang digunakan.')
         self.assertTrue(check_password('rahasia123', self.pengguna.password))
+
+    def test_reset_password_memblokir_setelah_lima_kode_otp_salah(self):
+        response = self.client.post(
+            reverse('pengguna:forgot_password'),
+            {'nim_nik': '2201001'},
+        )
+        self.assertRedirects(response, reverse('pengguna:reset_password'))
+        wrong_code = '000000' if self.client.session['pengguna_otp']['code'] != '000000' else '111111'
+
+        for _ in range(4):
+            response = self.client.post(reverse('pengguna:reset_password'), {
+                'kode': wrong_code,
+                'password': 'passwordbaru123',
+                'password_confirmation': 'passwordbaru123',
+            })
+            self.assertEqual(response.status_code, 200)
+
+        response = self.client.post(reverse('pengguna:reset_password'), {
+            'kode': wrong_code,
+            'password': 'passwordbaru123',
+            'password_confirmation': 'passwordbaru123',
+        })
+
+        self.assertRedirects(response, reverse('pengguna:forgot_password'))
+        self.assertNotIn('pengguna_otp', self.client.session)
 
     def test_logout_menghapus_session_pengguna(self):
         session = self.client.session
@@ -1508,3 +1646,73 @@ class PenggunaAuthTests(TestCase):
         response = self.client.get(reverse('inventaris:barang_list'))
 
         self.assertEqual(response.status_code, 200)
+
+
+class SensitiveMediaAccessTests(TestCase):
+    def setUp(self):
+        self.owner = Pengguna.objects.create(
+            nama_pengguna='Pemilik Transkrip',
+            nim_nik='0640020991',
+            email='owner-media@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081200000991',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+        )
+        self.other_user = Pengguna.objects.create(
+            nama_pengguna='Pengguna Lain',
+            nim_nik='0640020992',
+            email='other-media@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081200000992',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='mahasiswa',
+        )
+        matkul = MataKuliahAsleb.objects.create(
+            kode='IKL6991',
+            nama='Keamanan Berkas',
+            dosen='Dosen Penguji',
+            kelas='TIF-01',
+        )
+        self.registration = PendaftaranAsleb.objects.create(
+            nama=self.owner.nama_pengguna,
+            nim=self.owner.nim_nik,
+            no_hp=self.owner.no_hp,
+            email=self.owner.email,
+            program_studi=self.owner.prodi,
+            semester=5,
+            matkul=matkul,
+            transkrip='pendaftaran_asleb/transkrip/rahasia.pdf',
+        )
+        self.url = f'{settings.MEDIA_URL}{self.registration.transkrip.name}'
+
+    def login(self, pengguna):
+        session = self.client.session
+        session['pengguna_id'] = pengguna.pk
+        session.save()
+
+    def test_media_sensitif_memerlukan_login(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse('pengguna:login'), response.url)
+
+    def test_mahasiswa_tidak_bisa_membuka_transkrip_pengguna_lain(self):
+        self.login(self.other_user)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_pemilik_lolos_pemeriksaan_otorisasi_media(self):
+        self.login(self.owner)
+
+        response = self.client.get(self.url)
+
+        self.assertNotEqual(response.status_code, 403)

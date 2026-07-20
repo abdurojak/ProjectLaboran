@@ -214,7 +214,7 @@ class InventarisBarangDetailView(LaboranInventarisRequiredMixin, DetailView):
                 ),
                 0,
             ),
-        ).prefetch_related('detail_barang__lokasi')
+        ).prefetch_related('detail_barang__lokasi', 'galeri_foto')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -253,17 +253,19 @@ class BarangCreateView(LaboranInventarisRequiredMixin, CreateView):
     success_url = reverse_lazy('inventaris:barang_list')
 
     def form_valid(self, form):
-        response = super().form_valid(form)
-        lokasi = form.cleaned_data['lokasi']
+        with transaction.atomic():
+            response = super().form_valid(form)
+            form.save_gallery(self.object)
+            lokasi = form.cleaned_data['lokasi']
 
-        for _ in range(self.object.jumlah):
-            Barang.objects.create(
-                inventaris=self.object,
-                nama=self.object.nama,
-                jumlah=self.object.jumlah,
-                lokasi=lokasi,
-                kondisi='baik',
-            )
+            for _ in range(self.object.jumlah):
+                Barang.objects.create(
+                    inventaris=self.object,
+                    nama=self.object.nama,
+                    jumlah=self.object.jumlah,
+                    lokasi=lokasi,
+                    kondisi='baik',
+                )
 
         return response
 
@@ -278,6 +280,7 @@ class BarangUpdateView(LaboranInventarisRequiredMixin, UpdateView):
         with transaction.atomic():
             previous_total = self.object.detail_barang.count()
             response = super().form_valid(form)
+            form.save_gallery(self.object)
             self.sync_detail_stock(previous_total)
         return response
 

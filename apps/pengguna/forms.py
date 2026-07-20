@@ -529,6 +529,16 @@ class LoginPenggunaForm(forms.Form):
 
 
 class RegisterPenggunaForm(forms.ModelForm):
+    # Registrasi menerima local-part saja; domain kampus ditambahkan di clean_email().
+    email = forms.CharField(
+        label='Email',
+        widget=forms.TextInput(attrs={
+            'autocomplete': 'email',
+            'placeholder': 'nama.email',
+            'pattern': '[A-Za-z0-9._%+-]+(@std\\.trisakti\\.ac\\.id)?',
+            'title': 'Cukup isi nama email. Domain @std.trisakti.ac.id akan ditambahkan otomatis.',
+        }),
+    )
     password_confirmation = forms.CharField(label='Konfirmasi password', widget=forms.PasswordInput)
 
     class Meta:
@@ -578,6 +588,11 @@ class RegisterPenggunaForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         apply_fakultas_prodi_choices(self)
+        self.fields['foto'].required = True
+        self.fields['foto'].help_text = 'Wajib unggah foto wajah asli untuk verifikasi akun.'
+        self.fields['foto'].error_messages['required'] = (
+            'Foto wajah wajib diunggah untuk melakukan registrasi.'
+        )
 
     def clean_nim_nik(self):
         nim_nik = self.cleaned_data['nim_nik'].strip()
@@ -609,6 +624,8 @@ class RegisterPenggunaForm(forms.ModelForm):
 
     def clean_foto(self):
         foto = self.cleaned_data.get('foto')
+        if not foto:
+            raise forms.ValidationError('Foto wajah wajib diunggah untuk melakukan registrasi.')
         validate_human_face_photo(foto)
         return foto
 

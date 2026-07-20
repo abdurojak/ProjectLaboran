@@ -211,6 +211,7 @@
                          data-product-condition="{{ product.kondisi }}"
                          data-product-description="{{ product.keterangan }}"
                          data-product-photo="{{ product.photo_url }}"
+                         data-product-photos="{{ product.photo_urls }}"
                          data-product-stock="{{ product.available_count }}"
                          data-product-total="{{ product.total_count }}"
                          data-available-ids="{{ product.available_ids }}"
@@ -304,11 +305,18 @@
     <div class="loan-detail-modal" data-product-modal aria-hidden="true">
         <div class="surface-card w-full max-w-3xl overflow-hidden p-0">
             <div class="grid md:grid-cols-[minmax(0,.9fr)_minmax(0,1.1fr)]">
-                <div class="bg-slate-100">
+                <div class="relative bg-slate-100">
                     <img src="" alt="" class="hidden h-full min-h-72 w-full object-cover" data-modal-photo>
                     <div class="loan-product-placeholder flex h-full min-h-72 items-center justify-center text-white" data-modal-placeholder>
                         <i data-lucide="box" class="h-14 w-14"></i>
                     </div>
+                    <button type="button" class="absolute left-3 top-1/2 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-slate-950/65 text-white backdrop-blur hover:bg-slate-950/80" data-modal-photo-prev aria-label="Foto sebelumnya">
+                        <i data-lucide="chevron-left" class="h-5 w-5"></i>
+                    </button>
+                    <button type="button" class="absolute right-3 top-1/2 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-slate-950/65 text-white backdrop-blur hover:bg-slate-950/80" data-modal-photo-next aria-label="Foto berikutnya">
+                        <i data-lucide="chevron-right" class="h-5 w-5"></i>
+                    </button>
+                    <div class="absolute bottom-3 left-3 right-3 hidden gap-2 overflow-x-auto rounded-2xl bg-slate-950/55 p-2 backdrop-blur" data-modal-photo-thumbs></div>
                 </div>
                 <div class="p-6">
                     <div class="flex items-start justify-between gap-4">
@@ -800,14 +808,58 @@
             }
         }
 
+        let modalPhotos = [];
+        let activePhotoIndex = 0;
+
+        function renderModalPhoto(index) {
+            if (!modal) {
+                return;
+            }
+            const photo = modal.querySelector('[data-modal-photo]');
+            const placeholder = modal.querySelector('[data-modal-placeholder]');
+            const previous = modal.querySelector('[data-modal-photo-prev]');
+            const next = modal.querySelector('[data-modal-photo-next]');
+            const thumbs = modal.querySelector('[data-modal-photo-thumbs]');
+            activePhotoIndex = Math.max(0, Math.min(index, modalPhotos.length - 1));
+
+            if (photo && placeholder && modalPhotos.length) {
+                photo.src = modalPhotos[activePhotoIndex];
+                photo.classList.remove('hidden');
+                placeholder.classList.add('hidden');
+            } else if (photo && placeholder) {
+                photo.removeAttribute('src');
+                photo.classList.add('hidden');
+                placeholder.classList.remove('hidden');
+            }
+
+            [previous, next].forEach(function (button) {
+                if (button) {
+                    button.classList.toggle('hidden', modalPhotos.length < 2);
+                    button.classList.toggle('flex', modalPhotos.length > 1);
+                }
+            });
+            if (thumbs) {
+                thumbs.innerHTML = '';
+                thumbs.classList.toggle('hidden', modalPhotos.length < 2);
+                thumbs.classList.toggle('flex', modalPhotos.length > 1);
+                modalPhotos.forEach(function (url, photoIndex) {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'h-12 w-12 shrink-0 overflow-hidden rounded-xl border-2 ' + (photoIndex === activePhotoIndex ? 'border-cyan-300' : 'border-transparent');
+                    button.innerHTML = '<img class="h-full w-full object-cover" alt="Foto barang ' + (photoIndex + 1) + '">';
+                    button.querySelector('img').src = url;
+                    button.addEventListener('click', function () { renderModalPhoto(photoIndex); });
+                    thumbs.appendChild(button);
+                });
+            }
+        }
+
         shop.querySelectorAll('[data-product-detail]').forEach(function (button) {
             button.addEventListener('click', function () {
                 if (!modal || button.disabled) {
                     return;
                 }
                 const card = button.closest('[data-product-card]');
-                const photo = modal.querySelector('[data-modal-photo]');
-                const placeholder = modal.querySelector('[data-modal-placeholder]');
                 setText('[data-modal-code]', card.dataset.productCode);
                 setText('[data-modal-name]', card.dataset.productName);
                 setText('[data-modal-detail-code]', card.dataset.productDetailCode);
@@ -815,24 +867,30 @@
                 setText('[data-modal-condition]', card.dataset.productCondition);
                 setText('[data-modal-stock]', (card.dataset.productStock || '0') + ' tersedia dari ' + (card.dataset.productTotal || '0') + ' unit');
                 setText('[data-modal-description]', card.dataset.productDescription);
-                if (photo && placeholder) {
-                    if (card.dataset.productPhoto) {
-                        photo.src = card.dataset.productPhoto;
-                        photo.alt = card.dataset.productName || 'Foto barang';
-                        photo.classList.remove('hidden');
-                        placeholder.classList.add('hidden');
-                    } else {
-                        photo.removeAttribute('src');
-                        photo.classList.add('hidden');
-                        placeholder.classList.remove('hidden');
-                    }
+                modalPhotos = (card.dataset.productPhotos || card.dataset.productPhoto || '').split('||').filter(Boolean);
+                const photo = modal.querySelector('[data-modal-photo]');
+                if (photo) {
+                    photo.alt = card.dataset.productName || 'Foto barang';
                 }
+                renderModalPhoto(0);
                 modal.classList.add('is-open');
                 modal.setAttribute('aria-hidden', 'false');
             });
         });
 
         if (modal) {
+            const previous = modal.querySelector('[data-modal-photo-prev]');
+            const next = modal.querySelector('[data-modal-photo-next]');
+            if (previous) {
+                previous.addEventListener('click', function () {
+                    renderModalPhoto((activePhotoIndex - 1 + modalPhotos.length) % modalPhotos.length);
+                });
+            }
+            if (next) {
+                next.addEventListener('click', function () {
+                    renderModalPhoto((activePhotoIndex + 1) % modalPhotos.length);
+                });
+            }
             modal.querySelectorAll('[data-modal-close]').forEach(function (button) {
                 button.addEventListener('click', closeModal);
             });

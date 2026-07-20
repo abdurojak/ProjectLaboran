@@ -1,3 +1,8 @@
+from urllib.parse import unquote
+
+from django.conf import settings
+from django.db.models import Q
+from django.http import HttpResponseForbidden
 from django.shortcuts import redirect
 from django.urls import resolve, reverse
 
@@ -13,6 +18,11 @@ class PenggunaLoginRequiredMiddleware:
         'laporan_preview',
         'laporan_preview_file',
         'laporan_download',
+        'laporan_delete',
+        'modul_preview',
+        'modul_viewer',
+        'modul_preview_page',
+        'modul_download',
     }
     MAHASISWA_ALLOWED_KALENDER_URLS = {
         'kegiatan_list',
@@ -21,6 +31,7 @@ class PenggunaLoginRequiredMiddleware:
         'kegiatan_update',
         'kegiatan_delete',
         'notifikasi_list',
+        'notifikasi_summary',
     }
     MAHASISWA_ALLOWED_PENGGUNA_PATHS = {'/pengguna/logout/'}
     ASISTEN_LAB_BLOCKED_NAMESPACES = {'inventaris', 'barang_tertinggal', 'pendaftaran_asleb'}
@@ -39,6 +50,11 @@ class PenggunaLoginRequiredMiddleware:
         'laporan_preview',
         'laporan_preview_file',
         'laporan_download',
+        'laporan_delete',
+        'modul_preview',
+        'modul_viewer',
+        'modul_preview_page',
+        'modul_download',
     }
     ASISTEN_LAB_ALLOWED_KALENDER_URLS = {
         'kegiatan_list',
@@ -47,13 +63,13 @@ class PenggunaLoginRequiredMiddleware:
         'kegiatan_update',
         'kegiatan_delete',
         'notifikasi_list',
+        'notifikasi_summary',
     }
 
     EXEMPT_PREFIXES = (
         '/api/',
         '/admin/',
         '/health/',
-        '/media/',
         '/pendaftaran-asleb/daftar/',
         '/pendaftaran-asleb/berhasil/',
         '/pendaftaran-asleb/qr/',
@@ -101,6 +117,14 @@ class PenggunaLoginRequiredMiddleware:
         if not pengguna_id and not is_exempt:
             return redirect(f'{login_url}?next={path}')
 
+        if pengguna_id and path.startswith(settings.MEDIA_URL):
+            if not self.can_access_media(pengguna, path):
+                return HttpResponseForbidden('Anda tidak memiliki akses ke berkas ini.')
+            response = self.get_response(request)
+            response['Cache-Control'] = 'private, no-store, no-cache, must-revalidate'
+            response['X-Content-Type-Options'] = 'nosniff'
+            return response
+
         if pengguna_id and not is_exempt:
             resolved = resolve(path)
             namespace = resolved.namespace
@@ -132,6 +156,60 @@ class PenggunaLoginRequiredMiddleware:
             response['Pragma'] = 'no-cache'
             response['Expires'] = '0'
         return response
+
+    def can_access_media(self, pengguna, path):
+        media_name = unquote(path[len(settings.MEDIA_URL):]).lstrip('/')
+        if not media_name:
+            return False
+
+        if media_name.startswith('pendaftaran_asleb/'):
+            from apps.pendaftaran_asleb.models import PendaftaranAsleb
+
+            if pengguna.role == 'laboran':
+                return True
+            return PendaftaranAsleb.objects.filter(
+                nim=pengguna.nim_nik,
+            ).filter(
+                Q(cv=media_name)
+                | Q(transkrip=media_name)
+                | Q(tanda_tangan=media_name)
+            ).exists()
+
+        if media_name.startswith('honor_asleb/'):
+            from apps.asleb.models import HonorAsleb
+
+            return pengguna.role == 'laboran' or HonorAsleb.objects.filter(
+                asleb__nim=pengguna.nim_nik,
+                bukti_transfer=media_name,
+            ).exists()
+
+        if media_name.startswith(('absensi_asleb/', 'laporan_praktikum/')):
+            from apps.asleb.models import AbsensiAsleb, AbsensiMasukAsleb, PengumpulanLaporanPraktikum
+
+            if media_name.startswith('absensi_asleb/'):
+                if pengguna.role == 'laboran':
+                    return True
+                legacy_absensi = AbsensiAsleb.objects.filter(
+                    asleb__nim=pengguna.nim_nik,
+                ).filter(
+                    Q(file_modul=media_name)
+                    | Q(bukti_foto=media_name)
+                    | Q(bukti_video=media_name)
+                ).exists()
+                mobile_absensi = AbsensiMasukAsleb.objects.filter(
+                    asleb__nim=pengguna.nim_nik,
+                ).filter(
+                    Q(foto_absensi=media_name) | Q(video_absensi=media_name)
+                ).exists()
+                return legacy_absensi or mobile_absensi
+
+            laporan = PengumpulanLaporanPraktikum.objects.filter(file_laporan=media_name).first()
+            if not laporan:
+                return False
+            from apps.asleb.views import can_access_laporan
+            return can_access_laporan(pengguna, laporan)
+
+        return True
 
     def mahasiswa_can_access(self, namespace, path, resolved, pengguna):
         if namespace == 'pendaftaran_asleb':

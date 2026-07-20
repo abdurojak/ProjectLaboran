@@ -29,10 +29,19 @@
     <div class="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
         <article class="surface-card p-5">
             {% if inventaris.foto %}
-            <img src="{{ inventaris.foto.url }}" alt="{{ inventaris.nama }}" class="h-56 w-full rounded-3xl object-cover ring-1 ring-slate-200">
+            <img src="{{ inventaris.foto.url }}" alt="{{ inventaris.nama }}" class="h-56 w-full rounded-3xl object-cover ring-1 ring-slate-200" data-inventory-main-photo>
             {% else %}
             <div class="flex h-56 w-full items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50 text-slate-400">
                 <i data-lucide="image-off" class="h-8 w-8"></i>
+            </div>
+            {% endif %}
+            {% if inventaris.galeri_foto.all %}
+            <div class="mt-3 grid grid-cols-3 gap-2">
+                {% for gallery_photo in inventaris.galeri_foto.all %}
+                <button type="button" class="overflow-hidden rounded-2xl border border-slate-200" data-inventory-gallery-photo data-photo-url="{{ gallery_photo.foto.url }}" aria-label="Lihat foto tambahan {{ forloop.counter }}">
+                    <img src="{{ gallery_photo.foto.url }}" alt="Foto tambahan {{ inventaris.nama }}" class="h-20 w-full object-cover transition duration-200 hover:scale-105">
+                </button>
+                {% endfor %}
             </div>
             {% endif %}
         </article>
@@ -160,6 +169,15 @@
         const kondisiSelect = document.getElementById('id_kondisi');
         const lokasiSelect = document.getElementById('id_lokasi');
         let searchTimer = null;
+
+        document.querySelectorAll('[data-inventory-gallery-photo]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                const mainPhoto = document.querySelector('[data-inventory-main-photo]');
+                if (mainPhoto && button.dataset.photoUrl) {
+                    mainPhoto.src = button.dataset.photoUrl;
+                }
+            });
+        });
 
         if (searchInput) {
             searchInput.addEventListener('input', function () {
