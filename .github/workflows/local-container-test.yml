@@ -1,0 +1,98 @@
+name: Local AlmaLinux Container Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: GHCR image tag to test
+        required: true
+        default: production
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: projectlaboran-local-container
+  cancel-in-progress: false
+
+jobs:
+  deploy-local:
+    if: github.repository == 'abdurojak/ProjectLaboran'
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 20
+
+    steps:
+      - name: Validate local runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v podman >/dev/null
+          podman info >/dev/null
+          ENV_FILE=/home/admin/LabTif/container-test.env
+          test -f "$ENV_FILE" || {
+            echo "Missing $ENV_FILE on the local AlmaLinux server." >&2
+            exit 1
+          }
+          test "$(stat -c '%U' "$ENV_FILE")" = admin
+          mode="$(stat -c '%a' "$ENV_FILE")"
+          [[ "$mode" == 600 || "$mode" == 400 ]] || {
+            echo "$ENV_FILE must have mode 600 or 400." >&2
+            exit 1
+          }
+          for key in SECRET_KEY DB_HOST DB_PORT DB_NAME DB_USER DB_PASSWORD LABHUB_LICENSE_KEY; do
+            grep -Eq "^[[:space:]]*${key}=" "$ENV_FILE" || {
+              echo "Missing required key: $key" >&2
+              exit 1
+            }
+          done
+
+      - name: Pull protected image
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          set -euo pipefail
+          trap 'podman logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          printf '%s' "$GHCR_TOKEN" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+          podman pull "ghcr.io/abdurojak/projectlaboran:${IMAGE_TAG}"
+
+      - name: Start local test container
+        shell: bash
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p /home/admin/LabTif/container-media
+          podman rm -f labhub-local >/dev/null 2>&1 || true
+          podman run -d \
+            --name labhub-local \
+            --env-file /home/admin/LabTif/container-test.env \
+            --env FORCE_SCRIPT_NAME=/labhub \
+            --env LABHUB_LICENSE_ENFORCED=True \
+            --publish 127.0.0.1:18000:8000 \
+            --volume /home/admin/LabTif/container-media:/app/media:Z \
+            --security-opt no-new-privileges \
+            --cap-drop ALL \
+            "ghcr.io/abdurojak/projectlaboran:${IMAGE_TAG}"
+
+      - name: Verify local health
+        shell: bash
+        run: |
+          set -euo pipefail
+          cleanup_log() {
+            podman logs --tail 200 labhub-local 2>&1 || true
+          }
+          trap cleanup_log ERR
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:18000/health/ >/dev/null; then
+              podman ps --filter name=labhub-local
+              echo "Local container is healthy at http://127.0.0.1:18000/health/"
+              exit 0
+            fi
+            podman inspect --format '{{.State.Status}}' labhub-local | grep -q running || exit 1
+            sleep 2
+          done
+          echo "Health check timed out." >&2
+          exit 1

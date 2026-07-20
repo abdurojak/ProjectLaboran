@@ -227,5 +227,23 @@ class ContainerDeploymentContractTests(unittest.TestCase):
         self.assertNotIn("/home/admin/LabTif", workflow)
 
 
+class LocalContainerWorkflowContractTests(unittest.TestCase):
+    def test_local_container_workflow_is_manual_and_isolated(self):
+        workflow = (
+            Path(__file__).parents[2]
+            / ".github/workflows/local-container-test.yml"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("workflow_dispatch:", workflow)
+        self.assertNotIn("\n  push:\n", workflow)
+        self.assertIn("runs-on: [self-hosted, linux, x64]", workflow)
+        self.assertIn("command -v podman", workflow)
+        self.assertIn("container-test.env", workflow)
+        self.assertIn("127.0.0.1:18000:8000", workflow)
+        self.assertIn("--name labhub-local", workflow)
+        self.assertNotIn("systemctl", workflow)
+        self.assertNotIn("projectlaboran-daphne", workflow)
+
+
 if __name__ == "__main__":
     unittest.main()
