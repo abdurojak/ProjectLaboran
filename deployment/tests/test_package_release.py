@@ -147,6 +147,16 @@ class EnvelopeTests(unittest.TestCase):
 
 
 class WorkflowContractTests(unittest.TestCase):
+    def test_manylinux_installs_mysql_build_dependencies_before_python_packages(self):
+        workflow = (
+            Path(__file__).parents[2] / ".github/workflows/test-runner.yml"
+        ).read_text(encoding="utf-8")
+        build_script = workflow.split("quay.io/pypa/manylinux_2_28_x86_64", 1)[1]
+
+        system_dependencies = build_script.index("mariadb-connector-c-devel")
+        python_dependencies = build_script.index("pip install")
+        self.assertLess(system_dependencies, python_dependencies)
+
     def test_workflow_is_manual_signed_artifact_deployment(self):
         workflow = (
             Path(__file__).parents[2] / ".github/workflows/test-runner.yml"

@@ -35,6 +35,8 @@ jobs:
             quay.io/pypa/manylinux_2_28_x86_64@sha256:b04887b645dde99b9e955aeae3ff4da414992d0bd88259f046295b56361c5614 \
             /bin/bash -euo pipefail -c '
               PYTHON=/opt/python/cp311-cp311/bin/python
+              dnf install -y mariadb-connector-c-devel pkgconf-pkg-config
+              dnf clean all
               "$PYTHON" -m pip install --disable-pip-version-check -r requirements-build.txt
               "$PYTHON" -m piptools compile \
                 --generate-hashes \
