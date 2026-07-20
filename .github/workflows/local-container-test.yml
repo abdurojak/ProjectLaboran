@@ -68,10 +68,11 @@ jobs:
           podman rm -f labhub-local >/dev/null 2>&1 || true
           podman run -d \
             --name labhub-local \
+            --network host \
             --env-file /home/admin/LabTif/container-test.env \
-            --env FORCE_SCRIPT_NAME=/labhub \
+            --env FORCE_SCRIPT_NAME= \
             --env LABHUB_LICENSE_ENFORCED=True \
-            --publish 127.0.0.1:18000:8000 \
+            --env PORT=18000 \
             --volume /home/admin/LabTif/container-media:/app/media:Z \
             --security-opt no-new-privileges \
             --cap-drop ALL \
@@ -91,8 +92,12 @@ jobs:
               echo "Local container is healthy at http://127.0.0.1:18000/health/"
               exit 0
             fi
-            podman inspect --format '{{.State.Status}}' labhub-local | grep -q running || exit 1
+            if ! podman inspect --format '{{.State.Status}}' labhub-local | grep -q running; then
+              cleanup_log
+              exit 1
+            fi
             sleep 2
           done
           echo "Health check timed out." >&2
+          cleanup_log
           exit 1
