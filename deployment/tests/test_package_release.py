@@ -166,13 +166,14 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotIn('"$PYTHON" -m pip download', workflow)
         self.assertNotIn('--only-binary=:all:', workflow)
 
-    def test_workflow_is_manual_signed_artifact_deployment(self):
+    def test_workflow_publishes_signed_container_on_main_push(self):
         workflow = (
             Path(__file__).parents[2] / ".github/workflows/test-runner.yml"
         ).read_text(encoding="utf-8")
 
         self.assertIn("workflow_dispatch:", workflow)
-        self.assertNotIn("\n  push:\n", workflow)
+        self.assertIn("\n  push:\n", workflow)
+        self.assertIn("branches: [main]", workflow)
         self.assertIn("PRODUCTION_ARTIFACT_SIGNING_PRIVATE_KEY", workflow)
         self.assertIn("docker run --rm", workflow)
         self.assertNotIn("    container:\n", workflow)
@@ -228,7 +229,7 @@ class ContainerDeploymentContractTests(unittest.TestCase):
 
 
 class LocalContainerWorkflowContractTests(unittest.TestCase):
-    def test_local_container_workflow_is_manual_and_isolated(self):
+    def test_local_container_workflow_waits_for_successful_image_publish(self):
         workflow = (
             Path(__file__).parents[2]
             / ".github/workflows/local-container-test.yml"
@@ -236,6 +237,9 @@ class LocalContainerWorkflowContractTests(unittest.TestCase):
 
         self.assertIn("workflow_dispatch:", workflow)
         self.assertNotIn("\n  push:\n", workflow)
+        self.assertIn("workflow_run:", workflow)
+        self.assertIn("workflows: [Publish Production Container]", workflow)
+        self.assertIn("github.event.workflow_run.conclusion == 'success'", workflow)
         self.assertIn("runs-on: [self-hosted, linux, x64]", workflow)
         self.assertIn("command -v podman", workflow)
         self.assertIn("container-test.env", workflow)
