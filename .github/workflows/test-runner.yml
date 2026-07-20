@@ -46,11 +46,10 @@ jobs:
                 requirements.txt
               rm -rf wheelhouse
               mkdir -p wheelhouse
-              "$PYTHON" -m pip download \
+              "$PYTHON" -m pip wheel \
                 --disable-pip-version-check \
                 --require-hashes \
-                --only-binary=:all: \
-                --dest wheelhouse \
+                --wheel-dir wheelhouse \
                 -r requirements.lock
               "$PYTHON" deployment/build_protected_artifact.py \
                 --source . \

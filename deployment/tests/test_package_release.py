@@ -157,6 +157,15 @@ class WorkflowContractTests(unittest.TestCase):
         python_dependencies = build_script.index("pip install")
         self.assertLess(system_dependencies, python_dependencies)
 
+    def test_manylinux_builds_wheelhouse_for_source_only_dependencies(self):
+        workflow = (
+            Path(__file__).parents[2] / ".github/workflows/test-runner.yml"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('"$PYTHON" -m pip wheel', workflow)
+        self.assertNotIn('"$PYTHON" -m pip download', workflow)
+        self.assertNotIn('--only-binary=:all:', workflow)
+
     def test_workflow_is_manual_signed_artifact_deployment(self):
         workflow = (
             Path(__file__).parents[2] / ".github/workflows/test-runner.yml"
