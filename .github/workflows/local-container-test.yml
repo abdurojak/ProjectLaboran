@@ -70,7 +70,7 @@ jobs:
             --name labhub-local \
             --network host \
             --env-file /home/admin/LabTif/container-test.env \
-            --env FORCE_SCRIPT_NAME= \
+            --env FORCE_SCRIPT_NAME=/ \
             --env LABHUB_LICENSE_ENFORCED=True \
             --env PORT=18000 \
             --volume /home/admin/LabTif/container-media:/app/media:Z \
