@@ -72,7 +72,7 @@ jobs:
           IMAGE_TAG: ${{ inputs.image_tag || 'production' }}
         run: |
           set -euo pipefail
-          mkdir -p /home/admin/LabTif/container-media
+          mkdir -p /home/admin/LabTif/Storage
           podman rm -f labhub-local >/dev/null 2>&1 || true
           podman run -d \
             --name labhub-local \
@@ -80,8 +80,10 @@ jobs:
             --env-file /home/admin/LabTif/container-test.env \
             --env FORCE_SCRIPT_NAME=/ \
             --env LABHUB_LICENSE_ENFORCED=True \
+            --env MEDIA_ROOT=/app/media \
+            --env MEDIA_URL=/media/ \
             --env PORT=18000 \
-            --volume /home/admin/LabTif/container-media:/app/media:Z \
+            --volume /home/admin/LabTif/Storage:/app/media:Z \
             --security-opt no-new-privileges \
             --cap-drop ALL \
             "ghcr.io/abdurojak/projectlaboran:${IMAGE_TAG}"

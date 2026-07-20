@@ -246,6 +246,8 @@ class LocalContainerWorkflowContractTests(unittest.TestCase):
         self.assertIn("--network host", workflow)
         self.assertIn("--env PORT=18000", workflow)
         self.assertIn("--env FORCE_SCRIPT_NAME=/", workflow)
+        self.assertIn("/home/admin/LabTif/Storage:/app/media:Z", workflow)
+        self.assertIn("--env MEDIA_ROOT=/app/media", workflow)
         self.assertNotIn("--publish", workflow)
         self.assertIn("--name labhub-local", workflow)
         self.assertNotIn("systemctl", workflow)
