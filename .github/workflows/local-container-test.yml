@@ -40,7 +40,7 @@ jobs:
             echo "$ENV_FILE must have mode 600 or 400." >&2
             exit 1
           }
-          for key in SECRET_KEY DB_HOST DB_PORT DB_NAME DB_USER DB_PASSWORD LABHUB_LICENSE_KEY; do
+          for key in SECRET_KEY DB_HOST DB_PORT DB_NAME DB_USER DB_PASSWORD LABHUB_LICENSE_KEY LABHUB_LICENSE_FINGERPRINT; do
             grep -Eq "^[[:space:]]*${key}=" "$ENV_FILE" || {
               echo "Missing required key: $key" >&2
               exit 1
