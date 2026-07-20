@@ -657,6 +657,10 @@ class TugasLaporanPraktikum(models.Model):
             return False
         return self.izinkan_terlambat or now <= self.batas_pengumpulan
 
+    @property
+    def is_late(self):
+        return timezone.now() > self.batas_pengumpulan
+
     def __str__(self):
         return f'{self.judul} - {self.matkul}'
 
@@ -670,6 +674,7 @@ class PengumpulanLaporanPraktikum(models.Model):
     STATUS_DIREVISI = 'sudah_direvisi'
     STATUS_DITERIMA = 'diterima'
     STATUS_DINILAI = 'sudah_dinilai'
+    STATUS_DIBATALKAN = 'dibatalkan'
     STATUS_CHOICES = [
         (STATUS_BELUM, 'Belum dikumpulkan'),
         (STATUS_TERKUMPUL, 'Sudah dikumpulkan'),
@@ -679,6 +684,7 @@ class PengumpulanLaporanPraktikum(models.Model):
         (STATUS_DIREVISI, 'Sudah direvisi'),
         (STATUS_DITERIMA, 'Diterima'),
         (STATUS_DINILAI, 'Sudah dinilai'),
+        (STATUS_DIBATALKAN, 'Dibatalkan'),
     ]
 
     tugas = models.ForeignKey(TugasLaporanPraktikum, on_delete=models.CASCADE, related_name='pengumpulan')

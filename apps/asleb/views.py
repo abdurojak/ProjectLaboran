@@ -832,7 +832,21 @@ def can_access_laporan(pengguna, laporan):
 
 
 def sync_laporan_score_to_praktikum_result(laporan, reviewer):
-    if laporan.nilai is None or not laporan.tugas.modul_id:
+    if not laporan.tugas.modul_id:
+        return None
+    is_final = (
+        laporan.status == PengumpulanLaporanPraktikum.STATUS_DINILAI
+        and laporan.nilai is not None
+    )
+    if not is_final:
+        hasil = HasilPraktikumMahasiswa.objects.filter(
+            peserta=laporan.peserta,
+            modul=laporan.tugas.modul,
+        ).first()
+        if hasil and hasil.nilai_laporan is not None:
+            hasil.nilai_laporan = None
+            hasil.dicatat_oleh = reviewer
+            hasil.save(update_fields=['nilai_laporan', 'nilai', 'dicatat_oleh', 'diperbarui_pada'])
         return None
     hasil, _ = HasilPraktikumMahasiswa.objects.update_or_create(
         peserta=laporan.peserta,
@@ -1018,7 +1032,7 @@ class LaporanPraktikumListView(TemplateView):
             messages.error(request, 'Silakan login untuk membuka laporan praktikum.')
             return redirect('pengguna:login')
         if pengguna.role == LABORAN_ROLE:
-            messages.info(request, 'Laboran cukup memantau nilai dan absensi mahasiswa dari menu Nilai & Absensi Mahasiswa.')
+            messages.info(request, 'Laboran menerima hasil akhir melalui menu Nilai & Absensi Mahasiswa.')
             return redirect('asleb:praktikum_mahasiswa_list')
         if pengguna.role not in {MAHASISWA_ROLE, ASISTEN_LAB_ROLE}:
             messages.error(request, 'Anda tidak memiliki akses ke laporan praktikum.')
@@ -1041,6 +1055,7 @@ class LaporanPraktikumListView(TemplateView):
             PengumpulanLaporanPraktikum.objects
             .select_related('tugas', 'peserta')
             .filter(peserta__in=peserta_qs)
+            .exclude(status=PengumpulanLaporanPraktikum.STATUS_DIBATALKAN)
             .order_by('tugas_id', 'peserta_id', '-versi')
         ):
             latest_submissions.setdefault((laporan.tugas_id, laporan.peserta_id), laporan)
@@ -1053,6 +1068,15 @@ class LaporanPraktikumListView(TemplateView):
                 'peserta': peserta,
                 'laporan': latest_submissions.get((tugas.pk, peserta.pk)) if peserta else None,
             })
+
+        participant_groups = []
+        participant_group_index = {}
+        for item in participant_cards:
+            matkul = item['tugas'].matkul
+            if matkul.pk not in participant_group_index:
+                participant_group_index[matkul.pk] = len(participant_groups)
+                participant_groups.append({'matkul': matkul, 'items': []})
+            participant_groups[participant_group_index[matkul.pk]]['items'].append(item)
 
         review_tasks = TugasLaporanPraktikum.objects.none()
         if pengguna.role == ASISTEN_LAB_ROLE:
@@ -1070,24 +1094,27 @@ class LaporanPraktikumListView(TemplateView):
             PengumpulanLaporanPraktikum.objects
             .select_related('tugas', 'tugas__matkul', 'peserta', 'diperiksa_oleh')
             .filter(tugas__in=review_tasks)
+            .exclude(status=PengumpulanLaporanPraktikum.STATUS_DIBATALKAN)
             .order_by('tugas__matkul__nama', 'tugas__modul__nomor', 'tugas__judul', '-dikumpulkan_pada')
         )
         review_groups = []
         group_index = {}
+        for tugas in review_tasks.order_by('matkul__nama', 'matkul__kelas', 'modul__nomor', 'judul'):
+            group_index[tugas.pk] = len(review_groups)
+            review_groups.append({
+                'tugas': tugas,
+                'modul_label': f'Modul {tugas.modul.nomor}' if tugas.modul_id else 'Tanpa modul',
+                'laporan_list': [],
+            })
         for laporan in submissions_for_review:
             tugas = laporan.tugas
             group_key = tugas.pk
-            if group_key not in group_index:
-                group_index[group_key] = len(review_groups)
-                review_groups.append({
-                    'tugas': tugas,
-                    'modul_label': f'Modul {tugas.modul.nomor}' if tugas.modul_id else 'Tanpa modul',
-                    'laporan_list': [],
-                })
-            review_groups[group_index[group_key]]['laporan_list'].append(laporan)
+            if group_key in group_index:
+                review_groups[group_index[group_key]]['laporan_list'].append(laporan)
 
         context.update({
             'participant_cards': participant_cards,
+            'participant_groups': participant_groups,
             'review_tasks': review_tasks,
             'submissions_for_review': submissions_for_review,
             'review_groups': review_groups,
@@ -1142,8 +1169,8 @@ class PengumpulanLaporanPraktikumCreateView(FormView):
         if not self.peserta:
             messages.error(request, 'Anda bukan peserta pada mata kuliah tugas ini.')
             return redirect('asleb:laporan_tugas_list')
-        if not self.tugas.is_open:
-            messages.error(request, 'Periode pengumpulan laporan belum dibuka atau sudah ditutup.')
+        if timezone.now() < self.tugas.mulai_pengumpulan:
+            messages.error(request, 'Periode pengumpulan laporan belum dibuka.')
             return redirect('asleb:laporan_tugas_list')
         return super().dispatch(request, *args, **kwargs)
 
@@ -1160,6 +1187,8 @@ class PengumpulanLaporanPraktikumCreateView(FormView):
         laporan.versi = (latest.versi + 1) if latest else 1
         if latest and latest.status == PengumpulanLaporanPraktikum.STATUS_REVISI:
             laporan.status = PengumpulanLaporanPraktikum.STATUS_DIREVISI
+        if timezone.now() > self.tugas.batas_pengumpulan:
+            laporan.status = PengumpulanLaporanPraktikum.STATUS_TERLAMBAT
         laporan.save()
         log_praktikum_activity(self.request.current_pengguna, 'laporan_dikumpulkan', self.tugas.judul, self.tugas.matkul, self.peserta)
         if self.tugas.asisten_pemeriksa and self.tugas.asisten_pemeriksa.email:
@@ -1173,6 +1202,70 @@ class PengumpulanLaporanPraktikumCreateView(FormView):
             )
         messages.success(self.request, 'Laporan berhasil dikumpulkan.')
         return redirect(self.success_url)
+
+
+@require_POST
+def cancel_laporan_praktikum(request, pk):
+    laporan = get_object_or_404(
+        PengumpulanLaporanPraktikum.objects.select_related(
+            'tugas', 'tugas__matkul', 'tugas__modul', 'peserta', 'peserta__pengguna',
+        ),
+        pk=pk,
+    )
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not pengguna or laporan.peserta.pengguna_id != pengguna.pk:
+        messages.error(request, 'Anda hanya dapat membatalkan kiriman laporan milik sendiri.')
+        return redirect('asleb:laporan_tugas_list')
+    if laporan.status == PengumpulanLaporanPraktikum.STATUS_DIBATALKAN:
+        messages.info(request, 'Kiriman laporan ini sudah dibatalkan.')
+        return redirect('asleb:laporan_tugas_list')
+
+    with transaction.atomic():
+        PengumpulanLaporanPraktikum.objects.filter(
+            tugas=laporan.tugas,
+            peserta=laporan.peserta,
+        ).update(
+            status=PengumpulanLaporanPraktikum.STATUS_DIBATALKAN,
+            diperbarui_pada=timezone.now(),
+        )
+
+        if laporan.tugas.modul_id:
+            hasil = HasilPraktikumMahasiswa.objects.filter(
+                peserta=laporan.peserta,
+                modul=laporan.tugas.modul,
+            ).first()
+            if hasil:
+                pengganti = (
+                    PengumpulanLaporanPraktikum.objects
+                    .filter(
+                        tugas__matkul=laporan.tugas.matkul,
+                        tugas__modul=laporan.tugas.modul,
+                        peserta=laporan.peserta,
+                        nilai__isnull=False,
+                    )
+                    .exclude(status=PengumpulanLaporanPraktikum.STATUS_DIBATALKAN)
+                    .select_related('diperiksa_oleh')
+                    .order_by('-diperiksa_pada', '-dikumpulkan_pada', '-versi')
+                    .first()
+                )
+                hasil.nilai_laporan = pengganti.nilai if pengganti else None
+                hasil.dicatat_oleh = pengganti.diperiksa_oleh if pengganti else None
+                if hasil.nilai_realtime is None and not pengganti:
+                    hasil.nilai = None
+                hasil.save(update_fields=['nilai_laporan', 'nilai', 'dicatat_oleh', 'diperbarui_pada'])
+
+    log_praktikum_activity(
+        pengguna,
+        'laporan_dibatalkan',
+        laporan.tugas.judul,
+        laporan.tugas.matkul,
+        laporan.peserta,
+    )
+    messages.success(
+        request,
+        'Kiriman laporan berhasil dibatalkan. Pengiriman ulang setelah tenggat otomatis ditandai terlambat.',
+    )
+    return redirect('asleb:laporan_tugas_list')
 
 
 class ReviewLaporanPraktikumUpdateView(UpdateView):
