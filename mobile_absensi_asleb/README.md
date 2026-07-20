@@ -4,7 +4,7 @@ Aplikasi Flutter khusus absensi masuk Asisten Laboratorium. Django tetap menjadi
 
 ## Endpoint API
 
-Base URL: `http://<IP-SERVER>:8000/api/mobile/v1/`
+Base URL: `http://<IP-SERVER>/api/mobile/v1/`
 
 | Method | Endpoint | Fungsi |
 |---|---|---|
@@ -37,7 +37,7 @@ Konfigurasi `.env` minimum:
 
 ```env
 ALLOWED_HOSTS=localhost,127.0.0.1,10.24.80.245
-PUBLIC_ACCESS_BASE_URL=http://10.24.80.245:8000
+PUBLIC_ACCESS_BASE_URL=http://10.24.80.245
 ```
 
 ## Menjalankan Flutter
@@ -45,23 +45,23 @@ PUBLIC_ACCESS_BASE_URL=http://10.24.80.245:8000
 ```powershell
 cd mobile_absensi_asleb
 flutter pub get
-flutter run --dart-define=API_BASE_URL=http://10.24.80.245:8000/api/mobile/v1/
+flutter run --dart-define=API_BASE_URL=http://10.24.80.245/api/mobile/v1/
 ```
 
-Untuk Android Emulator gunakan `http://10.0.2.2:8000/api/mobile/v1/`. Untuk HP fisik gunakan IP laptop yang dapat diakses HP.
+Untuk Android Emulator lokal gunakan `http://10.0.2.2:8000/api/mobile/v1/` jika server Django masih dijalankan manual di port 8000. Untuk HP fisik/production gunakan IP atau domain server yang dapat diakses HP.
 
 ## Build APK
 
 Debug APK:
 
 ```powershell
-flutter build apk --debug --dart-define=API_BASE_URL=http://10.24.80.245:8000/api/mobile/v1/
+flutter build apk --debug --dart-define=API_BASE_URL=http://10.24.80.245/api/mobile/v1/
 ```
 
 Release APK:
 
 ```powershell
-flutter build apk --release --dart-define=API_BASE_URL=http://10.24.80.245:8000/api/mobile/v1/
+flutter build apk --release --dart-define=API_BASE_URL=http://10.24.80.245/api/mobile/v1/
 ```
 
 Output berada di `build/app/outputs/flutter-apk/`. Untuk distribusi resmi, buat keystore release dan jangan memakai signing debug bawaan.
