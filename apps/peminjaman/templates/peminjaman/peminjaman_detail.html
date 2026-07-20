@@ -176,9 +176,17 @@
                         <td>{% if detail.barang.lokasi %}{{ detail.barang.lokasi.nama_lokasi }}{% else %}-{% endif %}</td>
                         <td>{{ detail.get_status_display }}</td>
                         <td>
-                            <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-brand-700 transition hover:bg-brand-50" data-detail-photo-preview data-photo-title="{{ detail.barang.kode_barang }} - {{ detail.barang.nama }}" data-photo-url="{{ detail.barang_photo_url }}" aria-label="Lihat foto {{ detail.barang.kode_barang }}">
-                                <i data-lucide="eye" class="h-4 w-4"></i>
-                            </button>
+                            <div class="flex flex-wrap gap-2">
+                                {% for photo_url in detail.barang_photo_urls %}
+                                <button type="button" class="inline-flex h-10 w-10 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white text-brand-700 transition hover:bg-brand-50" data-detail-photo-preview data-photo-title="{{ detail.barang.kode_barang }} - {{ detail.barang.nama }} (Foto {{ forloop.counter }})" data-photo-url="{{ photo_url }}" aria-label="Lihat foto {{ forloop.counter }} {{ detail.barang.kode_barang }}">
+                                    <img src="{{ photo_url }}" alt="" class="h-full w-full object-cover">
+                                </button>
+                                {% empty %}
+                                <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-brand-700 transition hover:bg-brand-50" data-detail-photo-preview data-photo-title="{{ detail.barang.kode_barang }} - {{ detail.barang.nama }}" data-photo-url="" aria-label="Foto {{ detail.barang.kode_barang }} belum tersedia">
+                                    <i data-lucide="image-off" class="h-4 w-4"></i>
+                                </button>
+                                {% endfor %}
+                            </div>
                         </td>
                     </tr>
                     {% endfor %}

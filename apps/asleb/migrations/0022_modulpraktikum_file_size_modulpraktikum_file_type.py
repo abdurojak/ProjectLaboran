@@ -5,15 +5,22 @@ from django.db import migrations, models
 
 def ensure_modul_columns(apps, schema_editor):
     table_name = schema_editor.quote_name('asleb_modulpraktikum')
-    with schema_editor.connection.cursor() as cursor:
-        vendor = schema_editor.connection.vendor
-        if vendor == 'mysql':
+    vendor = schema_editor.connection.vendor
+    if vendor == 'mysql':
+        with schema_editor.connection.cursor() as cursor:
             cursor.execute(
                 f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS file_size bigint NULL"
             )
             cursor.execute(
                 f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS file_type varchar(20) NOT NULL DEFAULT ''"
             )
+        return
+
+    with schema_editor.connection.cursor() as cursor:
+        cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN file_size bigint NULL")
+        cursor.execute(
+            f"ALTER TABLE {table_name} ADD COLUMN file_type varchar(20) NOT NULL DEFAULT ''"
+        )
 
 
 def populate_modul_file_metadata(apps, schema_editor):

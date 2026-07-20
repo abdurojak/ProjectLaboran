@@ -4,7 +4,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 
 from apps.peminjaman.models import PeminjamanAlat
 from apps.pengguna.models import Pengguna
-from .models import Barang, InventarisBarang, Lokasi, PaketBarang
+from .models import Barang, FotoInventarisBarang, InventarisBarang, Lokasi, PaketBarang
 
 
 def login_laboran(client, suffix='TEST'):
@@ -147,6 +147,7 @@ class BarangFotoFormTests(TestCase):
             reverse('inventaris:barang_update', args=[self.barang.pk]),
             {
                 'nama': 'Kamera',
+                'jumlah': self.barang.jumlah,
                 'hapus_foto': '1',
                 'keterangan': '',
             },
@@ -155,6 +156,52 @@ class BarangFotoFormTests(TestCase):
         self.assertRedirects(response, reverse('inventaris:barang_list'))
         self.barang.refresh_from_db()
         self.assertFalse(self.barang.foto)
+
+    def test_laboran_bisa_menambah_beberapa_foto_galeri_sekaligus(self):
+        gif = (
+            b'GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00'
+            b'\xff\xff\xff!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00'
+            b'\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;'
+        )
+        response = self.client.post(
+            reverse('inventaris:barang_update', args=[self.barang.pk]),
+            {
+                'nama': self.barang.nama,
+                'jumlah': self.barang.jumlah,
+                'keterangan': self.barang.keterangan,
+                'foto_galeri': [
+                    SimpleUploadedFile('depan.gif', gif, content_type='image/gif'),
+                    SimpleUploadedFile('samping.gif', gif, content_type='image/gif'),
+                ],
+            },
+        )
+
+        self.assertRedirects(response, reverse('inventaris:barang_list'))
+        self.assertEqual(self.barang.galeri_foto.count(), 2)
+
+    def test_foto_galeri_bisa_ditandai_untuk_dihapus_saat_edit(self):
+        first = FotoInventarisBarang.objects.create(
+            inventaris=self.barang,
+            foto='barang/galeri/depan.jpg',
+        )
+        second = FotoInventarisBarang.objects.create(
+            inventaris=self.barang,
+            foto='barang/galeri/samping.jpg',
+        )
+
+        response = self.client.post(
+            reverse('inventaris:barang_update', args=[self.barang.pk]),
+            {
+                'nama': self.barang.nama,
+                'jumlah': self.barang.jumlah,
+                'keterangan': self.barang.keterangan,
+                'hapus_foto_galeri': [str(first.pk)],
+            },
+        )
+
+        self.assertRedirects(response, reverse('inventaris:barang_list'))
+        self.assertFalse(FotoInventarisBarang.objects.filter(pk=first.pk).exists())
+        self.assertTrue(FotoInventarisBarang.objects.filter(pk=second.pk).exists())
 
 
 class BarangListViewTests(TestCase):

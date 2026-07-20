@@ -89,6 +89,25 @@ class InventarisBarang(models.Model):
         return f'{prefix}-{next_number:04d}'
 
 
+class FotoInventarisBarang(models.Model):
+    inventaris = models.ForeignKey(
+        InventarisBarang,
+        on_delete=models.CASCADE,
+        related_name='galeri_foto',
+    )
+    foto = models.ImageField(upload_to='barang/galeri/')
+    urutan = models.PositiveSmallIntegerField(default=0)
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['urutan', 'pk']
+        verbose_name = 'Foto Galeri Inventaris'
+        verbose_name_plural = 'Foto Galeri Inventaris'
+
+    def __str__(self):
+        return f'Foto {self.inventaris.nama} #{self.pk}'
+
+
 class Barang(models.Model):
     KONDISI_CHOICES = [
         ('baik', 'Baik'),

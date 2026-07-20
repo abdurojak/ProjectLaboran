@@ -1,4 +1,5 @@
-import random
+import hashlib
+import secrets
 from smtplib import SMTPException
 from datetime import timedelta
 from urllib.parse import urlencode, urljoin
@@ -6,6 +7,7 @@ from urllib.parse import urlencode, urljoin
 from django.contrib import messages
 from django.contrib.auth.hashers import check_password, make_password
 from django.conf import settings
+from django.core.cache import cache
 from django.db.models import Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -44,6 +46,7 @@ from .models import Fakultas, PengalamanPengguna, Pengguna, Prodi, School
 
 OTP_SESSION_KEY = 'pengguna_otp'
 OTP_EXPIRE_MINUTES = 10
+OTP_MAX_ATTEMPTS = 5
 
 RIWAYAT_FORM_CLASSES = {
     'pengalaman': PengalamanPenggunaForm,
@@ -80,7 +83,14 @@ class AdminPenggunaRequiredMixin:
 
 
 def generate_otp_code():
-    return f'{random.randint(0, 999999):06d}'
+    return f'{secrets.randbelow(1_000_000):06d}'
+
+
+def login_attempt_cache_key(request):
+    identifier = request.POST.get('nim_nik', '').strip().lower()
+    address = request.META.get('REMOTE_ADDR', '')
+    digest = hashlib.sha256(f'{address}:{identifier}'.encode()).hexdigest()
+    return f'pengguna-login-attempt:{digest}'
 
 
 def build_public_url(route_name, *args):
@@ -99,6 +109,7 @@ def store_otp(request, purpose, pengguna, method, extra=None):
         'pengguna_id': pengguna.pk,
         'method': method,
         'code': code,
+        'attempts': 0,
         'expires_at': (timezone.now() + timedelta(minutes=OTP_EXPIRE_MINUTES)).isoformat(),
     }
     if extra:
@@ -123,6 +134,20 @@ def get_pending_otp(request, purpose):
         return None
 
     return otp
+
+
+def otp_code_matches(request, otp, submitted_code):
+    if secrets.compare_digest(str(submitted_code), str(otp['code'])):
+        return True
+
+    otp['attempts'] = int(otp.get('attempts', 0)) + 1
+    if otp['attempts'] >= OTP_MAX_ATTEMPTS:
+        request.session.pop(OTP_SESSION_KEY, None)
+        return False
+
+    request.session[OTP_SESSION_KEY] = otp
+    request.session.modified = True
+    return False
 
 
 def send_verification_code(request, pengguna, method, purpose, extra=None):
@@ -345,7 +370,11 @@ class ProdiUpdateView(AdminRequiredMixin, UpdateView):
 
 class PenggunaChangePasswordView(View):
     def post(self, request, pk, *args, **kwargs):
-        pengguna = Pengguna.objects.get(pk=pk)
+        pengguna = get_object_or_404(Pengguna, pk=pk)
+        current = getattr(request, 'current_pengguna', None)
+        if not current or (current.role != 'admin' and current.pk != pengguna.pk):
+            messages.error(request, 'Anda tidak memiliki akses untuk mengganti password akun ini.')
+            return redirect('dashboard:home')
         form = ChangePasswordForm(request.POST)
 
         if form.is_valid():
@@ -362,12 +391,16 @@ class PenggunaChangePasswordView(View):
 
 class PenggunaUpdateProfileView(View):
     def post(self, request, pk, *args, **kwargs):
-        pengguna = Pengguna.objects.get(pk=pk)
+        pengguna = get_object_or_404(Pengguna, pk=pk)
+        current = getattr(request, 'current_pengguna', None)
+        if not current or (current.role != 'admin' and current.pk != pengguna.pk):
+            messages.error(request, 'Anda tidak memiliki akses untuk mengubah profil akun ini.')
+            return redirect('dashboard:home')
         form = PenggunaProfileForm(
             request.POST,
             request.FILES,
             instance=pengguna,
-            current_pengguna=getattr(request, 'current_pengguna', None),
+            current_pengguna=current,
         )
 
         if form.is_valid():
@@ -547,7 +580,10 @@ class PenggunaVerifyProfilePhoneView(FormView):
 
     def form_valid(self, form):
         otp = get_pending_otp(self.request, 'profile_phone')
-        if form.cleaned_data['kode'] != otp['code']:
+        if not otp_code_matches(self.request, otp, form.cleaned_data['kode']):
+            if not get_pending_otp(self.request, 'profile_phone'):
+                messages.error(self.request, 'Batas percobaan kode tercapai. Silakan ubah nomor HP kembali.')
+                return redirect('pengguna:detail', pk=self.kwargs['pk'])
             form.add_error('kode', 'Kode verifikasi tidak sesuai.')
             return self.form_invalid(form)
 
@@ -564,8 +600,26 @@ class PenggunaLoginView(FormView):
     form_class = LoginPenggunaForm
     success_url = reverse_lazy('dashboard:home')
 
+    def post(self, request, *args, **kwargs):
+        cache_key = login_attempt_cache_key(request)
+        attempts = int(cache.get(cache_key, 0))
+        if attempts >= settings.LOGIN_MAX_ATTEMPTS:
+            form = self.get_form()
+            form.add_error(None, 'Terlalu banyak percobaan login. Silakan coba kembali beberapa saat lagi.')
+            return self.form_invalid(form)
+        return super().post(request, *args, **kwargs)
+
+    def form_invalid(self, form):
+        if self.request.method == 'POST' and self.request.POST.get('nim_nik'):
+            cache_key = login_attempt_cache_key(self.request)
+            attempts = int(cache.get(cache_key, 0)) + 1
+            cache.set(cache_key, attempts, settings.LOGIN_LOCKOUT_SECONDS)
+        return super().form_invalid(form)
+
     def form_valid(self, form):
         pengguna = form.cleaned_data['pengguna']
+        cache.delete(login_attempt_cache_key(self.request))
+        self.request.session.cycle_key()
         self.request.session['pengguna_id'] = pengguna.pk
         messages.success(self.request, f'Selamat datang, {pengguna.nama_pengguna}.')
         next_url = self.request.GET.get('next')
@@ -615,7 +669,10 @@ class PenggunaVerifyRegisterView(FormView):
 
     def form_valid(self, form):
         otp = get_pending_otp(self.request, 'register')
-        if form.cleaned_data['kode'] != otp['code']:
+        if not otp_code_matches(self.request, otp, form.cleaned_data['kode']):
+            if not get_pending_otp(self.request, 'register'):
+                messages.error(self.request, 'Batas percobaan kode tercapai. Silakan registrasi ulang.')
+                return redirect('pengguna:register')
             form.add_error('kode', 'Kode verifikasi tidak sesuai.')
             return self.form_invalid(form)
 
@@ -624,6 +681,7 @@ class PenggunaVerifyRegisterView(FormView):
         pengguna.save(update_fields=['is_verified', 'diperbarui_pada'])
         linked_count = link_peserta_praktikum_to_pengguna(pengguna)
         self.request.session.pop(OTP_SESSION_KEY, None)
+        self.request.session.cycle_key()
         self.request.session['pengguna_id'] = pengguna.pk
         if linked_count:
             messages.success(
@@ -670,7 +728,10 @@ class ResetPasswordView(FormView):
 
     def form_valid(self, form):
         otp = get_pending_otp(self.request, 'reset_password')
-        if form.cleaned_data['kode'] != otp['code']:
+        if not otp_code_matches(self.request, otp, form.cleaned_data['kode']):
+            if not get_pending_otp(self.request, 'reset_password'):
+                messages.error(self.request, 'Batas percobaan kode tercapai. Silakan minta kode baru.')
+                return redirect('pengguna:forgot_password')
             form.add_error('kode', 'Kode verifikasi tidak sesuai.')
             return self.form_invalid(form)
 
@@ -689,6 +750,6 @@ class ResetPasswordView(FormView):
 
 class PenggunaLogoutView(View):
     def post(self, request, *args, **kwargs):
-        request.session.pop('pengguna_id', None)
+        request.session.flush()
         messages.success(request, 'Anda sudah keluar.')
         return redirect('pengguna:login')

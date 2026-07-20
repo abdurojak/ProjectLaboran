@@ -13,7 +13,7 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 
-from apps.asleb.models import Asleb
+from apps.asleb.models import Asleb, HonorAsleb
 from apps.jadwal.models import JadwalPraktikum
 from apps.pengguna.models import PengalamanPengguna, Pengguna
 from apps.ruangan.models import RuanganLab
@@ -802,14 +802,12 @@ class PendaftaranAslebViewTests(TestCase):
         period.refresh_from_db()
         akun_asleb.refresh_from_db()
         asleb.refresh_from_db()
-        jadwal_diajukan.refresh_from_db()
-        jadwal_diterima.refresh_from_db()
         self.assertEqual(period.diakhiri_oleh, self.laboran)
         self.assertIsNotNone(period.diakhiri_pada)
         self.assertEqual(akun_asleb.role, 'mahasiswa')
         self.assertEqual(asleb.status, 'nonaktif')
-        self.assertEqual(jadwal_diajukan.status, JadwalPraktikum.STATUS_DITOLAK)
-        self.assertEqual(jadwal_diterima.status, JadwalPraktikum.STATUS_DITOLAK)
+        self.assertFalse(JadwalPraktikum.objects.filter(pk=jadwal_diajukan.pk).exists())
+        self.assertFalse(JadwalPraktikum.objects.filter(pk=jadwal_diterima.pk).exists())
 
     def test_laboran_mengakhiri_periode_menyembunyikan_rekap_honor_aslab_nonaktif(self):
         period = PeriodeAsleb.get_for_date(timezone.localdate())

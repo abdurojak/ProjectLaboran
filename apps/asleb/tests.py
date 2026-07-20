@@ -3,6 +3,7 @@ import shutil
 import tempfile
 import zipfile
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from io import BytesIO
 from unittest import skipUnless
 from unittest.mock import patch
@@ -358,17 +359,6 @@ class AslebViewTests(TestCase):
             role='asisten_lab',
             is_verified=True,
         )
-        Asleb.objects.create(
-            nama='Aslab Aktif',
-            nim=pengguna_aslab.nim_nik,
-            no_hp=pengguna_aslab.no_hp,
-            email=pengguna_aslab.email,
-            program_studi=pengguna_aslab.prodi,
-            matkul=str(matkul_lama),
-            semester=4,
-            status='nonaktif',
-            tanggal_bergabung=date(2026, 1, 10),
-        )
         asleb_aktif = Asleb.objects.create(
             nama='Aslab Aktif',
             nim=pengguna_aslab.nim_nik,
@@ -385,6 +375,7 @@ class AslebViewTests(TestCase):
 
         self.assertEqual(list(matkul_queryset), [matkul_baru])
         self.assertEqual(get_asleb_matkul(asleb_aktif), matkul_baru)
+        self.assertNotIn(matkul_lama, matkul_queryset)
 
     def test_laboran_tidak_bisa_mengeluarkan_asleb_tanpa_alasan(self):
         laboran = Pengguna.objects.create(

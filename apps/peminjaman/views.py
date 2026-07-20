@@ -33,6 +33,17 @@ BULK_STATUS_UI_CHOICES = [
 ARCHIVED_STATUS_CHOICES = {'ditolak', 'digantikan', 'dikembalikan'}
 
 
+def get_barang_photo_urls(barang):
+    urls = []
+    if barang.foto:
+        urls.append(barang.foto.url)
+    if barang.inventaris_id:
+        if barang.inventaris.foto:
+            urls.append(barang.inventaris.foto.url)
+        urls.extend(photo.foto.url for photo in barang.inventaris.galeri_foto.all())
+    return list(dict.fromkeys(urls))
+
+
 def scope_peminjaman_for_pengguna(queryset, pengguna):
     if not pengguna:
         return queryset.none()
@@ -76,7 +87,7 @@ def barang_options(request):
         status__in=ACTIVE_PEMINJAMAN_STATUSES,
     )
     queryset = (
-        Barang.objects.select_related('inventaris', 'lokasi')
+        Barang.objects.select_related('inventaris', 'lokasi').prefetch_related('inventaris__galeri_foto')
         .annotate(is_borrowed=Exists(active_loans))
         .order_by('kode_barang')
     )
@@ -128,11 +139,7 @@ def barang_options(request):
     results = []
 
     for barang in page_obj.object_list:
-        photo_url = ''
-        if barang.foto:
-            photo_url = barang.foto.url
-        elif barang.inventaris_id and barang.inventaris.foto:
-            photo_url = barang.inventaris.foto.url
+        photo_urls = get_barang_photo_urls(barang)
         group_available_items = get_available_items_for_group(barang)
         is_selectable = bool(group_available_items)
         results.append({
@@ -147,7 +154,8 @@ def barang_options(request):
             'kondisi_key': barang.kondisi,
             'status': f'{len(group_available_items)} tersedia' if is_selectable else 'Tidak tersedia',
             'disabled': not is_selectable,
-            'photo_url': photo_url,
+            'photo_url': photo_urls[0] if photo_urls else '',
+            'photo_urls': photo_urls,
         })
 
     return JsonResponse({
@@ -381,7 +389,7 @@ class PeminjamanAlatListView(ListView):
             status__in=ACTIVE_PEMINJAMAN_STATUSES,
         )
         queryset = (
-            Barang.objects.select_related('inventaris', 'lokasi')
+            Barang.objects.select_related('inventaris', 'lokasi').prefetch_related('inventaris__galeri_foto')
             .annotate(is_borrowed=Exists(active_loans))
             .order_by('inventaris__nama', 'nama', 'kode_barang')
         )
@@ -429,11 +437,7 @@ class PeminjamanAlatListView(ListView):
                 item for item in group_items
                 if not item.is_borrowed and item.kondisi != 'rusak_berat'
             ]
-            photo_url = ''
-            if barang.foto:
-                photo_url = barang.foto.url
-            elif barang.inventaris_id and barang.inventaris.foto:
-                photo_url = barang.inventaris.foto.url
+            photo_urls = get_barang_photo_urls(barang)
             products.append({
                 'id': barang.pk,
                 'nama': barang.inventaris.nama if barang.inventaris_id else barang.nama,
@@ -442,7 +446,8 @@ class PeminjamanAlatListView(ListView):
                 'lokasi': barang.lokasi.nama_lokasi if barang.lokasi_id else '-',
                 'kondisi': barang.get_kondisi_display(),
                 'keterangan': (barang.inventaris.keterangan if barang.inventaris_id else barang.keterangan) or 'Belum ada spesifikasi tambahan.',
-                'photo_url': photo_url,
+                'photo_url': photo_urls[0] if photo_urls else '',
+                'photo_urls': '||'.join(photo_urls),
                 'total_count': len(group_items),
                 'available_count': len(available_items),
                 'available_ids': ','.join(str(item.pk) for item in available_items),
@@ -459,14 +464,22 @@ class PeminjamanAlatDetailView(DetailView):
     context_object_name = 'peminjaman'
 
     def get_queryset(self):
-        return super().get_queryset().select_related('barang', 'barang__inventaris', 'barang__lokasi', 'paket')
+        queryset = super().get_queryset().select_related(
+            'barang', 'barang__inventaris', 'barang__lokasi', 'paket'
+        ).prefetch_related('barang__inventaris__galeri_foto')
+        return scope_peminjaman_for_pengguna(
+            queryset,
+            getattr(self.request, 'current_pengguna', None),
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         pengguna = getattr(self.request, 'current_pengguna', None)
         if self.object.transaksi_id:
             context['detail_transaksi'] = list(
-                self.object.transaksi.detail.select_related('barang', 'barang__inventaris', 'barang__lokasi')
+                self.object.transaksi.detail.select_related(
+                    'barang', 'barang__inventaris', 'barang__lokasi'
+                ).prefetch_related('barang__inventaris__galeri_foto')
             )
         else:
             context['detail_transaksi'] = [self.object]
@@ -474,12 +487,10 @@ class PeminjamanAlatDetailView(DetailView):
         context['peminjam_pengguna'] = peminjam_pengguna
         context['peminjam_foto_url'] = peminjam_pengguna.foto.url if peminjam_pengguna and peminjam_pengguna.foto else ''
         for detail in context['detail_transaksi']:
-            detail.barang_photo_url = ''
+            detail.barang_photo_urls = get_barang_photo_urls(detail.barang)
+            detail.barang_photo_url = detail.barang_photo_urls[0] if detail.barang_photo_urls else ''
             detail.barang_photo_label = detail.barang.nama
-            if detail.barang.foto:
-                detail.barang_photo_url = detail.barang.foto.url
-            elif detail.barang.inventaris_id and detail.barang.inventaris.foto:
-                detail.barang_photo_url = detail.barang.inventaris.foto.url
+            if detail.barang.inventaris_id:
                 detail.barang_photo_label = detail.barang.inventaris.nama
         context['can_edit'] = bool(
             pengguna and (

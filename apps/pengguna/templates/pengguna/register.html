@@ -31,7 +31,8 @@
             <div class="{% if field.name == 'nama_pengguna' %}span-2{% elif field.name == 'alamat' %}span-3{% endif %}">
                 {% if field.name == 'foto' %}
                     {{ field.label_tag }}
-                    {% include "components/file_upload.html" with field=field current_file=None button_label="Pilih Foto" title="Foto pengguna" empty_label="Opsional" preview_label="Preview foto" preview_alt="Preview foto pengguna" show_preview=False %}
+                    {% include "components/file_upload.html" with field=field current_file=None button_label="Pilih Foto Wajah" title="Foto wajah (wajib)" empty_label="Belum ada foto wajah dipilih" preview_label="Preview foto" preview_alt="Preview foto pengguna" show_preview=False %}
+                    <p class="mt-2 text-xs font-semibold text-slate-500">Wajib foto wajah asli. Foto pemandangan, karakter, atau gambar tanpa wajah akan ditolak.</p>
                 {% elif field.name == 'email' %}
                     {{ field.label_tag }}
                     <div class="register-email-field">

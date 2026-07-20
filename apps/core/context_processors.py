@@ -75,6 +75,17 @@ SIDEBAR_LINKS = [
     },
     {'title': 'Jadwal Praktikum', 'icon': 'calendar-clock', 'url': 'jadwal:jadwal_list', 'namespace': 'jadwal'},
     {
+        'title': 'Laporan Praktikum',
+        'icon': 'file-up',
+        'url': 'asleb:laporan_tugas_list',
+        'namespace': 'asleb',
+        'url_names': {
+            'laporan_tugas_list', 'laporan_submit', 'laporan_cancel',
+            'laporan_preview', 'laporan_preview_file', 'laporan_download',
+        },
+        'roles': {MAHASISWA_ROLE},
+    },
+    {
         'title': 'Asisten Laboratorium',
         'icon': 'users-round',
         'namespace': 'asisten_laboratorium',
@@ -104,7 +115,7 @@ SIDEBAR_LINKS = [
                     'laporan_tugas_list', 'laporan_tugas_create', 'laporan_submit',
                     'laporan_review', 'laporan_preview', 'laporan_download',
                 },
-                'roles': {ASISTEN_LAB_ROLE, MAHASISWA_ROLE},
+                'roles': {ASISTEN_LAB_ROLE},
             },
             {
                 'title': 'Data Aslab',
@@ -148,7 +159,7 @@ SIDEBAR_LINKS = [
     {'title': 'Pengaturan', 'icon': 'settings', 'url': 'core:settings', 'namespace': 'core', 'url_names': {'settings'}},
 ]
 
-MAHASISWA_VISIBLE_NAMESPACES = {'core', 'dashboard', 'kalender', 'peminjaman', 'jadwal', 'ruangan'}
+MAHASISWA_VISIBLE_NAMESPACES = {'core', 'dashboard', 'kalender', 'peminjaman', 'jadwal', 'asleb', 'ruangan'}
 ASISTEN_LAB_HIDDEN_NAMESPACES = {'inventaris', 'barang_tertinggal', 'asleb', 'pendaftaran_asleb', 'pengguna'}
 ADMIN_VISIBLE_NAMESPACES = {'core', 'dashboard', 'kalender', 'pengguna'}
 

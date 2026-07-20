@@ -4,7 +4,14 @@ from django.core import mail
 from django.test import TestCase
 from django.urls import reverse
 
-from apps.inventaris.models import Barang, InventarisBarang, Lokasi, PaketBarang, PaketBarangItem
+from apps.inventaris.models import (
+    Barang,
+    FotoInventarisBarang,
+    InventarisBarang,
+    Lokasi,
+    PaketBarang,
+    PaketBarangItem,
+)
 from apps.pengguna.models import Pengguna
 from .models import PeminjamanAlat, PeminjamanTransaksi
 
@@ -474,6 +481,39 @@ class PeminjamanViewsTests(TestCase):
         self.assertContains(detail_response, 'data-detail-photo-preview')
         self.assertContains(detail_response, 'data-photo-url="/media/barang/kamera-parent.jpg"')
 
+    def test_api_dan_katalog_peminjaman_menampilkan_semua_foto_galeri(self):
+        inventaris = InventarisBarang.objects.create(
+            nama='Kamera Galeri',
+            jumlah=1,
+            foto='barang/kamera-cover.jpg',
+        )
+        FotoInventarisBarang.objects.create(
+            inventaris=inventaris,
+            foto='barang/galeri/kamera-samping.jpg',
+        )
+        barang = Barang.objects.create(
+            inventaris=inventaris,
+            nama=inventaris.nama,
+            jumlah=1,
+            lokasi=self.lokasi,
+            kondisi='baik',
+        )
+
+        options_response = self.client.get(reverse('peminjaman:barang_options'), {'q': barang.kode_barang})
+        self.pengguna.role = 'mahasiswa'
+        self.pengguna.save(update_fields=['role'])
+        catalog_response = self.client.get(reverse('peminjaman:peminjaman_list'))
+
+        result = options_response.json()['results'][0]
+        self.assertEqual(
+            result['photo_urls'],
+            ['/media/barang/kamera-cover.jpg', '/media/barang/galeri/kamera-samping.jpg'],
+        )
+        self.assertContains(
+            catalog_response,
+            'data-product-photos="/media/barang/kamera-cover.jpg||/media/barang/galeri/kamera-samping.jpg"',
+        )
+
     def test_form_edit_menampilkan_detail_barang_terpilih_sebagai_badge(self):
         response = self.client.get(reverse('peminjaman:peminjaman_update', args=[self.peminjaman.pk]))
 
@@ -697,6 +737,18 @@ class PeminjamanMahasiswaTests(TestCase):
             jumlah=1,
             lokasi=self.lokasi,
             kondisi='baik',
+        )
+        self.barang_lain = Barang.objects.create(
+            nama='Kamera', kode_barang='LAB-011', jumlah=1,
+            lokasi=self.lokasi, kondisi='baik',
+        )
+        self.barang_tersedia_lain = Barang.objects.create(
+            nama='Kamera', kode_barang='LAB-012', jumlah=1,
+            lokasi=self.lokasi, kondisi='baik',
+        )
+        self.barang_rusak = Barang.objects.create(
+            nama='Kamera', kode_barang='LAB-013', jumlah=1,
+            lokasi=self.lokasi, kondisi='rusak_ringan',
         )
 
     def test_mahasiswa_create_peminjaman_otomatis_diajukan(self):
@@ -989,6 +1041,10 @@ class PeminjamanMahasiswaTests(TestCase):
         self.assertContains(response, '<option value="selesai">Selesai</option>', html=True)
 
     def test_admin_bulk_status_selesai_memetakan_status_berdasarkan_status_sebelumnya(self):
+        admin_session = self.client.session
+        admin_session['pengguna_id'] = Pengguna.objects.get(nim_nik='ADM-PJM').pk
+        admin_session.save()
+
         dipinjam = PeminjamanAlat.objects.create(
             barang=self.barang_lain,
             nama_peminjam='Status Dipinjam',
@@ -1025,6 +1081,10 @@ class PeminjamanMahasiswaTests(TestCase):
         self.assertEqual(diajukan.status, 'diajukan')
 
     def test_admin_detail_status_selesai_memetakan_status_berdasarkan_status_sebelumnya(self):
+        admin_session = self.client.session
+        admin_session['pengguna_id'] = Pengguna.objects.get(nim_nik='ADM-PJM').pk
+        admin_session.save()
+
         transaksi = PeminjamanTransaksi.objects.create(
             nama_peminjam='Detail Selesai',
             tanggal_pinjam=date(2026, 7, 1),
@@ -1202,15 +1262,8 @@ class PeminjamanMahasiswaTests(TestCase):
             tanggal_kembali=date(2026, 6, 22),
             status='diajukan',
         )
-        barang_lain = Barang.objects.create(
-            nama='Laptop',
-            kode_barang='LAB-011',
-            jumlah=1,
-            lokasi=self.lokasi,
-            kondisi='baik',
-        )
         milik_orang_lain = PeminjamanAlat.objects.create(
-            barang=barang_lain,
+            barang=self.barang_lain,
             nama_peminjam='Budi',
             nim='2201003',
             no_hp='081299999999',
@@ -1226,9 +1279,7 @@ class PeminjamanMahasiswaTests(TestCase):
         self.assertContains(list_response, self.mahasiswa.nama_pengguna)
         self.assertNotContains(list_response, '081299999999')
         self.assertEqual(own_detail_response.status_code, 200)
-        self.assertEqual(other_detail_response.status_code, 200)
-        self.assertNotContains(other_detail_response, reverse('peminjaman:peminjaman_update', args=[milik_orang_lain.pk]))
-        self.assertNotContains(other_detail_response, reverse('peminjaman:peminjaman_delete', args=[milik_orang_lain.pk]))
+        self.assertEqual(other_detail_response.status_code, 404)
 
     def test_mahasiswa_melihat_tombol_edit_hapus_di_detail_pengajuan_miliknya(self):
         peminjaman = PeminjamanAlat.objects.create(
@@ -1261,9 +1312,7 @@ class PeminjamanMahasiswaTests(TestCase):
 
         response = self.client.get(reverse('peminjaman:peminjaman_detail', args=[peminjaman.pk]))
 
-        self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, reverse('peminjaman:peminjaman_update', args=[peminjaman.pk]))
-        self.assertNotContains(response, reverse('peminjaman:peminjaman_delete', args=[peminjaman.pk]))
+        self.assertEqual(response.status_code, 404)
 
     def test_mahasiswa_tidak_melihat_form_ubah_status_detail_peminjaman(self):
         peminjaman = PeminjamanAlat.objects.create(
