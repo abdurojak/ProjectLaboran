@@ -934,6 +934,9 @@ class DashboardViewTests(TestCase):
             jumlah_praktikum=1,
             total_pertemuan=3,
             status='dibayar',
+            tanggal_transfer=timezone.localdate(),
+            pic_transfer='Laboran Pembayar',
+            bukti_transfer='honor_asleb/bukti_transfer/test-dashboard.pdf',
         )
         session = self.client.session
         session['pengguna_id'] = asisten.pk
@@ -941,13 +944,10 @@ class DashboardViewTests(TestCase):
 
         response = self.client.get(reverse('dashboard:home'))
 
-        self.assertContains(response, 'Honor Bulan Ini')
-        self.assertContains(response, 'Rp 0')
         self.assertContains(response, 'Riwayat Honor Saya')
         self.assertContains(response, 'Jadwal Praktikum')
-        self.assertContains(response, 'dashboard-glass-item')
-        self.assertContains(response, '.dashboard-page .dashboard-glass-item')
         self.assertContains(response, 'Dibayar')
+        self.assertEqual(response.context['riwayat_honor_saya'][0].status, 'dibayar')
 
     def test_dashboard_asisten_lab_hanya_menampilkan_jadwal_matkul_sendiri(self):
         asisten = Pengguna.objects.create(

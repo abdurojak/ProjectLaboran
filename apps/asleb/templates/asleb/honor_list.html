@@ -246,6 +246,11 @@
                         {% if honor.bukti_transfer %}
                         <a class="mt-2 inline-flex text-sm font-bold text-brand-700 hover:text-brand-800" href="{{ honor.bukti_transfer.url }}" target="_blank" rel="noreferrer">Lihat bukti TF</a>
                         {% endif %}
+                        {% if honor.diarsipkan_pada and honor.status != 'dibayar' %}
+                        <div class="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
+                            Arsip periode, pembayaran masih menunggu bukti transfer.
+                        </div>
+                        {% endif %}
                     </div>
                     <div class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
                         <div class="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Bukti dan Aksi</div>
@@ -275,10 +280,9 @@
                 </div>
 
                 {% if honor.status != 'dibayar' and not is_asisten_lab %}
-                <form method="post" enctype="multipart/form-data" action="{% url 'asleb:honor_confirm_transfer' honor.pk %}" class="honor-transfer-card mt-4 grid gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4 md:grid-cols-[160px_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-center">
+                <form method="post" enctype="multipart/form-data" action="{% url 'asleb:honor_confirm_transfer' honor.pk %}" class="honor-transfer-card mt-4 grid gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4 md:grid-cols-[180px_minmax(0,1fr)_auto] md:items-center">
                     {% csrf_token %}
                     <input type="date" name="tanggal_transfer" value="{% now 'Y-m-d' %}" class="min-h-10 rounded-xl bg-white text-xs">
-                    <input type="text" name="pic_transfer" value="{{ current_pengguna.nama_pengguna }}" class="min-h-10 rounded-xl bg-white text-xs" placeholder="PIC transfer">
                     <input type="file" name="bukti_transfer" accept="image/*,.pdf" class="text-xs">
                     <button type="submit" class="inline-flex items-center justify-center gap-1 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700">
                         <i data-lucide="badge-check" class="h-4 w-4"></i>

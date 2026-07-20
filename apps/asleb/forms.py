@@ -1,11 +1,14 @@
 import csv
 import io
+from datetime import timedelta
+from pathlib import Path
 
 from django import forms
 from django.conf import settings
 from django.utils import timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from math import asin, cos, radians, sin, sqrt
+from PIL import Image, UnidentifiedImageError
 
 from apps.pengguna.models import Pengguna
 
@@ -90,23 +93,63 @@ class HonorAslebForm(forms.ModelForm):
         self.fields['assigned_laboran'].empty_label = 'Bagi otomatis ke laboran'
         if not self.current_pengguna or self.current_pengguna.role != 'admin':
             self.fields.pop('assigned_laboran', None)
+        # Status dibayar hanya boleh diubah melalui aksi konfirmasi transfer.
+        for field_name in ('tanggal_transfer', 'bukti_transfer', 'pic_transfer', 'status'):
+            self.fields.pop(field_name, None)
 
 
 class KonfirmasiTransferHonorForm(forms.ModelForm):
     class Meta:
         model = HonorAsleb
-        fields = ['tanggal_transfer', 'pic_transfer', 'bukti_transfer']
+        fields = ['tanggal_transfer', 'bukti_transfer']
         widgets = {
             'tanggal_transfer': forms.DateInput(attrs={'type': 'date'}),
             'bukti_transfer': forms.FileInput(attrs={'accept': 'image/*,.pdf'}),
-            'pic_transfer': forms.TextInput(attrs={'placeholder': 'Nama petugas yang melakukan transfer'}),
         }
 
     def clean_bukti_transfer(self):
         bukti_transfer = self.cleaned_data.get('bukti_transfer')
-        if not bukti_transfer and not self.instance.bukti_transfer:
+        if not bukti_transfer:
             raise forms.ValidationError('Bukti screenshot transfer wajib diupload.')
+        if bukti_transfer.size > 5 * 1024 * 1024:
+            raise forms.ValidationError('Ukuran bukti transfer maksimal 5 MB.')
+
+        extension = Path(bukti_transfer.name).suffix.lower()
+        content_type = (getattr(bukti_transfer, 'content_type', '') or '').lower()
+        if extension == '.pdf' and content_type == 'application/pdf':
+            if bukti_transfer.read(5) != b'%PDF-':
+                raise forms.ValidationError('Isi file bukti transfer bukan PDF yang valid.')
+            bukti_transfer.seek(0)
+            return bukti_transfer
+
+        if extension not in {'.jpg', '.jpeg', '.png'} or content_type not in {'image/jpeg', 'image/png'}:
+            raise forms.ValidationError('Bukti transfer hanya boleh JPG, PNG, atau PDF.')
+        try:
+            Image.open(bukti_transfer).verify()
+        except (UnidentifiedImageError, OSError, ValueError) as exc:
+            raise forms.ValidationError('Isi gambar bukti transfer tidak valid.') from exc
+        finally:
+            bukti_transfer.seek(0)
         return bukti_transfer
+
+    def clean_tanggal_transfer(self):
+        transfer_date = self.cleaned_data.get('tanggal_transfer')
+        if not transfer_date:
+            raise forms.ValidationError('Tanggal transfer wajib diisi.')
+        if transfer_date > timezone.localdate():
+            raise forms.ValidationError('Tanggal transfer tidak boleh berada di masa depan.')
+        if transfer_date < self.instance.bulan.replace(day=1):
+            raise forms.ValidationError('Tanggal transfer tidak boleh lebih awal dari bulan honor.')
+        month_start = self.instance.bulan.replace(day=1)
+        next_month = (
+            month_start.replace(year=month_start.year + 1, month=1)
+            if month_start.month == 12
+            else month_start.replace(month=month_start.month + 1)
+        )
+        month_end = next_month - timedelta(days=1)
+        if transfer_date < month_end:
+            raise forms.ValidationError('Honor hanya dapat ditransfer setelah bulan honor berakhir.')
+        return transfer_date
 
 
 class SuratHonorAslebGenerateForm(forms.Form):

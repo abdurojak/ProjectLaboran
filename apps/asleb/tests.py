@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from django.core import mail
 from django.core.management import call_command
+from django.db import IntegrityError, transaction
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -23,7 +24,7 @@ from apps.pengguna.models import PengalamanPengguna, Pengguna
 from apps.jadwal.models import JadwalPraktikum, PermintaanPerubahanJadwal
 from apps.ruangan.models import RuanganLab
 
-from .forms import AbsensiAslebForm, ENABLE_CAMERA_LOCATION_CAPTURE, get_asleb_matkul
+from .forms import AbsensiAslebForm, ENABLE_CAMERA_LOCATION_CAPTURE, HonorAslebForm, get_asleb_matkul
 from .models import (
     AbsensiAsleb,
     AbsensiMasukAsleb,
@@ -37,7 +38,7 @@ from .models import (
     PesertaPraktikum,
     TugasLaporanPraktikum,
 )
-from .views import get_praktikum_matkul_queryset
+from .views import _sync_honor_attendance, get_praktikum_matkul_queryset
 from .surat_honor import LAB_SIGNATURES, build_lab_signature, build_lampiran_page, build_styles
 
 
@@ -424,11 +425,12 @@ class AslebViewTests(TestCase):
         session['pengguna_id'] = laboran.pk
         session.save()
 
-        response = self.client.post(
-            reverse('asleb:asleb_end_membership', args=[self.asleb.pk]),
-            {'alasan_pengeluaran': 'Pelanggaran aturan laboratorium.'},
-            follow=True,
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse('asleb:asleb_end_membership', args=[self.asleb.pk]),
+                {'alasan_pengeluaran': 'Pelanggaran aturan laboratorium.'},
+                follow=True,
+            )
 
         akun_asleb.refresh_from_db()
         self.asleb.refresh_from_db()
@@ -515,7 +517,7 @@ class AslebViewTests(TestCase):
         self.assertContains(response, 'html[data-theme="dark"] .participant-modal')
         self.assertContains(response, 'participant-table-action')
         self.assertContains(response, reverse('asleb:praktikum_peserta_update', args=[peserta.pk]))
-        self.assertNotContains(response, 'href="?matkul=')
+        self.assertContains(response, 'data-matkul-switch')
 
     def test_laboran_dapat_menghapus_banyak_peserta_praktikum(self):
         peserta_pertama = PesertaPraktikum.objects.create(matkul=self.matkul, nim='0640020099', nama='Mahasiswa Satu')
@@ -940,6 +942,14 @@ class AslebViewTests(TestCase):
 
         self.assertRedirects(response, reverse('dashboard:home'))
 
+    def test_form_umum_honor_tidak_dapat_mengubah_status_pembayaran(self):
+        form = HonorAslebForm(current_pengguna=self.pengguna)
+
+        self.assertNotIn('status', form.fields)
+        self.assertNotIn('tanggal_transfer', form.fields)
+        self.assertNotIn('pic_transfer', form.fields)
+        self.assertNotIn('bukti_transfer', form.fields)
+
     def test_honor_asleb_dua_periode_masih_junior(self):
         self.create_pendaftaran_history(self.asleb.nim, 2)
 
@@ -1047,19 +1057,147 @@ class AslebViewTests(TestCase):
             total_pertemuan=3,
             status='diproses',
         )
-        bukti = SimpleUploadedFile('bukti-tf.jpg', b'bukti transfer', content_type='image/jpeg')
+        bukti = self.make_camera_photo('bukti-tf.png')
 
         response = self.client.post(reverse('asleb:honor_confirm_transfer', args=[honor.pk]), {
             'tanggal_transfer': '2026-04-30',
-            'pic_transfer': 'Lab Admin',
             'bukti_transfer': bukti,
         })
 
         self.assertRedirects(response, reverse('asleb:honor_list'))
         honor.refresh_from_db()
         self.assertEqual(honor.status, 'dibayar')
-        self.assertEqual(honor.pic_transfer, 'Lab Admin')
+        self.assertEqual(honor.pic_transfer, self.pengguna.nama_pengguna)
         self.assertTrue(honor.bukti_transfer)
+
+    def test_konfirmasi_transfer_ditolak_tanpa_bukti(self):
+        honor = HonorAsleb.objects.create(
+            asleb=self.asleb,
+            bulan=date(2026, 4, 1),
+            total_pertemuan=3,
+            status='diproses',
+        )
+
+        response = self.client.post(reverse('asleb:honor_confirm_transfer', args=[honor.pk]), {
+            'tanggal_transfer': '2026-04-30',
+        }, follow=True)
+
+        honor.refresh_from_db()
+        self.assertEqual(honor.status, 'diproses')
+        self.assertFalse(honor.bukti_transfer)
+        self.assertContains(response, 'Bukti screenshot transfer wajib diupload')
+
+    def test_konfirmasi_transfer_ditolak_sebelum_bulan_honor_berakhir(self):
+        honor = HonorAsleb.objects.create(
+            asleb=self.asleb,
+            bulan=date(2026, 7, 1),
+            total_pertemuan=3,
+            status='diproses',
+        )
+
+        response = self.client.post(reverse('asleb:honor_confirm_transfer', args=[honor.pk]), {
+            'tanggal_transfer': '2026-07-15',
+            'bukti_transfer': self.make_camera_photo('bukti-terlalu-awal.png'),
+        }, follow=True)
+
+        honor.refresh_from_db()
+        self.assertEqual(honor.status, 'diproses')
+        self.assertContains(response, 'Honor hanya dapat ditransfer setelah bulan honor berakhir')
+
+    def test_konfirmasi_transfer_tidak_dapat_diulang(self):
+        honor = HonorAsleb.objects.create(
+            asleb=self.asleb,
+            bulan=date(2026, 4, 1),
+            total_pertemuan=3,
+            status='diproses',
+        )
+        first_proof = self.make_camera_photo('bukti-pertama.png')
+        self.client.post(reverse('asleb:honor_confirm_transfer', args=[honor.pk]), {
+            'tanggal_transfer': '2026-04-30',
+            'bukti_transfer': first_proof,
+        })
+        honor.refresh_from_db()
+        original_name = honor.bukti_transfer.name
+
+        response = self.client.post(reverse('asleb:honor_confirm_transfer', args=[honor.pk]), {
+            'tanggal_transfer': '2026-05-01',
+            'bukti_transfer': self.make_camera_photo('bukti-kedua.png'),
+        }, follow=True)
+
+        honor.refresh_from_db()
+        self.assertEqual(honor.bukti_transfer.name, original_name)
+        self.assertEqual(honor.tanggal_transfer, date(2026, 4, 30))
+        self.assertContains(response, 'sudah dikonfirmasi dibayar')
+
+    def test_laboran_tidak_dapat_mengonfirmasi_honor_tugas_laboran_lain(self):
+        laboran_lain = Pengguna.objects.create(
+            nama_pengguna='Laboran Lain', nim_nik='LAB-LAIN-HONOR',
+            email='laboran-lain-honor@trisakti.ac.id', password='rahasia123',
+            no_hp='081200000022', alamat='Jakarta', fakultas='Teknologi Industri',
+            prodi='Informatika', gender='laki_laki', role='laboran', is_verified=True,
+        )
+        honor = HonorAsleb.objects.create(
+            asleb=self.asleb,
+            bulan=date(2026, 4, 1),
+            total_pertemuan=3,
+            status='diproses',
+            assigned_laboran=laboran_lain,
+        )
+
+        response = self.client.post(reverse('asleb:honor_confirm_transfer', args=[honor.pk]), {
+            'tanggal_transfer': '2026-04-30',
+            'bukti_transfer': self.make_camera_photo('bukti-tidak-berhak.png'),
+        }, follow=True)
+
+        honor.refresh_from_db()
+        self.assertEqual(honor.status, 'diproses')
+        self.assertFalse(honor.bukti_transfer)
+        self.assertContains(response, 'bukan milik akun laboran Anda')
+
+    def test_honor_asleb_hanya_satu_record_per_bulan(self):
+        HonorAsleb.objects.create(
+            asleb=self.asleb,
+            bulan=date(2026, 4, 1),
+            total_pertemuan=3,
+        )
+
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                HonorAsleb.objects.create(
+                    asleb=self.asleb,
+                    bulan=date(2026, 4, 20),
+                    total_pertemuan=4,
+                )
+
+    def test_database_menolak_status_dibayar_tanpa_bukti_lengkap(self):
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                HonorAsleb.objects.create(
+                    asleb=self.asleb,
+                    bulan=date(2026, 4, 1),
+                    total_pertemuan=3,
+                    status='dibayar',
+                    tanggal_transfer=date(2026, 4, 30),
+                    pic_transfer='Lab Laboran',
+                )
+
+    def test_sinkronisasi_absensi_tidak_mengubah_honor_yang_sudah_dibayar(self):
+        honor = HonorAsleb.objects.create(
+            asleb=self.asleb,
+            bulan=date(2026, 4, 1),
+            total_pertemuan=3,
+            status='dibayar',
+            tanggal_transfer=date(2026, 4, 30),
+            pic_transfer='Lab Laboran',
+            bukti_transfer='honor_asleb/bukti_transfer/bukti-final.pdf',
+        )
+
+        synced = _sync_honor_attendance(self.asleb, date(2026, 4, 1))
+
+        honor.refresh_from_db()
+        self.assertEqual(synced.pk, honor.pk)
+        self.assertEqual(honor.total_pertemuan, 3)
+        self.assertEqual(honor.status, 'dibayar')
 
     def test_ttd_kepala_laboratorium_di_lampiran_rata_kanan(self):
         lab_name = next(iter(LAB_SIGNATURES))

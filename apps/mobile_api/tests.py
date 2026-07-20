@@ -7,10 +7,19 @@ from unittest.mock import patch
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from PIL import Image
 from rest_framework.test import APIClient
 
-from apps.asleb.models import AbsensiMasukAsleb, Asleb, HonorAsleb, PengaturanAbsensiAsleb
+from apps.asleb.models import (
+    AbsensiAsleb,
+    AbsensiMasukAsleb,
+    Asleb,
+    HonorAsleb,
+    ModulPraktikum,
+    PengaturanAbsensiAsleb,
+)
+from apps.asleb.views import sync_honor_from_absensi
 from apps.inventaris.models import Barang, FotoInventarisBarang, InventarisBarang, Lokasi
 from apps.jadwal.models import JadwalPraktikum
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PeriodeAsleb, RiwayatAsleb
@@ -221,6 +230,42 @@ class MobileAbsensiApiTests(TestCase):
         )
         self.assertEqual(duplicate.status_code, 400)
         self.assertEqual(AbsensiMasukAsleb.objects.count(), 1)
+
+    @patch('apps.mobile_api.views.validate_schedule_time', return_value=(True, '', 'sudah_absen'))
+    def test_absensi_web_dan_mobile_jadwal_yang_sama_tidak_menggandakan_honor(self, _mock_time):
+        module = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=1,
+            judul='Modul Sinkronisasi',
+            file=SimpleUploadedFile(
+                'modul-sinkron.pdf',
+                b'%PDF-1.4\n%%EOF',
+                content_type='application/pdf',
+            ),
+            diunggah_oleh=self.laboran,
+        )
+        web_attendance = AbsensiAsleb.objects.create(
+            asleb=self.asleb,
+            jadwal=self.schedule,
+            modul_praktikum=module,
+            tanggal_praktikum=timezone.localdate(),
+            modul=1,
+            file_modul='absensi_asleb/modul/modul-sinkron.pdf',
+            bukti_video='absensi_asleb/video/video-sinkron.mp4',
+        )
+        sync_honor_from_absensi(web_attendance)
+
+        self.authenticate()
+        response = self.client.post(
+            reverse('mobile_api:check_in'), self.check_in_payload(), format='multipart'
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        honor = HonorAsleb.objects.get(
+            asleb=self.asleb,
+            bulan=timezone.localdate().replace(day=1),
+        )
+        self.assertEqual(honor.total_pertemuan, 1)
 
     @patch('apps.mobile_api.views.validate_schedule_time', return_value=(True, '', 'sudah_absen'))
     def test_jadwal_orang_lain_tidak_dapat_diabsen(self, _mock_time):

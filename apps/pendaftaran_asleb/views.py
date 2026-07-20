@@ -370,41 +370,52 @@ class PendaftaranAslebPublicCreateView(View):
         if not form.is_valid():
             return self.render_current_step(request, berkas_form=form)
 
-        level, limit = get_asleb_experience(current_pengguna.nim_nik)
-        if get_period_registration_count(current_pengguna.nim_nik) >= limit:
-            self.clear_wizard(request)
-            messages.error(
-                request,
-                f'Batas pengambilan matkul {level.title()} ({limit} matkul) untuk periode ini sudah tercapai.',
-            )
-            return redirect('pendaftaran_asleb:pendaftaran_success')
-
         signature_file = decode_signature_data(form.cleaned_data.get('signature_data'))
         with default_storage.open(wizard['transkrip_path'], 'rb') as transkrip_file:
             transkrip_content = ContentFile(transkrip_file.read(), name=wizard.get('transkrip_name') or 'transkrip.pdf')
         cv_content = ContentFile(build_cv_pdf(current_pengguna), name=f'cv-{current_pengguna.nim_nik}.pdf')
 
-        pendaftaran = PendaftaranAsleb(
-            nama=form.cleaned_data['nama'],
-            nim=form.cleaned_data['nim'],
-            no_hp=form.cleaned_data['no_hp'],
-            email=form.cleaned_data.get('email', ''),
-            program_studi=form.cleaned_data['program_studi'],
-            semester=form.cleaned_data['semester'],
-            matkul=matkul,
-            periode=get_current_period(),
-            cv=cv_content,
-            transkrip=transkrip_content,
-            tanda_tangan=signature_file,
-            metode_rekening=form.cleaned_data['metode_rekening'],
-            rekening=form.cleaned_data['rekening'],
-            nama_pemilik_rekening=form.cleaned_data['nama_pemilik_rekening'],
-            nilai_transkrip=wizard['nilai_transkrip'],
-            skor_nilai=PendaftaranAsleb.grade_to_score(wizard['nilai_transkrip']),
-            alasan=form.cleaned_data.get('alasan', ''),
-            status='diajukan',
-        )
-        pendaftaran.save()
+        period = get_current_period()
+        with transaction.atomic():
+            # Mengunci akun membuat pemeriksaan limit aman dari klik/request paralel.
+            locked_pengguna = Pengguna.objects.select_for_update().get(pk=current_pengguna.pk)
+            level, limit = get_asleb_experience(locked_pengguna.nim_nik)
+            active_registrations = PendaftaranAsleb.objects.filter(
+                nim=locked_pengguna.nim_nik,
+                periode=period,
+            ).exclude(status='ditolak')
+            if active_registrations.count() >= limit:
+                self.clear_wizard(request)
+                messages.error(
+                    request,
+                    f'Batas pengambilan matkul {level.title()} ({limit} matkul) untuk periode ini sudah tercapai.',
+                )
+                return redirect('pendaftaran_asleb:pendaftaran_success')
+            if active_registrations.filter(matkul=matkul).exists():
+                self.clear_wizard(request)
+                messages.error(request, 'Matkul ini sudah Anda ambil pada periode sekarang.')
+                return redirect('pendaftaran_asleb:pendaftaran_success')
+
+            PendaftaranAsleb.objects.create(
+                nama=form.cleaned_data['nama'],
+                nim=form.cleaned_data['nim'],
+                no_hp=form.cleaned_data['no_hp'],
+                email=form.cleaned_data.get('email', ''),
+                program_studi=form.cleaned_data['program_studi'],
+                semester=form.cleaned_data['semester'],
+                matkul=matkul,
+                periode=period,
+                cv=cv_content,
+                transkrip=transkrip_content,
+                tanda_tangan=signature_file,
+                metode_rekening=form.cleaned_data['metode_rekening'],
+                rekening=form.cleaned_data['rekening'],
+                nama_pemilik_rekening=form.cleaned_data['nama_pemilik_rekening'],
+                nilai_transkrip=wizard['nilai_transkrip'],
+                skor_nilai=PendaftaranAsleb.grade_to_score(wizard['nilai_transkrip']),
+                alasan=form.cleaned_data.get('alasan', ''),
+                status='diajukan',
+            )
         default_storage.delete(wizard['transkrip_path'])
         request.session.pop(WIZARD_SESSION_KEY, None)
         request.session.modified = True
@@ -495,13 +506,14 @@ class RekeningPendaftaranUpdateView(UpdateView):
 
 
 @require_POST
+@transaction.atomic
 def accept_pendaftaran(request, pk):
     if not require_laboran_operation(request, 'Hanya laboran yang dapat menerima pendaftaran aslab.'):
         return redirect('pendaftaran_asleb:pendaftaran_list')
-    pendaftaran = get_object_or_404(PendaftaranAsleb, pk=pk)
+    pendaftaran = get_object_or_404(PendaftaranAsleb.objects.select_for_update(), pk=pk)
     pendaftaran.status = 'diterima'
     pendaftaran.save(update_fields=['status', 'diperbarui_pada'])
-    send_pendaftaran_status_email(pendaftaran)
+    transaction.on_commit(lambda: send_pendaftaran_status_email(pendaftaran))
     transaction.on_commit(lambda: send_registration_status_update(pendaftaran))
     transaction.on_commit(lambda: send_data_refresh(
         ('laboran',), 'registration.list.updated', ['/pendaftaran-asleb/', '/'],
@@ -512,13 +524,14 @@ def accept_pendaftaran(request, pk):
 
 
 @require_POST
+@transaction.atomic
 def reject_pendaftaran(request, pk):
     if not require_laboran_operation(request, 'Hanya laboran yang dapat menolak pendaftaran aslab.'):
         return redirect('pendaftaran_asleb:pendaftaran_list')
-    pendaftaran = get_object_or_404(PendaftaranAsleb, pk=pk)
+    pendaftaran = get_object_or_404(PendaftaranAsleb.objects.select_for_update(), pk=pk)
     pendaftaran.status = 'ditolak'
     pendaftaran.save(update_fields=['status', 'diperbarui_pada'])
-    send_pendaftaran_status_email(pendaftaran)
+    transaction.on_commit(lambda: send_pendaftaran_status_email(pendaftaran))
     transaction.on_commit(lambda: send_registration_status_update(pendaftaran))
     transaction.on_commit(lambda: send_data_refresh(
         ('laboran',), 'registration.list.updated', ['/pendaftaran-asleb/', '/'],
@@ -544,8 +557,13 @@ def generate_all_accepted_asleb(request):
         messages.error(request, 'Hanya laboran yang dapat melakukan generate Data Aslab.')
         return redirect('pendaftaran_asleb:pendaftaran_list')
 
-    current_period = get_current_period()
-    registrations = PendaftaranAsleb.objects.select_for_update().select_related('matkul', 'periode').all()
+    current_period = PeriodeAsleb.objects.select_for_update().get(pk=get_current_period().pk)
+    if current_period.diakhiri_pada or current_period.selesai < timezone.localdate():
+        messages.error(request, 'Generate dibatalkan karena periode Asisten Lab sudah berakhir.')
+        return redirect('pendaftaran_asleb:pendaftaran_list')
+    registrations = PendaftaranAsleb.objects.select_for_update().select_related('matkul', 'periode').filter(
+        Q(periode=current_period) | Q(periode__isnull=True)
+    )
     registration_list = list(registrations)
     if not registration_list:
         messages.warning(request, 'Tidak ada data pendaftaran yang perlu diproses.')
