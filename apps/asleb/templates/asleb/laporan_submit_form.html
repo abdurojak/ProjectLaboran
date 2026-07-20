@@ -16,7 +16,11 @@
             {% for error in form.file_laporan.errors %}<p class="mt-2 text-sm font-bold text-rose-600">{{ error }}</p>{% endfor %}
         </div>
         <div class="rounded-3xl border border-cyan-200 bg-cyan-50/50 p-4 text-sm text-cyan-900">
+            {% if view.tugas.is_late %}
+            Tenggat sudah berakhir. Kiriman ini tetap diterima tetapi otomatis diberi status <strong>Terlambat</strong>.
+            {% else %}
             Pengumpulan ulang akan disimpan sebagai versi baru, jadi riwayat revisi tidak hilang.
+            {% endif %}
         </div>
         <div class="flex flex-wrap gap-3">
             <button class="btn-primary gap-2" type="submit"><i data-lucide="upload" class="h-4 w-4"></i>Kumpulkan</button>

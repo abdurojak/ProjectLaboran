@@ -1551,6 +1551,127 @@ class AslebViewTests(TestCase):
         self.assertIsNone(hasil.nilai)
         self.assertTrue(Notifikasi.objects.filter(pengguna=mahasiswa, source_key=f'laporan-deleted:{laporan.pk}').exists())
 
+    def test_tugas_tetap_terlihat_asisten_meski_belum_ada_kiriman(self):
+        asisten_user = Pengguna.objects.create(
+            nama_pengguna=self.asleb.nama,
+            nim_nik=self.asleb.nim,
+            email='asisten-tugas-kosong@std.trisakti.ac.id',
+            password='rahasia123',
+            role='asisten_lab',
+        )
+        self.asleb.matkul = str(self.matkul)
+        self.asleb.status = 'aktif'
+        self.asleb.save(update_fields=['matkul', 'status'])
+        tugas = TugasLaporanPraktikum.objects.create(
+            judul='Laporan yang Belum Dikumpulkan',
+            matkul=self.matkul,
+            batas_pengumpulan=timezone.now() + timedelta(days=1),
+            dibuat_oleh=asisten_user,
+        )
+        session = self.client.session
+        session['pengguna_id'] = asisten_user.pk
+        session.save()
+
+        response = self.client.get(reverse('asleb:laporan_tugas_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, tugas.judul)
+        self.assertContains(response, 'Belum ada mahasiswa yang mengumpulkan laporan')
+
+    def test_laboran_hanya_diarahkan_ke_rekap_nilai(self):
+        laboran = Pengguna.objects.create(
+            nama_pengguna='Laboran Rekap',
+            nim_nik='1000000999',
+            email='laboran-rekap@trisakti.ac.id',
+            password='rahasia123',
+            role='laboran',
+        )
+        session = self.client.session
+        session['pengguna_id'] = laboran.pk
+        session.save()
+
+        response = self.client.get(reverse('asleb:laporan_tugas_list'))
+
+        self.assertRedirects(response, reverse('asleb:praktikum_mahasiswa_list'))
+
+    def test_mahasiswa_dapat_membatalkan_semua_versi_kiriman(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Mahasiswa Batal',
+            nim_nik='0640020888',
+            email='mahasiswa-batal@std.trisakti.ac.id',
+            password='rahasia123',
+            role='mahasiswa',
+        )
+        peserta = PesertaPraktikum.objects.create(
+            matkul=self.matkul,
+            pengguna=mahasiswa,
+            nim=mahasiswa.nim_nik,
+            nama=mahasiswa.nama_pengguna,
+        )
+        tugas = TugasLaporanPraktikum.objects.create(
+            judul='Laporan untuk Dibatalkan',
+            matkul=self.matkul,
+            batas_pengumpulan=timezone.now() + timedelta(days=1),
+        )
+        laporan_1 = PengumpulanLaporanPraktikum.objects.create(
+            tugas=tugas,
+            peserta=peserta,
+            versi=1,
+            file_laporan=SimpleUploadedFile('laporan-v1.pdf', b'%PDF-1.4', content_type='application/pdf'),
+        )
+        PengumpulanLaporanPraktikum.objects.create(
+            tugas=tugas,
+            peserta=peserta,
+            versi=2,
+            file_laporan=SimpleUploadedFile('laporan-v2.pdf', b'%PDF-1.4', content_type='application/pdf'),
+        )
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+
+        response = self.client.post(reverse('asleb:laporan_cancel', args=[laporan_1.pk]))
+
+        self.assertRedirects(response, reverse('asleb:laporan_tugas_list'))
+        self.assertFalse(
+            PengumpulanLaporanPraktikum.objects.filter(tugas=tugas, peserta=peserta)
+            .exclude(status=PengumpulanLaporanPraktikum.STATUS_DIBATALKAN)
+            .exists()
+        )
+
+    def test_kiriman_setelah_tenggat_otomatis_terlambat(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Mahasiswa Terlambat',
+            nim_nik='0640020777',
+            email='mahasiswa-terlambat@std.trisakti.ac.id',
+            password='rahasia123',
+            role='mahasiswa',
+        )
+        peserta = PesertaPraktikum.objects.create(
+            matkul=self.matkul,
+            pengguna=mahasiswa,
+            nim=mahasiswa.nim_nik,
+            nama=mahasiswa.nama_pengguna,
+        )
+        tugas = TugasLaporanPraktikum.objects.create(
+            judul='Laporan Terlambat',
+            matkul=self.matkul,
+            mulai_pengumpulan=timezone.now() - timedelta(days=2),
+            batas_pengumpulan=timezone.now() - timedelta(days=1),
+            izinkan_terlambat=False,
+        )
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+
+        response = self.client.post(
+            reverse('asleb:laporan_submit', args=[tugas.pk]),
+            {'file_laporan': SimpleUploadedFile('terlambat.pdf', b'%PDF-1.4', content_type='application/pdf')},
+        )
+
+        self.assertRedirects(response, reverse('asleb:laporan_tugas_list'))
+        laporan = PengumpulanLaporanPraktikum.objects.get(tugas=tugas, peserta=peserta)
+        self.assertEqual(laporan.status, PengumpulanLaporanPraktikum.STATUS_TERLAMBAT)
+
     def create_active_schedule(self):
         return JadwalPraktikum.objects.create(
             mata_kuliah=str(self.matkul),

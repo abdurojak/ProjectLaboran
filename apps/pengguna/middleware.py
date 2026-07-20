@@ -9,6 +9,7 @@ class PenggunaLoginRequiredMiddleware:
     MAHASISWA_ALLOWED_ASLEB_URLS = {
         'laporan_tugas_list',
         'laporan_submit',
+        'laporan_cancel',
         'laporan_preview',
         'laporan_preview_file',
         'laporan_download',
@@ -33,6 +34,7 @@ class PenggunaLoginRequiredMiddleware:
         'laporan_tugas_list',
         'laporan_tugas_create',
         'laporan_submit',
+        'laporan_cancel',
         'laporan_review',
         'laporan_preview',
         'laporan_preview_file',
