@@ -249,16 +249,10 @@ def sync_expired_asleb_periods(value=None):
     expired_honor_qs = HonorAsleb.objects.filter(asleb__nim__in=expired_nims).exclude(status='dibayar')
     for honor in expired_honor_qs:
         changed_fields = []
-        if honor.status != 'dibayar':
-            honor.status = 'dibayar'
-            changed_fields.append('status')
-        if not honor.tanggal_transfer:
-            honor.tanggal_transfer = today
-            changed_fields.append('tanggal_transfer')
-        if not honor.pic_transfer:
-            honor.pic_transfer = 'Arsip Otomatis Periode'
-            changed_fields.append('pic_transfer')
-        note = 'Diarsipkan otomatis saat periode Asisten Lab berakhir.'
+        if not honor.diarsipkan_pada:
+            honor.diarsipkan_pada = timezone.now()
+            changed_fields.append('diarsipkan_pada')
+        note = 'Diarsipkan saat periode Asisten Lab berakhir; pembayaran tetap menunggu konfirmasi dan bukti transfer.'
         existing_note = (honor.keterangan or '').strip()
         if note not in existing_note:
             honor.keterangan = f'{existing_note} {note}'.strip()
@@ -314,6 +308,9 @@ def sync_expired_asleb_periods(value=None):
 @transaction.atomic
 def end_asleb_period(period, ended_by, value=None):
     today = value or timezone.localdate()
+    period = PeriodeAsleb.objects.select_for_update().get(pk=period.pk)
+    if period.diakhiri_pada:
+        return 0, 0
     period.selesai = today - timedelta(days=1)
     if period.pendaftaran_selesai >= today:
         period.pendaftaran_selesai = today - timedelta(days=1)

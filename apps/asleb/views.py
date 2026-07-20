@@ -211,7 +211,7 @@ class HonorAslebListView(HonorAccessMixin, ListView):
         status = self.request.GET.get('status', '').strip()
 
         if pengguna and pengguna.role == LABORAN_ROLE:
-            queryset = queryset.filter(assigned_laboran=pengguna, asleb__status='aktif')
+            queryset = queryset.filter(assigned_laboran=pengguna)
         elif pengguna and pengguna.role == ASISTEN_LAB_ROLE:
             queryset = queryset.filter(asleb__nim=pengguna.nim_nik, asleb__status='aktif')
         elif pengguna:
@@ -247,7 +247,7 @@ class HonorAslebListView(HonorAccessMixin, ListView):
         pengguna = getattr(self.request, 'current_pengguna', None)
         base_honor_qs = HonorAsleb.objects.all()
         if pengguna and pengguna.role == LABORAN_ROLE:
-            base_honor_qs = base_honor_qs.filter(assigned_laboran=pengguna, asleb__status='aktif')
+            base_honor_qs = base_honor_qs.filter(assigned_laboran=pengguna)
         elif pengguna and pengguna.role == ASISTEN_LAB_ROLE:
             base_honor_qs = base_honor_qs.filter(asleb__nim=pengguna.nim_nik, asleb__status='aktif')
         elif pengguna:
@@ -2122,28 +2122,37 @@ def toggle_absensi_status(request):
 
 
 @require_POST
+@transaction.atomic
 def confirm_honor_transfer(request, pk):
     pengguna = getattr(request, 'current_pengguna', None)
     if not can_manage_lab_operations(pengguna):
         messages.error(request, 'Hanya laboran yang bisa mengonfirmasi transfer honor.')
         return redirect('asleb:honor_list')
 
-    honor = get_object_or_404(HonorAsleb, pk=pk)
+    honor = get_object_or_404(HonorAsleb.objects.select_for_update(), pk=pk)
     if pengguna.role == LABORAN_ROLE and honor.assigned_laboran_id != pengguna.pk:
         messages.error(request, 'Tugas TF honor ini bukan milik akun laboran Anda.')
+        return redirect('asleb:honor_list')
+
+    if honor.status == 'dibayar':
+        messages.warning(request, 'Honor ini sudah dikonfirmasi dibayar dan tidak dapat dikonfirmasi ulang.')
         return redirect('asleb:honor_list')
 
     form = KonfirmasiTransferHonorForm(request.POST, request.FILES, instance=honor)
 
     if not form.is_valid():
-        messages.error(request, 'Konfirmasi transfer gagal. Pastikan tanggal, PIC, dan bukti transfer sudah diisi dengan benar.')
+        errors = '; '.join(
+            str(error)
+            for field_errors in form.errors.values()
+            for error in field_errors
+        )
+        messages.error(request, f'Konfirmasi transfer gagal. {errors}')
         return redirect('asleb:honor_list')
 
     honor = form.save(commit=False)
     if not honor.tanggal_transfer:
         honor.tanggal_transfer = timezone.localdate()
-    if not honor.pic_transfer:
-        honor.pic_transfer = pengguna.nama_pengguna
+    honor.pic_transfer = pengguna.nama_pengguna
     honor.status = 'dibayar'
     honor.save()
     transaction.on_commit(lambda: send_honor_update(honor, event='honor.paid'))
@@ -2240,23 +2249,7 @@ def roman_month(month):
 
 def sync_honor_from_absensi(absensi):
     bulan = absensi.tanggal_praktikum.replace(day=1)
-    total_pertemuan = get_total_honor_attendance_count(absensi.asleb, bulan)
-
-    honor, _ = HonorAsleb.objects.get_or_create(
-        asleb=absensi.asleb,
-        bulan=bulan,
-        defaults={
-            'jumlah_praktikum': 1,
-            'pic_transfer': '',
-            'status': 'diproses',
-        },
-    )
-    honor.jumlah_praktikum = max(honor.jumlah_praktikum, 1)
-    honor.total_pertemuan = total_pertemuan
-    if honor.status == 'draft':
-        honor.status = 'diproses'
-    honor.save()
-    return honor
+    return _sync_honor_attendance(absensi.asleb, bulan)
 
 
 def get_total_honor_attendance_count(asleb, bulan):
@@ -2282,20 +2275,30 @@ def get_total_honor_attendance_count(asleb, bulan):
     return web_absensi.count() + mobile_count
 
 
-def sync_honor_from_mobile_absensi(absensi_masuk):
-    bulan = absensi_masuk.tanggal_absensi.replace(day=1)
-    honor, _ = HonorAsleb.objects.get_or_create(
-        asleb=absensi_masuk.asleb,
-        bulan=bulan,
-        defaults={
-            'jumlah_praktikum': 1,
-            'pic_transfer': '',
-            'status': 'diproses',
-        },
-    )
+@transaction.atomic
+def _sync_honor_attendance(asleb, bulan):
+    # Baris Aslab selalu ada dan menjadi mutex saat rekap bulan belum terbentuk.
+    asleb = Asleb.objects.select_for_update().get(pk=asleb.pk)
+    honor = HonorAsleb.objects.select_for_update().filter(asleb=asleb, bulan=bulan).first()
+    if honor is None:
+        honor = HonorAsleb.objects.create(
+            asleb=asleb,
+            bulan=bulan,
+            jumlah_praktikum=1,
+            pic_transfer='',
+            status='diproses',
+        )
+    # Bukti transfer mengunci nominal pembayaran yang sudah diselesaikan.
+    if honor.status == 'dibayar':
+        return honor
     honor.jumlah_praktikum = max(honor.jumlah_praktikum, 1)
-    honor.total_pertemuan = get_total_honor_attendance_count(absensi_masuk.asleb, bulan)
+    honor.total_pertemuan = get_total_honor_attendance_count(asleb, bulan)
     if honor.status == 'draft':
         honor.status = 'diproses'
     honor.save()
     return honor
+
+
+def sync_honor_from_mobile_absensi(absensi_masuk):
+    bulan = absensi_masuk.tanggal_absensi.replace(day=1)
+    return _sync_honor_attendance(absensi_masuk.asleb, bulan)

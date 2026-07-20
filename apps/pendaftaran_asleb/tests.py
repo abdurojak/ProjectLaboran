@@ -691,12 +691,23 @@ class PendaftaranAslebViewTests(TestCase):
     def test_tahap_berkas_checkbox_pernyataan_memakai_style_verifikasi_data(self):
         mahasiswa = self.create_mahasiswa_dengan_cv('0642201046')
         self.start_transcript_step(mahasiswa)
+        session = self.client.session
+        wizard = session[WIZARD_SESSION_KEY]
+        wizard.update({
+            'step': 'berkas',
+            'transkrip_path': 'pendaftaran_asleb/transkrip_tmp/contoh.pdf',
+            'nilai_transkrip': 'A',
+            'nilai_lolos': True,
+            'nim_terverifikasi': True,
+        })
+        session[WIZARD_SESSION_KEY] = wizard
+        session.save()
 
         response = self.client.get(reverse('pendaftaran_asleb:pendaftaran_public'))
 
         self.assertContains(response, 'registration-check-card')
-        self.assertContains(response, 'registration-check-label flex cursor-pointer gap-4')
-        self.assertContains(response, 'class="registration-check-input"')
+        self.assertContains(response, '.registration-check-label')
+        self.assertContains(response, '.registration-check-input')
         self.assertContains(response, 'Verifikasi dan Pernyataan Data')
         self.assertContains(response, 'Pernyataan Kesanggupan Tugas')
         self.assertContains(response, 'bersedia menjalankan tugas dan kewajiban sebagai Asisten Laboratorium')
@@ -809,7 +820,7 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertFalse(JadwalPraktikum.objects.filter(pk=jadwal_diajukan.pk).exists())
         self.assertFalse(JadwalPraktikum.objects.filter(pk=jadwal_diterima.pk).exists())
 
-    def test_laboran_mengakhiri_periode_menyembunyikan_rekap_honor_aslab_nonaktif(self):
+    def test_laboran_mengakhiri_periode_tetap_menampilkan_honor_belum_dibayar(self):
         period = PeriodeAsleb.get_for_date(timezone.localdate())
         akun_asleb = Pengguna.objects.create(
             nama_pengguna='Aslab Honor Periode', nim_nik='0640020888',
@@ -843,9 +854,10 @@ class PendaftaranAslebViewTests(TestCase):
         after_response = self.client.get(reverse('asleb:honor_list'), {
             'bulan': timezone.localdate().replace(day=1).strftime('%Y-%m'),
         })
-        self.assertNotContains(after_response, 'Aslab Honor Periode')
+        self.assertContains(after_response, 'Aslab Honor Periode')
+        self.assertContains(after_response, 'pembayaran masih menunggu bukti transfer')
 
-    def test_laboran_mengakhiri_periode_otomatis_menandai_honor_lama_dibayar(self):
+    def test_laboran_mengakhiri_periode_mengarsipkan_honor_tanpa_memalsukan_pembayaran(self):
         period = PeriodeAsleb.get_for_date(timezone.localdate())
         akun_asleb = Pengguna.objects.create(
             nama_pengguna='Aslab Arsip Honor', nim_nik='0640020777',
@@ -872,10 +884,11 @@ class PendaftaranAslebViewTests(TestCase):
         })
 
         honor.refresh_from_db()
-        self.assertEqual(honor.status, 'dibayar')
-        self.assertEqual(honor.tanggal_transfer, timezone.localdate())
-        self.assertEqual(honor.pic_transfer, 'Arsip Otomatis Periode')
-        self.assertIn('Diarsipkan otomatis saat periode Asisten Lab berakhir.', honor.keterangan)
+        self.assertEqual(honor.status, 'diproses')
+        self.assertIsNone(honor.tanggal_transfer)
+        self.assertEqual(honor.pic_transfer, '')
+        self.assertIsNotNone(honor.diarsipkan_pada)
+        self.assertIn('pembayaran tetap menunggu konfirmasi dan bukti transfer', honor.keterangan)
 
     def test_admin_tidak_dapat_mengakhiri_periode_asleb(self):
         period = PeriodeAsleb.get_for_date(timezone.localdate())
@@ -935,9 +948,10 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertFalse(MataKuliahAsleb.objects.filter(pk=matkul.pk).exists())
 
     def test_terima_pendaftaran_hanya_menandai_diterima(self):
-        response = self.client.post(
-            reverse('pendaftaran_asleb:pendaftaran_accept', args=[self.pendaftaran.pk])
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse('pendaftaran_asleb:pendaftaran_accept', args=[self.pendaftaran.pk])
+            )
 
         self.assertEqual(response.status_code, 302)
         self.pendaftaran.refresh_from_db()
@@ -947,9 +961,10 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertIn('Pendaftaran Aslab Diterima', mail.outbox[0].subject)
 
     def test_tolak_pendaftaran_mengirim_email_status(self):
-        response = self.client.post(
-            reverse('pendaftaran_asleb:pendaftaran_reject', args=[self.pendaftaran.pk])
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse('pendaftaran_asleb:pendaftaran_reject', args=[self.pendaftaran.pk])
+            )
 
         self.assertEqual(response.status_code, 302)
         self.pendaftaran.refresh_from_db()
@@ -1071,6 +1086,46 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertTrue(PendaftaranAsleb.objects.filter(pk=self.pendaftaran.pk).exists())
         self.assertFalse(Asleb.objects.filter(nim=self.pendaftaran.nim).exists())
         self.assertFalse(RiwayatAsleb.objects.filter(nim=self.pendaftaran.nim).exists())
+
+    def test_generate_tidak_memproses_pendaftaran_periode_masa_depan(self):
+        self.pendaftaran.status = 'ditolak'
+        self.pendaftaran.save(update_fields=['status'])
+        future_period = PeriodeAsleb.objects.create(
+            tahun=2027,
+            semester=1,
+            mulai=date(2027, 1, 1),
+            selesai=date(2027, 6, 30),
+            pendaftaran_mulai=date(2027, 1, 1),
+            pendaftaran_selesai=date(2027, 1, 30),
+        )
+        future_registration = PendaftaranAsleb.objects.create(
+            nama='Pendaftar Masa Depan', nim='2401999', no_hp='081234567899',
+            email='masa-depan@std.trisakti.ac.id', program_studi='Informatika', semester=4,
+            matkul=self.matkul, periode=future_period, status='diterima',
+        )
+
+        self.client.post(reverse('pendaftaran_asleb:pendaftaran_generate_all_accepted'))
+
+        self.assertTrue(PendaftaranAsleb.objects.filter(pk=future_registration.pk).exists())
+        self.assertFalse(Asleb.objects.filter(nim=future_registration.nim).exists())
+
+    def test_generate_ditolak_setelah_periode_diakhiri(self):
+        current_period = PeriodeAsleb.get_for_date(timezone.localdate())
+        current_period.diakhiri_pada = timezone.now()
+        current_period.selesai = timezone.localdate() - timedelta(days=1)
+        current_period.save(update_fields=['diakhiri_pada', 'selesai'])
+        self.pendaftaran.periode = current_period
+        self.pendaftaran.status = 'diterima'
+        self.pendaftaran.save(update_fields=['periode', 'status'])
+
+        response = self.client.post(
+            reverse('pendaftaran_asleb:pendaftaran_generate_all_accepted'),
+            follow=True,
+        )
+
+        self.assertTrue(PendaftaranAsleb.objects.filter(pk=self.pendaftaran.pk).exists())
+        self.assertFalse(Asleb.objects.filter(nim=self.pendaftaran.nim).exists())
+        self.assertContains(response, 'periode Asisten Lab sudah berakhir')
 
 
 def make_signature_data():

@@ -115,11 +115,29 @@ class HonorAsleb(models.Model):
     pic_transfer = models.CharField(max_length=120, blank=True)
     keterangan = models.CharField(max_length=200, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    diarsipkan_pada = models.DateTimeField(blank=True, null=True)
     dibuat_pada = models.DateTimeField(auto_now_add=True)
     diperbarui_pada = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['-bulan', 'asleb__nama']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['asleb', 'bulan'],
+                name='unique_honor_asleb_per_bulan',
+            ),
+            models.CheckConstraint(
+                check=(
+                    ~models.Q(status='dibayar')
+                    | (
+                        models.Q(tanggal_transfer__isnull=False)
+                        & ~models.Q(pic_transfer='')
+                        & ~models.Q(bukti_transfer='')
+                    )
+                ),
+                name='paid_honor_requires_transfer_evidence',
+            ),
+        ]
         verbose_name = 'Honor Aslab'
         verbose_name_plural = 'Honor Aslab'
 
@@ -180,6 +198,7 @@ class HonorAsleb(models.Model):
         return f'{self.get_metode_transfer_display()} {self.nomor_transfer}{owner}'
 
     def save(self, *args, **kwargs):
+        self.bulan = self.bulan.replace(day=1)
         self.level = self.asleb.level_otomatis
         self.fill_transfer_from_registration()
         if not self.assigned_laboran_id:
