@@ -1,9 +1,10 @@
 from django.conf import settings
 from django.contrib.auth.hashers import check_password
 from django.db import IntegrityError, transaction
-from django.db.models import Q, Sum
+from django.db.models import Count, Q, Sum
 from django.utils import timezone
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -13,17 +14,33 @@ from apps.asleb.models import AbsensiMasukAsleb, PengaturanAbsensiAsleb
 from apps.asleb.views import sync_honor_from_mobile_absensi
 from apps.asleb.models import HonorAsleb
 from apps.core.views import bot_answer
+from apps.inventaris.models import (
+    ACTIVE_PEMINJAMAN_STATUSES,
+    Barang,
+    FotoInventarisBarang,
+    InventarisBarang,
+    Lokasi,
+)
+from apps.kalender.realtime import send_peminjaman_status_update
+from apps.peminjaman.models import PeminjamanAlat
+from apps.peminjaman.notifications import send_peminjaman_status_notification
+from apps.peminjaman.services import update_peminjaman_status
 from apps.pendaftaran_asleb.services import sync_expired_asleb_periods
 from apps.pengguna.models import Pengguna
 
+from .authentication import has_mobile_access
 from .jwt_service import create_token_pair, decode_token
+from .permissions import IsAsistenLab, IsLaboran
 from .serializers import (
     AttendanceSerializer,
     CheckInSerializer,
+    LaboranInventoryCreateSerializer,
     LoginSerializer,
     ProfileSerializer,
     RefreshSerializer,
     ScheduleSerializer,
+    absolute_file_url,
+    validate_inventory_photo,
 )
 from .services import (
     WEEKDAY_KEYS,
@@ -80,10 +97,9 @@ class LoginView(APIView):
             return api_error('Akun belum diverifikasi.', 'account_unverified', status.HTTP_403_FORBIDDEN)
         sync_expired_asleb_periods()
         pengguna.refresh_from_db(fields=['role'])
-        asleb = get_active_asleb(pengguna)
-        if pengguna.role != 'asisten_lab' or not asleb:
+        if not has_mobile_access(pengguna):
             return api_error(
-                'Akun tidak memiliki akses sebagai Asisten Lab aktif.',
+                'Aplikasi hanya dapat diakses oleh Asisten Lab aktif atau Laboran.',
                 'role_not_allowed',
                 status.HTTP_403_FORBIDDEN,
             )
@@ -101,9 +117,9 @@ class RefreshTokenView(APIView):
         serializer = RefreshSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         payload = decode_token(serializer.validated_data['refresh'], 'refresh')
-        pengguna = Pengguna.objects.filter(pk=payload['sub'], is_verified=True, role='asisten_lab').first()
-        if not pengguna or not get_active_asleb(pengguna):
-            return api_error('Akses Asisten Lab sudah tidak aktif.', 'role_not_allowed', status.HTTP_403_FORBIDDEN)
+        pengguna = Pengguna.objects.filter(pk=payload['sub'], is_verified=True).first()
+        if not pengguna or not has_mobile_access(pengguna):
+            return api_error('Akses aplikasi mobile sudah tidak aktif.', 'role_not_allowed', status.HTTP_403_FORBIDDEN)
         return Response({'tokens': create_token_pair(pengguna)})
 
 
@@ -114,6 +130,11 @@ class LogoutView(APIView):
 
 class ProfileView(APIView):
     def get(self, request):
+        if request.user.role == 'laboran':
+            return Response({
+                'user': ProfileSerializer(request.user, context={'request': request}).data,
+                'asleb': None,
+            })
         asleb = get_active_asleb(request.user)
         return Response({
             'user': ProfileSerializer(request.user, context={'request': request}).data,
@@ -128,6 +149,8 @@ class ProfileView(APIView):
 
 
 class DashboardView(APIView):
+    permission_classes = [IsAsistenLab]
+
     def get(self, request):
         asleb = get_active_asleb(request.user)
         today = timezone.localdate()
@@ -186,6 +209,8 @@ class ChatbotView(APIView):
 
 
 class ScheduleListView(APIView):
+    permission_classes = [IsAsistenLab]
+
     def get(self, request):
         asleb = get_active_asleb(request.user)
         schedules = list(get_owned_schedules(asleb))
@@ -195,6 +220,8 @@ class ScheduleListView(APIView):
 
 
 class ScheduleDetailView(APIView):
+    permission_classes = [IsAsistenLab]
+
     def get(self, request, pk):
         asleb = get_active_asleb(request.user)
         schedule = get_owned_schedules(asleb).filter(pk=pk).first()
@@ -215,6 +242,7 @@ class ScheduleDetailView(APIView):
 
 
 class CheckInView(APIView):
+    permission_classes = [IsAsistenLab]
     parser_classes = [MultiPartParser, FormParser]
 
     @transaction.atomic
@@ -259,6 +287,8 @@ class CheckInView(APIView):
 
 
 class AttendanceHistoryView(APIView):
+    permission_classes = [IsAsistenLab]
+
     def get(self, request):
         asleb = get_active_asleb(request.user)
         queryset = AbsensiMasukAsleb.objects.filter(asleb=asleb).select_related(
@@ -270,6 +300,8 @@ class AttendanceHistoryView(APIView):
 
 
 class LocationConfigView(APIView):
+    permission_classes = [IsAsistenLab]
+
     def get(self, request):
         return Response({
             'attendance_open': PengaturanAbsensiAsleb.get_solo().dibuka,
@@ -282,3 +314,154 @@ class LocationConfigView(APIView):
             'max_video_size_mb': settings.ABSENSI_MAX_VIDEO_SIZE_MB,
             'max_video_duration_seconds': settings.ABSENSI_MAX_VIDEO_DURATION_SECONDS,
         })
+
+
+def inventory_payload(request, inventory):
+    gallery = [absolute_file_url(request, item.foto) for item in inventory.galeri_foto.all()]
+    cover = absolute_file_url(request, inventory.foto)
+    photos = ([cover] if cover else []) + gallery
+    borrowed = getattr(inventory, 'jumlah_dipinjam_aktif', 0) or 0
+    return {
+        'id': inventory.pk,
+        'kode': inventory.kode_inventaris,
+        'nama': inventory.nama,
+        'jumlah': inventory.jumlah,
+        'dipinjam': borrowed,
+        'tersedia': max(inventory.jumlah - borrowed, 0),
+        'keterangan': inventory.keterangan,
+        'foto_url': cover or (gallery[0] if gallery else None),
+        'foto_urls': list(dict.fromkeys(item for item in photos if item)),
+    }
+
+
+class LaboranDashboardView(APIView):
+    permission_classes = [IsLaboran]
+
+    def get(self, request):
+        inventory = InventarisBarang.objects.aggregate(total=Sum('jumlah'))['total'] or 0
+        borrowed = PeminjamanAlat.objects.filter(status__in=ACTIVE_PEMINJAMAN_STATUSES).count()
+        pending = PeminjamanAlat.objects.filter(status='diajukan').count()
+        recent = PeminjamanAlat.objects.select_related('barang').order_by('-dibuat_pada')[:5]
+        return Response({
+            'profile': ProfileSerializer(request.user, context={'request': request}).data,
+            'summary': {
+                'total_barang': inventory,
+                'menunggu_persetujuan': pending,
+                'sedang_dipinjam': borrowed,
+                'lokasi': Lokasi.objects.count(),
+            },
+            'peminjaman_terbaru': [loan_payload(item) for item in recent],
+        })
+
+
+class LaboranLocationListView(APIView):
+    permission_classes = [IsLaboran]
+
+    def get(self, request):
+        return Response({'results': [
+            {'id': item.pk, 'kode': item.kode_lokasi, 'nama': item.nama_lokasi}
+            for item in Lokasi.objects.order_by('nama_lokasi')
+        ]})
+
+
+class LaboranInventoryListCreateView(APIView):
+    permission_classes = [IsLaboran]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get(self, request):
+        query = str(request.query_params.get('q') or '').strip()
+        queryset = InventarisBarang.objects.annotate(
+            jumlah_dipinjam_aktif=Count(
+                'detail_barang__peminjaman',
+                filter=Q(detail_barang__peminjaman__status__in=ACTIVE_PEMINJAMAN_STATUSES),
+            )
+        ).prefetch_related('galeri_foto')
+        if query:
+            queryset = queryset.filter(Q(nama__icontains=query) | Q(kode_inventaris__icontains=query))
+        return Response({'results': [inventory_payload(request, item) for item in queryset]})
+
+    @transaction.atomic
+    def post(self, request):
+        serializer = LaboranInventoryCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        gallery_files = request.FILES.getlist('foto_galeri')
+        if len(gallery_files) > 8:
+            return api_error('Foto tambahan maksimal 8 file.', 'too_many_photos')
+        try:
+            gallery_files = [validate_inventory_photo(item) for item in gallery_files]
+        except ValidationError as exc:
+            return Response({'foto_galeri': exc.detail}, status=status.HTTP_400_BAD_REQUEST)
+
+        values = serializer.validated_data
+        inventory = InventarisBarang.objects.create(
+            nama=values['nama'],
+            jumlah=values['jumlah'],
+            foto=values.get('foto'),
+            keterangan=values.get('keterangan', ''),
+        )
+        for _ in range(inventory.jumlah):
+            Barang.objects.create(
+                inventaris=inventory,
+                nama=inventory.nama,
+                jumlah=inventory.jumlah,
+                lokasi=values['lokasi'],
+                kondisi='baik',
+            )
+        for order, photo in enumerate(gallery_files, start=1):
+            FotoInventarisBarang.objects.create(inventaris=inventory, foto=photo, urutan=order)
+        inventory.jumlah_dipinjam_aktif = 0
+        return Response(inventory_payload(request, inventory), status=status.HTTP_201_CREATED)
+
+
+def loan_payload(loan):
+    return {
+        'id': loan.pk,
+        'kode': loan.kode_pinjam,
+        'barang': loan.barang.nama,
+        'kode_barang': loan.barang.kode_barang,
+        'peminjam': loan.nama_peminjam,
+        'nim': loan.nim,
+        'tanggal_pinjam': loan.tanggal_pinjam,
+        'tanggal_kembali': loan.tanggal_kembali,
+        'status': loan.status,
+        'status_display': loan.get_status_display(),
+        'catatan': loan.catatan,
+    }
+
+
+class LaboranLoanListView(APIView):
+    permission_classes = [IsLaboran]
+
+    def get(self, request):
+        requested_status = str(request.query_params.get('status') or '').strip()
+        queryset = PeminjamanAlat.objects.select_related('barang').order_by('-dibuat_pada')
+        if requested_status:
+            queryset = queryset.filter(status=requested_status)
+        return Response({'results': [loan_payload(item) for item in queryset[:200]]})
+
+
+class LaboranLoanStatusView(APIView):
+    permission_classes = [IsLaboran]
+    allowed_transitions = {
+        'diajukan': {'dipinjam'},
+        'dipinjam': {'dikembalikan', 'hilang', 'rusak'},
+        'hilang': {'digantikan'},
+        'rusak': {'digantikan'},
+    }
+
+    @transaction.atomic
+    def post(self, request, pk):
+        loan = PeminjamanAlat.objects.select_for_update().select_related('barang').filter(pk=pk).first()
+        if not loan:
+            return api_error('Peminjaman tidak ditemukan.', 'loan_not_found', status.HTTP_404_NOT_FOUND)
+        next_status = str(request.data.get('status') or '').strip()
+        if next_status not in self.allowed_transitions.get(loan.status, set()):
+            return api_error('Perubahan status peminjaman tidak diizinkan.', 'invalid_status_transition')
+        update_peminjaman_status(loan, next_status)
+        send_peminjaman_status_notification(loan)
+        transaction.on_commit(
+            lambda loan_id=loan.pk: send_peminjaman_status_update(
+                PeminjamanAlat.objects.select_related('barang').get(pk=loan_id)
+            )
+        )
+        return Response(loan_payload(loan))

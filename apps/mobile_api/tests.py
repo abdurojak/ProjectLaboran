@@ -11,9 +11,11 @@ from PIL import Image
 from rest_framework.test import APIClient
 
 from apps.asleb.models import AbsensiMasukAsleb, Asleb, HonorAsleb, PengaturanAbsensiAsleb
+from apps.inventaris.models import Barang, FotoInventarisBarang, InventarisBarang, Lokasi
 from apps.jadwal.models import JadwalPraktikum
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PeriodeAsleb, RiwayatAsleb
 from apps.pengguna.models import Pengguna
+from apps.peminjaman.models import PeminjamanAlat
 from apps.ruangan.models import RuanganLab
 
 
@@ -44,6 +46,12 @@ class MobileAbsensiApiTests(TestCase):
             password='Password123!', no_hp='081200000001', alamat='Jakarta',
             fakultas='Teknologi Industri', prodi='Informatika', gender='laki_laki',
             role='asisten_lab', is_verified=True,
+        )
+        self.laboran = Pengguna.objects.create(
+            nama_pengguna='Laboran Mobile', nim_nik='1000000099', email='laboran.mobile@trisakti.ac.id',
+            password='Password123!', no_hp='081200000099', alamat='Jakarta',
+            fakultas='Teknologi Industri', prodi='Informatika', gender='laki_laki',
+            role='laboran', is_verified=True,
         )
         self.period = PeriodeAsleb.objects.create(
             tahun=2030, semester=1, mulai=date(2030, 1, 1), selesai=date(2030, 6, 30),
@@ -78,6 +86,15 @@ class MobileAbsensiApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {response.data['tokens']['access']}")
 
+    def authenticate_laboran(self):
+        response = self.client.post(reverse('mobile_api:login'), {
+            'identifier': self.laboran.nim_nik,
+            'password': 'Password123!',
+        }, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['user']['role'], 'laboran')
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {response.data['tokens']['access']}")
+
     def check_in_payload(self, **overrides):
         payload = {
             'jadwal_id': self.schedule.pk,
@@ -86,13 +103,19 @@ class MobileAbsensiApiTests(TestCase):
         payload.update(overrides)
         return payload
 
-    def test_login_hanya_menerima_asisten_lab_aktif(self):
+    def test_login_menerima_asisten_lab_aktif_dan_laboran(self):
         response = self.client.post(reverse('mobile_api:login'), {
             'identifier': self.user.email,
             'password': 'Password123!',
         }, format='json')
         self.assertEqual(response.status_code, 200)
         self.assertIn('access', response.data['tokens'])
+
+        laboran_response = self.client.post(reverse('mobile_api:login'), {
+            'identifier': self.laboran.email,
+            'password': 'Password123!',
+        }, format='json')
+        self.assertEqual(laboran_response.status_code, 200)
 
         self.user.role = 'mahasiswa'
         self.user.save(update_fields=['role'])
@@ -101,6 +124,69 @@ class MobileAbsensiApiTests(TestCase):
             'password': 'Password123!',
         }, format='json')
         self.assertEqual(denied.status_code, 403)
+
+    def test_endpoint_mobile_dipisahkan_berdasarkan_role(self):
+        self.authenticate_laboran()
+        asleb_endpoint = self.client.get(reverse('mobile_api:schedule_list'))
+        self.assertEqual(asleb_endpoint.status_code, 403)
+
+        self.client.credentials()
+        self.authenticate()
+        laboran_endpoint = self.client.get(reverse('mobile_api:laboran_dashboard'))
+        self.assertEqual(laboran_endpoint.status_code, 403)
+
+    def test_laboran_dapat_membuat_inventaris_dengan_beberapa_foto(self):
+        location = Lokasi.objects.create(nama_lokasi='Lemari Mobile')
+        self.authenticate_laboran()
+        response = self.client.post(
+            reverse('mobile_api:laboran_inventory'),
+            {
+                'nama': 'Kamera Praktikum',
+                'jumlah': 2,
+                'lokasi_id': location.pk,
+                'keterangan': 'Perangkat dokumentasi praktikum.',
+                'foto': valid_photo('cover.jpg'),
+                'foto_galeri': [valid_photo('samping.jpg'), valid_photo('belakang.jpg')],
+            },
+            format='multipart',
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        inventory = InventarisBarang.objects.get(nama='Kamera Praktikum')
+        self.assertEqual(inventory.detail_barang.count(), 2)
+        self.assertEqual(FotoInventarisBarang.objects.filter(inventaris=inventory).count(), 2)
+        self.assertEqual(len(response.data['foto_urls']), 3)
+
+    @patch('apps.mobile_api.views.send_peminjaman_status_notification')
+    @patch('apps.mobile_api.views.send_peminjaman_status_update')
+    def test_laboran_dapat_memproses_peminjaman_dengan_transisi_aman(self, realtime, email):
+        location = Lokasi.objects.create(nama_lokasi='Rak Peminjaman')
+        inventory = InventarisBarang.objects.create(nama='Router', jumlah=1)
+        item = Barang.objects.create(
+            inventaris=inventory, nama=inventory.nama, jumlah=1, lokasi=location,
+        )
+        loan = PeminjamanAlat.objects.create(
+            barang=item, nama_peminjam='Mahasiswa', nim='0640020099', no_hp='0812',
+            tanggal_pinjam=date.today(), tanggal_kembali=date.today(), status='diajukan',
+        )
+        self.authenticate_laboran()
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse('mobile_api:laboran_loan_status', args=[loan.pk]),
+                {'status': 'dipinjam'},
+                format='json',
+            )
+        self.assertEqual(response.status_code, 200, response.data)
+        loan.refresh_from_db()
+        self.assertEqual(loan.status, 'dipinjam')
+        email.assert_called_once()
+        realtime.assert_called_once()
+
+        invalid = self.client.post(
+            reverse('mobile_api:laboran_loan_status', args=[loan.pk]),
+            {'status': 'digantikan'},
+            format='json',
+        )
+        self.assertEqual(invalid.status_code, 400)
 
     def test_daftar_jadwal_hanya_milik_asleb_login(self):
         other_room = RuanganLab.objects.create(kode='LAB-OTHER', nama='Lab Other', kapasitas=20)

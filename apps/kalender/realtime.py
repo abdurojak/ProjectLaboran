@@ -102,6 +102,20 @@ def send_role_notification(role, payload, persist=True):
     return True
 
 
+def send_data_refresh(roles, event, refresh_paths, *, related_object_id=None, title='Data diperbarui'):
+    """Broadcast a silent UI refresh after a committed database mutation."""
+    payload = {
+        'event': event,
+        'title': title,
+        'related_object_id': related_object_id,
+        'refresh_paths': refresh_paths,
+        'silent': True,
+        'auto_refresh': True,
+    }
+    for role in roles:
+        send_role_notification(role, payload, persist=False)
+
+
 def users_for_nim(nim):
     return Pengguna.objects.filter(nim_nik=nim, is_verified=True)
 
@@ -117,6 +131,7 @@ def send_registration_status_update(pendaftaran):
         'related_object_id': pendaftaran.pk,
         'related_url': reverse('dashboard:home'),
         'refresh_paths': ['/pendaftaran-asleb/', '/'],
+        'auto_refresh': True,
     }
     for pengguna in users_for_nim(pendaftaran.nim):
         send_user_notification(pengguna.pk, payload)
@@ -132,6 +147,7 @@ def send_schedule_update(jadwal, event='schedule.updated', notify_managers=False
         'related_object_id': jadwal.pk,
         'related_url': reverse('jadwal:jadwal_detail', kwargs={'pk': jadwal.pk}),
         'refresh_paths': ['/jadwal/', '/'],
+        'auto_refresh': True,
     }
     if notify_managers:
         send_role_notification('laboran', payload)
@@ -166,7 +182,8 @@ def send_schedule_change_request_update(change_request):
         'notification_type': 'diajukan',
         'related_object_id': change_request.pk,
         'related_url': reverse('jadwal:jadwal_list'),
-        'refresh_paths': [],
+        'refresh_paths': ['/jadwal/', '/'],
+        'auto_refresh': True,
         'icon': 'calendar-clock',
         'icon_class': 'bg-amber-50 text-amber-700',
     }
@@ -183,6 +200,7 @@ def send_honor_update(honor, event='honor.updated'):
         'related_object_id': honor.pk,
         'related_url': reverse('asleb:honor_list'),
         'refresh_paths': ['/asleb/honorarium/', '/'],
+        'auto_refresh': True,
     }
     for pengguna in users_for_nim(honor.asleb.nim):
         send_user_notification(pengguna.pk, payload)
@@ -198,6 +216,7 @@ def send_attendance_update(absensi):
         'related_object_id': absensi.pk,
         'related_url': reverse('asleb:absensi_list'),
         'refresh_paths': ['/asleb/absensi/', '/'],
+        'auto_refresh': True,
     }
     for pengguna in users_for_nim(absensi.asleb.nim):
         send_user_notification(pengguna.pk, payload)
@@ -213,7 +232,8 @@ def send_peminjaman_request_update(peminjaman):
         'notification_type': 'diajukan',
         'related_object_id': peminjaman.pk,
         'related_url': reverse('peminjaman:peminjaman_detail', kwargs={'pk': peminjaman.pk}),
-        'refresh_paths': [],
+        'refresh_paths': ['/peminjaman/', '/'],
+        'auto_refresh': True,
         'icon': 'clipboard-list',
         'icon_class': 'bg-amber-50 text-amber-700',
     }
@@ -228,7 +248,8 @@ def send_peminjaman_stock_update(peminjaman):
         'notification_type': 'stok',
         'related_object_id': peminjaman.barang_id,
         'related_url': reverse('peminjaman:peminjaman_list'),
-        'refresh_paths': [],
+        'refresh_paths': ['/peminjaman/', '/inventaris/', '/'],
+        'auto_refresh': True,
         'silent': True,
         'icon': 'boxes',
         'icon_class': 'bg-teal-50 text-teal-700',
@@ -259,7 +280,8 @@ def send_peminjaman_status_update(peminjaman):
         'notification_type': status_label,
         'related_object_id': peminjaman.pk,
         'related_url': reverse('peminjaman:peminjaman_detail', kwargs={'pk': peminjaman.pk}),
-        'refresh_paths': [],
+        'refresh_paths': ['/peminjaman/', '/'],
+        'auto_refresh': True,
         'icon': icon,
         'icon_class': icon_class,
     }
@@ -277,7 +299,8 @@ def send_peminjaman_rejected_update(peminjaman):
         'notification_type': 'Ditolak',
         'related_object_id': peminjaman.pk,
         'related_url': reverse('peminjaman:peminjaman_list'),
-        'refresh_paths': [],
+        'refresh_paths': ['/peminjaman/', '/'],
+        'auto_refresh': True,
         'icon': 'x-circle',
         'icon_class': 'bg-rose-50 text-rose-700',
     }

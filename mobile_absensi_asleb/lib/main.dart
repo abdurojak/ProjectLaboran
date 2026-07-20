@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'providers/attendance_provider.dart';
 import 'providers/auth_provider.dart';
+import 'providers/laboran_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_shell.dart';
 import 'services/api_service.dart';
@@ -31,6 +32,7 @@ class LabHubApp extends StatelessWidget {
           create: (_) => AuthProvider(api, storage)..restoreSession(),
         ),
         ChangeNotifierProvider(create: (_) => AttendanceProvider(api)),
+        ChangeNotifierProvider(create: (_) => LaboranProvider(api)),
       ],
       child: MaterialApp(
         title: 'LabHub Absensi',

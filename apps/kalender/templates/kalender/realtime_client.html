@@ -49,6 +49,7 @@
         let reconnectTimer = null;
         let reconnectAttempt = 0;
         let refreshTimer = null;
+        let regionRefreshInFlight = false;
         let summaryTimer = null;
         let latestSummaryId = null;
         let closedByPage = false;
@@ -144,6 +145,42 @@
                 .catch(function () {});
         }
 
+        function refreshVisibleRegions(payload) {
+            if (regionRefreshInFlight || !window.fetch || document.visibilityState !== 'visible') return;
+            const currentRegions = Array.from(document.querySelectorAll('[data-realtime-region]'));
+            if (!currentRegions.length) return;
+            regionRefreshInFlight = true;
+            fetch(window.location.href, {
+                headers: {'X-Requested-With': 'LabHub-Realtime'},
+                credentials: 'same-origin',
+                cache: 'no-store',
+            })
+                .then(function (response) {
+                    if (!response.ok) throw new Error('Pembaruan halaman belum tersedia.');
+                    return response.text();
+                })
+                .then(function (html) {
+                    const nextDocument = new DOMParser().parseFromString(html, 'text/html');
+                    let updated = 0;
+                    currentRegions.forEach(function (region) {
+                        const key = region.getAttribute('data-realtime-region');
+                        if (!key) return;
+                        const replacement = Array.from(nextDocument.querySelectorAll('[data-realtime-region]')).find(function (item) {
+                            return item.getAttribute('data-realtime-region') === key;
+                        });
+                        if (!replacement || !region.isConnected) return;
+                        region.replaceWith(document.importNode(replacement, true));
+                        updated += 1;
+                    });
+                    if (updated) {
+                        if (window.lucide) window.lucide.createIcons();
+                        document.dispatchEvent(new CustomEvent('labhub:regions-refreshed', {detail: payload}));
+                    }
+                })
+                .catch(function () {})
+                .finally(function () { regionRefreshInFlight = false; });
+        }
+
         function scheduleRefresh(payload) {
             if (!payload.auto_refresh) return;
             const paths = Array.isArray(payload.refresh_paths) ? payload.refresh_paths : [];
@@ -152,7 +189,7 @@
             });
             if (!shouldRefresh || document.visibilityState !== 'visible') return;
             window.clearTimeout(refreshTimer);
-            refreshTimer = window.setTimeout(function () { window.location.reload(); }, 900);
+            refreshTimer = window.setTimeout(function () { refreshVisibleRegions(payload); }, 350);
         }
 
         function connect() {

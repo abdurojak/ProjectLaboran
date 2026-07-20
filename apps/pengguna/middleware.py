@@ -212,6 +212,9 @@ class PenggunaLoginRequiredMiddleware:
         return True
 
     def mahasiswa_can_access(self, namespace, path, resolved, pengguna):
+        if namespace == 'barang_tertinggal':
+            return resolved.url_name in {'berita_list', 'berita_detail'}
+
         if namespace == 'pendaftaran_asleb':
             return resolved.url_name == 'rekening_update'
 

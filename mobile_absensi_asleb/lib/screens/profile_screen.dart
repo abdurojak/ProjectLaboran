@@ -13,6 +13,7 @@ class ProfileScreen extends StatelessWidget {
     final auth = context.watch<AuthProvider>();
     final attendance = context.watch<AttendanceProvider>();
     final user = auth.user;
+    final isLaboran = user?.role == 'laboran';
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -70,9 +71,9 @@ class ProfileScreen extends StatelessWidget {
                       color: AppTheme.teal.withValues(alpha: .1),
                       borderRadius: BorderRadius.circular(99),
                     ),
-                    child: const Text(
-                      'Asisten Laboratorium',
-                      style: TextStyle(
+                    child: Text(
+                      isLaboran ? 'Laboran' : 'Asisten Laboratorium',
+                      style: const TextStyle(
                         color: AppTheme.teal,
                         fontWeight: FontWeight.w900,
                       ),
@@ -98,13 +99,14 @@ class ProfileScreen extends StatelessWidget {
                     label: 'Program Studi',
                     value: user?.programStudi ?? '-',
                   ),
-                  _ProfileRow(
-                    icon: Icons.menu_book_outlined,
-                    label: 'Mata Kuliah',
-                    value: attendance.courses.isEmpty
-                        ? '-'
-                        : attendance.courses.join('\n'),
-                  ),
+                  if (!isLaboran)
+                    _ProfileRow(
+                      icon: Icons.menu_book_outlined,
+                      label: 'Mata Kuliah',
+                      value: attendance.courses.isEmpty
+                          ? '-'
+                          : attendance.courses.join('\n'),
+                    ),
                 ],
               ),
             ),

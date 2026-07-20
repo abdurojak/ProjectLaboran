@@ -8,6 +8,7 @@ from django.views.generic import CreateView, DeleteView, DetailView, ListView, U
 
 from apps.core.views import PostOnlyDeleteMixin
 from apps.core.permissions import can_manage_lab_operations
+from apps.kalender.realtime import send_data_refresh
 
 from .forms import (
     BarangForm,
@@ -17,6 +18,16 @@ from .forms import (
     PaketBarangItemFormSet,
 )
 from .models import ACTIVE_PEMINJAMAN_STATUSES, Barang, InventarisBarang, Lokasi, PaketBarang
+
+
+def schedule_inventory_refresh(object_id=None):
+    transaction.on_commit(lambda: send_data_refresh(
+        ('laboran', 'mahasiswa', 'asisten_lab'),
+        'inventory.updated',
+        ['/inventaris/', '/peminjaman/', '/'],
+        related_object_id=object_id,
+        title='Inventaris diperbarui',
+    ))
 
 
 class LaboranInventarisRequiredMixin:
@@ -157,6 +168,7 @@ class DetailBarangCreateView(LaboranInventarisRequiredMixin, CreateView):
         form.instance.jumlah = self.inventaris.jumlah
         response = super().form_valid(form)
         self.inventaris.sync_jumlah_from_detail()
+        schedule_inventory_refresh(self.inventaris.pk)
         return response
 
     def get_context_data(self, **kwargs):
@@ -173,6 +185,11 @@ class DetailBarangUpdateView(LaboranInventarisRequiredMixin, UpdateView):
     form_class = BarangForm
     template_name = 'inventaris/detail_barang_form.html'
     context_object_name = 'barang'
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        schedule_inventory_refresh(self.object.inventaris_id)
+        return response
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -194,6 +211,7 @@ class DetailBarangDeleteView(LaboranInventarisRequiredMixin, PostOnlyDeleteMixin
             response = super().form_valid(form)
             if inventaris:
                 inventaris.sync_jumlah_from_detail()
+        schedule_inventory_refresh(inventaris.pk if inventaris else None)
         return response
 
     def get_success_url(self):
@@ -267,6 +285,7 @@ class BarangCreateView(LaboranInventarisRequiredMixin, CreateView):
                     kondisi='baik',
                 )
 
+        schedule_inventory_refresh(self.object.pk)
         return response
 
 
@@ -282,6 +301,7 @@ class BarangUpdateView(LaboranInventarisRequiredMixin, UpdateView):
             response = super().form_valid(form)
             form.save_gallery(self.object)
             self.sync_detail_stock(previous_total)
+        schedule_inventory_refresh(self.object.pk)
         return response
 
     def sync_detail_stock(self, previous_total):
@@ -329,6 +349,12 @@ class BarangDeleteView(LaboranInventarisRequiredMixin, PostOnlyDeleteMixin, Dele
     template_name = 'inventaris/barang_confirm_delete.html'
     context_object_name = 'barang'
     success_url = reverse_lazy('inventaris:barang_list')
+
+    def form_valid(self, form):
+        object_id = self.object.pk
+        response = super().form_valid(form)
+        schedule_inventory_refresh(object_id)
+        return response
 
 
 class LokasiListView(LaboranInventarisRequiredMixin, ListView):

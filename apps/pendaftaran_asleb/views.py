@@ -18,7 +18,7 @@ from io import BytesIO
 import qrcode
 
 from apps.asleb.models import Asleb, HonorAsleb
-from apps.kalender.realtime import send_registration_status_update
+from apps.kalender.realtime import send_data_refresh, send_registration_status_update
 from apps.core.views import PostOnlyDeleteMixin
 from apps.core.permissions import LABORAN_ROLE, can_manage_lab_operations
 from apps.core.emails import send_branded_email
@@ -503,6 +503,10 @@ def accept_pendaftaran(request, pk):
     pendaftaran.save(update_fields=['status', 'diperbarui_pada'])
     send_pendaftaran_status_email(pendaftaran)
     transaction.on_commit(lambda: send_registration_status_update(pendaftaran))
+    transaction.on_commit(lambda: send_data_refresh(
+        ('laboran',), 'registration.list.updated', ['/pendaftaran-asleb/', '/'],
+        related_object_id=pendaftaran.pk, title='Status pendaftaran diperbarui',
+    ))
     messages.success(request, 'Pendaftaran aslab ditandai diterima. Role akan berubah setelah proses Generate berhasil.')
     return redirect('pendaftaran_asleb:pendaftaran_list')
 
@@ -516,6 +520,10 @@ def reject_pendaftaran(request, pk):
     pendaftaran.save(update_fields=['status', 'diperbarui_pada'])
     send_pendaftaran_status_email(pendaftaran)
     transaction.on_commit(lambda: send_registration_status_update(pendaftaran))
+    transaction.on_commit(lambda: send_data_refresh(
+        ('laboran',), 'registration.list.updated', ['/pendaftaran-asleb/', '/'],
+        related_object_id=pendaftaran.pk, title='Status pendaftaran diperbarui',
+    ))
     messages.warning(request, 'Pendaftaran aslab ditandai ditolak.')
     return redirect('pendaftaran_asleb:pendaftaran_list')
 
@@ -569,6 +577,10 @@ def generate_all_accepted_asleb(request):
         transaction.on_commit(lambda item=pendaftaran: send_registration_status_update(item))
 
     registrations.delete()
+    transaction.on_commit(lambda: send_data_refresh(
+        ('laboran',), 'registration.generated', ['/pendaftaran-asleb/', '/asleb/', '/'],
+        title='Data Asisten Lab berhasil digenerate',
+    ))
     messages.success(
         request,
         f'Generate selesai: {len(accepted_registrations)} pendaftar masuk Data Aslab dan '

@@ -3,13 +3,14 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
 from apps.pengguna.models import Pengguna
+from apps.kalender.models import Notifikasi
 
 from .models import BarangTertinggal
 
 
 class BarangTertinggalViewTests(TestCase):
     def setUp(self):
-        pengguna = Pengguna.objects.create(
+        self.laboran = Pengguna.objects.create(
             nama_pengguna='Laboran Barang Tertinggal',
             nim_nik='LAB-BRT',
             email='laboran-brt@trisakti.ac.id',
@@ -22,7 +23,7 @@ class BarangTertinggalViewTests(TestCase):
             role='laboran',
         )
         session = self.client.session
-        session['pengguna_id'] = pengguna.pk
+        session['pengguna_id'] = self.laboran.pk
         session.save()
         self.barang = BarangTertinggal.objects.create(
             nama_barang='Flashdisk',
@@ -72,6 +73,7 @@ class BarangTertinggalViewTests(TestCase):
                 'jenis_barang': 'Perlengkapan',
                 'jumlah_barang': 1,
                 'tanggal_ditemukan': '2026-06-23',
+                'lokasi_ditemukan': 'Lab Pemrograman meja 4',
                 'tanggal_diambil': '',
                 'nama_pemilik': '',
                 'nim_pemilik': '',
@@ -84,6 +86,69 @@ class BarangTertinggalViewTests(TestCase):
         self.assertRedirects(response, reverse('barang_tertinggal:list'))
         self.assertEqual(barang.kode_barang_tertinggal, f'BRT-260623-{barang.id:04d}')
         self.assertTrue(barang.foto)
+        self.assertEqual(barang.lokasi_ditemukan, 'Lab Pemrograman meja 4')
+
+    def test_create_menerbitkan_berita_dan_notifikasi_mahasiswa(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Mahasiswa Penerima Berita', nim_nik='06400239991',
+            email='berita@std.trisakti.ac.id', password='rahasia123', no_hp='081299991',
+            alamat='Jakarta', fakultas='Teknologi Industri', prodi='Informatika',
+            gender='laki_laki', role='mahasiswa',
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(reverse('barang_tertinggal:create'), {
+                'nama_barang': 'Kalkulator Biru',
+                'jenis_barang': 'Elektronik',
+                'jumlah_barang': 1,
+                'lokasi_ditemukan': 'Lab Rekayasa Data',
+                'tanggal_ditemukan': '2026-07-20',
+                'tanggal_diambil': '',
+                'nama_pemilik': '',
+                'nim_pemilik': '',
+                'status': 'tertinggal',
+            })
+
+        barang = BarangTertinggal.objects.get(nama_barang='Kalkulator Biru')
+        self.assertRedirects(response, reverse('barang_tertinggal:list'))
+        notification = Notifikasi.objects.get(
+            pengguna=mahasiswa,
+            source_key=f'barang-tertinggal:{barang.pk}:published',
+        )
+        self.assertIn('Kalkulator Biru', notification.judul)
+        self.assertEqual(notification.url, reverse('barang_tertinggal:berita_detail', args=[barang.pk]))
+
+    def test_mahasiswa_melihat_berita_aktif_dan_bukan_barang_diambil(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Mahasiswa Berita', nim_nik='06400239992',
+            email='berita2@std.trisakti.ac.id', password='rahasia123', no_hp='081299992',
+            alamat='Jakarta', fakultas='Teknologi Industri', prodi='Informatika',
+            gender='perempuan', role='mahasiswa',
+        )
+        sudah_diambil = BarangTertinggal.objects.create(
+            nama_barang='Barang Selesai', jenis_barang='Lainnya', jumlah_barang=1,
+            lokasi_ditemukan='Laboratorium', tanggal_ditemukan='2026-07-19', status='diambil',
+        )
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+
+        response = self.client.get(reverse('barang_tertinggal:berita_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Flashdisk')
+        self.assertNotContains(response, sudah_diambil.nama_barang)
+        detail = self.client.get(reverse('barang_tertinggal:berita_detail', args=[self.barang.pk]))
+        self.assertEqual(detail.status_code, 200)
+        self.assertContains(detail, self.barang.kode_barang_tertinggal)
+
+        dashboard = self.client.get(reverse('dashboard:home'))
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertContains(dashboard, 'Berita Barang Hilang')
+        self.assertContains(dashboard, self.barang.nama_barang)
+
+    def test_laboran_tidak_dapat_membuka_hal_berita_mahasiswa(self):
+        response = self.client.get(reverse('barang_tertinggal:berita_list'))
+        self.assertRedirects(response, reverse('dashboard:home'))
 
     def test_update_barang_tertinggal(self):
         response = self.client.post(

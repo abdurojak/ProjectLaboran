@@ -11,6 +11,7 @@ class BarangTertinggalForm(forms.ModelForm):
             'jenis_barang',
             'jumlah_barang',
             'foto',
+            'lokasi_ditemukan',
             'tanggal_ditemukan',
             'tanggal_diambil',
             'nama_pemilik',

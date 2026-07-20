@@ -2,6 +2,8 @@ import 'package:dio/dio.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../models/attendance.dart';
+import '../models/inventory_item.dart';
+import '../models/loan_item.dart';
 import '../models/schedule.dart';
 import '../models/user_profile.dart';
 import '../utils/constants.dart';
@@ -88,6 +90,8 @@ class ApiService {
 
   Future<Map<String, dynamic>> profile() => _getMap('profile/');
   Future<Map<String, dynamic>> dashboard() => _getMap('dashboard/');
+  Future<Map<String, dynamic>> laboranDashboard() =>
+      _getMap('laboran/dashboard/');
   Future<Map<String, dynamic>> locationConfig() => _getMap('config/location/');
 
   Future<List<PraktikumSchedule>> schedules() async {
@@ -109,6 +113,82 @@ class ApiService {
       final response = await dio.post('chatbot/', data: {'message': message});
       final data = Map<String, dynamic>.from(response.data as Map);
       return data['answer'] as String? ?? 'Maaf, bot belum memberi jawaban.';
+    } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> laboranLocations() async {
+    final data = await _getMap('laboran/locations/');
+    return (data['results'] as List)
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+  }
+
+  Future<List<InventoryItem>> laboranInventory() async {
+    final data = await _getMap('laboran/inventory/');
+    return (data['results'] as List)
+        .map(
+          (item) =>
+              InventoryItem.fromJson(Map<String, dynamic>.from(item as Map)),
+        )
+        .toList();
+  }
+
+  Future<InventoryItem> createLaboranInventory({
+    required String name,
+    required int quantity,
+    required int locationId,
+    required String description,
+    required List<XFile> photos,
+  }) async {
+    try {
+      final data = FormData();
+      data.fields.addAll([
+        MapEntry('nama', name),
+        MapEntry('jumlah', '$quantity'),
+        MapEntry('lokasi_id', '$locationId'),
+        MapEntry('keterangan', description),
+      ]);
+      for (var index = 0; index < photos.length; index++) {
+        final photo = photos[index];
+        final isPng = photo.name.toLowerCase().endsWith('.png');
+        data.files.add(
+          MapEntry(
+            index == 0 ? 'foto' : 'foto_galeri',
+            await MultipartFile.fromFile(
+              photo.path,
+              filename: photo.name,
+              contentType: DioMediaType('image', isPng ? 'png' : 'jpeg'),
+            ),
+          ),
+        );
+      }
+      final response = await dio.post('laboran/inventory/', data: data);
+      return InventoryItem.fromJson(
+        Map<String, dynamic>.from(response.data as Map),
+      );
+    } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
+  }
+
+  Future<List<LoanItem>> laboranLoans() async {
+    final data = await _getMap('laboran/loans/');
+    return (data['results'] as List)
+        .map(
+          (item) => LoanItem.fromJson(Map<String, dynamic>.from(item as Map)),
+        )
+        .toList();
+  }
+
+  Future<LoanItem> updateLaboranLoanStatus(int id, String status) async {
+    try {
+      final response = await dio.post(
+        'laboran/loans/$id/status/',
+        data: {'status': status},
+      );
+      return LoanItem.fromJson(Map<String, dynamic>.from(response.data as Map));
     } on DioException catch (error) {
       throw ApiException.fromDio(error);
     }

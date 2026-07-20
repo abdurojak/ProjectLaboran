@@ -16,6 +16,7 @@ class BarangTertinggal(models.Model):
     jenis_barang = models.CharField(max_length=100)
     jumlah_barang = models.PositiveIntegerField(default=1)
     foto = models.ImageField(upload_to='barang_tertinggal/', blank=True, null=True)
+    lokasi_ditemukan = models.CharField(max_length=180, blank=True)
     tanggal_ditemukan = models.DateField()
     tanggal_diambil = models.DateField(blank=True, null=True)
     nama_pemilik = models.CharField(max_length=150, blank=True)

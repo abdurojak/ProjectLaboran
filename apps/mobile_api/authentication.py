@@ -8,6 +8,15 @@ from apps.pendaftaran_asleb.services import sync_expired_asleb_periods
 from .jwt_service import decode_token
 
 
+def has_mobile_access(pengguna):
+    if pengguna.role == 'laboran':
+        return True
+    return bool(
+        pengguna.role == 'asisten_lab'
+        and Asleb.objects.filter(nim=pengguna.nim_nik, status='aktif').exists()
+    )
+
+
 class PenggunaJWTAuthentication(BaseAuthentication):
     keyword = b'bearer'
 
@@ -27,6 +36,6 @@ class PenggunaJWTAuthentication(BaseAuthentication):
             raise AuthenticationFailed('Akun tidak ditemukan atau belum diverifikasi.')
         sync_expired_asleb_periods()
         pengguna.refresh_from_db(fields=['role'])
-        if pengguna.role != 'asisten_lab' or not Asleb.objects.filter(nim=pengguna.nim_nik, status='aktif').exists():
-            raise AuthenticationFailed('Akses Asisten Lab sudah tidak aktif.')
+        if not has_mobile_access(pengguna):
+            raise AuthenticationFailed('Akun tidak memiliki akses ke aplikasi mobile LabHub.')
         return pengguna, payload

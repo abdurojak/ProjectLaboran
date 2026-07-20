@@ -12,3 +12,10 @@ class IsAsistenLab(BasePermission):
             and getattr(request.user, 'role', None) == 'asisten_lab'
             and Asleb.objects.filter(nim=request.user.nim_nik, status='aktif').exists()
         )
+
+
+class IsLaboran(BasePermission):
+    message = 'Fitur ini hanya dapat diakses oleh Laboran.'
+
+    def has_permission(self, request, view):
+        return bool(request.user and getattr(request.user, 'role', None) == 'laboran')

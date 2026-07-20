@@ -7,6 +7,7 @@ from rest_framework import serializers
 
 from apps.asleb.models import AbsensiMasukAsleb
 from apps.jadwal.models import JadwalPraktikum
+from apps.inventaris.models import Lokasi
 
 
 def absolute_file_url(request, field):
@@ -22,6 +23,37 @@ class LoginSerializer(serializers.Serializer):
 
 class RefreshSerializer(serializers.Serializer):
     refresh = serializers.CharField()
+
+
+class LaboranInventoryCreateSerializer(serializers.Serializer):
+    nama = serializers.CharField(max_length=150)
+    jumlah = serializers.IntegerField(min_value=1, max_value=1000)
+    lokasi_id = serializers.PrimaryKeyRelatedField(
+        source='lokasi', queryset=Lokasi.objects.all()
+    )
+    keterangan = serializers.CharField(required=False, allow_blank=True, max_length=3000)
+    foto = serializers.ImageField(required=False, allow_null=True)
+
+    def validate_foto(self, photo):
+        return validate_inventory_photo(photo)
+
+
+def validate_inventory_photo(photo):
+    extension = Path(photo.name).suffix.lower()
+    content_type = (getattr(photo, 'content_type', '') or '').lower()
+    allowed_extensions = {'.jpg', '.jpeg', '.png', '.webp'}
+    allowed_types = {'image/jpeg', 'image/png', 'image/webp'}
+    if extension not in allowed_extensions or content_type not in allowed_types:
+        raise serializers.ValidationError('Foto barang harus berformat JPG, PNG, atau WebP.')
+    if photo.size > 5 * 1024 * 1024:
+        raise serializers.ValidationError('Ukuran setiap foto barang maksimal 5 MB.')
+    try:
+        Image.open(photo).verify()
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise serializers.ValidationError('Isi file foto barang tidak valid.') from exc
+    finally:
+        photo.seek(0)
+    return photo
 
 
 class ProfileSerializer(serializers.Serializer):

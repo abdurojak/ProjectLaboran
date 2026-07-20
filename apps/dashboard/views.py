@@ -11,6 +11,7 @@ from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
 from apps.asleb.models import AbsensiAsleb, Asleb, HonorAsleb, HasilPraktikumMahasiswa, ModulPraktikum, PesertaPraktikum
+from apps.barang_tertinggal.models import BarangTertinggal
 from apps.inventaris.models import ACTIVE_PEMINJAMAN_STATUSES, Barang, InventarisBarang
 from apps.jadwal.models import JadwalPraktikum, PermintaanPerubahanJadwal
 from apps.jadwal.notifications import send_jadwal_status_notification
@@ -307,6 +308,11 @@ class DashboardView(TemplateView):
             context['jadwal_minggu_ini'] = jadwal_minggu_ini[:5]
             context['modul_terbaru'] = modul_tersedia.order_by('-dibuat_pada')[:5]
             context['notifikasi_terbaru'] = notifikasi_saya[:5]
+            if is_mahasiswa:
+                context['berita_barang_tertinggal'] = (
+                    BarangTertinggal.objects.exclude(status='diambil')
+                    .order_by('-tanggal_ditemukan', '-dibuat_pada')[:4]
+                )
             context['hasil_absensi_terbaru'] = hasil_absensi_saya.select_related('modul', 'peserta').order_by('-tanggal_praktikum', '-diperbarui_pada')[:5]
             menu_modules = [
                 {

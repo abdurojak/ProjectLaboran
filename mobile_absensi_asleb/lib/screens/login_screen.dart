@@ -95,7 +95,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             const SizedBox(height: 24),
                             const Text(
-                              'Absensi Asisten Lab',
+                              'LabHub Mobile',
                               style: TextStyle(
                                 fontSize: 28,
                                 height: 1.1,
@@ -105,7 +105,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             const SizedBox(height: 8),
                             const Text(
-                              'Masuk dengan akun LabHub yang sudah aktif sebagai Asisten Laboratorium.',
+                              'Masuk sebagai Asisten Lab aktif atau Laboran untuk mengakses fitur mobile.',
                               style: TextStyle(
                                 color: Color(0xFF64748B),
                                 height: 1.5,
@@ -116,12 +116,12 @@ class _LoginScreenState extends State<LoginScreen> {
                               controller: _identifier,
                               textInputAction: TextInputAction.next,
                               decoration: const InputDecoration(
-                                labelText: 'NIM atau email',
+                                labelText: 'NIM, NIK, atau email',
                                 prefixIcon: Icon(Icons.badge_outlined),
                               ),
                               validator: (value) =>
                                   (value == null || value.trim().isEmpty)
-                                  ? 'NIM atau email wajib diisi.'
+                                  ? 'NIM, NIK, atau email wajib diisi.'
                                   : null,
                             ),
                             const SizedBox(height: 14),
@@ -185,7 +185,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             const SizedBox(height: 16),
                             const Center(
                               child: Text(
-                                'Khusus akun Asisten Lab aktif',
+                                'Untuk Asisten Lab aktif dan Laboran',
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w700,

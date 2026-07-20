@@ -23,7 +23,7 @@ from django.views.generic import CreateView, DeleteView, DetailView, FormView, L
 from apps.core.views import PostOnlyDeleteMixin
 from apps.core.permissions import ASISTEN_LAB_ROLE, LABORAN_ROLE, MAHASISWA_ROLE, can_manage_lab_operations
 from apps.jadwal.models import JadwalPraktikum
-from apps.kalender.realtime import send_attendance_update, send_honor_update
+from apps.kalender.realtime import send_attendance_update, send_data_refresh, send_honor_update
 from apps.pengguna.models import Pengguna
 from apps.pendaftaran_asleb.forms import PengaturanBiayaTransferForm
 from apps.pendaftaran_asleb.models import PengaturanBiayaTransfer
@@ -1201,6 +1201,11 @@ class PengumpulanLaporanPraktikumCreateView(FormView):
                 url=str(reverse_lazy('asleb:laporan_tugas_list')),
             )
         messages.success(self.request, 'Laporan berhasil dikumpulkan.')
+        transaction.on_commit(lambda: send_data_refresh(
+            ('asisten_lab', 'mahasiswa'), 'practicum.report.submitted',
+            ['/asleb/laporan-praktikum/'], related_object_id=laporan.pk,
+            title='Laporan praktikum dikumpulkan',
+        ))
         return redirect(self.success_url)
 
 
@@ -1265,6 +1270,11 @@ def cancel_laporan_praktikum(request, pk):
         request,
         'Kiriman laporan berhasil dibatalkan. Pengiriman ulang setelah tenggat otomatis ditandai terlambat.',
     )
+    transaction.on_commit(lambda: send_data_refresh(
+        ('asisten_lab', 'mahasiswa'), 'practicum.report.cancelled',
+        ['/asleb/laporan-praktikum/'], related_object_id=laporan.pk,
+        title='Kiriman laporan dibatalkan',
+    ))
     return redirect('asleb:laporan_tugas_list')
 
 
@@ -1309,6 +1319,11 @@ class ReviewLaporanPraktikumUpdateView(UpdateView):
             messages.success(self.request, 'Status laporan berhasil diperbarui dan nilai laporan otomatis masuk ke rekap nilai mahasiswa.')
         else:
             messages.success(self.request, 'Status laporan berhasil diperbarui.')
+        transaction.on_commit(lambda: send_data_refresh(
+            ('asisten_lab', 'mahasiswa', 'laboran'), 'practicum.report.reviewed',
+            ['/asleb/laporan-praktikum/', '/asleb/praktikum-mahasiswa/'],
+            related_object_id=self.object.pk, title='Penilaian laporan diperbarui',
+        ))
         return response
 
 
@@ -1389,6 +1404,11 @@ def delete_laporan_praktikum(request, pk):
         url=str(reverse_lazy('asleb:laporan_tugas_list')),
     )
     messages.success(request, f'Laporan {peserta.nama} berhasil dihapus.')
+    transaction.on_commit(lambda: send_data_refresh(
+        ('asisten_lab', 'mahasiswa', 'laboran'), 'practicum.report.deleted',
+        ['/asleb/laporan-praktikum/', '/asleb/praktikum-mahasiswa/'],
+        related_object_id=pk, title='Laporan praktikum dihapus',
+    ))
     return redirect('asleb:laporan_tugas_list')
 
 
@@ -1466,6 +1486,11 @@ class PesertaPraktikumBulkCreateView(PesertaPraktikumManageMixin, FormView):
                 created += int(was_created)
                 updated += int(not was_created)
         messages.success(self.request, f'{created} peserta ditambahkan dan {updated} peserta diperbarui.')
+        transaction.on_commit(lambda: send_data_refresh(
+            ('laboran', 'asisten_lab', 'mahasiswa'), 'practicum.participants.updated',
+            ['/asleb/praktikum-mahasiswa/', '/'], related_object_id=matkul.pk,
+            title='Daftar peserta praktikum diperbarui',
+        ))
         return redirect(f'{self.success_url}?matkul={matkul.pk}')
 
 
@@ -1478,7 +1503,13 @@ class PesertaPraktikumUpdateView(PesertaPraktikumManageMixin, UpdateView):
         account = Pengguna.objects.filter(nim_nik=form.cleaned_data['nim']).first()
         form.instance.pengguna = account
         messages.success(self.request, 'Data peserta praktikum berhasil diperbarui.')
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        transaction.on_commit(lambda: send_data_refresh(
+            ('laboran', 'asisten_lab', 'mahasiswa'), 'practicum.participants.updated',
+            ['/asleb/praktikum-mahasiswa/', '/'], related_object_id=self.object.matkul_id,
+            title='Daftar peserta praktikum diperbarui',
+        ))
+        return response
 
     def get_success_url(self):
         return f'{reverse_lazy("asleb:praktikum_mahasiswa_list")}?matkul={self.object.matkul_id}'
@@ -1506,6 +1537,11 @@ def delete_peserta_praktikum(request, pk):
     peserta = get_object_or_404(PesertaPraktikum.objects.select_related('matkul'), pk=pk)
     matkul_id = peserta.matkul_id
     result = delete_participant(peserta)
+    transaction.on_commit(lambda: send_data_refresh(
+        ('laboran', 'asisten_lab', 'mahasiswa'), 'practicum.participants.updated',
+        ['/asleb/praktikum-mahasiswa/', '/'], related_object_id=matkul_id,
+        title='Daftar peserta praktikum diperbarui',
+    ))
     if wants_json_response(request):
         return JsonResponse({
             'ok': True,
@@ -1540,6 +1576,12 @@ def bulk_delete_peserta_praktikum(request):
         result = delete_participant(peserta)
         deleted += int(result == 'deleted')
         deactivated += int(result == 'deactivated')
+    if deleted or deactivated:
+        transaction.on_commit(lambda: send_data_refresh(
+            ('laboran', 'asisten_lab', 'mahasiswa'), 'practicum.participants.updated',
+            ['/asleb/praktikum-mahasiswa/', '/'], related_object_id=matkul_id or None,
+            title='Daftar peserta praktikum diperbarui',
+        ))
     if wants_json_response(request):
         return JsonResponse({
             'ok': bool(deleted or deactivated),
@@ -1570,6 +1612,11 @@ def delete_all_peserta_praktikum(request, matkul_pk):
         peserta_with_history = peserta_qs.filter(hasil_praktikum__isnull=False).distinct()
         peserta_with_history.update(aktif=False)
         peserta_qs.filter(hasil_praktikum__isnull=True).delete()
+    transaction.on_commit(lambda: send_data_refresh(
+        ('laboran', 'asisten_lab', 'mahasiswa'), 'practicum.participants.updated',
+        ['/asleb/praktikum-mahasiswa/', '/'], related_object_id=matkul.pk,
+        title='Daftar peserta praktikum diperbarui',
+    ))
     if wants_json_response(request):
         return JsonResponse({
             'ok': True,
@@ -1628,6 +1675,11 @@ class NilaiAbsensiMahasiswaView(PraktikumMahasiswaAccessMixin, TemplateView):
                     result.dicatat_oleh = request.current_pengguna
                     result.full_clean()
                     result.save()
+            transaction.on_commit(lambda: send_data_refresh(
+                ('laboran', 'asisten_lab', 'mahasiswa'), 'practicum.grades.updated',
+                ['/asleb/praktikum-mahasiswa/', '/'], related_object_id=self.matkul.pk,
+                title='Nilai dan absensi mahasiswa diperbarui',
+            ))
             messages.success(request, f'Nilai dan absensi {len(rows)} mahasiswa berhasil disimpan.')
             return redirect('asleb:praktikum_nilai', matkul_pk=self.matkul.pk, modul_pk=self.modul.pk)
         return self.render_to_response(self.get_context_data(rows=rows, tanggal_praktikum=tanggal))
