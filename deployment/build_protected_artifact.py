@@ -41,6 +41,7 @@ EXCLUDED_NAMES = {
     "test",
     "tests",
     "venv",
+    "wheelhouse",
 }
 
 

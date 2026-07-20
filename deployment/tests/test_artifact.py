@@ -371,6 +371,25 @@ class BuildPathValidationTests(unittest.TestCase):
 
 
 class BuilderIgnorePolicyTests(unittest.TestCase):
+    def test_copytree_excludes_generated_wheelhouse(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "source"
+            destination = root / "release"
+            wheelhouse = source / "wheelhouse"
+            wheelhouse.mkdir(parents=True)
+            long_wheel = (
+                "charset_normalizer-3.4.9-cp311-cp311-manylinux2014_x86_64."
+                "manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl"
+            )
+            (wheelhouse / long_wheel).write_bytes(b"wheel")
+            (source / "manage.py").write_text("application", encoding="utf-8")
+
+            shutil.copytree(source, destination, ignore=builder._ignore_source_entries)
+
+            self.assertFalse((destination / "wheelhouse").exists())
+            self.assertTrue((destination / "manage.py").is_file())
+
     def test_copytree_filters_sensitive_files_and_preserves_application_files(self):
         sensitive_names = (
             ".env.windows-backup",
