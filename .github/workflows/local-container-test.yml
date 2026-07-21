@@ -85,7 +85,8 @@ jobs:
             --env MEDIA_ROOT=/app/media \
             --env MEDIA_URL=/media/ \
             --env PORT=18000 \
-            --volume /home/admin/LabTif/Storage:/app/media:Z \
+            --volume /home/admin/LabTif/Storage:/app/media \
+            --security-opt label=disable \
             --security-opt no-new-privileges \
             --cap-drop ALL \
             "ghcr.io/abdurojak/projectlaboran:${IMAGE_TAG}"
