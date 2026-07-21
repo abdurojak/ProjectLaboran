@@ -206,13 +206,12 @@ class DashboardView(TemplateView):
             matkul_labels = []
             if is_asisten_lab:
                 matkul_labels = self.get_asisten_lab_matkul_labels(pengguna)
-                asisten_matkul_ids = list(
-                    MataKuliahAsleb.objects.filter(
-                        Q(pendaftaran__nim=pengguna.nim_nik, pendaftaran__status__in=['diterima', 'digenerate'])
-                        | Q(riwayat_asleb__nim=pengguna.nim_nik)
-                        | Q(nama__in=[label.split(' - ')[0] for label in matkul_labels])
-                    ).values_list('pk', flat=True).distinct()
-                )
+                active_label_set = set(matkul_labels)
+                asisten_matkul_ids = [
+                    matkul.pk
+                    for matkul in MataKuliahAsleb.objects.filter(aktif=True)
+                    if str(matkul) in active_label_set
+                ]
 
             allowed_labels = matkul_labels if is_asisten_lab else mahasiswa_matkul_labels
             allowed_matkul_ids = asisten_matkul_ids if is_asisten_lab else mahasiswa_matkul_ids
@@ -258,7 +257,7 @@ class DashboardView(TemplateView):
                     },
                     {
                         'label': 'Kelas Diampu',
-                        'value': len(allowed_matkul_ids),
+                        'value': len(set(matkul_labels)),
                         'note': 'Mata kuliah/kelas aktif',
                         'icon': 'presentation',
                         'tone': 'green',

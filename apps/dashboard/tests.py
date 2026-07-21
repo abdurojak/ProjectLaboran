@@ -974,6 +974,12 @@ class DashboardViewTests(TestCase):
             dosen='Anung B. Aribowo, M.Kom',
             kelas='SI-01',
         )
+        matkul_nama_sama = MataKuliahAsleb.objects.create(
+            kode='PM_DASHBOARD_KELAS_LAIN',
+            nama='Pemrograman Mobile',
+            dosen='Dosen Kelas Lain',
+            kelas='SI-02',
+        )
         PendaftaranAsleb.objects.create(
             nama=asisten.nama_pengguna,
             nim=asisten.nim_nik,
@@ -1027,6 +1033,11 @@ class DashboardViewTests(TestCase):
 
         self.assertContains(response, 'Pemrograman Mobile')
         self.assertNotContains(response, 'Kecerdasan Buatan')
+        kelas_diampu = next(
+            card for card in response.context['stats_cards']
+            if card['label'] == 'Kelas Diampu'
+        )
+        self.assertEqual(kelas_diampu['value'], 1)
 
     def test_dashboard_asisten_lab_tidak_menampilkan_pendaftaran_saat_dibuka(self):
         asisten = Pengguna.objects.create(
