@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'providers/attendance_provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/laboran_provider.dart';
+import 'providers/theme_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_shell.dart';
 import 'services/api_service.dart';
@@ -33,12 +34,17 @@ class LabHubApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(create: (_) => AttendanceProvider(api)),
         ChangeNotifierProvider(create: (_) => LaboranProvider(api)),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()..load()),
       ],
-      child: MaterialApp(
-        title: 'LabHub Absensi',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light,
-        home: const AuthGate(),
+      child: Consumer<ThemeProvider>(
+        builder: (context, theme, _) => MaterialApp(
+          title: 'LabHub',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light,
+          darkTheme: AppTheme.dark,
+          themeMode: theme.mode,
+          home: const AuthGate(),
+        ),
       ),
     );
   }

@@ -130,19 +130,22 @@ class _LaboranDashboardScreenState extends State<LaboranDashboardScreen> {
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
+                  children: [
                     Text(
                       'Akses mobile Laboran',
                       style: TextStyle(
                         fontSize: 19,
                         fontWeight: FontWeight.w900,
-                        color: AppTheme.navy,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
-                    SizedBox(height: 9),
+                    const SizedBox(height: 9),
                     Text(
                       'Gunakan tab Inventaris untuk menambah barang dan foto. Gunakan tab Peminjaman untuk menyetujui, mengonfirmasi pengembalian, atau mencatat masalah barang.',
-                      style: TextStyle(color: Color(0xFF64748B), height: 1.5),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        height: 1.5,
+                      ),
                     ),
                   ],
                 ),
@@ -186,8 +189,8 @@ class _Metric extends StatelessWidget {
           ),
           Text(
             label,
-            style: const TextStyle(
-              color: AppTheme.navy,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
               fontWeight: FontWeight.w800,
             ),
           ),

@@ -42,16 +42,20 @@ class ScheduleCard extends StatelessWidget {
                       children: [
                         Text(
                           schedule.mataKuliah,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w900,
-                            color: AppTheme.navy,
+                            color: Theme.of(context).colorScheme.onSurface,
                           ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           'Kelas ${schedule.kelas}',
-                          style: const TextStyle(color: Color(0xFF64748B)),
+                          style: TextStyle(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
+                          ),
                         ),
                       ],
                     ),
@@ -118,10 +122,10 @@ class _Info extends StatelessWidget {
           text,
           maxLines: maxLines,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w700,
-            color: Color(0xFF475569),
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
       ),

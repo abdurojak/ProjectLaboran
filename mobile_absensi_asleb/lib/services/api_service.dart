@@ -118,6 +118,29 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> adminChat() => _getMap('chat-admin/');
+
+  Future<Map<String, dynamic>> startAdminChat() async {
+    try {
+      final response = await dio.post('chat-admin/', data: {'action': 'start'});
+      return Map<String, dynamic>.from(response.data as Map);
+    } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
+  }
+
+  Future<Map<String, dynamic>> sendAdminMessage(String message) async {
+    try {
+      final response = await dio.post(
+        'chat-admin/',
+        data: {'message': message},
+      );
+      return Map<String, dynamic>.from(response.data as Map);
+    } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
+  }
+
   Future<List<Map<String, dynamic>>> laboranLocations() async {
     final data = await _getMap('laboran/locations/');
     return (data['results'] as List)

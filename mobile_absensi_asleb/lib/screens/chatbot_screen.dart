@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/attendance_provider.dart';
+import '../providers/auth_provider.dart';
 import '../services/api_exception.dart';
-import '../utils/app_theme.dart';
+import 'admin_chat_screen.dart';
 
 class ChatbotScreen extends StatefulWidget {
   const ChatbotScreen({super.key});
@@ -139,11 +140,25 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AttendanceProvider>();
+    final isAsleb = context.watch<AuthProvider>().user?.role == 'asisten_lab';
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _ensureGreeting(provider),
     );
     return Scaffold(
-      appBar: AppBar(title: const Text('Chat Bantuan')),
+      appBar: AppBar(
+        title: const Text('Chat Bantuan'),
+        actions: [
+          if (isAsleb)
+            IconButton(
+              tooltip: 'Chat Admin',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AdminChatScreen()),
+              ),
+              icon: const Icon(Icons.support_agent_rounded),
+            ),
+        ],
+      ),
       body: Column(
         children: [
           Expanded(
@@ -167,28 +182,46 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
             top: false,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: TextField(
-                      controller: controller,
-                      minLines: 1,
-                      maxLines: 4,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => sendMessage(),
-                      decoration: const InputDecoration(
-                        hintText: 'Tulis pertanyaan...',
+                  if (isAsleb) ...[
+                    OutlinedButton.icon(
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AdminChatScreen(),
+                        ),
                       ),
+                      icon: const Icon(Icons.support_agent_rounded),
+                      label: const Text('Chat Admin'),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  FilledButton(
-                    onPressed: sending ? null : sendMessage,
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size(54, 54),
-                      padding: EdgeInsets.zero,
-                    ),
-                    child: const Icon(Icons.send_rounded),
+                    const SizedBox(height: 8),
+                  ],
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: controller,
+                          minLines: 1,
+                          maxLines: 4,
+                          textInputAction: TextInputAction.send,
+                          onSubmitted: (_) => sendMessage(),
+                          decoration: const InputDecoration(
+                            hintText: 'Tulis pertanyaan...',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      FilledButton(
+                        onPressed: sending ? null : sendMessage,
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(54, 54),
+                          padding: EdgeInsets.zero,
+                        ),
+                        child: const Icon(Icons.send_rounded),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -215,8 +248,11 @@ class _MessageBubble extends StatelessWidget {
     final alignment = message.fromBot
         ? CrossAxisAlignment.start
         : CrossAxisAlignment.end;
-    final color = message.fromBot ? Colors.white : AppTheme.teal;
-    final textColor = message.fromBot ? AppTheme.navy : Colors.white;
+    final colors = Theme.of(context).colorScheme;
+    final color = message.fromBot
+        ? colors.surfaceContainerHigh
+        : colors.primary;
+    final textColor = message.fromBot ? colors.onSurface : colors.onPrimary;
     return Column(
       crossAxisAlignment: alignment,
       children: [
@@ -230,7 +266,7 @@ class _MessageBubble extends StatelessWidget {
             color: color,
             borderRadius: BorderRadius.circular(18),
             border: message.fromBot
-                ? Border.all(color: const Color(0xFFDDE8E8))
+                ? Border.all(color: colors.outlineVariant)
                 : null,
           ),
           child: Text(

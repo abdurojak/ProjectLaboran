@@ -21,6 +21,7 @@ from apps.asleb.models import (
 )
 from apps.asleb.views import sync_honor_from_absensi
 from apps.inventaris.models import Barang, FotoInventarisBarang, InventarisBarang, Lokasi
+from apps.core.models import PercakapanBantuan, PesanBantuan
 from apps.jadwal.models import JadwalPraktikum
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PeriodeAsleb, RiwayatAsleb
 from apps.pengguna.models import Pengguna
@@ -143,6 +144,31 @@ class MobileAbsensiApiTests(TestCase):
         self.authenticate()
         laboran_endpoint = self.client.get(reverse('mobile_api:laboran_dashboard'))
         self.assertEqual(laboran_endpoint.status_code, 403)
+
+    def test_asisten_lab_dapat_meneruskan_chat_ke_admin(self):
+        self.authenticate()
+
+        response = self.client.post(
+            reverse('mobile_api:chat_admin'),
+            {'message': 'Mohon bantu cek absensi saya.'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['status'], 'admin')
+        conversation = PercakapanBantuan.objects.get(pengguna=self.user)
+        self.assertTrue(
+            PesanBantuan.objects.filter(
+                percakapan=conversation,
+                pengirim='pengguna',
+                isi='Mohon bantu cek absensi saya.',
+            ).exists()
+        )
+
+        self.client.credentials()
+        self.authenticate_laboran()
+        denied = self.client.get(reverse('mobile_api:chat_admin'))
+        self.assertEqual(denied.status_code, 403)
 
     def test_dashboard_laboran_membedakan_total_barang_dan_total_unit(self):
         InventarisBarang.objects.create(nama='Router Mobile', jumlah=3)

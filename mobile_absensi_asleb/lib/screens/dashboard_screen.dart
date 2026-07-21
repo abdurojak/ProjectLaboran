@@ -120,12 +120,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   const SizedBox(height: 24),
                   _HonorSummaryCard(honor: state.honor),
                   const SizedBox(height: 24),
-                  const Text(
+                  Text(
                     'Jadwal hari ini',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w900,
-                      color: AppTheme.navy,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -197,12 +197,13 @@ class _HonorSummaryCard extends StatelessWidget {
     final pending = honor?['total_pending'] ?? 0;
     final meetings = monthHonor['total_pertemuan'] ?? 0;
     final status = monthHonor['status'] as String? ?? 'belum_ada';
+    final colors = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colors.surface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFDDE8E8)),
+        border: Border.all(color: colors.outlineVariant),
       ),
       child: Row(
         children: [
@@ -220,18 +221,18 @@ class _HonorSummaryCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Honor Bulan Ini',
                   style: TextStyle(
-                    color: Color(0xFF64748B),
+                    color: colors.onSurfaceVariant,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   _rupiah(amount),
-                  style: const TextStyle(
-                    color: AppTheme.navy,
+                  style: TextStyle(
+                    color: colors.onSurface,
                     fontSize: 22,
                     fontWeight: FontWeight.w900,
                   ),
@@ -241,8 +242,8 @@ class _HonorSummaryCard extends StatelessWidget {
                   '$meetings pertemuan • ${status.replaceAll('_', ' ')} • pending ${_rupiah(pending)}',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF64748B),
+                  style: TextStyle(
+                    color: colors.onSurfaceVariant,
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
                   ),

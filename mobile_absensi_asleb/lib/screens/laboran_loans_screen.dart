@@ -125,17 +125,17 @@ class _LoanCard extends StatelessWidget {
                   children: [
                     Text(
                       loan.barang,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w900,
-                        color: AppTheme.navy,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 3),
                     Text(
                       '${loan.kode} • ${loan.kodeBarang}',
-                      style: const TextStyle(
-                        color: Color(0xFF64748B),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                       ),
@@ -168,7 +168,12 @@ class _LoanCard extends StatelessWidget {
             loan.peminjam,
             style: const TextStyle(fontWeight: FontWeight.w900),
           ),
-          Text(loan.nim, style: const TextStyle(color: Color(0xFF64748B))),
+          Text(
+            loan.nim,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
           const SizedBox(height: 10),
           Row(
             children: [
@@ -223,7 +228,9 @@ class _LoanCard extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 '${loan.barang} • ${loan.peminjam}',
-                style: const TextStyle(color: Color(0xFF64748B)),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
               const SizedBox(height: 16),
               ...actions.map(

@@ -107,16 +107,18 @@ class _CheckInScreenState extends State<CheckInScreen> {
                 children: [
                   Text(
                     widget.schedule.mataKuliah,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w900,
-                      color: AppTheme.navy,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                   const SizedBox(height: 7),
                   Text(
                     '${widget.schedule.hariDisplay}, ${widget.schedule.waktuMulai} • ${widget.schedule.laboratorium}',
-                    style: const TextStyle(color: Color(0xFF64748B)),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
@@ -135,9 +137,11 @@ class _CheckInScreenState extends State<CheckInScreen> {
             child: Container(
               height: 230,
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: const Color(0xFFD7E2E2)),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
               ),
               clipBehavior: Clip.antiAlias,
               child: photo == null
@@ -331,18 +335,18 @@ class _SectionTitle extends StatelessWidget {
           children: [
             Text(
               title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w900,
-                color: AppTheme.navy,
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
             const SizedBox(height: 2),
             Text(
               subtitle,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
-                color: Color(0xFF64748B),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
                 height: 1.4,
               ),
             ),

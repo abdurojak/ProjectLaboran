@@ -63,16 +63,16 @@ class _ScheduleListScreenState extends State<ScheduleListScreen> {
                         color: AppTheme.teal.withValues(alpha: .08),
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: const Row(
+                      child: Row(
                         children: [
-                          Icon(Icons.info_outline, color: AppTheme.teal),
-                          SizedBox(width: 12),
+                          const Icon(Icons.info_outline, color: AppTheme.teal),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: Text(
                               'Absensi hanya aktif pada hari dan rentang waktu jadwal.',
                               style: TextStyle(
                                 fontWeight: FontWeight.w700,
-                                color: AppTheme.navy,
+                                color: Theme.of(context).colorScheme.onSurface,
                               ),
                             ),
                           ),

@@ -15,6 +15,9 @@ from apps.asleb.models import AbsensiMasukAsleb, PengaturanAbsensiAsleb
 from apps.asleb.views import sync_honor_from_mobile_absensi
 from apps.asleb.models import HonorAsleb
 from apps.core.views import bot_answer
+from apps.core.models import PesanBantuan
+from apps.core.realtime import broadcast_help_message, broadcast_help_status
+from apps.core.views import get_active_help_conversation
 from apps.inventaris.models import (
     ACTIVE_PEMINJAMAN_STATUSES,
     Barang,
@@ -315,6 +318,62 @@ class LocationConfigView(APIView):
             'max_video_size_mb': settings.ABSENSI_MAX_VIDEO_SIZE_MB,
             'max_video_duration_seconds': settings.ABSENSI_MAX_VIDEO_DURATION_SECONDS,
         })
+
+
+def admin_chat_payload(conversation):
+    return {
+        'id': conversation.pk,
+        'status': conversation.status,
+        'status_display': conversation.get_status_display(),
+        'messages': [
+            {
+                'id': message.pk,
+                'sender': message.pengirim,
+                'sender_display': message.get_pengirim_display(),
+                'text': message.isi,
+                'created_at': timezone.localtime(message.dibuat_pada).isoformat(),
+            }
+            for message in conversation.pesan.order_by('dibuat_pada', 'pk')[:100]
+        ],
+    }
+
+
+class AslebAdminChatView(APIView):
+    permission_classes = [IsAsistenLab]
+
+    def get(self, request):
+        conversation = get_active_help_conversation(request.user)
+        return Response(admin_chat_payload(conversation))
+
+    @transaction.atomic
+    def post(self, request):
+        conversation = get_active_help_conversation(request.user)
+        content = str(request.data.get('message') or '').strip()[:1000]
+        action = str(request.data.get('action') or '').strip()
+        if not content and action != 'start':
+            return api_error('Tulis pesan untuk admin terlebih dahulu.', 'message_required')
+
+        if conversation.status == 'bot':
+            conversation.status = 'admin'
+            conversation.save(update_fields=['status', 'diperbarui_pada'])
+            broadcast_help_status(conversation)
+            notice = PesanBantuan.objects.create(
+                percakapan=conversation,
+                pengirim='bot',
+                isi='Percakapan diteruskan ke admin. Silakan tunggu balasan di halaman ini.',
+            )
+            broadcast_help_message(notice)
+
+        if content:
+            message = PesanBantuan.objects.create(
+                percakapan=conversation,
+                pengirim='pengguna',
+                isi=content,
+            )
+            conversation.save(update_fields=['diperbarui_pada'])
+            broadcast_help_message(message)
+
+        return Response(admin_chat_payload(conversation))
 
 
 def inventory_payload(request, inventory):

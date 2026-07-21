@@ -5,7 +5,6 @@ import 'package:video_player/video_player.dart';
 
 import '../models/attendance.dart';
 import '../providers/attendance_provider.dart';
-import '../utils/app_theme.dart';
 import '../widgets/state_views.dart';
 import '../widgets/status_badge.dart';
 
@@ -78,10 +77,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                 Expanded(
                                   child: Text(
                                     item.mataKuliah,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontWeight: FontWeight.w900,
                                       fontSize: 16,
-                                      color: AppTheme.navy,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurface,
                                     ),
                                   ),
                                 ),
@@ -91,15 +92,21 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             const SizedBox(height: 10),
                             Text(
                               '${DateFormat('d MMM yyyy', 'id_ID').format(item.waktuMasuk.toLocal())} • ${DateFormat('HH:mm').format(item.waktuMasuk.toLocal())}',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.w700,
-                                color: Color(0xFF475569),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
                               ),
                             ),
                             const SizedBox(height: 6),
                             Text(
                               '${item.kelas} • ${item.laboratorium}',
-                              style: const TextStyle(color: Color(0xFF64748B)),
+                              style: TextStyle(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                              ),
                             ),
                           ],
                         ),
@@ -153,10 +160,10 @@ class _HistoryDetailState extends State<_HistoryDetail> {
           children: [
             Text(
               record.mataKuliah,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w900,
-                color: AppTheme.navy,
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
             const SizedBox(height: 8),
@@ -260,7 +267,12 @@ class _Data extends StatelessWidget {
       children: [
         SizedBox(
           width: 110,
-          child: Text(label, style: const TextStyle(color: Color(0xFF64748B))),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
         ),
         Expanded(
           child: Text(

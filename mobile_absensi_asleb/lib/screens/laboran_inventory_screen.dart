@@ -137,17 +137,17 @@ class _InventoryCard extends StatelessWidget {
                     item.nama,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w900,
-                      color: AppTheme.navy,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     item.kode,
-                    style: const TextStyle(
-                      color: Color(0xFF64748B),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -295,8 +295,8 @@ class _InventoryDetailScreenState extends State<_InventoryDetailScreen> {
             const SizedBox(height: 5),
             Text(
               item.kode,
-              style: const TextStyle(
-                color: Color(0xFF64748B),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -692,9 +692,12 @@ class _AddInventoryScreenState extends State<_AddInventoryScreen> {
               ),
               const SizedBox(height: 10),
             ],
-            const Text(
+            Text(
               'Foto pertama menjadi sampul. Maksimal 9 foto, masing-masing 5 MB.',
-              style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 12,
+              ),
             ),
             const SizedBox(height: 24),
             FilledButton.icon(

@@ -2,6 +2,7 @@ from django.urls import path
 
 from .views import (
     AttendanceHistoryView,
+    AslebAdminChatView,
     ChatbotView,
     CheckInView,
     DashboardView,
@@ -33,6 +34,7 @@ urlpatterns = [
     path('attendance/check-in/', CheckInView.as_view(), name='check_in'),
     path('attendance/history/', AttendanceHistoryView.as_view(), name='attendance_history'),
     path('chatbot/', ChatbotView.as_view(), name='chatbot'),
+    path('chat-admin/', AslebAdminChatView.as_view(), name='chat_admin'),
     path('config/location/', LocationConfigView.as_view(), name='location_config'),
     path('laboran/dashboard/', LaboranDashboardView.as_view(), name='laboran_dashboard'),
     path('laboran/locations/', LaboranLocationListView.as_view(), name='laboran_locations'),

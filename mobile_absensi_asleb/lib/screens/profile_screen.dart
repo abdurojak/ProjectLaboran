@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/attendance_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/theme_provider.dart';
 import '../utils/app_theme.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -47,17 +48,17 @@ class ProfileScreen extends StatelessWidget {
                   Text(
                     user?.nama ?? '-',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 21,
                       fontWeight: FontWeight.w900,
-                      color: AppTheme.navy,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                   const SizedBox(height: 5),
                   Text(
                     user?.identitas ?? '-',
-                    style: const TextStyle(
-                      color: Color(0xFF64748B),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -80,6 +81,25 @@ class ProfileScreen extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: SwitchListTile.adaptive(
+              value: context.watch<ThemeProvider>().isDark,
+              onChanged: (value) =>
+                  context.read<ThemeProvider>().setDark(value),
+              secondary: const Icon(
+                Icons.dark_mode_outlined,
+                color: AppTheme.teal,
+              ),
+              title: const Text(
+                'Mode Gelap',
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
+              subtitle: const Text(
+                'Warna aplikasi tersimpan otomatis di perangkat ini.',
               ),
             ),
           ),
@@ -155,8 +175,8 @@ class _ProfileRow extends StatelessWidget {
           width: 100,
           child: Text(
             label,
-            style: const TextStyle(
-              color: Color(0xFF64748B),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
               fontWeight: FontWeight.w700,
             ),
           ),

@@ -193,8 +193,8 @@ class _DetailRow extends StatelessWidget {
           width: 90,
           child: Text(
             label,
-            style: const TextStyle(
-              color: Color(0xFF64748B),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -205,9 +205,9 @@ class _DetailRow extends StatelessWidget {
               Text(
                 value ?? '-',
                 textAlign: TextAlign.right,
-                style: const TextStyle(
+                style: TextStyle(
                   fontWeight: FontWeight.w900,
-                  color: AppTheme.navy,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
         ),
