@@ -299,9 +299,21 @@ sudo -u nginx test -r /var/lib/labhub/media
 
 Django/Daphne dengan `DEBUG=False` tidak melayani static **atau** media production.
 Di dalam server block production, gunakan static dari release aktif, alias media
-persistent, dan root-owned maintenance include:
+persistent, dan halaman maintenance mandiri. Halaman ini dilayani langsung oleh
+Nginx sehingga tetap tersedia ketika Django, Daphne, atau database sedang berhenti:
 
 ```nginx
+# Isi konfigurasi ini tersedia di deployment/nginx-maintenance-page.conf.
+error_page 503 @labhub_maintenance;
+
+location @labhub_maintenance {
+    root /usr/share/nginx/html/labhub-maintenance;
+    try_files /maintenance.html =503;
+    add_header Cache-Control "no-store, max-age=0" always;
+    add_header Retry-After "60" always;
+    add_header X-Content-Type-Options "nosniff" always;
+}
+
 include /etc/nginx/labhub-maintenance.conf;
 
 location /static/ {
@@ -318,6 +330,8 @@ location /media/ {
 ```
 
 ```bash
+sudo install -d -o root -g root -m 0755 /usr/share/nginx/html/labhub-maintenance
+sudo install -o root -g root -m 0644 deployment/maintenance.html /usr/share/nginx/html/labhub-maintenance/maintenance.html
 sudo test -e /etc/nginx/labhub-maintenance.conf || sudo install -o root -g root -m 0644 /dev/null /etc/nginx/labhub-maintenance.conf
 sudo semanage fcontext -a -t httpd_sys_content_t '/var/lib/labhub/media(/.*)?'
 sudo semanage fcontext -a -t httpd_sys_content_t '/home/admin/LabTif/releases/[0-9a-f]{40}/staticfiles(/.*)?'
@@ -329,6 +343,23 @@ fi
 sudo nginx -t
 sudo systemctl reload nginx
 ```
+
+Setelah file terpasang, aktifkan maintenance untuk memastikan halaman bermerek
+LabHub tampil dan header retry terkirim. Jalankan dari host production:
+
+```bash
+printf 'return 503;\n' | sudo tee /etc/nginx/labhub-maintenance.conf >/dev/null
+sudo nginx -t
+sudo systemctl reload nginx
+curl --silent --show-error --head -H 'Host: <production-hostname>' http://127.0.0.1/
+sudo truncate -s 0 /etc/nginx/labhub-maintenance.conf
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+Respons pengujian harus berstatus `503` dengan header `Retry-After: 60`. Jangan
+menaruh halaman ini di `staticfiles` atau media persistent karena keduanya dapat
+berubah saat deployment dan tidak dijamin tersedia selama cutover.
 
 Rule fcontext static bersifat persistent untuk semua release SHA. Launcher menjalankan
 `restorecon` pada static tree setelah candidate sealed dipublish ke path final. Boolean
