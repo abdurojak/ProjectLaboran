@@ -245,6 +245,7 @@ class LocalContainerWorkflowContractTests(unittest.TestCase):
         self.assertIn("container-test.env", workflow)
         self.assertIn("--network host", workflow)
         self.assertIn("--userns keep-id", workflow)
+        self.assertIn("--restart unless-stopped", workflow)
         self.assertIn("--env PORT=18000", workflow)
         self.assertIn("--env FORCE_SCRIPT_NAME=/", workflow)
         self.assertIn("/home/admin/LabTif/Storage:/app/media:Z", workflow)
