@@ -135,6 +135,19 @@ class ApiService {
         .toList();
   }
 
+  Future<InventoryItem> laboranInventoryDetail(int id) async {
+    final data = await _getMap('laboran/inventory/$id/');
+    return InventoryItem.fromJson(data);
+  }
+
+  Future<void> deleteLaboranInventory(int id) async {
+    try {
+      await dio.delete('laboran/inventory/$id/');
+    } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
+  }
+
   Future<InventoryItem> createLaboranInventory({
     required String name,
     required int quantity,

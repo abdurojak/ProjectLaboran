@@ -8,6 +8,7 @@ class InventoryItem {
     required this.tersedia,
     required this.keterangan,
     required this.photoUrls,
+    required this.locations,
   });
 
   final int id;
@@ -18,6 +19,7 @@ class InventoryItem {
   final int tersedia;
   final String keterangan;
   final List<String> photoUrls;
+  final List<Map<String, dynamic>> locations;
 
   String? get photoUrl => photoUrls.isEmpty ? null : photoUrls.first;
 
@@ -31,6 +33,9 @@ class InventoryItem {
     keterangan: json['keterangan'] as String? ?? '',
     photoUrls: (json['foto_urls'] as List? ?? const [])
         .map((item) => item.toString())
+        .toList(),
+    locations: (json['lokasi'] as List? ?? const [])
+        .map((item) => Map<String, dynamic>.from(item as Map))
         .toList(),
   );
 }

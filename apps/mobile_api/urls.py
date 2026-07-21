@@ -8,6 +8,7 @@ from .views import (
     LocationConfigView,
     LaboranDashboardView,
     LaboranInventoryListCreateView,
+    LaboranInventoryDetailView,
     LaboranLoanListView,
     LaboranLoanStatusView,
     LaboranLocationListView,
@@ -36,6 +37,11 @@ urlpatterns = [
     path('laboran/dashboard/', LaboranDashboardView.as_view(), name='laboran_dashboard'),
     path('laboran/locations/', LaboranLocationListView.as_view(), name='laboran_locations'),
     path('laboran/inventory/', LaboranInventoryListCreateView.as_view(), name='laboran_inventory'),
+    path(
+        'laboran/inventory/<int:pk>/',
+        LaboranInventoryDetailView.as_view(),
+        name='laboran_inventory_detail',
+    ),
     path('laboran/loans/', LaboranLoanListView.as_view(), name='laboran_loans'),
     path('laboran/loans/<int:pk>/status/', LaboranLoanStatusView.as_view(), name='laboran_loan_status'),
 ]

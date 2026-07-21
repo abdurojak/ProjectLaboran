@@ -144,6 +144,17 @@ class MobileAbsensiApiTests(TestCase):
         laboran_endpoint = self.client.get(reverse('mobile_api:laboran_dashboard'))
         self.assertEqual(laboran_endpoint.status_code, 403)
 
+    def test_dashboard_laboran_membedakan_total_barang_dan_total_unit(self):
+        InventarisBarang.objects.create(nama='Router Mobile', jumlah=3)
+        InventarisBarang.objects.create(nama='Kamera Mobile', jumlah=2)
+        self.authenticate_laboran()
+
+        response = self.client.get(reverse('mobile_api:laboran_dashboard'))
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['summary']['total_barang'], 2)
+        self.assertEqual(response.data['summary']['total_unit'], 5)
+
     def test_laboran_dapat_membuat_inventaris_dengan_beberapa_foto(self):
         location = Lokasi.objects.create(nama_lokasi='Lemari Mobile')
         self.authenticate_laboran()
@@ -164,6 +175,55 @@ class MobileAbsensiApiTests(TestCase):
         self.assertEqual(inventory.detail_barang.count(), 2)
         self.assertEqual(FotoInventarisBarang.objects.filter(inventaris=inventory).count(), 2)
         self.assertEqual(len(response.data['foto_urls']), 3)
+
+    def test_laboran_dapat_melihat_detail_dan_menghapus_inventaris_tanpa_riwayat(self):
+        location = Lokasi.objects.create(nama_lokasi='Rak Detail Mobile')
+        inventory = InventarisBarang.objects.create(nama='Sensor Mobile', jumlah=1)
+        Barang.objects.create(
+            inventaris=inventory,
+            nama=inventory.nama,
+            jumlah=1,
+            lokasi=location,
+        )
+        self.authenticate_laboran()
+
+        detail_url = reverse('mobile_api:laboran_inventory_detail', args=[inventory.pk])
+        detail = self.client.get(detail_url)
+        self.assertEqual(detail.status_code, 200, detail.data)
+        self.assertEqual(detail.data['nama'], 'Sensor Mobile')
+        self.assertEqual(detail.data['lokasi'][0]['nama'], 'Rak Detail Mobile')
+
+        deleted = self.client.delete(detail_url)
+        self.assertEqual(deleted.status_code, 204, deleted.data)
+        self.assertFalse(InventarisBarang.objects.filter(pk=inventory.pk).exists())
+
+    def test_laboran_tidak_dapat_menghapus_inventaris_dengan_riwayat_peminjaman(self):
+        location = Lokasi.objects.create(nama_lokasi='Rak Riwayat Mobile')
+        inventory = InventarisBarang.objects.create(nama='Router Riwayat', jumlah=1)
+        item = Barang.objects.create(
+            inventaris=inventory,
+            nama=inventory.nama,
+            jumlah=1,
+            lokasi=location,
+        )
+        PeminjamanAlat.objects.create(
+            barang=item,
+            nama_peminjam='Mahasiswa Lama',
+            nim='0640020088',
+            no_hp='0812',
+            tanggal_pinjam=date.today(),
+            tanggal_kembali=date.today(),
+            status='dikembalikan',
+        )
+        self.authenticate_laboran()
+
+        response = self.client.delete(
+            reverse('mobile_api:laboran_inventory_detail', args=[inventory.pk])
+        )
+
+        self.assertEqual(response.status_code, 409, response.data)
+        self.assertEqual(response.data['code'], 'inventory_has_loan_history')
+        self.assertTrue(InventarisBarang.objects.filter(pk=inventory.pk).exists())
 
     @patch('apps.mobile_api.views.send_peminjaman_status_notification')
     @patch('apps.mobile_api.views.send_peminjaman_status_update')

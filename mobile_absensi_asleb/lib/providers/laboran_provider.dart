@@ -55,6 +55,28 @@ class LaboranProvider extends ChangeNotifier {
         photos: photos,
       );
       inventory = [item, ...inventory];
+      await loadDashboard();
+      return true;
+    } on ApiException catch (exception) {
+      error = exception.message;
+      return false;
+    } finally {
+      submitting = false;
+      notifyListeners();
+    }
+  }
+
+  Future<InventoryItem> loadInventoryDetail(int id) =>
+      api.laboranInventoryDetail(id);
+
+  Future<bool> deleteInventory(int id) async {
+    submitting = true;
+    error = null;
+    notifyListeners();
+    try {
+      await api.deleteLaboranInventory(id);
+      inventory = inventory.where((item) => item.id != id).toList();
+      await loadDashboard();
       return true;
     } on ApiException catch (exception) {
       error = exception.message;

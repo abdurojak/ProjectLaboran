@@ -2,6 +2,7 @@ from django.conf import settings
 from django.contrib.auth.hashers import check_password
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Q, Sum
+from django.core.exceptions import SuspiciousFileOperation
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
@@ -321,6 +322,11 @@ def inventory_payload(request, inventory):
     cover = absolute_file_url(request, inventory.foto)
     photos = ([cover] if cover else []) + gallery
     borrowed = getattr(inventory, 'jumlah_dipinjam_aktif', 0) or 0
+    locations = list(
+        inventory.detail_barang.exclude(lokasi=None)
+        .values('lokasi_id', 'lokasi__kode_lokasi', 'lokasi__nama_lokasi')
+        .distinct()
+    )
     return {
         'id': inventory.pk,
         'kode': inventory.kode_inventaris,
@@ -329,6 +335,14 @@ def inventory_payload(request, inventory):
         'dipinjam': borrowed,
         'tersedia': max(inventory.jumlah - borrowed, 0),
         'keterangan': inventory.keterangan,
+        'lokasi': [
+            {
+                'id': item['lokasi_id'],
+                'kode': item['lokasi__kode_lokasi'],
+                'nama': item['lokasi__nama_lokasi'],
+            }
+            for item in locations
+        ],
         'foto_url': cover or (gallery[0] if gallery else None),
         'foto_urls': list(dict.fromkeys(item for item in photos if item)),
     }
@@ -338,14 +352,16 @@ class LaboranDashboardView(APIView):
     permission_classes = [IsLaboran]
 
     def get(self, request):
-        inventory = InventarisBarang.objects.aggregate(total=Sum('jumlah'))['total'] or 0
+        total_barang = InventarisBarang.objects.count()
+        total_unit = InventarisBarang.objects.aggregate(total=Sum('jumlah'))['total'] or 0
         borrowed = PeminjamanAlat.objects.filter(status__in=ACTIVE_PEMINJAMAN_STATUSES).count()
         pending = PeminjamanAlat.objects.filter(status='diajukan').count()
         recent = PeminjamanAlat.objects.select_related('barang').order_by('-dibuat_pada')[:5]
         return Response({
             'profile': ProfileSerializer(request.user, context={'request': request}).data,
             'summary': {
-                'total_barang': inventory,
+                'total_barang': total_barang,
+                'total_unit': total_unit,
                 'menunggu_persetujuan': pending,
                 'sedang_dipinjam': borrowed,
                 'lokasi': Lokasi.objects.count(),
@@ -375,7 +391,7 @@ class LaboranInventoryListCreateView(APIView):
                 'detail_barang__peminjaman',
                 filter=Q(detail_barang__peminjaman__status__in=ACTIVE_PEMINJAMAN_STATUSES),
             )
-        ).prefetch_related('galeri_foto')
+        ).prefetch_related('galeri_foto', 'detail_barang__lokasi')
         if query:
             queryset = queryset.filter(Q(nama__icontains=query) | Q(kode_inventaris__icontains=query))
         return Response({'results': [inventory_payload(request, item) for item in queryset]})
@@ -393,24 +409,85 @@ class LaboranInventoryListCreateView(APIView):
             return Response({'foto_galeri': exc.detail}, status=status.HTTP_400_BAD_REQUEST)
 
         values = serializer.validated_data
-        inventory = InventarisBarang.objects.create(
-            nama=values['nama'],
-            jumlah=values['jumlah'],
-            foto=values.get('foto'),
-            keterangan=values.get('keterangan', ''),
-        )
-        for _ in range(inventory.jumlah):
-            Barang.objects.create(
-                inventaris=inventory,
-                nama=inventory.nama,
-                jumlah=inventory.jumlah,
-                lokasi=values['lokasi'],
-                kondisi='baik',
+        try:
+            inventory = InventarisBarang.objects.create(
+                nama=values['nama'],
+                jumlah=values['jumlah'],
+                foto=values.get('foto'),
+                keterangan=values.get('keterangan', ''),
             )
-        for order, photo in enumerate(gallery_files, start=1):
-            FotoInventarisBarang.objects.create(inventaris=inventory, foto=photo, urutan=order)
+            for _ in range(inventory.jumlah):
+                Barang.objects.create(
+                    inventaris=inventory,
+                    nama=inventory.nama,
+                    jumlah=inventory.jumlah,
+                    lokasi=values['lokasi'],
+                    kondisi='baik',
+                )
+            for order, photo in enumerate(gallery_files, start=1):
+                FotoInventarisBarang.objects.create(inventaris=inventory, foto=photo, urutan=order)
+        except (OSError, SuspiciousFileOperation) as exc:
+            transaction.set_rollback(True)
+            return api_error(
+                'Foto inventaris gagal disimpan. Periksa folder media server dan coba upload ulang.',
+                'inventory_photo_save_failed',
+                http_status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                error=str(exc),
+            )
         inventory.jumlah_dipinjam_aktif = 0
         return Response(inventory_payload(request, inventory), status=status.HTTP_201_CREATED)
+
+
+class LaboranInventoryDetailView(APIView):
+    permission_classes = [IsLaboran]
+
+    def get_object(self, pk):
+        return (
+            InventarisBarang.objects.annotate(
+                jumlah_dipinjam_aktif=Count(
+                    'detail_barang__peminjaman',
+                    filter=Q(
+                        detail_barang__peminjaman__status__in=ACTIVE_PEMINJAMAN_STATUSES
+                    ),
+                )
+            )
+            .prefetch_related('galeri_foto', 'detail_barang__lokasi')
+            .filter(pk=pk)
+            .first()
+        )
+
+    def get(self, request, pk):
+        inventory = self.get_object(pk)
+        if inventory is None:
+            return api_error(
+                'Barang inventaris tidak ditemukan.',
+                'inventory_not_found',
+                http_status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(inventory_payload(request, inventory))
+
+    @transaction.atomic
+    def delete(self, request, pk):
+        inventory = InventarisBarang.objects.select_for_update().filter(pk=pk).first()
+        if inventory is None:
+            return api_error(
+                'Barang inventaris tidak ditemukan.',
+                'inventory_not_found',
+                http_status=status.HTTP_404_NOT_FOUND,
+            )
+
+        loan_count = PeminjamanAlat.objects.filter(barang__inventaris=inventory).count()
+        if loan_count:
+            return api_error(
+                'Barang tidak dapat dihapus karena memiliki riwayat peminjaman. '
+                'Data transaksi lama tetap harus disimpan.',
+                'inventory_has_loan_history',
+                http_status=status.HTTP_409_CONFLICT,
+                loan_count=loan_count,
+            )
+
+        inventory.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 def loan_payload(loan):
