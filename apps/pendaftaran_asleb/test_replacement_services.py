@@ -397,6 +397,19 @@ class LimitedRegistrationTests(TestCase):
         self.assertNotEqual(retried.pk, selected.pk)
         self.assertTrue(PendaftaranAsleb.objects.filter(pk=selected.pk, status='ditolak').exists())
 
+    @patch('apps.pendaftaran_asleb.replacement_services.notify_offer_sent')
+    def test_limited_selection_notifies_candidate_only_after_commit(self, notify):
+        opening = self.open()
+        registration = self.apply(opening)
+
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            offer = select_limited_candidate(
+                opening_id=opening.pk, registration_id=registration.pk, actor=self.laboran,
+            )
+
+        self.assertEqual(len(callbacks), 1)
+        notify.assert_called_once_with(offer.pk)
+
 
 @skipUnless(connection.vendor == 'mysql', 'Concurrency contract uses MySQL row locks.')
 class LimitedRegistrationConcurrencyTests(TransactionTestCase):
@@ -828,6 +841,33 @@ class HonorReassignmentTests(TestCase):
         self.assertEqual(audit.status, HonorReassignment.STATUS_CORRECTION_REQUIRED)
         self.assertEqual(audit.final_asleb, self.incoming)
         self.assertNotIn(honor, payment_eligible_honors(HonorAsleb.objects.all()))
+
+    @patch('apps.pendaftaran_asleb.replacement_notifications.send_branded_email')
+    @patch('apps.pendaftaran_asleb.replacement_notifications.send_user_notification')
+    def test_correction_notification_is_scheduled_once_without_bank_payload(
+        self, send_realtime, send_email,
+    ):
+        honor = self.honor(self.outgoing, date(2026, 10, 1), status='dibayar')
+        honor.nomor_transfer = '4455667788'
+        honor.nama_pemilik_transfer = 'Rekening Aslab Lama'
+        honor.save(update_fields=['nomor_transfer', 'nama_pemilik_transfer'])
+
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            self.run_service()
+
+        self.assertEqual(len(callbacks), 1)
+        self.assertTrue(send_realtime.called)
+        self.assertTrue(send_email.called)
+        serialized_calls = f'{send_realtime.call_args_list!r}{send_email.call_args_list!r}'
+        self.assertNotIn(honor.nomor_transfer, serialized_calls)
+        self.assertNotIn(honor.nama_pemilik_transfer, serialized_calls)
+
+        send_realtime.reset_mock(); send_email.reset_mock()
+        with self.captureOnCommitCallbacks(execute=True) as repeated_callbacks:
+            self.run_service()
+        self.assertEqual(repeated_callbacks, [])
+        send_realtime.assert_not_called()
+        send_email.assert_not_called()
 
     def test_unlocked_reassignment_uses_incoming_registration_account(self):
         self.replacement_registration()
@@ -1355,6 +1395,85 @@ class DirectOfferServiceTests(TestCase):
             with self.assertRaisesMessage(ValidationError, message):
                 return_offer_for_revision(offer_id=offer.pk, actor=actor, notes=notes)
 
+    @patch('apps.pendaftaran_asleb.replacement_services.transaction.on_commit')
+    def test_offer_notification_is_scheduled_with_immutable_id(self, on_commit):
+        offer = self.create_offer()
+
+        on_commit.assert_called_once()
+        callback = on_commit.call_args.args[0]
+        self.assertEqual(callback.__defaults__, (offer.pk,))
+
+    def test_rolled_back_offer_does_not_execute_or_retain_notification(self):
+        with patch(
+            'apps.pendaftaran_asleb.replacement_notifications.notify_offer_sent'
+        ) as notify:
+            with self.captureOnCommitCallbacks(execute=True) as callbacks:
+                with self.assertRaises(RuntimeError):
+                    with transaction.atomic():
+                        self.create_offer()
+                        raise RuntimeError('rollback outer transaction')
+
+        self.assertEqual(callbacks, [])
+        notify.assert_not_called()
+        self.assertFalse(AslabOffer.objects.exists())
+
+    @patch(
+        'apps.pendaftaran_asleb.replacement_notifications.send_branded_email'
+    )
+    @patch(
+        'apps.pendaftaran_asleb.replacement_notifications.send_user_notification',
+        side_effect=RuntimeError('realtime unavailable'),
+    )
+    def test_realtime_failure_does_not_block_email_or_commit(self, _realtime, email):
+        with self.captureOnCommitCallbacks(execute=True):
+            offer = self.create_offer()
+
+        self.assertTrue(AslabOffer.objects.filter(pk=offer.pk).exists())
+        email.assert_called_once()
+
+    @patch(
+        'apps.pendaftaran_asleb.replacement_notifications.send_branded_email',
+        side_effect=RuntimeError('email unavailable'),
+    )
+    @patch('apps.pendaftaran_asleb.replacement_notifications.send_user_notification')
+    def test_email_failure_does_not_block_realtime_or_commit(self, realtime, _email):
+        with self.captureOnCommitCallbacks(execute=True):
+            offer = self.create_offer()
+
+        self.assertTrue(AslabOffer.objects.filter(pk=offer.pk).exists())
+        realtime.assert_called_once()
+
+    @patch('apps.pendaftaran_asleb.replacement_notifications.send_branded_email')
+    @patch('apps.pendaftaran_asleb.replacement_notifications.send_user_notification')
+    def test_submission_notification_contains_no_bank_values(self, realtime, email):
+        offer = accept_offer(offer_id=self.create_offer().pk, candidate=self.candidate)
+        form = self.candidate_form(
+            offer, rekening='9876543210', nama_pemilik_rekening='Pemilik Sangat Rahasia',
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_offer_registration(
+                offer_id=offer.pk, candidate=self.candidate, registration_form=form,
+            )
+
+        serialized_calls = f'{realtime.call_args_list!r}{email.call_args_list!r}'
+        self.assertNotIn('9876543210', serialized_calls)
+        self.assertNotIn('Pemilik Sangat Rahasia', serialized_calls)
+
+    @patch('apps.pendaftaran_asleb.replacement_services.notify_offer_response')
+    def test_expiry_idempotency_does_not_notify_twice(self, notify):
+        offer = self.create_offer(deadline=self.now + timezone.timedelta(hours=1))
+
+        with self.captureOnCommitCallbacks(execute=True) as first_callbacks:
+            self.assertEqual(expire_due_offers(now=offer.deadline), 1)
+        with self.captureOnCommitCallbacks(execute=True) as second_callbacks:
+            self.assertEqual(expire_due_offers(now=offer.deadline), 0)
+
+        self.assertEqual(len(first_callbacks), 1)
+        self.assertEqual(second_callbacks, [])
+        notify.assert_called_once_with(offer.pk)
+
 
 class TerminationServiceTests(TestCase):
     def setUp(self):
@@ -1492,11 +1611,19 @@ class TerminationServiceTests(TestCase):
         self.assertFalse(AslabReplacement.objects.exists())
 
     def test_second_termination_is_rejected_without_duplicate(self):
-        self.end()
+        with patch(
+            'apps.pendaftaran_asleb.replacement_services.notify_assignment_ended'
+        ) as notify:
+            with self.captureOnCommitCallbacks(execute=True) as first_callbacks:
+                replacement = self.end()
 
-        with self.assertRaisesMessage(ValidationError, 'sudah tidak aktif'):
-            self.end()
+            with self.captureOnCommitCallbacks(execute=True) as second_callbacks:
+                with self.assertRaisesMessage(ValidationError, 'sudah tidak aktif'):
+                    self.end()
 
+        self.assertEqual(len(first_callbacks), 1)
+        self.assertEqual(second_callbacks, [])
+        notify.assert_called_once_with(replacement.pk)
         self.assertEqual(AslabReplacement.objects.count(), 1)
         self.assertEqual(AslabReplacementAudit.objects.count(), 1)
 
