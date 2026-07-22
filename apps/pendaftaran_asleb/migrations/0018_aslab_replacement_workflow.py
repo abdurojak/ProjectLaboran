@@ -40,7 +40,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='pendaftaranasleb',
             name='jenis',
-            field=models.CharField(choices=[('regular', 'Reguler'), ('replacement', 'Pengganti')], default='regular', max_length=16),
+            field=models.CharField(choices=[('reguler', 'Reguler'), ('replacement', 'Pengganti')], default='reguler', max_length=16),
         ),
         migrations.CreateModel(
             name='LimitedReplacementOpening',
@@ -80,11 +80,12 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('status', models.CharField(choices=[('waiting', 'Menunggu'), ('accepted_incomplete', 'Diterima, Data Belum Lengkap'), ('submitted', 'Diajukan'), ('verified', 'Terverifikasi'), ('declined', 'Ditolak'), ('expired', 'Kedaluwarsa'), ('cancelled', 'Dibatalkan')], default='waiting', max_length=24)),
-                ('deadline', models.DateTimeField(blank=True, null=True)),
+                ('deadline', models.DateTimeField()),
                 ('responded_at', models.DateTimeField(blank=True, null=True)),
                 ('submitted_at', models.DateTimeField(blank=True, null=True)),
                 ('verified_at', models.DateTimeField(blank=True, null=True)),
-                ('notes', models.TextField(blank=True)),
+                ('verification_notes', models.TextField(blank=True)),
+                ('decline_reason', models.TextField(blank=True)),
                 ('candidate', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='aslab_offers', to='pengguna.pengguna')),
                 ('live_replacement', models.OneToOneField(blank=True, editable=False, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='live_offer', to='pendaftaran_asleb.aslabreplacement')),
                 ('registration', models.OneToOneField(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='replacement_offer', to='pendaftaran_asleb.pendaftaranasleb')),
@@ -103,5 +104,13 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name='aslaboffer',
             constraint=models.CheckConstraint(check=models.Q(models.Q(('live_replacement', models.F('replacement')), ('live_replacement__isnull', False), ('status__in', ['waiting', 'accepted_incomplete', 'submitted'])), models.Q(models.Q(('status__in', ['waiting', 'accepted_incomplete', 'submitted']), _negated=True), ('live_replacement__isnull', True)), _connector='OR'), name='aslab_offer_live_replacement_guard'),
+        ),
+        migrations.AddConstraint(
+            model_name='pendaftaranasleb',
+            constraint=models.CheckConstraint(check=models.Q(models.Q(('candidate_user__isnull', True), ('jenis', 'reguler'), ('replacement_process__isnull', True)), models.Q(('candidate_user__isnull', False), ('jenis', 'replacement'), ('replacement_process__isnull', False)), _connector='OR'), name='registration_replacement_linkage_guard'),
+        ),
+        migrations.AddConstraint(
+            model_name='pendaftaranasleb',
+            constraint=models.UniqueConstraint(fields=('replacement_process', 'candidate_user'), name='unique_replacement_registration_candidate'),
         ),
     ]
