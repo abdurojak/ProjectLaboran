@@ -38,4 +38,16 @@ class Migration(migrations.Migration):
                 name='honor_reassignment_final_guard',
             ),
         ),
+        migrations.AddConstraint(
+            model_name='honorreassignment',
+            constraint=models.CheckConstraint(
+                check=models.Q(('honor__isnull', True), ('status', 'held'), _negated=True),
+                name='held_honor_requires_row',
+            ),
+        ),
+        migrations.AddField(
+            model_name='surathonorasleb',
+            name='honors',
+            field=models.ManyToManyField(blank=True, related_name='issued_honor_letters', to='asleb.honorasleb'),
+        ),
     ]

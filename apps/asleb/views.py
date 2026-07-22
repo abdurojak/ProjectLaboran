@@ -9,7 +9,7 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.db import IntegrityError, transaction
-from django.db.models import Avg, Count, Q, Sum
+from django.db.models import Avg, Count, Exists, OuterRef, Q, Sum
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.response import TemplateResponse
@@ -28,7 +28,10 @@ from apps.kalender.realtime import send_attendance_update, send_honor_update
 from apps.pengguna.models import Pengguna
 from apps.pendaftaran_asleb.forms import PengaturanBiayaTransferForm
 from apps.pendaftaran_asleb.models import AslabAssignment, PengaturanBiayaTransfer
-from apps.pendaftaran_asleb.replacement_services import end_single_active_assignment_for_replacement
+from apps.pendaftaran_asleb.replacement_services import (
+    end_single_active_assignment_for_replacement,
+    payment_eligible_honors,
+)
 from apps.pendaftaran_asleb.services import notify_manual_asleb_removal
 
 from .forms import (
@@ -53,6 +56,7 @@ from .models import (
     Asleb,
     HasilPraktikumMahasiswa,
     HonorAsleb,
+    HonorReassignment,
     LogAktivitasPraktikum,
     ModulPraktikum,
     PengumpulanLaporanPraktikum,
@@ -229,7 +233,12 @@ class HonorAslebListView(HonorAccessMixin, ListView):
     context_object_name = 'honor_list'
 
     def get_queryset(self):
-        queryset = HonorAsleb.objects.select_related('asleb', 'assigned_laboran')
+        held_audits = HonorReassignment.objects.filter(
+            honor_id=OuterRef('pk'), status=HonorReassignment.STATUS_HELD,
+        )
+        queryset = HonorAsleb.objects.select_related('asleb', 'assigned_laboran').annotate(
+            replacement_held=Exists(held_audits),
+        )
         pengguna = getattr(self.request, 'current_pengguna', None)
         search = self.request.GET.get('q', '').strip()
         bulan = self.request.GET.get('bulan', '').strip()
@@ -302,7 +311,7 @@ def update_transfer_fees(request):
     form = PengaturanBiayaTransferForm(request.POST, instance=PengaturanBiayaTransfer.get_solo())
     if form.is_valid():
         form.save()
-        for honor in HonorAsleb.objects.exclude(status='dibayar'):
+        for honor in payment_eligible_honors(HonorAsleb.objects.exclude(status='dibayar')):
             honor.save()
         messages.success(request, 'Biaya admin transfer berhasil diperbarui.')
     else:
@@ -414,12 +423,15 @@ class SuratHonorAslebGenerateView(SuratHonorAccessMixin, FormView):
             'perihal': SuratHonorAsleb._meta.get_field('perihal').default,
         }
 
+    @transaction.atomic
     def form_valid(self, form):
         pengguna = getattr(self.request, 'current_pengguna', None)
         bulan = form.cleaned_data['bulan']
-        honors = list(HonorAsleb.objects.select_related('asleb').filter(
+        honors = list(payment_eligible_honors(
+            HonorAsleb.objects.select_for_update().select_related('asleb').filter(
             bulan__year=bulan.year,
             bulan__month=bulan.month,
+            )
         ).order_by('asleb__matkul', 'asleb__nama'))
 
         if not honors:
@@ -445,6 +457,7 @@ class SuratHonorAslebGenerateView(SuratHonorAccessMixin, FormView):
             jumlah_asleb=len(honors),
         )
         surat.file_pdf.save(filename, ContentFile(pdf_bytes), save=True)
+        surat.honors.set(honors)
         messages.success(self.request, f'Surat honor {surat.bulan_label} berhasil digenerate dan disimpan ke arsip.')
         return super().form_valid(form)
 
@@ -2002,13 +2015,21 @@ def toggle_absensi_status(request):
 
 
 @require_POST
+@transaction.atomic
 def confirm_honor_transfer(request, pk):
     pengguna = getattr(request, 'current_pengguna', None)
     if not can_manage_lab_operations(pengguna):
         messages.error(request, 'Hanya laboran yang bisa mengonfirmasi transfer honor.')
         return redirect('asleb:honor_list')
 
-    honor = get_object_or_404(HonorAsleb, pk=pk)
+    asleb_id = get_object_or_404(HonorAsleb.objects.only('asleb_id'), pk=pk).asleb_id
+    Asleb.objects.select_for_update().get(pk=asleb_id)
+    honor = get_object_or_404(HonorAsleb.objects.select_for_update(), pk=pk)
+    if HonorReassignment.objects.filter(
+        honor=honor, status=HonorReassignment.STATUS_HELD,
+    ).exists():
+        messages.error(request, 'Honor sedang ditahan sampai proses penggantian aslab selesai.')
+        return redirect('asleb:honor_list')
     if pengguna.role == LABORAN_ROLE and honor.assigned_laboran_id != pengguna.pk:
         messages.error(request, 'Tugas TF honor ini bukan milik akun laboran Anda.')
         return redirect('asleb:honor_list')
@@ -2039,16 +2060,17 @@ def auto_assign_honor_transfers(request):
         return redirect('asleb:honor_list')
 
     selected_bulan = request.POST.get('bulan', '').strip()
-    honor_qs = HonorAsleb.objects.select_related('asleb').exclude(status='dibayar').order_by('bulan', 'asleb__nama', 'pk')
-    if selected_bulan:
-        try:
-            year, month = selected_bulan.split('-')
-            honor_qs = honor_qs.filter(bulan__year=year, bulan__month=month)
-        except ValueError:
-            messages.error(request, 'Format bulan tidak valid.')
-            return redirect('asleb:honor_list')
-
     with transaction.atomic():
+        honor_qs = payment_eligible_honors(
+            HonorAsleb.objects.select_for_update().select_related('asleb').exclude(status='dibayar')
+        ).order_by('bulan', 'asleb__nama', 'pk')
+        if selected_bulan:
+            try:
+                year, month = selected_bulan.split('-')
+                honor_qs = honor_qs.filter(bulan__year=year, bulan__month=month)
+            except ValueError:
+                messages.error(request, 'Format bulan tidak valid.')
+                return redirect('asleb:honor_list')
         assigned_count = rebalance_honor_transfers(honor_qs)
 
     if assigned_count:
@@ -2060,7 +2082,7 @@ def auto_assign_honor_transfers(request):
 
 def assign_unassigned_honor_transfers(honor_qs):
     assigned_count = 0
-    for honor in honor_qs:
+    for honor in payment_eligible_honors(honor_qs):
         laboran = honor.get_next_laboran_for_transfer()
         if not laboran:
             continue
@@ -2076,7 +2098,7 @@ def rebalance_honor_transfers(honor_qs):
         return 0
 
     honors_by_month = {}
-    for honor in honor_qs:
+    for honor in payment_eligible_honors(honor_qs):
         month_key = honor.bulan.replace(day=1)
         honors_by_month.setdefault(month_key, []).append(honor)
 
