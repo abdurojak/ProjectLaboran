@@ -47,6 +47,7 @@ class PenggunaLoginRequiredMiddleware:
         'laporan_submit',
         'laporan_cancel',
         'laporan_review',
+        'laporan_delete',
         'laporan_preview',
         'laporan_preview_file',
         'laporan_download',
