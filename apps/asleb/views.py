@@ -34,7 +34,6 @@ from apps.pendaftaran_asleb.replacement_services import (
     reconcile_retrospective_honor,
     with_replacement_hold_state,
 )
-from apps.pendaftaran_asleb.services import notify_manual_asleb_removal
 
 from .forms import (
     AbsensiAslebForm,
@@ -181,12 +180,6 @@ def end_asleb_membership(request, pk):
             status=AslabAssignment.STATUS_ACTIVE,
         ).exists()
     )
-    if person_access_ended:
-        transaction.on_commit(
-            lambda asleb_item=asleb, akun_item=akun, reason=alasan_pengeluaran, actor=pengguna:
-            notify_manual_asleb_removal(asleb_item, akun_item, reason=reason, acted_by=actor)
-        )
-
     if person_access_ended:
         messages.success(
             request,

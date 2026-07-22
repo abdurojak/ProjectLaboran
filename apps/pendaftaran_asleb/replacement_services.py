@@ -13,6 +13,15 @@ from .models import (
     AslabAssignment, AslabOffer, AslabReplacement, AslabReplacementAudit, AslabSlot,
     LimitedReplacementOpening, PendaftaranAsleb,
 )
+from .replacement_notifications import (
+    notify_assignment_ended,
+    notify_honor_correction_required,
+    notify_offer_response,
+    notify_offer_sent,
+    notify_replacement_activated,
+    notify_submission_ready,
+    notify_submission_returned,
+)
 from .services import sync_asleb_person_from_registration
 
 
@@ -166,6 +175,7 @@ def reassign_replacement_honor(*, replacement, incoming_asleb, actor):
         if not registration or not registration.rekening.strip() or not registration.nama_pemilik_rekening.strip():
             raise ValidationError('Data rekening pengganti belum lengkap atau belum terverifikasi.')
 
+    correction_created = False
     for honor in honors:
         audit = audits.get(honor.pk)
         if audit and audit.status != HonorReassignment.STATUS_HELD:
@@ -188,6 +198,7 @@ def reassign_replacement_honor(*, replacement, incoming_asleb, actor):
                 HonorReassignment.objects.create(
                     replacement=locked_replacement, honor=honor, **values,
                 )
+            correction_created = True
             continue
         honor.asleb = incoming
         honor.metode_transfer = registration.metode_rekening
@@ -217,6 +228,12 @@ def reassign_replacement_honor(*, replacement, incoming_asleb, actor):
     statuses = HonorReassignment.objects.filter(
         replacement=locked_replacement,
     ).values_list('status', flat=True)
+    if correction_created:
+        transaction.on_commit(
+            lambda replacement_id=locked_replacement.pk:
+            notify_honor_correction_required(replacement_id),
+            robust=True,
+        )
     return {
         'reassigned': sum(status == HonorReassignment.STATUS_REASSIGNED for status in statuses),
         'correction_required': sum(
@@ -566,6 +583,9 @@ def select_limited_candidate(*, opening_id, registration_id, actor):
     _audit(replacement, actor, 'limited_candidate_selected', previous, replacement.status,
            metadata={'opening_id': opening.pk, 'registration_id': selected.pk,
                      'offer_id': offer.pk, 'quota': 1})
+    transaction.on_commit(
+        lambda offer_id=offer.pk: notify_offer_sent(offer_id), robust=True,
+    )
     return offer
 
 
@@ -776,6 +796,10 @@ def activate_replacement(*, offer_id, actor, active_date):
             'active_date': active_date.isoformat(),
         },
     )
+    transaction.on_commit(
+        lambda replacement_id=replacement.pk: notify_replacement_activated(replacement_id),
+        robust=True,
+    )
     return assignment
 
 
@@ -821,6 +845,9 @@ def create_direct_offer(*, replacement_id, candidate_id, deadline, actor):
     _audit(replacement, actor, 'direct_offer_created', previous, replacement.status,
            metadata={'offer_id': offer.pk, 'candidate_id': candidate.pk,
                      'deadline': deadline.isoformat()})
+    transaction.on_commit(
+        lambda offer_id=offer.pk: notify_offer_sent(offer_id), robust=True,
+    )
     return offer
 
 
@@ -845,6 +872,9 @@ def accept_offer(*, offer_id, candidate):
     replacement.save(update_fields=['status', 'updated_at'])
     _audit(replacement, candidate, 'offer_accepted', previous, replacement.status,
            metadata={'offer_id': offer.pk})
+    transaction.on_commit(
+        lambda offer_id=offer.pk: notify_offer_response(offer_id), robust=True,
+    )
     return offer
 
 
@@ -870,6 +900,9 @@ def decline_offer(*, offer_id, candidate, reason=''):
     replacement.save(update_fields=['status', 'updated_at'])
     _audit(replacement, candidate, 'offer_declined', previous, replacement.status,
            reason=offer.decline_reason, metadata={'offer_id': offer.pk})
+    transaction.on_commit(
+        lambda offer_id=offer.pk: notify_offer_response(offer_id), robust=True,
+    )
     return offer
 
 
@@ -907,6 +940,9 @@ def _expire_due_offer(*, offer_id, now):
     replacement.save(update_fields=['status', 'updated_at'])
     _audit(replacement, None, 'offer_expired', previous, replacement.status,
            metadata={'offer_id': offer.pk, 'expired_at': now.isoformat()})
+    transaction.on_commit(
+        lambda offer_id=offer.pk: notify_offer_response(offer_id), robust=True,
+    )
     return True
 
 
@@ -982,6 +1018,9 @@ def submit_offer_registration(*, offer_id, candidate, registration_form):
     replacement.save(update_fields=['status', 'updated_at'])
     _audit(replacement, candidate, 'candidate_data_submitted', previous, replacement.status,
            metadata={'offer_id': offer.pk, 'registration_id': registration.pk})
+    transaction.on_commit(
+        lambda offer_id=offer.pk: notify_submission_ready(offer_id), robust=True,
+    )
     return registration
 
 
@@ -1010,6 +1049,9 @@ def return_offer_for_revision(*, offer_id, actor, notes):
     replacement.save(update_fields=['status', 'updated_at'])
     _audit(replacement, actor, 'offer_returned_for_revision', previous, replacement.status,
            reason=notes, metadata={'offer_id': offer.pk, 'registration_id': offer.registration_id})
+    transaction.on_commit(
+        lambda offer_id=offer.pk: notify_submission_returned(offer_id), robust=True,
+    )
     return offer
 
 
@@ -1134,6 +1176,10 @@ def _end_locked_assignment(
             'replacement_status': replacement.status,
             'effective_date': effective_date.isoformat(),
         },
+    )
+    transaction.on_commit(
+        lambda replacement_id=replacement.pk: notify_assignment_ended(replacement_id),
+        robust=True,
     )
     return replacement
 

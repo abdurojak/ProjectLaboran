@@ -465,10 +465,11 @@ class AslebViewTests(TestCase):
         self.assertFalse(PengalamanPengguna.objects.filter(pengguna=akun_asleb).exists())
         self.assertTrue(Notifikasi.objects.filter(
             pengguna=akun_asleb,
-            source_key=f'asleb-removed:{self.asleb.pk}:{akun_asleb.pk}',
+            source_key__startswith='aslab-replacement:',
+            source_key__endswith=':assignment-ended',
         ).exists())
         self.assertEqual(len(mail.outbox), 1)
-        self.assertIn('Status Asisten Lab Dinonaktifkan', mail.outbox[0].subject)
+        self.assertIn('Masa Tugas Aslab Diakhiri', mail.outbox[0].subject)
 
     @patch('apps.asleb.views.timezone.localdate', return_value=date(2026, 10, 15))
     @patch('apps.asleb.views.end_single_active_assignment_for_replacement')
