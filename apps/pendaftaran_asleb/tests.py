@@ -18,7 +18,7 @@ from apps.jadwal.models import JadwalPraktikum
 from apps.pengguna.models import PengalamanPengguna, Pengguna
 from apps.ruangan.models import RuanganLab
 
-from .forms import PendaftaranAslebPublicForm, PublicBerkasPendaftaranForm, RekeningPendaftaranForm
+from .forms import PendaftaranAslebForm, PendaftaranAslebPublicForm, PublicBerkasPendaftaranForm, RekeningPendaftaranForm
 from .models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb, PeriodeAsleb, RiwayatAsleb
 from .services import get_asleb_experience, is_registration_open, sync_expired_asleb_periods
 from .utils import analyze_transcript, extract_grade_from_transcript, get_public_registration_url
@@ -523,6 +523,28 @@ class PendaftaranAslebViewTests(TestCase):
 
         self.assertFalse(form.is_valid())
         self.assertIn('semester', form.errors)
+
+    def test_pendaftaran_form_save_assigns_current_periode(self):
+        form = PendaftaranAslebForm(data={
+            'nama': 'Andi Saputra',
+            'nim': '2201010',
+            'no_hp': '081111111120',
+            'email': 'andi.saputra@std.trisakti.ac.id',
+            'program_studi': 'Informatika',
+            'semester': 4,
+            'matkul': self.matkul.pk,
+            'metode_rekening': 'dana',
+            'rekening': '081111111120',
+            'nama_pemilik_rekening': 'Andi Saputra',
+            'nilai_transkrip': 'A',
+            'alasan': 'Ingin membantu kegiatan praktikum.',
+            'status': 'diajukan',
+        })
+
+        self.assertTrue(form.is_valid(), form.errors)
+        pendaftaran = form.save()
+
+        self.assertEqual(pendaftaran.periode, PeriodeAsleb.get_for_date(timezone.localdate()))
 
     def test_public_form_mendeteksi_nilai_transkrip(self):
         mahasiswa = Pengguna.objects.create(

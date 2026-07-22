@@ -17,7 +17,7 @@ from django.utils import timezone
 from reportlab.lib.enums import TA_RIGHT
 
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, PeriodeAsleb
-from apps.pendaftaran_asleb.services import sync_expired_asleb_periods
+from apps.pendaftaran_asleb.services import deactivate_asleb_membership, sync_expired_asleb_periods
 from apps.kalender.models import Notifikasi
 from apps.pengguna.models import PengalamanPengguna, Pengguna
 from apps.jadwal.models import JadwalPraktikum, PermintaanPerubahanJadwal
@@ -840,6 +840,33 @@ class AslebViewTests(TestCase):
         self.assertFalse(PermintaanPerubahanJadwal.objects.exists())
         pengalaman = PengalamanPengguna.objects.get(pengguna=akun_aslab, otomatis=True)
         self.assertIn(str(self.matkul), pengalaman.deskripsi)
+
+    def test_forced_deactivation_preserves_completed_operational_attendance(self):
+        jadwal = JadwalPraktikum.objects.create(
+            mata_kuliah=str(self.matkul),
+            kelas=self.matkul.kelas,
+            ruangan=self.test_room,
+            pengampu=self.asleb.nama,
+            hari='senin',
+            waktu_mulai='08:00',
+            waktu_selesai='09:00',
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+        attendance = AbsensiMasukAsleb.objects.create(
+            asleb=self.asleb,
+            jadwal=jadwal,
+            tanggal_absensi=timezone.localdate(),
+            foto_absensi=SimpleUploadedFile('foto.jpg', b'foto', content_type='image/jpeg'),
+        )
+
+        deactivate_asleb_membership(
+            self.asleb,
+            forced=True,
+            reason='Mengundurkan diri',
+            acted_by=self.pengguna,
+        )
+
+        self.assertTrue(AbsensiMasukAsleb.objects.filter(pk=attendance.pk).exists())
 
     def test_honor_asleb_mengikuti_rumus_excel(self):
         self.create_pendaftaran_history(self.asleb.nim, 3)
