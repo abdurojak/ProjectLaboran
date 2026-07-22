@@ -2,7 +2,11 @@ from django.contrib import admin
 
 from .models import (
     AslabAssignment,
+    AslabOffer,
+    AslabReplacement,
+    AslabReplacementAudit,
     AslabSlot,
+    LimitedReplacementOpening,
     MataKuliahAsleb,
     PendaftaranAsleb,
     PengaturanBiayaTransfer,
@@ -10,6 +14,46 @@ from .models import (
     PeriodeAsleb,
     RiwayatAsleb,
 )
+
+
+class ReadOnlyWorkflowAdmin(admin.ModelAdmin):
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(AslabReplacement)
+class AslabReplacementAdmin(ReadOnlyWorkflowAdmin):
+    list_display = ('outgoing_assignment', 'slot', 'effective_date', 'method', 'status', 'created_at')
+    list_filter = ('method', 'status', 'effective_date')
+    list_select_related = ('slot__periode', 'slot__matkul', 'outgoing_assignment__asleb', 'created_by')
+    readonly_fields = [field.name for field in AslabReplacement._meta.fields]
+
+
+@admin.register(AslabOffer)
+class AslabOfferAdmin(ReadOnlyWorkflowAdmin):
+    list_display = ('candidate', 'replacement', 'status', 'deadline', 'verified_at')
+    list_filter = ('status',)
+    list_select_related = ('candidate', 'replacement__slot', 'registration', 'verified_by')
+    readonly_fields = [field.name for field in AslabOffer._meta.fields]
+
+
+@admin.register(LimitedReplacementOpening)
+class LimitedReplacementOpeningAdmin(ReadOnlyWorkflowAdmin):
+    list_display = ('replacement', 'opens_at', 'closes_at', 'status')
+    list_filter = ('status',)
+    list_select_related = ('replacement__slot',)
+    readonly_fields = [field.name for field in LimitedReplacementOpening._meta.fields]
+
+
+@admin.register(AslabReplacementAudit)
+class AslabReplacementAuditAdmin(ReadOnlyWorkflowAdmin):
+    list_display = ('replacement', 'action', 'previous_state', 'new_state', 'actor', 'created_at')
+    list_filter = ('action', 'new_state')
+    list_select_related = ('replacement__slot', 'actor')
+    readonly_fields = [field.name for field in AslabReplacementAudit._meta.fields]
 
 
 @admin.register(AslabSlot)
