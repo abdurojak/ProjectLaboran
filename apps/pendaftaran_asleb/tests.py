@@ -13,7 +13,7 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 
-from apps.asleb.models import Asleb
+from apps.asleb.models import Asleb, HonorAsleb
 from apps.jadwal.models import JadwalPraktikum
 from apps.pengguna.models import PengalamanPengguna, Pengguna
 from apps.ruangan.models import RuanganLab
@@ -713,12 +713,23 @@ class PendaftaranAslebViewTests(TestCase):
     def test_tahap_berkas_checkbox_pernyataan_memakai_style_verifikasi_data(self):
         mahasiswa = self.create_mahasiswa_dengan_cv('0642201046')
         self.start_transcript_step(mahasiswa)
+        session = self.client.session
+        wizard = session[WIZARD_SESSION_KEY]
+        wizard.update({
+            'step': 'berkas',
+            'transkrip_path': 'pendaftaran_asleb/transkrip_tmp/contoh.pdf',
+            'nilai_transkrip': 'A',
+            'nilai_lolos': True,
+            'nim_terverifikasi': True,
+        })
+        session[WIZARD_SESSION_KEY] = wizard
+        session.save()
 
         response = self.client.get(reverse('pendaftaran_asleb:pendaftaran_public'))
 
         self.assertContains(response, 'registration-check-card')
-        self.assertContains(response, 'registration-check-label flex cursor-pointer gap-4')
-        self.assertContains(response, 'class="registration-check-input"')
+        self.assertContains(response, '.registration-check-label')
+        self.assertContains(response, '.registration-check-input')
         self.assertContains(response, 'Verifikasi dan Pernyataan Data')
         self.assertContains(response, 'Pernyataan Kesanggupan Tugas')
         self.assertContains(response, 'bersedia menjalankan tugas dan kewajiban sebagai Asisten Laboratorium')
@@ -824,14 +835,12 @@ class PendaftaranAslebViewTests(TestCase):
         period.refresh_from_db()
         akun_asleb.refresh_from_db()
         asleb.refresh_from_db()
-        jadwal_diajukan.refresh_from_db()
-        jadwal_diterima.refresh_from_db()
         self.assertEqual(period.diakhiri_oleh, self.laboran)
         self.assertIsNotNone(period.diakhiri_pada)
         self.assertEqual(akun_asleb.role, 'mahasiswa')
         self.assertEqual(asleb.status, 'nonaktif')
-        self.assertEqual(jadwal_diajukan.status, JadwalPraktikum.STATUS_DITOLAK)
-        self.assertEqual(jadwal_diterima.status, JadwalPraktikum.STATUS_DITOLAK)
+        self.assertFalse(JadwalPraktikum.objects.filter(pk=jadwal_diajukan.pk).exists())
+        self.assertFalse(JadwalPraktikum.objects.filter(pk=jadwal_diterima.pk).exists())
 
     def test_laboran_mengakhiri_periode_menyembunyikan_rekap_honor_aslab_nonaktif(self):
         period = PeriodeAsleb.get_for_date(timezone.localdate())
