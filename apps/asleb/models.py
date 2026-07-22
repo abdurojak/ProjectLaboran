@@ -251,6 +251,56 @@ class HonorAsleb(models.Model):
             self.nama_pemilik_transfer = registration.nama_pemilik_rekening or registration.nama
 
 
+class HonorReassignment(models.Model):
+    STATUS_HELD = 'held'
+    STATUS_REASSIGNED = 'reassigned'
+    STATUS_CORRECTION_REQUIRED = 'correction_required'
+    STATUS_CHOICES = [
+        (STATUS_HELD, 'Ditahan'),
+        (STATUS_REASSIGNED, 'Dialihkan'),
+        (STATUS_CORRECTION_REQUIRED, 'Perlu Koreksi'),
+    ]
+
+    replacement = models.ForeignKey(
+        'pendaftaran_asleb.AslabReplacement', on_delete=models.PROTECT,
+        related_name='honor_reassignments',
+    )
+    honor = models.ForeignKey(
+        HonorAsleb, on_delete=models.PROTECT, related_name='reassignment_audits',
+        null=True, blank=True,
+    )
+    bulan = models.DateField()
+    original_asleb = models.ForeignKey(
+        Asleb, on_delete=models.PROTECT, related_name='outgoing_honor_reassignments',
+    )
+    final_asleb = models.ForeignKey(
+        Asleb, on_delete=models.PROTECT, related_name='incoming_honor_reassignments',
+        null=True, blank=True,
+    )
+    status = models.CharField(max_length=24, choices=STATUS_CHOICES)
+    reason = models.TextField()
+    acted_by = models.ForeignKey(
+        'pengguna.Pengguna', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='honor_reassignments_acted',
+    )
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['bulan', 'pk']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['replacement', 'honor'], name='unique_replacement_honor_audit',
+            ),
+            models.CheckConstraint(
+                check=(
+                    models.Q(status='reassigned', final_asleb__isnull=False)
+                    | models.Q(status__in=['held', 'correction_required'], final_asleb__isnull=True)
+                ),
+                name='honor_reassignment_final_guard',
+            ),
+        ]
+
+
 def default_surat_honor_expires_at():
     today = timezone.localdate()
     try:
