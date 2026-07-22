@@ -21,24 +21,25 @@ REASON_STATUS_MAP = {
     'other': AslabAssignment.STATUS_TERMINATED,
 }
 
-UNRESOLVED_REPLACEMENT_STATUSES = {
+PAYMENT_BLOCKING_REPLACEMENT_STATUSES = {
     AslabReplacement.STATUS_WAITING_ACTION,
     AslabReplacement.STATUS_SEARCHING,
     AslabReplacement.STATUS_WAITING_CONSENT,
     AslabReplacement.STATUS_COMPLETING_DATA,
     AslabReplacement.STATUS_WAITING_VERIFICATION,
+    AslabReplacement.STATUS_ACTIVE,
 }
 
 
 def with_replacement_hold_state(queryset=None):
     queryset = queryset if queryset is not None else HonorAsleb.objects.all()
-    unresolved_replacement = AslabReplacement.objects.filter(
+    blocking_replacement = AslabReplacement.objects.filter(
         outgoing_assignment__asleb_id=OuterRef('asleb_id'),
-        status__in=UNRESOLVED_REPLACEMENT_STATUSES,
+        status__in=PAYMENT_BLOCKING_REPLACEMENT_STATUSES,
         transfer_month__lte=OuterRef('bulan'),
         slot__periode__selesai__gte=OuterRef('bulan'),
     )
-    return queryset.annotate(replacement_held=Exists(unresolved_replacement))
+    return queryset.annotate(replacement_held=Exists(blocking_replacement))
 
 
 def payment_eligible_honors(queryset=None):
@@ -202,6 +203,34 @@ def reassign_replacement_honor(*, replacement, incoming_asleb, actor):
             status == HonorReassignment.STATUS_CORRECTION_REQUIRED for status in statuses
         ),
     }
+
+
+def reconcile_retrospective_honor(*, honor, actor=None):
+    """Repair an outgoing honor created after its replacement was activated."""
+    if not honor.pk:
+        raise ValidationError('Honor harus disimpan sebelum direkonsiliasi.')
+    replacement_ids = list(AslabReplacement.objects.filter(
+        outgoing_assignment__asleb_id=honor.asleb_id,
+        status=AslabReplacement.STATUS_ACTIVE,
+        transfer_month__lte=honor.bulan,
+        slot__periode__selesai__gte=honor.bulan,
+    ).order_by('pk').values_list('pk', flat=True)[:2])
+    if not replacement_ids:
+        return honor
+    if len(replacement_ids) > 1:
+        raise ValidationError('Honor cocok dengan lebih dari satu penggantian aktif.')
+    replacement = AslabReplacement.objects.select_related(
+        'incoming_assignment__asleb', 'activated_by', 'created_by',
+    ).get(pk=replacement_ids[0])
+    if not replacement.incoming_assignment_id:
+        raise ValidationError('Penggantian aktif belum memiliki penugasan pengganti.')
+    reassign_replacement_honor(
+        replacement=replacement,
+        incoming_asleb=replacement.incoming_assignment.asleb,
+        actor=actor or replacement.activated_by or replacement.created_by,
+    )
+    honor.refresh_from_db()
+    return honor
 
 
 def eligible_candidate_queryset(replacement):

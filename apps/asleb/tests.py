@@ -1230,7 +1230,7 @@ class AslebViewTests(TestCase):
 
         response = self.client.get(reverse('asleb:honor_list'), {'bulan': '2026-10'})
         self.assertContains(response, self.asleb.nama)
-        self.assertContains(response, 'Ditahan - menunggu pengganti aktif')
+        self.assertContains(response, 'Ditahan - proses penggantian')
         self.assertNotContains(response, reverse('asleb:honor_confirm_transfer', args=[held.pk]))
 
         HonorAsleb.objects.filter(pk=held.pk).update(assigned_laboran=None)
