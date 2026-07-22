@@ -117,6 +117,30 @@ class AslebViewTests(TestCase):
         asleb_group = next(link for link in response.context['sidebar_links'] if link['title'] == 'Asisten Laboratorium')
         self.assertEqual([child['title'] for child in asleb_group['children'] if child['active']], ['Data Aslab'])
 
+    def test_aslab_with_operational_history_cannot_be_deleted(self):
+        period = PeriodeAsleb.objects.create(
+            tahun=2027, semester=1, mulai=date(2027, 1, 1), selesai=date(2027, 6, 30),
+            pendaftaran_mulai=date(2026, 12, 1), pendaftaran_selesai=date(2026, 12, 31),
+        )
+        slot = AslabSlot.objects.create(
+            periode=period, matkul=self.matkul, nomor=1, status=AslabSlot.STATUS_VACANT,
+        )
+        AslabAssignment.objects.create(
+            slot=slot, asleb=self.asleb, mulai_pada=period.mulai,
+            berakhir_pada=date(2027, 2, 1), status=AslabAssignment.STATUS_TERMINATED,
+        )
+
+        response = self.client.post(reverse('asleb:asleb_delete', args=[self.asleb.pk]))
+
+        self.assertRedirects(response, reverse('asleb:asleb_detail', args=[self.asleb.pk]))
+        self.assertTrue(Asleb.objects.filter(pk=self.asleb.pk).exists())
+
+    def test_unused_mistaken_aslab_record_can_be_deleted(self):
+        response = self.client.post(reverse('asleb:asleb_delete', args=[self.asleb.pk]))
+
+        self.assertRedirects(response, reverse('asleb:asleb_list'))
+        self.assertFalse(Asleb.objects.filter(pk=self.asleb.pk).exists())
+
     def test_absensi_list_memakai_layout_responsif(self):
         response = self.client.get(reverse('asleb:absensi_list'))
 

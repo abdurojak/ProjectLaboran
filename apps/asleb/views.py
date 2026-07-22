@@ -205,6 +205,20 @@ class AslebDetailView(LabOperationsRequiredMixin, DetailView):
     template_name = 'asleb/asleb_detail.html'
     context_object_name = 'asleb'
 
+    def get_queryset(self):
+        return super().get_queryset().prefetch_related(Prefetch(
+            'assignments',
+            queryset=AslabAssignment.objects.filter(
+                status=AslabAssignment.STATUS_ACTIVE,
+            ).select_related('slot__matkul', 'slot__periode').order_by('pk'),
+            to_attr='active_assignments',
+        ))
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['has_operational_history'] = asleb_has_operational_history(self.object)
+        return context
+
 
 class AslebCreateView(LabOperationsRequiredMixin, CreateView):
     model = Asleb
@@ -225,6 +239,33 @@ class AslebDeleteView(LabOperationsRequiredMixin, PostOnlyDeleteMixin, DeleteVie
     template_name = 'asleb/asleb_confirm_delete.html'
     context_object_name = 'asleb'
     success_url = reverse_lazy('asleb:asleb_list')
+
+    @transaction.atomic
+    def post(self, request, *args, **kwargs):
+        self.object = get_object_or_404(Asleb.objects.select_for_update(), pk=kwargs['pk'])
+        if asleb_has_operational_history(self.object):
+            messages.error(
+                request,
+                'Data Aslab memiliki histori operasional dan tidak boleh dihapus. '
+                'Gunakan Ganti/Akhiri Masa Tugas untuk penugasan aktif.',
+            )
+            return redirect('asleb:asleb_detail', pk=self.object.pk)
+        return super().post(request, *args, **kwargs)
+
+
+def asleb_has_operational_history(asleb):
+    direct_relations = (
+        asleb.assignments,
+        asleb.honorarium,
+        asleb.absensi,
+        asleb.absensi_masuk,
+        asleb.pengingat_absensi,
+    )
+    if any(relation.exists() for relation in direct_relations):
+        return True
+    return PengumpulanLaporanPraktikum.objects.filter(
+        diperiksa_oleh__nim_nik=asleb.nim,
+    ).exists()
 
 
 class HonorAslebListView(HonorAccessMixin, ListView):
