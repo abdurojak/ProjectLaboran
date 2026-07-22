@@ -8,9 +8,9 @@ def course_label(course):
     return f'{course.nama} - {course.dosen} - {course.kelas}'
 
 
-def matching_registration(PendaftaranAsleb, asleb):
+def matching_registration(registrations, asleb):
     candidates = list(
-        PendaftaranAsleb.objects.filter(
+        registrations.filter(
             nim=asleb.nim,
             periode_id=asleb.periode_aktif_id,
             status__in=ACCEPTED_STATUSES,
@@ -29,33 +29,38 @@ def matching_registration(PendaftaranAsleb, asleb):
 
 
 def backfill_aslab_assignments(apps, schema_editor):
+    alias = schema_editor.connection.alias
     Asleb = apps.get_model('asleb', 'Asleb')
     PendaftaranAsleb = apps.get_model('pendaftaran_asleb', 'PendaftaranAsleb')
     AslabSlot = apps.get_model('pendaftaran_asleb', 'AslabSlot')
     AslabAssignment = apps.get_model('pendaftaran_asleb', 'AslabAssignment')
+    aslebs = Asleb.objects.using(alias)
+    registrations = PendaftaranAsleb.objects.using(alias)
+    slots = AslabSlot.objects.using(alias)
+    assignments = AslabAssignment.objects.using(alias)
 
-    active_aslebs = Asleb.objects.filter(
+    active_aslebs = aslebs.filter(
         status='aktif',
         periode_aktif__isnull=False,
     ).select_related('periode_aktif').order_by('pk')
 
     for asleb in active_aslebs.iterator():
-        if AslabAssignment.objects.filter(asleb_id=asleb.pk, status='active').exists():
+        if assignments.filter(asleb_id=asleb.pk, status='active').exists():
             continue
 
-        registration = matching_registration(PendaftaranAsleb, asleb)
+        registration = matching_registration(registrations, asleb)
         if registration is None:
             continue
 
         occupied = set(
-            AslabAssignment.objects.filter(
+            assignments.filter(
                 slot__periode_id=asleb.periode_aktif_id,
                 slot__matkul_id=registration.matkul_id,
                 status='active',
             ).values_list('slot__nomor', flat=True)
         )
         unavailable = occupied | set(
-            AslabSlot.objects.filter(
+            slots.filter(
                 periode_id=asleb.periode_aktif_id,
                 matkul_id=registration.matkul_id,
                 status='closed',
@@ -65,7 +70,7 @@ def backfill_aslab_assignments(apps, schema_editor):
         if free_number is None:
             continue
 
-        slot, _ = AslabSlot.objects.get_or_create(
+        slot, _ = slots.get_or_create(
             periode_id=asleb.periode_aktif_id,
             matkul_id=registration.matkul_id,
             nomor=free_number,
@@ -73,8 +78,8 @@ def backfill_aslab_assignments(apps, schema_editor):
         )
         if slot.status != 'active':
             slot.status = 'active'
-            slot.save(update_fields=['status', 'diperbarui_pada'])
-        AslabAssignment.objects.create(
+            slot.save(using=alias, update_fields=['status', 'diperbarui_pada'])
+        assignments.create(
             slot_id=slot.pk,
             active_slot_id=slot.pk,
             asleb_id=asleb.pk,

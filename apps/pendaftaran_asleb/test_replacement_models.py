@@ -2,12 +2,13 @@ from collections import defaultdict
 from datetime import date
 from importlib import import_module
 from io import StringIO
+from types import SimpleNamespace
+from unittest.mock import Mock
 
-from django.apps import apps as django_apps
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.db import connection
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
+from django.db.migrations.executor import MigrationExecutor
 from django.db.models.deletion import ProtectedError
 from django.test import SimpleTestCase, TestCase
 
@@ -258,6 +259,9 @@ class AslabBackfillTests(TestCase):
         self.migration = import_module(
             'apps.pendaftaran_asleb.migrations.0017_backfill_aslab_assignments'
         )
+        self.historical_apps = MigrationExecutor(connection).loader.project_state(
+            [('pendaftaran_asleb', '0016_aslab_assignment_foundation')]
+        ).apps
         self.period = PeriodeAsleb.objects.create(
             tahun=2026,
             semester=2,
@@ -304,7 +308,10 @@ class AslabBackfillTests(TestCase):
 
     def run_backfill(self):
         with connection.schema_editor() as schema_editor:
-            self.migration.backfill_aslab_assignments(django_apps, schema_editor)
+            self.migration.backfill_aslab_assignments(
+                self.historical_apps,
+                schema_editor,
+            )
 
     def test_exact_single_registration_creates_lowest_slot_assignment(self):
         registration = self.create_registration('10001')
@@ -402,6 +409,80 @@ class AslabBackfillTests(TestCase):
         slot.refresh_from_db()
         self.assertEqual(slot.status, 'active')
         self.assertEqual(AslabAssignment.objects.get(asleb=asleb).slot, slot)
+
+
+class AslabBackfillDatabaseAliasTests(SimpleTestCase):
+    def test_backfill_uses_schema_editor_alias_for_all_database_paths(self):
+        migration = import_module(
+            'apps.pendaftaran_asleb.migrations.0017_backfill_aslab_assignments'
+        )
+        course = SimpleNamespace(
+            pk=31,
+            nama='Mata Kuliah Alias',
+            dosen='Dosen Alias',
+            kelas='TIF-01',
+        )
+        period = SimpleNamespace(mulai=date(2026, 7, 1))
+        asleb = SimpleNamespace(
+            pk=11,
+            nim='ALIAS01',
+            matkul='',
+            periode_aktif_id=21,
+            periode_aktif=period,
+        )
+        registration = SimpleNamespace(pk=41, matkul_id=course.pk, matkul=course)
+        slot = SimpleNamespace(pk=51, status='vacant', save=Mock())
+
+        def historical_model(aliased_manager):
+            direct_manager = Mock()
+            direct_manager.filter.side_effect = AssertionError(
+                'historical manager must be bound with using(alias)'
+            )
+            direct_manager.using.return_value = aliased_manager
+            return type('HistoricalModel', (), {'objects': direct_manager})
+
+        asleb_manager = Mock()
+        asleb_queryset = asleb_manager.filter.return_value
+        asleb_queryset.select_related.return_value.order_by.return_value.iterator.return_value = [
+            asleb
+        ]
+        registration_manager = Mock()
+        registration_queryset = registration_manager.filter.return_value
+        registration_queryset.select_related.return_value.order_by.return_value = [
+            registration
+        ]
+        assignment_manager = Mock()
+        assignment_manager.filter.side_effect = [
+            Mock(exists=Mock(return_value=False)),
+            Mock(values_list=Mock(return_value=[])),
+        ]
+        slot_manager = Mock()
+        slot_manager.filter.return_value.values_list.return_value = []
+        slot_manager.get_or_create.return_value = (slot, False)
+
+        model_map = {
+            ('asleb', 'Asleb'): historical_model(asleb_manager),
+            ('pendaftaran_asleb', 'PendaftaranAsleb'): historical_model(
+                registration_manager
+            ),
+            ('pendaftaran_asleb', 'AslabSlot'): historical_model(slot_manager),
+            ('pendaftaran_asleb', 'AslabAssignment'): historical_model(
+                assignment_manager
+            ),
+        }
+        historical_apps = Mock()
+        historical_apps.get_model.side_effect = lambda *key: model_map[key]
+        schema_editor = SimpleNamespace(connection=SimpleNamespace(alias='archive'))
+
+        migration.backfill_aslab_assignments(historical_apps, schema_editor)
+
+        for model in model_map.values():
+            model.objects.using.assert_called_once_with('archive')
+        slot.save.assert_called_once_with(
+            using='archive',
+            update_fields=['status', 'diperbarui_pada'],
+        )
+        assignment_manager.create.assert_called_once()
 
 
 class AuditAslabSlotsCommandTests(AslabBackfillTests):
