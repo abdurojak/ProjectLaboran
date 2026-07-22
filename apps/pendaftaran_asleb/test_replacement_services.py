@@ -1,3 +1,4 @@
+import base64
 from datetime import date, datetime
 from queue import Queue
 from threading import Barrier, Event, Thread
@@ -7,22 +8,209 @@ from unittest.mock import patch
 from django.core.exceptions import ValidationError
 from django.db import DatabaseError, IntegrityError, close_old_connections, connection, transaction
 from django.test import TestCase, TransactionTestCase
+from django.utils import timezone
 
 from apps.asleb.models import Asleb, HonorAsleb
 from apps.pengguna.models import PengalamanPengguna, Pengguna
 
 from .models import (
     AslabAssignment,
+    AslabOffer,
     AslabReplacement,
     AslabReplacementAudit,
     AslabSlot,
     MataKuliahAsleb,
     PeriodeAsleb,
+    PendaftaranAsleb,
 )
+from .replacement_forms import DirectOfferForm, ReplacementCandidateForm
 from .replacement_services import (
+    accept_offer,
+    create_direct_offer,
+    decline_offer,
     end_assignment_for_replacement,
     end_single_active_assignment_for_replacement,
+    expire_due_offers,
+    return_offer_for_revision,
+    submit_offer_registration,
 )
+
+
+class DirectOfferServiceTests(TestCase):
+    def setUp(self):
+        self.now = timezone.now()
+        self.period = PeriodeAsleb.objects.create(
+            tahun=2026, semester=2, mulai=date(2026, 7, 1), selesai=date(2026, 12, 31),
+            pendaftaran_mulai=date(2026, 7, 1), pendaftaran_selesai=date(2026, 7, 30),
+        )
+        self.course = MataKuliahAsleb.objects.create(
+            kode='OFF_TIF01', kode_mk='OFF01', nama='Offer Test', dosen='Dosen', kelas='TIF-01',
+        )
+        self.slot = AslabSlot.objects.create(
+            periode=self.period, matkul=self.course, nomor=1, status=AslabSlot.STATUS_VACANT,
+        )
+        self.laboran = self.user('LAB-OFF', 'Laboran', 'laboran')
+        self.candidate = self.user('STU-OFF', 'Candidate', 'mahasiswa')
+        outgoing_user = self.user('OLD-OFF', 'Old Aslab', 'mahasiswa')
+        outgoing = Asleb.objects.create(
+            nama='Old Aslab', nim=outgoing_user.nim_nik, no_hp='081', email=outgoing_user.email,
+            program_studi='TI', semester=5, status='nonaktif', periode_aktif=self.period,
+            tanggal_bergabung=date(2026, 7, 1),
+        )
+        assignment = AslabAssignment.objects.create(
+            slot=self.slot, asleb=outgoing, mulai_pada=date(2026, 7, 1),
+            berakhir_pada=date(2026, 9, 1), status=AslabAssignment.STATUS_RESIGNED,
+        )
+        self.replacement = AslabReplacement.objects.create(
+            slot=self.slot, outgoing_assignment=assignment, effective_date=date(2026, 9, 1),
+            transfer_month=date(2026, 9, 1), created_by=self.laboran,
+        )
+
+    def user(self, nim, name, role, verified=True):
+        return Pengguna.objects.create(
+            nama_pengguna=name, nim_nik=nim, email=f'{nim.lower()}@example.com', password='secret',
+            no_hp='08123', alamat='Jakarta', fakultas='FTI', prodi='TI', gender='laki_laki',
+            role=role, is_verified=verified,
+        )
+
+    def create_offer(self, **overrides):
+        values = dict(replacement_id=self.replacement.pk, candidate_id=self.candidate.pk,
+                      deadline=self.now + timezone.timedelta(days=3), actor=self.laboran)
+        values.update(overrides)
+        return create_direct_offer(**values)
+
+    def test_create_accept_decline_and_expire_transitions(self):
+        offer = self.create_offer()
+        self.replacement.refresh_from_db()
+        self.assertEqual((offer.status, self.replacement.method, self.replacement.status), (
+            AslabOffer.STATUS_WAITING, AslabReplacement.METHOD_DIRECT_OFFER,
+            AslabReplacement.STATUS_WAITING_CONSENT,
+        ))
+        accepted = accept_offer(offer_id=offer.pk, candidate=self.candidate)
+        self.candidate.refresh_from_db(); self.replacement.refresh_from_db()
+        self.assertEqual(accepted.status, AslabOffer.STATUS_ACCEPTED_INCOMPLETE)
+        self.assertEqual(self.replacement.status, AslabReplacement.STATUS_COMPLETING_DATA)
+        self.assertEqual(self.candidate.role, 'mahasiswa')
+
+        accepted.status = AslabOffer.STATUS_DECLINED
+        accepted.save(update_fields=['status'])
+        self.replacement.status = AslabReplacement.STATUS_WAITING_ACTION
+        self.replacement.save(update_fields=['status'])
+        second = self.create_offer()
+        declined = decline_offer(offer_id=second.pk, candidate=self.candidate, reason='Tidak bersedia')
+        self.replacement.refresh_from_db()
+        self.assertEqual(declined.decline_reason, 'Tidak bersedia')
+        self.assertEqual(self.replacement.status, AslabReplacement.STATUS_WAITING_ACTION)
+
+        third = self.create_offer(deadline=self.now + timezone.timedelta(seconds=1))
+        self.assertEqual(expire_due_offers(now=third.deadline), 1)
+        self.assertEqual(expire_due_offers(now=third.deadline), 0)
+        third.refresh_from_db()
+        self.assertEqual(third.status, AslabOffer.STATUS_EXPIRED)
+
+    def test_rejects_unauthorized_ineligible_conflicting_and_invalid_deadline(self):
+        invalid = self.user('BAD-OFF', 'Bad', 'admin')
+        for overrides, message in [
+            ({'actor': self.candidate}, 'laboran'),
+            ({'candidate_id': invalid.pk}, 'mahasiswa'),
+            ({'deadline': self.now}, 'masa depan'),
+        ]:
+            with self.subTest(overrides=overrides):
+                with self.assertRaisesMessage(ValidationError, message): self.create_offer(**overrides)
+        self.create_offer()
+        with self.assertRaisesMessage(ValidationError, 'aktif'):
+            self.create_offer()
+
+    def test_offer_ownership_and_deadline_are_enforced(self):
+        offer = self.create_offer(deadline=self.now + timezone.timedelta(seconds=1))
+        other = self.user('OTH-OFF', 'Other', 'mahasiswa')
+        with self.assertRaisesMessage(ValidationError, 'kandidat'):
+            accept_offer(offer_id=offer.pk, candidate=other)
+        with patch('apps.pendaftaran_asleb.replacement_services.timezone.now', return_value=offer.deadline):
+            with self.assertRaisesMessage(ValidationError, 'kedaluwarsa'):
+                accept_offer(offer_id=offer.pk, candidate=self.candidate)
+
+    def candidate_form(self, offer, **changes):
+        transcript_content = changes.pop('transcript_content', b'OFF01 Offer Test Nilai A')
+        include_files = changes.pop('include_files', True)
+        data = {
+            'nama': 'Tampered', 'nim': 'TAMPER', 'no_hp': '000', 'email': 'x@example.com',
+            'program_studi': 'Wrong', 'semester': 5, 'matkul': self.course.pk,
+            'metode_rekening': 'bni', 'rekening': '123456',
+            'nama_pemilik_rekening': 'Candidate', 'nilai_transkrip': 'A', 'alasan': 'Siap',
+        }
+        data.update(changes)
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        files = {
+            'transkrip': SimpleUploadedFile('transkrip.txt', transcript_content),
+            'tanda_tangan': SimpleUploadedFile(
+                'sign.png',
+                base64.b64decode(
+                    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+                ),
+                content_type='image/png',
+            ),
+        } if include_files else {}
+        return ReplacementCandidateForm(data=data, files=files, offer=offer, candidate=self.candidate)
+
+    def test_submit_forces_links_identity_and_revision_reuses_row(self):
+        offer = accept_offer(offer_id=self.create_offer().pk, candidate=self.candidate)
+        form = self.candidate_form(offer)
+        self.assertTrue(form.is_valid(), form.errors)
+        registration = submit_offer_registration(
+            offer_id=offer.pk, candidate=self.candidate, registration_form=form,
+        )
+        offer.refresh_from_db(); self.replacement.refresh_from_db(); self.candidate.refresh_from_db()
+        self.assertEqual(registration.nama, self.candidate.nama_pengguna)
+        self.assertEqual(registration.nim, self.candidate.nim_nik)
+        self.assertEqual(registration.matkul, self.course)
+        self.assertEqual(registration.periode, self.period)
+        self.assertEqual(registration.jenis, PendaftaranAsleb.JENIS_REPLACEMENT)
+        self.assertEqual(offer.status, AslabOffer.STATUS_SUBMITTED)
+        self.assertEqual(self.replacement.status, AslabReplacement.STATUS_WAITING_VERIFICATION)
+        self.assertEqual(self.candidate.role, 'mahasiswa')
+
+        return_offer_for_revision(offer_id=offer.pk, actor=self.laboran, notes='Perbaiki rekening')
+        offer.refresh_from_db(); self.replacement.refresh_from_db()
+        self.assertEqual(offer.registration_id, registration.pk)
+        self.assertIsNone(offer.submitted_at)
+        revised = self.candidate_form(offer)
+        self.assertTrue(revised.is_valid(), revised.errors)
+        result = submit_offer_registration(
+            offer_id=offer.pk, candidate=self.candidate, registration_form=revised,
+        )
+        self.assertEqual(result.pk, registration.pk)
+
+    def test_forms_filter_candidates_reject_tampering_and_require_files_payment_grade(self):
+        unverified = self.user('UNV-OFF', 'Unverified', 'mahasiswa', verified=False)
+        offer_form = DirectOfferForm(replacement=self.replacement, actor=self.laboran)
+        self.assertIn(self.candidate, offer_form.fields['candidate'].queryset)
+        self.assertNotIn(unverified, offer_form.fields['candidate'].queryset)
+        offer = accept_offer(offer_id=self.create_offer().pk, candidate=self.candidate)
+        wrong_course = MataKuliahAsleb.objects.create(
+            kode='WRONG01', kode_mk='WR01', nama='Wrong', dosen='D', kelas='X')
+        form = self.candidate_form(offer, matkul=wrong_course.pk, rekening='abc', nilai_transkrip='C')
+        self.assertFalse(form.is_valid())
+        self.assertIn('matkul', form.errors)
+        self.assertIn('rekening', form.errors)
+
+        missing = self.candidate_form(offer, include_files=False, rekening='', nama_pemilik_rekening='')
+        self.assertFalse(missing.is_valid())
+        self.assertIn('transkrip', missing.errors)
+        self.assertIn('tanda_tangan', missing.errors)
+        self.assertIn('rekening', missing.errors)
+        self.assertIn('nama_pemilik_rekening', missing.errors)
+
+        failing_grade = self.candidate_form(
+            offer, transcript_content=b'OFF01 Offer Test Nilai C', nilai_transkrip='A')
+        self.assertFalse(failing_grade.is_valid())
+        self.assertIn('transkrip', failing_grade.errors)
+
+    def test_return_revision_requires_authorization_notes_and_submitted_offer(self):
+        offer = self.create_offer()
+        for actor, notes, message in [(self.candidate, 'x', 'laboran'), (self.laboran, '', 'Catatan')]:
+            with self.assertRaisesMessage(ValidationError, message):
+                return_offer_for_revision(offer_id=offer.pk, actor=actor, notes=notes)
 
 
 class TerminationServiceTests(TestCase):
