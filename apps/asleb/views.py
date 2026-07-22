@@ -28,7 +28,7 @@ from apps.kalender.realtime import send_attendance_update, send_honor_update
 from apps.pengguna.models import Pengguna
 from apps.pendaftaran_asleb.forms import PengaturanBiayaTransferForm
 from apps.pendaftaran_asleb.models import AslabAssignment, PengaturanBiayaTransfer
-from apps.pendaftaran_asleb.replacement_services import end_assignment_for_replacement
+from apps.pendaftaran_asleb.replacement_services import end_single_active_assignment_for_replacement
 from apps.pendaftaran_asleb.services import notify_manual_asleb_removal
 
 from .forms import (
@@ -153,28 +153,9 @@ def end_asleb_membership(request, pk):
         messages.error(request, 'Alasan pengeluaran Aslab wajib diisi sebelum akun dinonaktifkan.')
         return redirect('asleb:asleb_list')
 
-    active_assignments = list(AslabAssignment.objects.filter(
-        asleb=asleb,
-        status=AslabAssignment.STATUS_ACTIVE,
-    ).order_by('pk')[:2])
-    if not active_assignments:
-        messages.error(
-            request,
-            'Aslab ini belum memiliki penugasan aktif. Jalankan audit slot sebelum mengakhiri masa tugas.',
-        )
-        return redirect('asleb:asleb_list')
-    if len(active_assignments) > 1:
-        messages.error(
-            request,
-            'Aslab ini memiliki beberapa penugasan aktif. Silakan pilih mata kuliah/slot tertentu '
-            'melalui alur penggantian baru.',
-        )
-        return redirect('asleb:asleb_list')
-    assignment = active_assignments[0]
-
     try:
-        end_assignment_for_replacement(
-            assignment_id=assignment.pk,
+        end_single_active_assignment_for_replacement(
+            asleb_id=asleb.pk,
             actor=pengguna,
             reason_type='dismissal',
             reason=alasan_pengeluaran,

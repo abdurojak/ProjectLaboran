@@ -469,7 +469,7 @@ class AslebViewTests(TestCase):
         self.assertIn('Status Asisten Lab Dinonaktifkan', mail.outbox[0].subject)
 
     @patch('apps.asleb.views.timezone.localdate', return_value=date(2026, 10, 15))
-    @patch('apps.asleb.views.end_assignment_for_replacement')
+    @patch('apps.asleb.views.end_single_active_assignment_for_replacement')
     def test_end_membership_delegates_to_replacement_service(self, end_assignment, _localdate):
         assignment = self.create_active_assignment()
         end_assignment.return_value = AslabReplacement(
@@ -483,7 +483,7 @@ class AslebViewTests(TestCase):
 
         self.assertRedirects(response, reverse('asleb:asleb_list'))
         end_assignment.assert_called_once_with(
-            assignment_id=assignment.pk,
+            asleb_id=self.asleb.pk,
             actor=self.pengguna,
             reason_type='dismissal',
             reason='Pelanggaran aturan.',
@@ -530,7 +530,7 @@ class AslebViewTests(TestCase):
         self.assertFalse(AslabReplacement.objects.exists())
 
     @patch('apps.asleb.views.timezone.localdate', return_value=date(2026, 10, 15))
-    @patch('apps.asleb.views.end_assignment_for_replacement')
+    @patch('apps.asleb.views.end_single_active_assignment_for_replacement')
     def test_end_membership_does_not_send_global_notification_when_access_remains(
         self, end_assignment, _localdate,
     ):
