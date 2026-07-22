@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
@@ -259,6 +260,148 @@ class RiwayatAsleb(models.Model):
 
     def __str__(self):
         return f'{self.nama} - {self.matkul} - {self.periode}'
+
+
+class AslabSlot(models.Model):
+    STATUS_ACTIVE = 'active'
+    STATUS_VACANT = 'vacant'
+    STATUS_CLOSED = 'closed'
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, 'Aktif'),
+        (STATUS_VACANT, 'Kosong'),
+        (STATUS_CLOSED, 'Ditutup'),
+    ]
+
+    periode = models.ForeignKey(
+        PeriodeAsleb,
+        on_delete=models.PROTECT,
+        related_name='aslab_slots',
+    )
+    matkul = models.ForeignKey(
+        MataKuliahAsleb,
+        on_delete=models.PROTECT,
+        related_name='aslab_slots',
+    )
+    nomor = models.PositiveSmallIntegerField()
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+    diperbarui_pada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['periode', 'matkul', 'nomor']
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(nomor__in=[1, 2]),
+                name='aslab_slot_number_1_or_2',
+            ),
+            models.UniqueConstraint(
+                fields=['periode', 'matkul', 'nomor'],
+                name='unique_aslab_slot',
+            ),
+        ]
+        verbose_name = 'Slot Aslab'
+        verbose_name_plural = 'Slot Aslab'
+
+    def __str__(self):
+        return f'{self.periode} - {self.matkul} - Slot {self.nomor}'
+
+
+class AslabAssignment(models.Model):
+    STATUS_PENDING = 'pending'
+    STATUS_ACTIVE = 'active'
+    STATUS_RESIGNED = 'resigned'
+    STATUS_TERMINATED = 'terminated'
+    STATUS_REPLACED = 'replaced'
+    STATUS_COMPLETED = 'completed'
+    STATUS_CANCELLED = 'cancelled'
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Menunggu'),
+        (STATUS_ACTIVE, 'Aktif'),
+        (STATUS_RESIGNED, 'Mengundurkan Diri'),
+        (STATUS_TERMINATED, 'Diberhentikan'),
+        (STATUS_REPLACED, 'Digantikan'),
+        (STATUS_COMPLETED, 'Selesai'),
+        (STATUS_CANCELLED, 'Dibatalkan'),
+    ]
+
+    slot = models.ForeignKey(
+        AslabSlot,
+        on_delete=models.PROTECT,
+        related_name='assignments',
+    )
+    active_slot = models.OneToOneField(
+        AslabSlot,
+        on_delete=models.PROTECT,
+        related_name='active_assignment',
+        null=True,
+        blank=True,
+        editable=False,
+    )
+    asleb = models.ForeignKey(
+        'asleb.Asleb',
+        on_delete=models.PROTECT,
+        related_name='assignments',
+    )
+    source_pendaftaran = models.ForeignKey(
+        PendaftaranAsleb,
+        on_delete=models.SET_NULL,
+        related_name='aslab_assignments',
+        null=True,
+        blank=True,
+    )
+    mulai_pada = models.DateField()
+    berakhir_pada = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    alasan_berakhir = models.TextField(blank=True)
+    diakhiri_oleh = models.ForeignKey(
+        'pengguna.Pengguna',
+        on_delete=models.SET_NULL,
+        related_name='aslab_assignments_ended',
+        null=True,
+        blank=True,
+    )
+    menggantikan = models.OneToOneField(
+        'self',
+        on_delete=models.SET_NULL,
+        related_name='digantikan_oleh',
+        null=True,
+        blank=True,
+    )
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+    diperbarui_pada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-mulai_pada', '-dibuat_pada']
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    models.Q(
+                        status='active',
+                        active_slot__isnull=False,
+                        active_slot=models.F('slot'),
+                    )
+                    | (~models.Q(status='active') & models.Q(active_slot__isnull=True))
+                ),
+                name='active_assignment_slot_guard',
+            ),
+        ]
+        verbose_name = 'Penugasan Aslab'
+        verbose_name_plural = 'Penugasan Aslab'
+
+    def clean(self):
+        super().clean()
+        expected_active_slot_id = self.slot_id if self.status == self.STATUS_ACTIVE else None
+        if self.active_slot_id != expected_active_slot_id:
+            raise ValidationError({
+                'active_slot': 'Guard slot aktif harus sesuai dengan slot dan status penugasan.',
+            })
+
+    def save(self, *args, **kwargs):
+        self.active_slot_id = self.slot_id if self.status == self.STATUS_ACTIVE else None
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.asleb} - {self.slot} - {self.get_status_display()}'
 
 
 class PengaturanBiayaTransfer(models.Model):
