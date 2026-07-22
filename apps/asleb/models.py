@@ -293,8 +293,11 @@ class HonorReassignment(models.Model):
             ),
             models.CheckConstraint(
                 check=(
-                    models.Q(status='reassigned', final_asleb__isnull=False)
-                    | models.Q(status__in=['held', 'correction_required'], final_asleb__isnull=True)
+                    models.Q(
+                        status__in=['reassigned', 'correction_required'],
+                        final_asleb__isnull=False,
+                    )
+                    | models.Q(status='held', final_asleb__isnull=True)
                 ),
                 name='honor_reassignment_final_guard',
             ),

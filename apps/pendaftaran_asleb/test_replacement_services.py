@@ -114,7 +114,7 @@ class HonorReassignmentTests(TestCase):
         audit = HonorReassignment.objects.get(honor=paid)
         self.assertEqual(paid.asleb, self.outgoing)
         self.assertEqual(audit.status, HonorReassignment.STATUS_CORRECTION_REQUIRED)
-        self.assertIsNone(audit.final_asleb)
+        self.assertEqual(audit.final_asleb, self.incoming)
 
     def test_idempotent_and_does_not_fabricate_missing_months(self):
         existing = self.honor(self.outgoing, date(2026, 11, 1))

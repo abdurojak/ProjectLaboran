@@ -66,7 +66,7 @@ def reassign_replacement_honor(*, replacement, incoming_asleb, actor):
                 honor=honor,
                 bulan=month,
                 original_asleb=outgoing,
-                final_asleb=None,
+                final_asleb=incoming,
                 status=HonorReassignment.STATUS_CORRECTION_REQUIRED,
                 reason='Honor sudah terkunci/dibayar dan memerlukan koreksi manual.',
                 acted_by=actor,
