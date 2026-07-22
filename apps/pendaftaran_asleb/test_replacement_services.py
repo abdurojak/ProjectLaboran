@@ -164,7 +164,7 @@ class DirectOfferServiceTests(TestCase):
         self.assertEqual(history_locks, [])
 
     def test_offer_ownership_and_deadline_are_enforced(self):
-        offer = self.create_offer(deadline=self.now + timezone.timedelta(seconds=1))
+        offer = self.create_offer(deadline=self.now + timezone.timedelta(days=1))
         other = self.user('OTH-OFF', 'Other', 'mahasiswa')
         with self.assertRaisesMessage(ValidationError, 'kandidat'):
             accept_offer(offer_id=offer.pk, candidate=other)
@@ -192,7 +192,7 @@ class DirectOfferServiceTests(TestCase):
                 self.assertEqual(offer.status, AslabOffer.STATUS_WAITING)
 
     def test_expiry_batch_skips_stale_offer_without_rolling_back_valid_offer(self):
-        valid_offer = self.create_offer(deadline=self.now + timezone.timedelta(seconds=1))
+        valid_offer = self.create_offer(deadline=self.now + timezone.timedelta(days=1))
 
         other_candidate = self.user('EXP-OTHER', 'Expiry Other', 'mahasiswa')
         other_course = MataKuliahAsleb.objects.create(
