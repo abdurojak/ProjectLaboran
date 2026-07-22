@@ -33,6 +33,7 @@ class PenggunaLoginRequiredMiddleware:
         'laporan_tugas_create',
         'laporan_submit',
         'laporan_review',
+        'laporan_delete',
         'laporan_preview',
         'laporan_download',
     }

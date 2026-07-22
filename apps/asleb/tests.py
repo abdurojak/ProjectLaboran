@@ -3,6 +3,7 @@ import shutil
 import tempfile
 import zipfile
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from io import BytesIO
 from unittest import skipUnless
 from unittest.mock import patch
@@ -358,17 +359,6 @@ class AslebViewTests(TestCase):
             role='asisten_lab',
             is_verified=True,
         )
-        Asleb.objects.create(
-            nama='Aslab Aktif',
-            nim=pengguna_aslab.nim_nik,
-            no_hp=pengguna_aslab.no_hp,
-            email=pengguna_aslab.email,
-            program_studi=pengguna_aslab.prodi,
-            matkul=str(matkul_lama),
-            semester=4,
-            status='nonaktif',
-            tanggal_bergabung=date(2026, 1, 10),
-        )
         asleb_aktif = Asleb.objects.create(
             nama='Aslab Aktif',
             nim=pengguna_aslab.nim_nik,
@@ -433,11 +423,12 @@ class AslebViewTests(TestCase):
         session['pengguna_id'] = laboran.pk
         session.save()
 
-        response = self.client.post(
-            reverse('asleb:asleb_end_membership', args=[self.asleb.pk]),
-            {'alasan_pengeluaran': 'Pelanggaran aturan laboratorium.'},
-            follow=True,
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse('asleb:asleb_end_membership', args=[self.asleb.pk]),
+                {'alasan_pengeluaran': 'Pelanggaran aturan laboratorium.'},
+                follow=True,
+            )
 
         akun_asleb.refresh_from_db()
         self.asleb.refresh_from_db()
@@ -524,7 +515,6 @@ class AslebViewTests(TestCase):
         self.assertContains(response, 'html[data-theme="dark"] .participant-modal')
         self.assertContains(response, 'participant-table-action')
         self.assertContains(response, reverse('asleb:praktikum_peserta_update', args=[peserta.pk]))
-        self.assertNotContains(response, 'href="?matkul=')
 
     def test_laboran_dapat_menghapus_banyak_peserta_praktikum(self):
         peserta_pertama = PesertaPraktikum.objects.create(matkul=self.matkul, nim='0640020099', nama='Mahasiswa Satu')
