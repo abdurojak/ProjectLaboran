@@ -398,6 +398,12 @@ class AslabAssignment(models.Model):
 
     def save(self, *args, **kwargs):
         self.active_slot_id = self.slot_id if self.status == self.STATUS_ACTIVE else None
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None:
+            persisted_fields = set(update_fields)
+            if persisted_fields.intersection({'status', 'slot'}):
+                persisted_fields.add('active_slot')
+            kwargs['update_fields'] = persisted_fields
         super().save(*args, **kwargs)
 
     def __str__(self):

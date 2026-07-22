@@ -4,6 +4,35 @@ from django.db import migrations, models
 import django.db.models.deletion
 
 
+def ensure_check_constraints_supported(apps, schema_editor):
+    connection = schema_editor.connection
+    if connection.vendor != 'mysql':
+        return
+
+    version = getattr(connection, 'mysql_version', None)
+    is_mariadb = getattr(connection, 'mysql_is_mariadb', False)
+    if not isinstance(version, (tuple, list)):
+        raise RuntimeError(
+            'Cannot determine the MySQL/MariaDB server version required '
+            'for enforced CHECK constraints.'
+        )
+
+    version = tuple(version)
+    if is_mariadb:
+        if version < (10, 2, 1):
+            raise RuntimeError(
+                'Aslab assignment constraints require MariaDB 10.2.1 or newer '
+                'with enforced CHECK constraints.'
+            )
+        return
+
+    if version < (8, 0, 16):
+        raise RuntimeError(
+            'Aslab assignment constraints require MySQL 8.0.16 or newer '
+            'with enforced CHECK constraints.'
+        )
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -13,6 +42,10 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunPython(
+            ensure_check_constraints_supported,
+            reverse_code=migrations.RunPython.noop,
+        ),
         migrations.CreateModel(
             name='AslabSlot',
             fields=[
