@@ -184,6 +184,35 @@ class HonorReassignmentTests(TestCase):
         self.assertIn(honor, HonorAsleb.objects.all())
         self.assertNotIn(honor, payment_eligible_honors(HonorAsleb.objects.all()))
 
+    def test_honor_created_after_termination_is_held_by_workflow_then_reassigned(self):
+        late_honor = self.honor(self.outgoing, date(2026, 11, 1))
+        self.assertFalse(HonorReassignment.objects.filter(honor=late_honor).exists())
+
+        self.assertNotIn(late_honor, payment_eligible_honors(HonorAsleb.objects.all()))
+        request = RequestFactory().get('/asleb/honor/')
+        request.current_pengguna = self.laboran
+        view = HonorAslebListView()
+        view.request = request
+        self.assertIn(late_honor, view.get_queryset())
+
+        self.replacement_registration()
+        self.run_service()
+
+        late_honor.refresh_from_db()
+        self.assertEqual(late_honor.asleb, self.incoming)
+        self.assertIn(late_honor, payment_eligible_honors(HonorAsleb.objects.all()))
+        self.assertEqual(
+            HonorReassignment.objects.get(honor=late_honor).status,
+            HonorReassignment.STATUS_REASSIGNED,
+        )
+
+    def test_cancelled_replacement_explicitly_releases_late_honor(self):
+        late_honor = self.honor(self.outgoing, date(2026, 11, 1))
+        self.replacement.status = AslabReplacement.STATUS_CANCELLED
+        self.replacement.save(update_fields=['status', 'updated_at'])
+
+        self.assertIn(late_honor, payment_eligible_honors(HonorAsleb.objects.all()))
+
     def test_held_audit_requires_real_honor_row(self):
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
@@ -212,6 +241,7 @@ class HonorReassignmentTests(TestCase):
         self.assertEqual(honor.asleb, self.outgoing)
         self.assertEqual(audit.status, HonorReassignment.STATUS_CORRECTION_REQUIRED)
         self.assertEqual(audit.final_asleb, self.incoming)
+        self.assertNotIn(honor, payment_eligible_honors(HonorAsleb.objects.all()))
 
     def test_unlocked_reassignment_uses_incoming_registration_account(self):
         self.replacement_registration()
