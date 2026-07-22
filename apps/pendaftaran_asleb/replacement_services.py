@@ -337,6 +337,39 @@ def _reject_live_opening_applications(opening, *, except_registration_id=None):
         registration.save(update_fields=['status'])
 
 
+def _terminalize_selected_limited_registration(*, replacement, offer, actor, action):
+    if not offer.registration_id:
+        return False
+    opening = LimitedReplacementOpening.objects.select_for_update().filter(
+        replacement=replacement,
+    ).first()
+    if opening is None or opening.status != LimitedReplacementOpening.STATUS_FILLED:
+        return False
+    try:
+        registration = PendaftaranAsleb.objects.select_for_update().get(
+            pk=offer.registration_id,
+            replacement_process=replacement,
+            candidate_user_id=offer.candidate_id,
+            jenis=PendaftaranAsleb.JENIS_REPLACEMENT,
+        )
+    except PendaftaranAsleb.DoesNotExist as exc:
+        raise ValidationError('Pendaftaran terpilih tidak lagi sesuai dengan penawaran.') from exc
+    if registration.status in PendaftaranAsleb.LIVE_REPLACEMENT_STATUSES:
+        registration.status = 'ditolak'
+        registration.save(update_fields=['status'])
+    opening.status = LimitedReplacementOpening.STATUS_CLOSED
+    opening.save(update_fields=['status', 'updated_at'])
+    _audit(
+        replacement, actor, action, replacement.status, replacement.status,
+        metadata={
+            'opening_id': opening.pk,
+            'offer_id': offer.pk,
+            'registration_id': registration.pk,
+        },
+    )
+    return True
+
+
 @transaction.atomic
 def open_limited_registration(
     *, replacement_id, actor, opens_at, closes_at, program_studi='', cohort=None,
@@ -362,23 +395,39 @@ def open_limited_registration(
         raise ValidationError('Status proses tidak dapat membuka pendaftaran terbatas.')
     if slot.status != AslabSlot.STATUS_VACANT:
         raise ValidationError('Slot penggantian tidak lagi kosong.')
-    if LimitedReplacementOpening.objects.select_for_update().filter(
+    opening = LimitedReplacementOpening.objects.select_for_update().filter(
         replacement=replacement,
-    ).exists():
-        raise ValidationError('Pendaftaran terbatas untuk proses ini sudah pernah dibuat.')
+    ).first()
+    if opening is not None and opening.status != LimitedReplacementOpening.STATUS_CLOSED:
+        raise ValidationError('Pendaftaran terbatas untuk proses ini masih aktif atau sudah terisi.')
     try:
-        opening = LimitedReplacementOpening.objects.create(
-            replacement=replacement, opens_at=opens_at, closes_at=closes_at,
-            program_studi=(program_studi or '').strip(), cohort=cohort,
-            additional_requirements=(requirements or '').strip(),
-            status=LimitedReplacementOpening.STATUS_OPEN,
-        )
+        recycled = opening is not None
+        if recycled:
+            opening.opens_at = opens_at
+            opening.closes_at = closes_at
+            opening.program_studi = (program_studi or '').strip()
+            opening.cohort = cohort
+            opening.additional_requirements = (requirements or '').strip()
+            opening.status = LimitedReplacementOpening.STATUS_OPEN
+            opening.save(update_fields=[
+                'opens_at', 'closes_at', 'program_studi', 'cohort',
+                'additional_requirements', 'status', 'updated_at',
+            ])
+        else:
+            opening = LimitedReplacementOpening.objects.create(
+                replacement=replacement, opens_at=opens_at, closes_at=closes_at,
+                program_studi=(program_studi or '').strip(), cohort=cohort,
+                additional_requirements=(requirements or '').strip(),
+                status=LimitedReplacementOpening.STATUS_OPEN,
+            )
         candidate_ids = sorted(set(allowed_candidate_ids or ()))
         if candidate_ids:
             candidates = list(Pengguna.objects.filter(pk__in=candidate_ids).order_by('pk'))
             if len(candidates) != len(candidate_ids):
                 raise ValidationError('Daftar kandidat yang diizinkan tidak valid.')
             opening.allowed_candidates.set(candidates)
+        else:
+            opening.allowed_candidates.clear()
     except IntegrityError as exc:
         raise ValidationError('Pendaftaran terbatas untuk proses ini sudah dibuat.') from exc
     previous = replacement.status
@@ -386,7 +435,7 @@ def open_limited_registration(
     replacement.status = AslabReplacement.STATUS_SEARCHING
     replacement.save(update_fields=['method', 'status', 'updated_at'])
     _audit(replacement, actor, 'limited_registration_opened', previous, replacement.status,
-           metadata={'opening_id': opening.pk, 'quota': 1})
+           metadata={'opening_id': opening.pk, 'quota': 1, 'recycled': recycled})
     return opening
 
 
@@ -813,6 +862,10 @@ def decline_offer(*, offer_id, candidate, reason=''):
     offer.responded_at = timezone.now()
     offer.decline_reason = (reason or '').strip()
     offer.save(update_fields=['status', 'responded_at', 'decline_reason'])
+    _terminalize_selected_limited_registration(
+        replacement=replacement, offer=offer, actor=candidate,
+        action='limited_selection_declined',
+    )
     replacement.status = AslabReplacement.STATUS_WAITING_ACTION
     replacement.save(update_fields=['status', 'updated_at'])
     _audit(replacement, candidate, 'offer_declined', previous, replacement.status,
@@ -846,6 +899,10 @@ def _expire_due_offer(*, offer_id, now):
     previous = replacement.status
     offer.status = AslabOffer.STATUS_EXPIRED
     offer.save(update_fields=['status'])
+    _terminalize_selected_limited_registration(
+        replacement=replacement, offer=offer, actor=None,
+        action='limited_selection_expired',
+    )
     replacement.status = AslabReplacement.STATUS_WAITING_ACTION
     replacement.save(update_fields=['status', 'updated_at'])
     _audit(replacement, None, 'offer_expired', previous, replacement.status,

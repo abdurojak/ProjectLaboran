@@ -322,6 +322,81 @@ class LimitedRegistrationTests(TestCase):
                 opening_id=opening.pk, registration_id=registration.pk, actor=self.laboran,
             )
 
+    def test_selected_decline_terminalizes_history_and_allows_explicit_reopen(self):
+        opening = self.open(program_studi='TI', cohort=2023,
+                            allowed_candidate_ids=[self.candidate.pk], requirements='Awal')
+        selected = self.apply(opening)
+        offer = select_limited_candidate(
+            opening_id=opening.pk, registration_id=selected.pk, actor=self.laboran,
+        )
+
+        decline_offer(offer_id=offer.pk, candidate=self.candidate, reason='Tidak bersedia')
+
+        opening.refresh_from_db(); selected.refresh_from_db(); self.replacement.refresh_from_db()
+        self.assertEqual(selected.status, 'ditolak')
+        self.assertIsNone(selected.live_candidate_user_id)
+        self.assertEqual(opening.status, LimitedReplacementOpening.STATUS_CLOSED)
+        self.assertEqual(self.replacement.status, AslabReplacement.STATUS_WAITING_ACTION)
+        replacement_opening_count = LimitedReplacementOpening.objects.filter(
+            replacement=self.replacement).count()
+
+        reopened = self.open(
+            opens_at=self.now,
+            closes_at=self.now + timezone.timedelta(days=3),
+            program_studi='', cohort=None, allowed_candidate_ids=[], requirements='Putaran baru',
+        )
+        retried_registration = submit_limited_application(
+            opening_id=reopened.pk, candidate=self.candidate,
+            cleaned_data=self.application_data(), files=self.application_files(),
+        )
+        new_candidate = self.user('20240002', 'New Candidate', 'mahasiswa')
+        new_registration = submit_limited_application(
+            opening_id=reopened.pk, candidate=new_candidate,
+            cleaned_data=self.application_data(), files=self.application_files(),
+        )
+
+        self.assertEqual(reopened.pk, opening.pk)
+        self.assertEqual(replacement_opening_count, 1)
+        self.assertEqual(LimitedReplacementOpening.objects.filter(
+            replacement=self.replacement).count(), 1)
+        self.assertEqual(selected.status, 'ditolak')
+        self.assertNotEqual(retried_registration.pk, selected.pk)
+        self.assertNotEqual(new_registration.pk, selected.pk)
+        reopened.refresh_from_db()
+        self.assertEqual(reopened.additional_requirements, 'Putaran baru')
+        self.assertFalse(reopened.allowed_candidates.exists())
+
+    def test_selected_expiry_terminalizes_history_and_requires_explicit_reopen(self):
+        opening = self.open()
+        selected = self.apply(opening)
+        offer = select_limited_candidate(
+            opening_id=opening.pk, registration_id=selected.pk, actor=self.laboran,
+        )
+
+        self.assertEqual(expire_due_offers(now=offer.deadline), 1)
+
+        opening.refresh_from_db(); selected.refresh_from_db(); self.replacement.refresh_from_db()
+        self.assertEqual(selected.status, 'ditolak')
+        self.assertIsNone(selected.live_candidate_user_id)
+        self.assertEqual(opening.status, LimitedReplacementOpening.STATUS_CLOSED)
+        self.assertEqual(self.replacement.status, AslabReplacement.STATUS_WAITING_ACTION)
+        self.assertEqual(expire_due_offers(now=offer.deadline), 0)
+        opening.refresh_from_db()
+        self.assertEqual(opening.status, LimitedReplacementOpening.STATUS_CLOSED)
+
+        reopened = self.open(
+            opens_at=self.now,
+            closes_at=self.now + timezone.timedelta(days=4),
+        )
+        retried = submit_limited_application(
+            opening_id=reopened.pk, candidate=self.candidate,
+            cleaned_data=self.application_data(), files=self.application_files(),
+        )
+        self.assertEqual(reopened.pk, opening.pk)
+        self.assertEqual(reopened.status, LimitedReplacementOpening.STATUS_OPEN)
+        self.assertNotEqual(retried.pk, selected.pk)
+        self.assertTrue(PendaftaranAsleb.objects.filter(pk=selected.pk, status='ditolak').exists())
+
 
 @skipUnless(connection.vendor == 'mysql', 'Concurrency contract uses MySQL row locks.')
 class LimitedRegistrationConcurrencyTests(TransactionTestCase):
@@ -451,6 +526,29 @@ class LimitedRegistrationConcurrencyTests(TransactionTestCase):
         else:
             self.assertEqual(opening.status, LimitedReplacementOpening.STATUS_OPEN)
             self.assertEqual(self.replacement.status, AslabReplacement.STATUS_SEARCHING)
+
+    def test_concurrent_reopen_reuses_one_terminal_opening(self):
+        opening = self.open()
+        selected = self.apply(opening)
+        offer = select_limited_candidate(
+            opening_id=opening.pk, registration_id=selected.pk, actor=self.laboran,
+        )
+        decline_offer(offer_id=offer.pk, candidate=self.candidate)
+
+        def operation():
+            return open_limited_registration(
+                replacement_id=self.replacement.pk,
+                actor=Pengguna.objects.get(pk=self.laboran.pk),
+                opens_at=self.now + timezone.timedelta(minutes=1),
+                closes_at=self.now + timezone.timedelta(days=2),
+            ).pk
+
+        results = self.race([operation, operation])
+        self.assertEqual(sum(kind == 'ok' for kind, _ in results), 1)
+        self.assertEqual(LimitedReplacementOpening.objects.filter(
+            replacement=self.replacement).count(), 1)
+        opening.refresh_from_db()
+        self.assertEqual(opening.status, LimitedReplacementOpening.STATUS_OPEN)
 
 
 class HonorReassignmentTests(TestCase):
