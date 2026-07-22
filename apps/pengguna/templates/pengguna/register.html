@@ -26,6 +26,29 @@
 
     <form method="post" enctype="multipart/form-data" class="register-form surface-card p-6 md:p-7" data-register-form>
         {% csrf_token %}
+        {% if form.errors %}
+        <div class="mb-6 rounded-2xl border border-rose-300 bg-rose-50 p-4 text-rose-900 shadow-sm" role="alert" aria-live="assertive" data-register-error-summary>
+            <div class="flex items-start gap-3">
+                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-700">
+                    <i data-lucide="circle-alert" class="h-5 w-5"></i>
+                </span>
+                <div>
+                    <p class="font-black">Registrasi belum berhasil</p>
+                    <p class="mt-1 text-sm font-semibold text-rose-700">Periksa data berikut, lalu kirim kembali formulir:</p>
+                    <ul class="mt-2 list-disc space-y-1 pl-5 text-sm font-semibold">
+                        {% for field in form %}
+                            {% for error in field.errors %}
+                            <li><strong>{{ field.label }}:</strong> {{ error }}</li>
+                            {% endfor %}
+                        {% endfor %}
+                        {% for error in form.non_field_errors %}
+                        <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+        {% endif %}
         <div class="register-grid">
             {% for field in form %}
             <div class="{% if field.name == 'nama_pengguna' %}span-2{% elif field.name == 'alamat' %}span-3{% endif %}">
@@ -189,6 +212,17 @@
         border-left-color: rgba(71, 85, 105, 0.75);
         background: rgba(45, 212, 191, 0.12);
         color: #99f6e4;
+    }
+
+    html[data-theme="dark"] [data-register-error-summary] {
+        border-color: rgba(251, 113, 133, 0.45);
+        background: rgba(136, 19, 55, 0.22);
+        color: #ffe4e6;
+    }
+
+    html[data-theme="dark"] [data-register-error-summary] p,
+    html[data-theme="dark"] [data-register-error-summary] li {
+        color: #fecdd3;
     }
 
     .register-form [data-file-upload] > div {

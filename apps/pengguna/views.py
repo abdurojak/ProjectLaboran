@@ -645,6 +645,13 @@ class PenggunaRegisterView(CreateView):
         messages.success(self.request, 'Registrasi berhasil. Masukkan kode verifikasi untuk mengaktifkan akun.')
         return response
 
+    def form_invalid(self, form):
+        messages.error(
+            self.request,
+            'Registrasi gagal. Periksa kembali data yang ditandai pada formulir.',
+        )
+        return super().form_invalid(form)
+
 
 class PenggunaVerifyRegisterView(FormView):
     template_name = 'pengguna/verify_register.html'

@@ -26,4 +26,14 @@ class UserProfile {
     programStudi: json['program_studi'] as String? ?? '-',
     fotoUrl: json['foto_url'] as String?,
   );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'nama': nama,
+    'identitas': identitas,
+    'email': email,
+    'role': role,
+    'program_studi': programStudi,
+    'foto_url': fotoUrl,
+  };
 }
