@@ -39,7 +39,12 @@ class AslabReplacementAdmin(ReadOnlyWorkflowAdmin):
 class AslabOfferAdmin(ReadOnlyWorkflowAdmin):
     list_display = ('candidate', 'replacement', 'status', 'deadline', 'verified_at')
     list_filter = ('status',)
-    list_select_related = ('candidate', 'replacement__slot', 'registration', 'verified_by')
+    list_select_related = (
+        'candidate', 'replacement__slot',
+        'replacement__outgoing_assignment__asleb',
+        'replacement__outgoing_assignment__slot',
+        'registration', 'verified_by',
+    )
     readonly_fields = [field.name for field in AslabOffer._meta.fields]
 
 
@@ -47,7 +52,11 @@ class AslabOfferAdmin(ReadOnlyWorkflowAdmin):
 class LimitedReplacementOpeningAdmin(ReadOnlyWorkflowAdmin):
     list_display = ('replacement', 'opens_at', 'closes_at', 'status')
     list_filter = ('status',)
-    list_select_related = ('replacement__slot',)
+    list_select_related = (
+        'replacement__slot',
+        'replacement__outgoing_assignment__asleb',
+        'replacement__outgoing_assignment__slot',
+    )
     readonly_fields = [field.name for field in LimitedReplacementOpening._meta.fields]
 
 
@@ -55,7 +64,12 @@ class LimitedReplacementOpeningAdmin(ReadOnlyWorkflowAdmin):
 class AslabReplacementAuditAdmin(ReadOnlyWorkflowAdmin):
     list_display = ('replacement', 'action', 'previous_state', 'new_state', 'actor', 'created_at')
     list_filter = ('action', 'new_state')
-    list_select_related = ('replacement__slot', 'actor')
+    list_select_related = (
+        'replacement__slot',
+        'replacement__outgoing_assignment__asleb',
+        'replacement__outgoing_assignment__slot',
+        'actor',
+    )
     readonly_fields = [field.name for field in AslabReplacementAudit._meta.fields]
 
 
