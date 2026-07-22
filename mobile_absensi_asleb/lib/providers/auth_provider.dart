@@ -6,7 +6,9 @@ import '../services/api_service.dart';
 import '../services/token_storage.dart';
 
 class AuthProvider extends ChangeNotifier {
-  AuthProvider(this.api, this.storage);
+  AuthProvider(this.api, this.storage) {
+    api.onSessionExpired = _expireSession;
+  }
 
   final ApiService api;
   final TokenStorage storage;
@@ -16,6 +18,12 @@ class AuthProvider extends ChangeNotifier {
   String? error;
 
   bool get isAuthenticated => user != null;
+
+  void _expireSession() {
+    user = null;
+    error = 'Sesi Anda telah berakhir. Silakan login kembali.';
+    notifyListeners();
+  }
 
   Future<void> restoreSession() async {
     initializing = true;

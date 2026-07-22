@@ -52,6 +52,7 @@ class ApiService {
             return handler.resolve(await dio.fetch(request));
           } catch (_) {
             await storage.clear();
+            onSessionExpired?.call();
             return handler.next(error);
           }
         },
@@ -61,6 +62,7 @@ class ApiService {
 
   final Dio dio;
   final TokenStorage storage;
+  void Function()? onSessionExpired;
 
   Future<UserProfile> login(String identifier, String password) async {
     try {

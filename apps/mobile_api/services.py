@@ -21,8 +21,16 @@ def get_asleb_course_labels(asleb):
     registrations = PendaftaranAsleb.objects.filter(
         nim=asleb.nim,
         status__in=['diterima', 'digenerate'],
-    ).select_related('matkul')
-    history = RiwayatAsleb.objects.filter(nim=asleb.nim).select_related('matkul')
+    )
+    history = RiwayatAsleb.objects.filter(nim=asleb.nim)
+    if asleb.periode_aktif_id:
+        registrations = registrations.filter(periode_id=asleb.periode_aktif_id)
+        history = history.filter(periode_id=asleb.periode_aktif_id)
+    else:
+        registrations = registrations.filter(periode__isnull=True)
+        history = history.none()
+    registrations = registrations.select_related('matkul')
+    history = history.select_related('matkul')
     labels = {str(item.matkul) for item in registrations}
     labels.update(str(item.matkul) for item in history)
     if asleb.matkul:

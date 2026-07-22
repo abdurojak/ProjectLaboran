@@ -20,6 +20,7 @@ from apps.asleb.models import (
     PengaturanAbsensiAsleb,
 )
 from apps.asleb.views import sync_honor_from_absensi
+from apps.mobile_api.models import MobileSession
 from apps.inventaris.models import Barang, FotoInventarisBarang, InventarisBarang, Lokasi
 from apps.core.models import PercakapanBantuan, PesanBantuan
 from apps.jadwal.models import JadwalPraktikum
@@ -74,6 +75,7 @@ class MobileAbsensiApiTests(TestCase):
             nama=self.user.nama_pengguna, nim=self.user.nim_nik, no_hp=self.user.no_hp,
             email=self.user.email, program_studi=self.user.prodi, semester=5,
             matkul=str(self.matkul), tanggal_bergabung=date.today(), status='aktif',
+            periode_aktif=self.period,
         )
         RiwayatAsleb.objects.create(
             nim=self.user.nim_nik, nama=self.user.nama_pengguna, email=self.user.email,
@@ -170,6 +172,89 @@ class MobileAbsensiApiTests(TestCase):
         denied = self.client.get(reverse('mobile_api:chat_admin'))
         self.assertEqual(denied.status_code, 403)
 
+    def test_logout_mencabut_access_dan_refresh_token(self):
+        login = self.client.post(reverse('mobile_api:login'), {
+            'identifier': self.user.email,
+            'password': 'Password123!',
+        }, format='json')
+        access = login.data['tokens']['access']
+        refresh = login.data['tokens']['refresh']
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {access}')
+
+        logout = self.client.post(reverse('mobile_api:logout'))
+
+        self.assertEqual(logout.status_code, 204)
+        self.assertIsNotNone(MobileSession.objects.get().revoked_at)
+        self.assertEqual(self.client.get(reverse('mobile_api:profile')).status_code, 403)
+        self.client.credentials()
+        refresh_response = self.client.post(
+            reverse('mobile_api:refresh'), {'refresh': refresh}, format='json'
+        )
+        self.assertEqual(refresh_response.status_code, 403)
+
+    def test_refresh_token_hanya_dapat_dipakai_sekali(self):
+        login = self.client.post(reverse('mobile_api:login'), {
+            'identifier': self.user.email,
+            'password': 'Password123!',
+        }, format='json')
+        refresh = login.data['tokens']['refresh']
+
+        first = self.client.post(
+            reverse('mobile_api:refresh'), {'refresh': refresh}, format='json'
+        )
+        second = self.client.post(
+            reverse('mobile_api:refresh'), {'refresh': refresh}, format='json'
+        )
+
+        self.assertEqual(first.status_code, 200, first.data)
+        self.assertEqual(second.status_code, 403)
+
+    @override_settings(LOGIN_MAX_ATTEMPTS=2, LOGIN_LOCKOUT_SECONDS=60)
+    def test_login_dibatasi_setelah_password_salah_berulang(self):
+        payload = {'identifier': self.user.email, 'password': 'salah'}
+
+        self.assertEqual(
+            self.client.post(reverse('mobile_api:login'), payload, format='json').status_code,
+            401,
+        )
+        self.assertEqual(
+            self.client.post(reverse('mobile_api:login'), payload, format='json').status_code,
+            401,
+        )
+        locked = self.client.post(reverse('mobile_api:login'), {
+            'identifier': self.user.email,
+            'password': 'Password123!',
+        }, format='json')
+
+        self.assertEqual(locked.status_code, 429)
+        self.assertEqual(locked.data['code'], 'login_locked')
+
+    def test_jadwal_periode_lama_tidak_muncul_di_aplikasi(self):
+        old_period = PeriodeAsleb.objects.create(
+            tahun=2029, semester=2, mulai=date(2029, 7, 1), selesai=date(2029, 12, 31),
+            pendaftaran_mulai=date(2029, 7, 1), pendaftaran_selesai=date(2029, 7, 30),
+        )
+        old_course = MataKuliahAsleb.objects.create(
+            kode='OLD-01', nama='Mata Kuliah Lama', dosen='Dosen Lama', kelas='TIF-99',
+        )
+        RiwayatAsleb.objects.create(
+            nim=self.user.nim_nik, nama=self.user.nama_pengguna, email=self.user.email,
+            periode=old_period, matkul=old_course, metode_rekening='bni',
+            source_pendaftaran_id=90002,
+        )
+        old_schedule = JadwalPraktikum.objects.create(
+            mata_kuliah=str(old_course), kelas=old_course.kelas, ruangan=self.room,
+            pengampu=old_course.dosen, hari='senin', waktu_mulai=time(10, 0),
+            waktu_selesai=time(12, 0), status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+        self.authenticate()
+
+        response = self.client.get(reverse('mobile_api:schedule_list'))
+
+        ids = {item['id'] for item in response.data['results']}
+        self.assertIn(self.schedule.pk, ids)
+        self.assertNotIn(old_schedule.pk, ids)
+
     def test_dashboard_laboran_membedakan_total_barang_dan_total_unit(self):
         InventarisBarang.objects.create(nama='Router Mobile', jumlah=3)
         InventarisBarang.objects.create(nama='Kamera Mobile', jumlah=2)
@@ -201,6 +286,29 @@ class MobileAbsensiApiTests(TestCase):
         self.assertEqual(inventory.detail_barang.count(), 2)
         self.assertEqual(FotoInventarisBarang.objects.filter(inventaris=inventory).count(), 2)
         self.assertEqual(len(response.data['foto_urls']), 3)
+
+    def test_upload_gambar_palsu_ditolak_backend(self):
+        location = Lokasi.objects.create(nama_lokasi='Lemari Aman')
+        self.authenticate_laboran()
+        fake_image = SimpleUploadedFile(
+            'bukan-gambar.jpg',
+            b'<script>alert("xss")</script>',
+            content_type='image/jpeg',
+        )
+
+        response = self.client.post(
+            reverse('mobile_api:laboran_inventory'),
+            {
+                'nama': 'Barang Tidak Valid',
+                'jumlah': 1,
+                'lokasi_id': location.pk,
+                'foto_galeri': [fake_image],
+            },
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(InventarisBarang.objects.filter(nama='Barang Tidak Valid').exists())
 
     def test_laboran_dapat_melihat_detail_dan_menghapus_inventaris_tanpa_riwayat(self):
         location = Lokasi.objects.create(nama_lokasi='Rak Detail Mobile')

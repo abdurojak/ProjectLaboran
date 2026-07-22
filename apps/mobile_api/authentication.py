@@ -5,7 +5,7 @@ from apps.pengguna.models import Pengguna
 from apps.asleb.models import Asleb
 from apps.pendaftaran_asleb.services import sync_expired_asleb_periods
 
-from .jwt_service import decode_token
+from .jwt_service import decode_token, get_active_session
 
 
 def has_mobile_access(pengguna):
@@ -31,6 +31,7 @@ class PenggunaJWTAuthentication(BaseAuthentication):
         except UnicodeError as exc:
             raise AuthenticationFailed('Token tidak valid.') from exc
         payload = decode_token(raw_token, 'access')
+        get_active_session(payload)
         pengguna = Pengguna.objects.filter(pk=payload['sub'], is_verified=True).first()
         if not pengguna:
             raise AuthenticationFailed('Akun tidak ditemukan atau belum diverifikasi.')

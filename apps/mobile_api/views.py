@@ -1,5 +1,8 @@
+import hashlib
+
 from django.conf import settings
 from django.contrib.auth.hashers import check_password
+from django.core.cache import cache
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Q, Sum
 from django.core.exceptions import SuspiciousFileOperation
@@ -33,7 +36,12 @@ from apps.pendaftaran_asleb.services import sync_expired_asleb_periods
 from apps.pengguna.models import Pengguna
 
 from .authentication import has_mobile_access
-from .jwt_service import create_token_pair, decode_token
+from .jwt_service import (
+    create_token_pair,
+    decode_token,
+    get_active_session,
+    revoke_session,
+)
 from .permissions import IsAsistenLab, IsLaboran
 from .serializers import (
     AttendanceSerializer,
@@ -58,6 +66,12 @@ from .services import (
 
 def api_error(message, code, http_status=status.HTTP_400_BAD_REQUEST, **extra):
     return Response({'detail': message, 'code': code, **extra}, status=http_status)
+
+
+def mobile_login_attempt_key(request, identifier):
+    address = request.META.get('REMOTE_ADDR', '')
+    digest = hashlib.sha256(f'{address}:{identifier.lower()}'.encode()).hexdigest()
+    return f'mobile-login-attempt:{digest}'
 
 
 def attendance_context(asleb, schedules, date_value=None):
@@ -92,10 +106,19 @@ class LoginView(APIView):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         identifier = serializer.validated_data['identifier'].strip()
+        attempt_key = mobile_login_attempt_key(request, identifier)
+        attempts = int(cache.get(attempt_key, 0))
+        if attempts >= settings.LOGIN_MAX_ATTEMPTS:
+            return api_error(
+                'Terlalu banyak percobaan login. Silakan coba kembali beberapa saat lagi.',
+                'login_locked',
+                status.HTTP_429_TOO_MANY_REQUESTS,
+            )
         pengguna = Pengguna.objects.filter(
             Q(nim_nik=identifier) | Q(email__iexact=identifier)
         ).first()
         if not pengguna or not check_password(serializer.validated_data['password'], pengguna.password):
+            cache.set(attempt_key, attempts + 1, settings.LOGIN_LOCKOUT_SECONDS)
             return api_error('Identitas atau password salah.', 'invalid_credentials', status.HTTP_401_UNAUTHORIZED)
         if not pengguna.is_verified:
             return api_error('Akun belum diverifikasi.', 'account_unverified', status.HTTP_403_FORBIDDEN)
@@ -107,6 +130,7 @@ class LoginView(APIView):
                 'role_not_allowed',
                 status.HTTP_403_FORBIDDEN,
             )
+        cache.delete(attempt_key)
         return Response({
             'tokens': create_token_pair(pengguna),
             'user': ProfileSerializer(pengguna, context={'request': request}).data,
@@ -117,18 +141,28 @@ class RefreshTokenView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
 
+    @transaction.atomic
     def post(self, request):
         serializer = RefreshSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         payload = decode_token(serializer.validated_data['refresh'], 'refresh')
+        session = get_active_session(
+            payload,
+            for_update=True,
+            require_refresh_jti=True,
+        )
         pengguna = Pengguna.objects.filter(pk=payload['sub'], is_verified=True).first()
         if not pengguna or not has_mobile_access(pengguna):
+            revoke_session(session)
             return api_error('Akses aplikasi mobile sudah tidak aktif.', 'role_not_allowed', status.HTTP_403_FORBIDDEN)
+        revoke_session(session)
         return Response({'tokens': create_token_pair(pengguna)})
 
 
 class LogoutView(APIView):
     def post(self, request):
+        session = get_active_session(request.auth)
+        revoke_session(session)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -485,13 +519,12 @@ class LaboranInventoryListCreateView(APIView):
                 )
             for order, photo in enumerate(gallery_files, start=1):
                 FotoInventarisBarang.objects.create(inventaris=inventory, foto=photo, urutan=order)
-        except (OSError, SuspiciousFileOperation) as exc:
+        except (OSError, SuspiciousFileOperation):
             transaction.set_rollback(True)
             return api_error(
                 'Foto inventaris gagal disimpan. Periksa folder media server dan coba upload ulang.',
                 'inventory_photo_save_failed',
                 http_status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                error=str(exc),
             )
         inventory.jumlah_dipinjam_aktif = 0
         return Response(inventory_payload(request, inventory), status=status.HTTP_201_CREATED)
