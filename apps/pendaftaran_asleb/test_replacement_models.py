@@ -1,8 +1,9 @@
 from datetime import date
+from importlib import import_module
 
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 
 from apps.asleb.models import Asleb
 from apps.pendaftaran_asleb.models import (
@@ -127,6 +128,46 @@ class AslabAssignmentFoundationTests(TestCase):
                     ),
                 ])
 
+    def test_pending_to_active_partial_save_persists_guard(self):
+        assignment = self.create_assignment(
+            self.first_asleb,
+            status=AslabAssignment.STATUS_PENDING,
+        )
+
+        assignment.status = AslabAssignment.STATUS_ACTIVE
+        assignment.save(update_fields=['status'])
+
+        assignment.refresh_from_db()
+        self.assertEqual(assignment.status, AslabAssignment.STATUS_ACTIVE)
+        self.assertEqual(assignment.active_slot_id, self.slot.pk)
+
+    def test_active_to_resigned_partial_save_clears_guard(self):
+        assignment = self.create_assignment(self.first_asleb)
+
+        assignment.status = AslabAssignment.STATUS_RESIGNED
+        assignment.save(update_fields=('status',))
+
+        assignment.refresh_from_db()
+        self.assertEqual(assignment.status, AslabAssignment.STATUS_RESIGNED)
+        self.assertIsNone(assignment.active_slot_id)
+
+    def test_active_slot_move_partial_save_moves_guard(self):
+        assignment = self.create_assignment(self.first_asleb)
+        other_slot = AslabSlot.objects.create(
+            periode=self.period,
+            matkul=self.course,
+            nomor=2,
+        )
+
+        assignment.slot = other_slot
+        update_fields = {'slot'}
+        assignment.save(update_fields=update_fields)
+
+        assignment.refresh_from_db()
+        self.assertEqual(assignment.slot_id, other_slot.pk)
+        self.assertEqual(assignment.active_slot_id, other_slot.pk)
+        self.assertEqual(update_fields, {'slot'})
+
     def test_historical_ownership_is_protected(self):
         assignment = self.create_assignment(self.first_asleb)
 
@@ -153,3 +194,37 @@ class AslabAssignmentFoundationTests(TestCase):
         registration.delete()
         assignment.refresh_from_db()
         self.assertIsNone(assignment.source_pendaftaran_id)
+
+
+class CheckConstraintCompatibilityGuardTests(SimpleTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.migration = import_module(
+            'apps.pendaftaran_asleb.migrations.0016_aslab_assignment_foundation'
+        )
+
+    @staticmethod
+    def schema_editor(version, is_mariadb=False, vendor='mysql'):
+        connection = type('FakeConnection', (), {
+            'vendor': vendor,
+            'mysql_version': version,
+            'mysql_is_mariadb': is_mariadb,
+        })()
+        return type('FakeSchemaEditor', (), {'connection': connection})()
+
+    def test_guard_rejects_mysql_before_check_enforcement(self):
+        editor = self.schema_editor((8, 0, 15))
+
+        with self.assertRaisesRegex(RuntimeError, 'MySQL 8.0.16 or newer'):
+            self.migration.ensure_check_constraints_supported(None, editor)
+
+    def test_guard_accepts_supported_mysql_and_mariadb(self):
+        self.migration.ensure_check_constraints_supported(
+            None,
+            self.schema_editor((8, 0, 16)),
+        )
+        self.migration.ensure_check_constraints_supported(
+            None,
+            self.schema_editor((10, 4, 27), is_mariadb=True),
+        )
