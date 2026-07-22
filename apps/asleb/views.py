@@ -153,16 +153,24 @@ def end_asleb_membership(request, pk):
         messages.error(request, 'Alasan pengeluaran Aslab wajib diisi sebelum akun dinonaktifkan.')
         return redirect('asleb:asleb_list')
 
-    assignment = AslabAssignment.objects.filter(
+    active_assignments = list(AslabAssignment.objects.filter(
         asleb=asleb,
         status=AslabAssignment.STATUS_ACTIVE,
-    ).order_by('pk').first()
-    if assignment is None:
+    ).order_by('pk')[:2])
+    if not active_assignments:
         messages.error(
             request,
             'Aslab ini belum memiliki penugasan aktif. Jalankan audit slot sebelum mengakhiri masa tugas.',
         )
         return redirect('asleb:asleb_list')
+    if len(active_assignments) > 1:
+        messages.error(
+            request,
+            'Aslab ini memiliki beberapa penugasan aktif. Silakan pilih mata kuliah/slot tertentu '
+            'melalui alur penggantian baru.',
+        )
+        return redirect('asleb:asleb_list')
+    assignment = active_assignments[0]
 
     try:
         end_assignment_for_replacement(
@@ -176,18 +184,34 @@ def end_asleb_membership(request, pk):
         messages.error(request, ' '.join(exc.messages))
         return redirect('asleb:asleb_list')
 
+    asleb.refresh_from_db()
     akun = Pengguna.objects.filter(nim_nik=asleb.nim).first()
-    if akun:
+    person_access_ended = (
+        asleb.status == 'nonaktif'
+        and akun is not None
+        and akun.role == MAHASISWA_ROLE
+        and not AslabAssignment.objects.filter(
+            asleb=asleb,
+            status=AslabAssignment.STATUS_ACTIVE,
+        ).exists()
+    )
+    if person_access_ended:
         transaction.on_commit(
             lambda asleb_item=asleb, akun_item=akun, reason=alasan_pengeluaran, actor=pengguna:
             notify_manual_asleb_removal(asleb_item, akun_item, reason=reason, acted_by=actor)
         )
 
-    messages.success(
-        request,
-        f'{asleb.nama} dikeluarkan dari Aslab dan proses penggantian berhasil dibuat. '
-        'notifikasi telah dikirim.',
-    )
+    if person_access_ended:
+        messages.success(
+            request,
+            f'{asleb.nama} dikeluarkan dari Aslab dan proses penggantian berhasil dibuat. '
+            'notifikasi telah dikirim.',
+        )
+    else:
+        messages.success(
+            request,
+            f'Satu penugasan Aslab {asleb.nama} telah diakhiri dan proses penggantian berhasil dibuat.',
+        )
     return redirect('asleb:asleb_list')
 
 

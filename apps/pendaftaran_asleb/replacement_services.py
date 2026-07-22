@@ -32,7 +32,7 @@ def end_assignment_for_replacement(
     valid_methods = {value for value, _label in AslabReplacement.METHOD_CHOICES}
     if method not in valid_methods:
         raise ValidationError('Metode penggantian tidak valid.')
-    if not isinstance(effective_date, date):
+    if type(effective_date) is not date:
         raise ValidationError('Tanggal efektif tidak valid.')
 
     try:

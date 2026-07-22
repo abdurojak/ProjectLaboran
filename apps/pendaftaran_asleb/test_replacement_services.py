@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
@@ -138,6 +138,16 @@ class TerminationServiceTests(TestCase):
                 self.assertEqual(self.assignment.status, AslabAssignment.STATUS_ACTIVE)
                 self.assertEqual(self.slot.status, AslabSlot.STATUS_ACTIVE)
                 self.assertFalse(AslabReplacement.objects.exists())
+
+    def test_rejects_datetime_as_effective_date(self):
+        with self.assertRaisesMessage(ValidationError, 'Tanggal efektif tidak valid'):
+            self.end(effective_date=datetime(2026, 10, 15, 8, 30))
+
+        self.assignment.refresh_from_db()
+        self.slot.refresh_from_db()
+        self.assertEqual(self.assignment.status, AslabAssignment.STATUS_ACTIVE)
+        self.assertEqual(self.slot.status, AslabSlot.STATUS_ACTIVE)
+        self.assertFalse(AslabReplacement.objects.exists())
 
     def test_second_termination_is_rejected_without_duplicate(self):
         self.end()
