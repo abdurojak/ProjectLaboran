@@ -401,7 +401,7 @@ class AslabAssignment(models.Model):
         update_fields = kwargs.get('update_fields')
         if update_fields is not None:
             persisted_fields = set(update_fields)
-            if persisted_fields.intersection({'status', 'slot'}):
+            if persisted_fields.intersection({'status', 'slot', 'slot_id'}):
                 persisted_fields.add('active_slot')
             kwargs['update_fields'] = persisted_fields
         super().save(*args, **kwargs)

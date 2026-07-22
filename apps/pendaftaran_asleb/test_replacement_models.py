@@ -168,6 +168,23 @@ class AslabAssignmentFoundationTests(TestCase):
         self.assertEqual(assignment.active_slot_id, other_slot.pk)
         self.assertEqual(update_fields, {'slot'})
 
+    def test_active_slot_id_move_partial_save_moves_guard(self):
+        assignment = self.create_assignment(self.first_asleb)
+        other_slot = AslabSlot.objects.create(
+            periode=self.period,
+            matkul=self.course,
+            nomor=2,
+        )
+
+        assignment.slot_id = other_slot.pk
+        update_fields = ['slot_id']
+        assignment.save(update_fields=update_fields)
+
+        assignment.refresh_from_db()
+        self.assertEqual(assignment.slot_id, other_slot.pk)
+        self.assertEqual(assignment.active_slot_id, other_slot.pk)
+        self.assertEqual(update_fields, ['slot_id'])
+
     def test_historical_ownership_is_protected(self):
         assignment = self.create_assignment(self.first_asleb)
 
