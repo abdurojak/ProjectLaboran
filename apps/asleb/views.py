@@ -31,6 +31,7 @@ from apps.pendaftaran_asleb.models import AslabAssignment, PengaturanBiayaTransf
 from apps.pendaftaran_asleb.replacement_services import (
     end_single_active_assignment_for_replacement,
     payment_eligible_honors,
+    reconcile_retrospective_honor,
     with_replacement_hold_state,
 )
 from apps.pendaftaran_asleb.services import notify_manual_asleb_removal
@@ -327,8 +328,13 @@ class HonorAslebCreateView(HonorAdminRequiredMixin, CreateView):
         kwargs['current_pengguna'] = getattr(self.request, 'current_pengguna', None)
         return kwargs
 
+    @transaction.atomic
     def form_valid(self, form):
         response = super().form_valid(form)
+        reconcile_retrospective_honor(
+            honor=self.object,
+            actor=getattr(self.request, 'current_pengguna', None),
+        )
         transaction.on_commit(lambda: send_honor_update(self.object, event='honor.created'))
         return response
 
@@ -353,8 +359,13 @@ class HonorAslebUpdateView(UpdateView):
         kwargs['current_pengguna'] = getattr(self.request, 'current_pengguna', None)
         return kwargs
 
+    @transaction.atomic
     def form_valid(self, form):
         response = super().form_valid(form)
+        reconcile_retrospective_honor(
+            honor=self.object,
+            actor=getattr(self.request, 'current_pengguna', None),
+        )
         transaction.on_commit(lambda: send_honor_update(self.object, event='honor.updated'))
         return response
 
@@ -2288,6 +2299,7 @@ def roman_month(month):
     return numerals[month]
 
 
+@transaction.atomic
 def sync_honor_from_absensi(absensi):
     bulan = absensi.tanggal_praktikum.replace(day=1)
     return _sync_honor_attendance(absensi.asleb, bulan)
@@ -2337,7 +2349,7 @@ def _sync_honor_attendance(asleb, bulan):
     if honor.status == 'draft':
         honor.status = 'diproses'
     honor.save()
-    return honor
+    return reconcile_retrospective_honor(honor=honor)
 
 
 def sync_honor_from_mobile_absensi(absensi_masuk):

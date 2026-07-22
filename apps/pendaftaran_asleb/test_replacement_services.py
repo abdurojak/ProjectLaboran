@@ -9,6 +9,7 @@ from django.core.exceptions import ValidationError
 from django.db import DatabaseError, IntegrityError, close_old_connections, connection, transaction
 from django.test import RequestFactory, TestCase, TransactionTestCase
 from django.test.utils import CaptureQueriesContext
+from django.urls import reverse
 from django.utils import timezone
 
 from apps.asleb.models import Asleb, HonorAsleb, HonorReassignment, SuratHonorAsleb
@@ -35,6 +36,7 @@ from .replacement_services import (
     expire_due_offers,
     hold_replacement_honor,
     payment_eligible_honors,
+    reconcile_retrospective_honor,
     reassign_replacement_honor,
     return_offer_for_revision,
     submit_offer_registration,
@@ -212,6 +214,82 @@ class HonorReassignmentTests(TestCase):
         self.replacement.save(update_fields=['status', 'updated_at'])
 
         self.assertIn(late_honor, payment_eligible_honors(HonorAsleb.objects.all()))
+
+    def test_retrospective_honor_after_active_reconciles_to_incoming_account(self):
+        self.replacement_registration()
+        incoming_assignment = AslabAssignment.objects.create(
+            slot=self.slot,
+            asleb=self.incoming,
+            mulai_pada=date(2026, 10, 5),
+            status=AslabAssignment.STATUS_ACTIVE,
+            menggantikan=self.replacement.outgoing_assignment,
+        )
+        self.replacement.incoming_assignment = incoming_assignment
+        self.replacement.status = AslabReplacement.STATUS_ACTIVE
+        self.replacement.activated_by = self.laboran
+        self.replacement.save(update_fields=[
+            'incoming_assignment', 'status', 'activated_by', 'updated_at',
+        ])
+        late_honor = self.honor(self.outgoing, date(2026, 11, 1))
+
+        self.assertNotIn(late_honor, payment_eligible_honors(HonorAsleb.objects.all()))
+        reconciled = reconcile_retrospective_honor(honor=late_honor, actor=self.laboran)
+
+        late_honor.refresh_from_db()
+        self.assertEqual(reconciled.pk, late_honor.pk)
+        self.assertEqual(late_honor.asleb, self.incoming)
+        self.assertEqual(late_honor.metode_transfer, 'bank_lain')
+        self.assertEqual(late_honor.nomor_transfer, '99887766')
+        self.assertEqual(late_honor.nama_pemilik_transfer, 'Aslab Baru')
+        self.assertEqual(
+            HonorReassignment.objects.get(honor=late_honor).status,
+            HonorReassignment.STATUS_REASSIGNED,
+        )
+        self.assertIn(late_honor, payment_eligible_honors(HonorAsleb.objects.all()))
+
+    def test_manual_honor_creation_boundary_reconciles_active_replacement(self):
+        self.replacement_registration()
+        incoming_assignment = AslabAssignment.objects.create(
+            slot=self.slot,
+            asleb=self.incoming,
+            mulai_pada=date(2026, 10, 5),
+            status=AslabAssignment.STATUS_ACTIVE,
+            menggantikan=self.replacement.outgoing_assignment,
+        )
+        self.replacement.incoming_assignment = incoming_assignment
+        self.replacement.status = AslabReplacement.STATUS_ACTIVE
+        self.replacement.activated_by = self.laboran
+        self.replacement.save(update_fields=[
+            'incoming_assignment', 'status', 'activated_by', 'updated_at',
+        ])
+        session = self.client.session
+        session['pengguna_id'] = self.laboran.pk
+        session.save()
+
+        response = self.client.post(reverse('asleb:honor_create'), {
+            'asleb': self.outgoing.pk,
+            'bulan': '2026-11-01',
+            'jumlah_praktikum': 1,
+            'total_pertemuan': 2,
+            'metode_transfer': 'bni',
+            'nomor_transfer': 'OLD-ACCOUNT',
+            'nama_pemilik_transfer': 'Aslab Lama',
+            'tanggal_transfer': '',
+            'pic_transfer': '',
+            'status': 'diproses',
+            'keterangan': '',
+        })
+
+        self.assertRedirects(response, reverse('asleb:honor_list'))
+        honor = HonorAsleb.objects.get(bulan=date(2026, 11, 1))
+        self.assertEqual(honor.asleb, self.incoming)
+        self.assertEqual(honor.nomor_transfer, '99887766')
+        self.assertEqual(honor.nama_pemilik_transfer, 'Aslab Baru')
+        self.assertEqual(
+            HonorReassignment.objects.get(honor=honor).status,
+            HonorReassignment.STATUS_REASSIGNED,
+        )
+        self.assertIn(honor, payment_eligible_honors(HonorAsleb.objects.all()))
 
     def test_held_audit_requires_real_honor_row(self):
         with self.assertRaises(IntegrityError):
