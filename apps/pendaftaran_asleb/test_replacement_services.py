@@ -29,6 +29,7 @@ from .models import (
 from .replacement_forms import DirectOfferForm, ReplacementCandidateForm
 from .replacement_services import (
     accept_offer,
+    activate_replacement,
     create_direct_offer,
     decline_offer,
     end_assignment_for_replacement,
@@ -41,6 +42,7 @@ from .replacement_services import (
     return_offer_for_revision,
     submit_offer_registration,
 )
+from .services import sync_expired_asleb_periods
 
 
 class HonorReassignmentTests(TestCase):
@@ -425,6 +427,25 @@ class DirectOfferServiceTests(TestCase):
         third.refresh_from_db()
         self.assertEqual(third.status, AslabOffer.STATUS_EXPIRED)
 
+    def test_period_completion_experience_uses_assignment_start_and_skips_outgoing(self):
+        offer = self.submitted_offer()
+        incoming = activate_replacement(
+            offer_id=offer.pk, actor=self.laboran, active_date=date(2026, 9, 5),
+        )
+
+        sync_expired_asleb_periods(date(2027, 1, 1))
+
+        incoming.refresh_from_db()
+        self.replacement.outgoing_assignment.refresh_from_db()
+        experience = PengalamanPengguna.objects.get(pengguna=self.candidate, otomatis=True)
+        self.assertEqual(incoming.status, AslabAssignment.STATUS_COMPLETED)
+        self.assertEqual(experience.tanggal_mulai, date(2026, 9, 5))
+        self.assertIn('pengganti', experience.deskripsi.lower())
+        self.assertFalse(PengalamanPengguna.objects.filter(
+            pengguna__nim_nik=self.replacement.outgoing_assignment.asleb.nim,
+            otomatis=True,
+        ).exists())
+
     def test_rejects_unauthorized_ineligible_conflicting_and_invalid_deadline(self):
         invalid = self.user('BAD-OFF', 'Bad', 'admin')
         for overrides, message in [
@@ -624,6 +645,54 @@ class DirectOfferServiceTests(TestCase):
             ),
         } if include_files else {}
         return ReplacementCandidateForm(data=data, files=files, offer=offer, candidate=self.candidate)
+
+    def submitted_offer(self):
+        offer = accept_offer(offer_id=self.create_offer().pk, candidate=self.candidate)
+        form = self.candidate_form(offer)
+        self.assertTrue(form.is_valid(), form.errors)
+        submit_offer_registration(
+            offer_id=offer.pk, candidate=self.candidate, registration_form=form,
+        )
+        return AslabOffer.objects.get(pk=offer.pk)
+
+    def test_activation_promotes_candidate_and_links_same_slot(self):
+        offer = self.submitted_offer()
+
+        assignment = activate_replacement(
+            offer_id=offer.pk, actor=self.laboran, active_date=date(2026, 9, 5),
+        )
+
+        self.candidate.refresh_from_db()
+        self.slot.refresh_from_db()
+        self.replacement.refresh_from_db()
+        offer.refresh_from_db()
+        self.assertEqual(assignment.slot, self.slot)
+        self.assertEqual(assignment.menggantikan, self.replacement.outgoing_assignment)
+        self.assertEqual(assignment.mulai_pada, date(2026, 9, 5))
+        self.assertEqual(assignment.status, AslabAssignment.STATUS_ACTIVE)
+        self.assertEqual(self.candidate.role, 'asisten_lab')
+        self.assertEqual(self.slot.status, AslabSlot.STATUS_ACTIVE)
+        self.assertEqual(self.replacement.status, AslabReplacement.STATUS_ACTIVE)
+        self.assertEqual(self.replacement.incoming_assignment, assignment)
+        self.assertEqual(offer.status, AslabOffer.STATUS_VERIFIED)
+        self.assertEqual(offer.registration.status, 'diterima')
+
+    def test_activation_rejects_invalid_state_actor_and_date_without_partial_changes(self):
+        offer = self.submitted_offer()
+        invalid_actor = self.user('BAD-ACT', 'Bad Actor', 'mahasiswa')
+        for actor, active_date, message in [
+            (invalid_actor, date(2026, 9, 5), 'laboran'),
+            (self.laboran, date(2026, 8, 31), 'berakhir'),
+            (self.laboran, date(2027, 1, 1), 'periode'),
+        ]:
+            with self.subTest(message=message):
+                with self.assertRaisesMessage(ValidationError, message):
+                    activate_replacement(
+                        offer_id=offer.pk, actor=actor, active_date=active_date,
+                    )
+        self.assertFalse(AslabAssignment.objects.filter(menggantikan=self.replacement.outgoing_assignment).exists())
+        self.candidate.refresh_from_db()
+        self.assertEqual(self.candidate.role, 'mahasiswa')
 
     def test_submit_forces_links_identity_and_revision_reuses_row(self):
         offer = accept_offer(offer_id=self.create_offer().pk, candidate=self.candidate)
@@ -1279,3 +1348,31 @@ class DirectOfferConcurrencyTests(TransactionTestCase):
         self.assertIn(offer.status, {
             AslabOffer.STATUS_SUBMITTED, AslabOffer.STATUS_ACCEPTED_INCOMPLETE})
         self.assertFalse(any(kind == 'unexpected' for kind, _ in outcomes), outcomes)
+
+    def test_concurrent_activation_creates_one_incoming_assignment(self):
+        offer = accept_offer(offer_id=self.offer().pk, candidate=self.candidate)
+        canonical_offer = AslabOffer.objects.select_related(
+            'replacement__slot__matkul').get(pk=offer.pk)
+        form = self.form(canonical_offer, self.candidate)
+        self.assertTrue(form.is_valid(), form.errors)
+        submit_offer_registration(
+            offer_id=offer.pk, candidate=self.candidate, registration_form=form,
+        )
+
+        outcomes = self.run_race([
+            lambda: activate_replacement(
+                offer_id=offer.pk,
+                actor=Pengguna.objects.get(pk=self.laboran.pk),
+                active_date=date(2026, 9, 1),
+            ).pk,
+            lambda: activate_replacement(
+                offer_id=offer.pk,
+                actor=Pengguna.objects.get(pk=self.laboran.pk),
+                active_date=date(2026, 9, 1),
+            ).pk,
+        ])
+
+        self.assertCountEqual([kind for kind, _ in outcomes], ['success', 'clean_error'])
+        self.assertEqual(AslabAssignment.objects.filter(
+            menggantikan=self.replacement.outgoing_assignment,
+        ).count(), 1)
