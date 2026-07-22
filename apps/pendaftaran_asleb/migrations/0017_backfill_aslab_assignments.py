@@ -17,7 +17,10 @@ def matching_registration(PendaftaranAsleb, asleb):
         ).select_related('matkul').order_by('pk')
     )
     if len(candidates) == 1:
-        return candidates[0]
+        candidate = candidates[0]
+        if not asleb.matkul or course_label(candidate.matkul) == asleb.matkul:
+            return candidate
+        return None
     if len(candidates) > 1 and asleb.matkul:
         exact = [item for item in candidates if course_label(item.matkul) == asleb.matkul]
         if len(exact) == 1:
