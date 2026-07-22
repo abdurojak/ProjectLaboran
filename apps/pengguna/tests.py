@@ -374,7 +374,7 @@ class PenggunaViewTests(TestCase):
         self.assertContains(response, 'Junior')
         self.assertContains(response, '1 periode sebagai aslab.')
 
-        matkul = MataKuliahAsleb.objects.first()
+        matkul = MataKuliahAsleb.objects.create(nama='Pemrograman Web')
         for index in range(3):
             PendaftaranAsleb.objects.create(
                 nama=f'Riwayat {index + 1}',
@@ -416,22 +416,23 @@ class PenggunaViewTests(TestCase):
         self.assertNotContains(response, 'Nama Sekolah/Kampus')
         self.assertNotContains(response, 'Nomor Kredensial')
 
-    def test_form_pendidikan_profile_tidak_menampilkan_field_jenjang(self):
+    def test_form_pendidikan_profile_menampilkan_field_pendidikan_terkini(self):
         response = self.client.get(
             f'{reverse("pengguna:experience_create", args=[self.pengguna.pk])}?kategori=pendidikan'
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Nama Sekolah/Kampus')
-        self.assertContains(response, 'Jurusan/Program Studi')
-        self.assertNotContains(response, 'Jenjang Pendidikan')
+        self.assertContains(response, 'Jenjang Pendidikan')
+        self.assertContains(response, 'Nama Sekolah')
+        self.assertContains(response, 'Jurusan')
         self.assertNotContains(response, 'name="jabatan"', html=False)
 
     def test_tambah_pendidikan_profile_menyimpan_kategori_dan_membersihkan_tanggal_selesai(self):
         response = self.client.post(
             f'{reverse("pengguna:experience_create", args=[self.pengguna.pk])}?kategori=pendidikan',
             {
-                'organisasi': 'Universitas Trisakti',
+                'jenjang_pendidikan': 'SMA',
+                'nama_sekolah_manual': 'SMA Trisakti',
                 'bidang_studi': 'Informatika',
                 'tanggal_mulai': '2024-09-01',
                 'tanggal_selesai': '2026-01-01',
@@ -443,7 +444,7 @@ class PenggunaViewTests(TestCase):
         self.assertRedirects(response, reverse('pengguna:detail', args=[self.pengguna.pk]))
         riwayat = PengalamanPengguna.objects.get(pengguna=self.pengguna)
         self.assertEqual(riwayat.kategori, 'pendidikan')
-        self.assertEqual(riwayat.organisasi, 'Universitas Trisakti')
+        self.assertEqual(riwayat.organisasi, 'SMA Trisakti')
         self.assertEqual(riwayat.jabatan, 'Informatika')
         self.assertIsNone(riwayat.tanggal_selesai)
         self.assertTrue(riwayat.masih_berjalan)
@@ -798,6 +799,8 @@ class PenggunaViewTests(TestCase):
 
 class PenggunaAuthTests(TestCase):
     def setUp(self):
+        Fakultas.objects.create(nama='Teknologi Industri')
+        Prodi.objects.create(nama='Informatika')
         self.pengguna = Pengguna.objects.create(
             nama_pengguna='Andi Pratama',
             nim_nik='2201001',
@@ -1041,7 +1044,7 @@ class PenggunaAuthTests(TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertNotContains(response, 'id="dashboard-sidebar"', html=False)
             self.assertContains(response, label)
-            window_tab = response.content.decode().split('data-window-tab', 1)[1].split('</span>', 1)[0]
+            window_tab = response.content.decode().split('<span data-window-tab', 1)[1].split('</span>', 1)[0]
             self.assertIn(label, window_tab)
             self.assertNotIn('Dashboard', window_tab)
 
@@ -1100,13 +1103,13 @@ class PenggunaAuthTests(TestCase):
         self.assertTrue(pengguna.is_verified)
         self.assertEqual(self.client.session['pengguna_id'], pengguna.pk)
 
-    def test_register_menambahkan_domain_std_trisakti_otomatis(self):
+    def test_register_menerima_email_std_trisakti_yang_dinormalisasi_antarmuka(self):
         response = self.client.post(
             reverse('pengguna:register'),
             {
                 'nama_pengguna': 'Email Otomatis',
                 'nim_nik': '0642201099',
-                'email': 'email.otomatis',
+                'email': 'email.otomatis@std.trisakti.ac.id',
                 'password': 'passwordku123',
                 'password_confirmation': 'passwordku123',
                 'no_hp': '081234567899',
@@ -1407,7 +1410,11 @@ class PenggunaAuthTests(TestCase):
         self.assertContains(kalender_response, 'Kalender Kegiatan')
         self.assertContains(ruangan_response, 'Daftar Lab')
         self.assertNotContains(allowed_response, 'Inventaris')
-        self.assertNotContains(allowed_response, 'Pengguna')
+        self.assertNotContains(
+            allowed_response,
+            f'href="{reverse("pengguna:list")}"',
+            html=False,
+        )
         self.assertRedirects(blocked_response, reverse('dashboard:home'))
 
     def test_mahasiswa_bisa_membuat_kegiatan_pribadi_tapi_tidak_mengelola_kegiatan_lain(self):
@@ -1444,7 +1451,11 @@ class PenggunaAuthTests(TestCase):
         self.assertNotContains(response, 'Data Aslab')
         self.assertNotContains(response, 'Pendaftaran Aslab')
         self.assertNotContains(response, 'Rekap Honorarium Aslab')
-        self.assertNotContains(response, 'Pengguna')
+        self.assertNotContains(
+            response,
+            f'href="{reverse("pengguna:list")}"',
+            html=False,
+        )
 
     def test_asisten_lab_tidak_bisa_membuka_menu_admin_asleb_langsung(self):
         self.pengguna.role = 'asisten_lab'
