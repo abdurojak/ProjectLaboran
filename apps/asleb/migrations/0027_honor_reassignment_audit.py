@@ -34,7 +34,7 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name='honorreassignment',
             constraint=models.CheckConstraint(
-                check=(models.Q(('final_asleb__isnull', False), ('status', 'reassigned')) | models.Q(('final_asleb__isnull', True), ('status__in', ['held', 'correction_required']))),
+                check=(models.Q(('final_asleb__isnull', False), ('status__in', ['reassigned', 'correction_required'])) | models.Q(('final_asleb__isnull', True), ('status', 'held'))),
                 name='honor_reassignment_final_guard',
             ),
         ),
