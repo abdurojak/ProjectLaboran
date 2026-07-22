@@ -42,6 +42,11 @@ class Migration(migrations.Migration):
             name='jenis',
             field=models.CharField(choices=[('reguler', 'Reguler'), ('replacement', 'Pengganti')], default='reguler', max_length=16),
         ),
+        migrations.AddField(
+            model_name='pendaftaranasleb',
+            name='live_candidate_user',
+            field=models.ForeignKey(blank=True, editable=False, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='live_aslab_registrations', to='pengguna.pengguna'),
+        ),
         migrations.CreateModel(
             name='LimitedReplacementOpening',
             fields=[
@@ -111,6 +116,10 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='pendaftaranasleb',
-            constraint=models.UniqueConstraint(fields=('replacement_process', 'candidate_user'), name='unique_replacement_registration_candidate'),
+            constraint=models.UniqueConstraint(fields=('replacement_process', 'live_candidate_user'), name='unique_live_replacement_registration_candidate'),
+        ),
+        migrations.AddConstraint(
+            model_name='pendaftaranasleb',
+            constraint=models.CheckConstraint(check=models.Q(models.Q(('candidate_user__isnull', False), ('jenis', 'replacement'), ('live_candidate_user', models.F('candidate_user')), ('live_candidate_user__isnull', False), ('status__in', ['diajukan', 'diterima'])), models.Q(models.Q(('jenis', 'replacement'), ('status__in', ['diajukan', 'diterima']), _negated=True), ('live_candidate_user__isnull', True)), _connector='OR'), name='live_replacement_registration_guard'),
         ),
     ]

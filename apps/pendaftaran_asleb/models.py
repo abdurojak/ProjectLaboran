@@ -163,6 +163,7 @@ class PendaftaranAsleb(models.Model):
         ('ditolak', 'Ditolak'),
         ('digenerate', 'Masuk Data Aslab'),
     ]
+    LIVE_REPLACEMENT_STATUSES = {'diajukan', 'diterima'}
     METODE_REKENING_CHOICES = [
         ('bni', 'BNI (gratis biaya admin)'),
         ('bank_lain', 'Bank lain (biaya admin Rp2.500)'),
@@ -227,6 +228,14 @@ class PendaftaranAsleb(models.Model):
         null=True,
         blank=True,
     )
+    live_candidate_user = models.ForeignKey(
+        'pengguna.Pengguna',
+        on_delete=models.PROTECT,
+        related_name='live_aslab_registrations',
+        null=True,
+        blank=True,
+        editable=False,
+    )
     tanggal_daftar = models.DateField(auto_now_add=True)
     dibuat_pada = models.DateTimeField(auto_now_add=True)
     diperbarui_pada = models.DateTimeField(auto_now=True)
@@ -250,8 +259,27 @@ class PendaftaranAsleb(models.Model):
                 name='registration_replacement_linkage_guard',
             ),
             models.UniqueConstraint(
-                fields=['replacement_process', 'candidate_user'],
-                name='unique_replacement_registration_candidate',
+                fields=['replacement_process', 'live_candidate_user'],
+                name='unique_live_replacement_registration_candidate',
+            ),
+            models.CheckConstraint(
+                check=(
+                    models.Q(
+                        jenis='replacement',
+                        status__in=['diajukan', 'diterima'],
+                        candidate_user__isnull=False,
+                        live_candidate_user__isnull=False,
+                        live_candidate_user=models.F('candidate_user'),
+                    )
+                    | (
+                        ~models.Q(
+                            jenis='replacement',
+                            status__in=['diajukan', 'diterima'],
+                        )
+                        & models.Q(live_candidate_user__isnull=True)
+                    )
+                ),
+                name='live_replacement_registration_guard',
             ),
         ]
         verbose_name = 'Pendaftaran Aslab'
@@ -259,6 +287,40 @@ class PendaftaranAsleb(models.Model):
 
     def __str__(self):
         return f'{self.nama} - {self.matkul}'
+
+    def clean(self):
+        super().clean()
+        expected_id = (
+            self.candidate_user_id
+            if self.jenis == self.JENIS_REPLACEMENT
+            and self.status in self.LIVE_REPLACEMENT_STATUSES
+            else None
+        )
+        if self.live_candidate_user_id != expected_id:
+            raise ValidationError({
+                'live_candidate_user': 'Guard pendaftaran pengganti aktif tidak sesuai.',
+            })
+
+    def save(self, *args, **kwargs):
+        self.live_candidate_user_id = (
+            self.candidate_user_id
+            if self.jenis == self.JENIS_REPLACEMENT
+            and self.status in self.LIVE_REPLACEMENT_STATUSES
+            else None
+        )
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None:
+            persisted_fields = set(update_fields)
+            guard_dependencies = {
+                'jenis', 'status',
+                'replacement_process', 'replacement_process_id',
+                'candidate_user', 'candidate_user_id',
+                'live_candidate_user', 'live_candidate_user_id',
+            }
+            if persisted_fields.intersection(guard_dependencies):
+                persisted_fields.add('live_candidate_user')
+            kwargs['update_fields'] = persisted_fields
+        super().save(*args, **kwargs)
 
     @staticmethod
     def grade_to_score(grade):
