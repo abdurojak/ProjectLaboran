@@ -2,7 +2,7 @@ from datetime import date
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Exists, OuterRef
+from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
 
 from apps.asleb.models import Asleb, HonorAsleb, HonorReassignment
@@ -30,6 +30,21 @@ PAYMENT_BLOCKING_REPLACEMENT_STATUSES = {
     AslabReplacement.STATUS_WAITING_VERIFICATION,
     AslabReplacement.STATUS_ACTIVE,
 }
+
+# Any workflow that needs Asleb rows follows this global order. Workflows that
+# never request an Asleb lock (offer response/revision) may start at replacement.
+CANONICAL_WORKFLOW_LOCK_ORDER = (
+    'asleb_identity', 'replacement', 'slot', 'offer', 'assignments',
+    'candidate_user', 'registration', 'honor', 'audit',
+)
+
+
+def _lock_asleb_identities(*, ids=(), nims=()):
+    condition = Q(pk__in=set(ids)) | Q(nim__in=set(nims))
+    return {
+        item.pk: item
+        for item in Asleb.objects.select_for_update().filter(condition).order_by('pk')
+    }
 
 
 def with_replacement_hold_state(queryset=None):
@@ -78,10 +93,14 @@ def _lock_honors_for_replacement(locked_replacement, outgoing):
 
 @transaction.atomic
 def hold_replacement_honor(*, replacement, actor):
+    outgoing_id = AslabReplacement.objects.filter(pk=replacement.pk).values_list(
+        'outgoing_assignment__asleb_id', flat=True,
+    ).first()
+    if outgoing_id is None:
+        raise ValidationError('Proses penggantian tidak ditemukan.')
+    locked_aslebs = _lock_asleb_identities(ids=[outgoing_id])
     locked_replacement = _lock_replacement_for_honor(replacement)
-    outgoing = Asleb.objects.select_for_update().get(
-        pk=locked_replacement.outgoing_assignment.asleb_id,
-    )
+    outgoing = locked_aslebs[outgoing_id]
     honors = _lock_honors_for_replacement(locked_replacement, outgoing)
     existing_ids = set(HonorReassignment.objects.select_for_update().filter(
         replacement=locked_replacement,
@@ -108,14 +127,14 @@ def hold_replacement_honor(*, replacement, actor):
 @transaction.atomic
 def reassign_replacement_honor(*, replacement, incoming_asleb, actor):
     """Move existing unlocked monthly honor rows and record every decision."""
-    locked_replacement = _lock_replacement_for_honor(replacement)
-    outgoing_id = locked_replacement.outgoing_assignment.asleb_id
+    outgoing_id = AslabReplacement.objects.filter(pk=replacement.pk).values_list(
+        'outgoing_assignment__asleb_id', flat=True,
+    ).first()
+    if outgoing_id is None:
+        raise ValidationError('Proses penggantian tidak ditemukan.')
     asleb_ids = sorted({outgoing_id, incoming_asleb.pk})
-    locked_aslebs = {
-        item.pk: item for item in Asleb.objects.select_for_update().filter(
-            pk__in=asleb_ids,
-        ).order_by('pk')
-    }
+    locked_aslebs = _lock_asleb_identities(ids=asleb_ids)
+    locked_replacement = _lock_replacement_for_honor(replacement)
     outgoing = locked_aslebs.get(outgoing_id)
     incoming = locked_aslebs.get(incoming_asleb.pk)
     if outgoing is None or incoming is None:
@@ -336,11 +355,23 @@ def _validate_activation_registration(*, offer, replacement, slot, candidate, re
 def activate_replacement(*, offer_id, actor, active_date):
     if not can_manage_lab_operations(actor):
         raise ValidationError('Hanya laboran yang dapat mengaktifkan pengganti.')
-    replacement_id = AslabOffer.objects.filter(pk=offer_id).values_list(
-        'replacement_id', flat=True,
+    offer_hint = AslabOffer.objects.filter(pk=offer_id).values(
+        'replacement_id', 'candidate_id',
     ).first()
-    if replacement_id is None:
+    if offer_hint is None:
         raise ValidationError('Penawaran tidak ditemukan.')
+    replacement_id = offer_hint['replacement_id']
+    outgoing_asleb_id = AslabReplacement.objects.filter(pk=replacement_id).values_list(
+        'outgoing_assignment__asleb_id', flat=True,
+    ).first()
+    candidate_nim = Pengguna.objects.filter(pk=offer_hint['candidate_id']).values_list(
+        'nim_nik', flat=True,
+    ).first()
+    if outgoing_asleb_id is None or candidate_nim is None:
+        raise ValidationError('Data identitas proses penggantian tidak ditemukan.')
+    locked_aslebs = _lock_asleb_identities(
+        ids=[outgoing_asleb_id], nims=[candidate_nim],
+    )
     try:
         replacement = AslabReplacement.objects.select_for_update().get(pk=replacement_id)
     except AslabReplacement.DoesNotExist as exc:
@@ -358,10 +389,14 @@ def activate_replacement(*, offer_id, actor, active_date):
         slot_id=slot.pk,
     ).order_by('pk'))
     candidate = Pengguna.objects.select_for_update().get(pk=offer.candidate_id)
+    if candidate.nim_nik != candidate_nim:
+        raise ValidationError('Identitas kandidat berubah selama aktivasi.')
     if not offer.registration_id:
         raise ValidationError('Data pendaftaran pengganti belum diajukan.')
     registration = PendaftaranAsleb.objects.select_for_update().get(pk=offer.registration_id)
-    existing_asleb = Asleb.objects.select_for_update().filter(nim=candidate.nim_nik).first()
+    existing_asleb = next(
+        (item for item in locked_aslebs.values() if item.nim == candidate.nim_nik), None,
+    )
 
     if offer.status != AslabOffer.STATUS_SUBMITTED:
         raise ValidationError('Penawaran harus berstatus submitted sebelum aktivasi.')

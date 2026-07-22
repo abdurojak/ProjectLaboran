@@ -457,6 +457,32 @@ class DirectOfferServiceTests(TestCase):
             pengguna=outgoing_user, otomatis=True,
         ).exists())
 
+    def test_old_assignment_completion_uses_assignment_nim_when_profile_points_to_new_period(self):
+        new_period = PeriodeAsleb.objects.create(
+            tahun=2027, semester=1, mulai=date(2027, 1, 1), selesai=date(2027, 6, 30),
+            pendaftaran_mulai=date(2027, 1, 1), pendaftaran_selesai=date(2027, 1, 30),
+        )
+        user = Pengguna.objects.get(nim_nik=self.replacement.outgoing_assignment.asleb.nim)
+        asleb = self.replacement.outgoing_assignment.asleb
+        asleb.periode_aktif = new_period
+        asleb.status = 'aktif'
+        asleb.save(update_fields=['periode_aktif', 'status'])
+        old_assignment = self.replacement.outgoing_assignment
+        old_assignment.status = AslabAssignment.STATUS_ACTIVE
+        old_assignment.berakhir_pada = None
+        old_assignment.save(update_fields=['status', 'berakhir_pada'])
+
+        sync_expired_asleb_periods(date(2027, 1, 1))
+        sync_expired_asleb_periods(date(2027, 1, 1))
+
+        old_assignment.refresh_from_db()
+        experiences = PengalamanPengguna.objects.filter(pengguna=user, otomatis=True)
+        self.assertEqual(old_assignment.status, AslabAssignment.STATUS_COMPLETED)
+        self.assertEqual(experiences.count(), 1)
+        experience = experiences.get()
+        self.assertEqual(experience.tanggal_mulai, date(2026, 7, 1))
+        self.assertEqual(experience.tanggal_selesai, date(2026, 12, 31))
+
     def test_rejects_unauthorized_ineligible_conflicting_and_invalid_deadline(self):
         invalid = self.user('BAD-OFF', 'Bad', 'admin')
         for overrides, message in [
@@ -705,8 +731,14 @@ class DirectOfferServiceTests(TestCase):
         self.candidate.refresh_from_db()
         self.assertEqual(self.candidate.role, 'mahasiswa')
 
-    def test_activation_locks_replacement_before_slot_and_offer(self):
+    def test_activation_locks_asleb_identities_before_replacement_slot_and_offer(self):
         offer = self.submitted_offer()
+        existing = Asleb.objects.create(
+            nama=self.candidate.nama_pengguna, nim=self.candidate.nim_nik,
+            no_hp=self.candidate.no_hp, email=self.candidate.email,
+            program_studi=self.candidate.prodi, semester=5, status='nonaktif',
+            periode_aktif=self.period, tanggal_bergabung=self.period.mulai,
+        )
 
         with CaptureQueriesContext(connection) as queries:
             activate_replacement(
@@ -720,11 +752,15 @@ class DirectOfferServiceTests(TestCase):
         replacement_table = AslabReplacement._meta.db_table.lower()
         slot_table = AslabSlot._meta.db_table.lower()
         offer_table = AslabOffer._meta.db_table.lower()
+        asleb_table = Asleb._meta.db_table.lower()
+        asleb_index = next(i for i, sql in enumerate(locking_sql) if asleb_table in sql)
         replacement_index = next(i for i, sql in enumerate(locking_sql) if replacement_table in sql)
         slot_index = next(i for i, sql in enumerate(locking_sql) if slot_table in sql)
         offer_index = next(i for i, sql in enumerate(locking_sql) if offer_table in sql)
+        self.assertLess(asleb_index, replacement_index)
         self.assertLess(replacement_index, slot_index)
         self.assertLess(slot_index, offer_index)
+        self.assertEqual(AslabAssignment.objects.get(menggantikan=self.replacement.outgoing_assignment).asleb, existing)
 
     def test_submit_forces_links_identity_and_revision_reuses_row(self):
         offer = accept_offer(offer_id=self.create_offer().pk, candidate=self.candidate)
@@ -1443,3 +1479,56 @@ class DirectOfferConcurrencyTests(TransactionTestCase):
                  AslabReplacement.STATUS_COMPLETING_DATA),
             },
         )
+
+    def test_activation_racing_termination_same_identity_has_no_deadlock(self):
+        other_course = MataKuliahAsleb.objects.create(
+            kode='RACE-ID', kode_mk='RACE-ID', nama='Identity Race',
+            dosen='Dosen', kelas='RACE',
+        )
+        other_slot = AslabSlot.objects.create(
+            periode=self.period, matkul=other_course, nomor=1,
+            status=AslabSlot.STATUS_ACTIVE,
+        )
+        candidate_asleb = Asleb.objects.create(
+            nama=self.candidate.nama_pengguna, nim=self.candidate.nim_nik,
+            no_hp=self.candidate.no_hp, email=self.candidate.email,
+            program_studi=self.candidate.prodi, semester=5, status='aktif',
+            periode_aktif=self.period, tanggal_bergabung=self.period.mulai,
+        )
+        other_assignment = AslabAssignment.objects.create(
+            slot=other_slot, asleb=candidate_asleb, mulai_pada=self.period.mulai,
+            status=AslabAssignment.STATUS_ACTIVE,
+        )
+        offer = accept_offer(offer_id=self.offer().pk, candidate=self.candidate)
+        canonical_offer = AslabOffer.objects.select_related(
+            'replacement__slot__matkul').get(pk=offer.pk)
+        form = self.form(canonical_offer, self.candidate)
+        self.assertTrue(form.is_valid(), form.errors)
+        submit_offer_registration(
+            offer_id=offer.pk, candidate=self.candidate, registration_form=form,
+        )
+
+        outcomes = self.run_race([
+            lambda: activate_replacement(
+                offer_id=offer.pk,
+                actor=Pengguna.objects.get(pk=self.laboran.pk),
+                active_date=date(2026, 9, 1),
+            ).pk,
+            lambda: end_assignment_for_replacement(
+                assignment_id=other_assignment.pk,
+                actor=Pengguna.objects.get(pk=self.laboran.pk),
+                reason_type='dismissal', reason='Concurrent identity termination',
+                effective_date=date(2026, 9, 1),
+            ).pk,
+        ])
+
+        self.assertCountEqual([kind for kind, _ in outcomes], ['success', 'success'])
+        other_assignment.refresh_from_db()
+        offer.refresh_from_db()
+        self.candidate.refresh_from_db()
+        self.assertEqual(other_assignment.status, AslabAssignment.STATUS_TERMINATED)
+        self.assertEqual(offer.status, AslabOffer.STATUS_VERIFIED)
+        self.assertEqual(self.candidate.role, 'asisten_lab')
+        self.assertEqual(AslabAssignment.objects.filter(
+            asleb=candidate_asleb, status=AslabAssignment.STATUS_ACTIVE,
+        ).count(), 1)
