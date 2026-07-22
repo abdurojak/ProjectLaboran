@@ -9,7 +9,7 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.db import IntegrityError, transaction
-from django.db.models import Avg, Count, Exists, OuterRef, Q, Sum
+from django.db.models import Avg, Count, Q, Sum
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.response import TemplateResponse
@@ -31,6 +31,7 @@ from apps.pendaftaran_asleb.models import AslabAssignment, PengaturanBiayaTransf
 from apps.pendaftaran_asleb.replacement_services import (
     end_single_active_assignment_for_replacement,
     payment_eligible_honors,
+    with_replacement_hold_state,
 )
 from apps.pendaftaran_asleb.services import notify_manual_asleb_removal
 
@@ -56,7 +57,6 @@ from .models import (
     Asleb,
     HasilPraktikumMahasiswa,
     HonorAsleb,
-    HonorReassignment,
     LogAktivitasPraktikum,
     ModulPraktikum,
     PengumpulanLaporanPraktikum,
@@ -233,11 +233,8 @@ class HonorAslebListView(HonorAccessMixin, ListView):
     context_object_name = 'honor_list'
 
     def get_queryset(self):
-        held_audits = HonorReassignment.objects.filter(
-            honor_id=OuterRef('pk'), status=HonorReassignment.STATUS_HELD,
-        )
-        queryset = HonorAsleb.objects.select_related('asleb', 'assigned_laboran').annotate(
-            replacement_held=Exists(held_audits),
+        queryset = with_replacement_hold_state(
+            HonorAsleb.objects.select_related('asleb', 'assigned_laboran')
         )
         pengguna = getattr(self.request, 'current_pengguna', None)
         search = self.request.GET.get('q', '').strip()
@@ -2025,9 +2022,7 @@ def confirm_honor_transfer(request, pk):
     asleb_id = get_object_or_404(HonorAsleb.objects.only('asleb_id'), pk=pk).asleb_id
     Asleb.objects.select_for_update().get(pk=asleb_id)
     honor = get_object_or_404(HonorAsleb.objects.select_for_update(), pk=pk)
-    if HonorReassignment.objects.filter(
-        honor=honor, status=HonorReassignment.STATUS_HELD,
-    ).exists():
+    if not payment_eligible_honors(HonorAsleb.objects.filter(pk=honor.pk)).exists():
         messages.error(request, 'Honor sedang ditahan sampai proses penggantian aslab selesai.')
         return redirect('asleb:honor_list')
     if pengguna.role == LABORAN_ROLE and honor.assigned_laboran_id != pengguna.pk:

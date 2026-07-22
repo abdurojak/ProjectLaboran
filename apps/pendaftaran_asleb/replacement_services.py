@@ -2,6 +2,7 @@ from datetime import date
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.db.models import Exists, OuterRef
 from django.utils import timezone
 
 from apps.asleb.models import Asleb, HonorAsleb, HonorReassignment
@@ -20,10 +21,37 @@ REASON_STATUS_MAP = {
     'other': AslabAssignment.STATUS_TERMINATED,
 }
 
+UNRESOLVED_REPLACEMENT_STATUSES = {
+    AslabReplacement.STATUS_WAITING_ACTION,
+    AslabReplacement.STATUS_SEARCHING,
+    AslabReplacement.STATUS_WAITING_CONSENT,
+    AslabReplacement.STATUS_COMPLETING_DATA,
+    AslabReplacement.STATUS_WAITING_VERIFICATION,
+}
+
+
+def with_replacement_hold_state(queryset=None):
+    queryset = queryset if queryset is not None else HonorAsleb.objects.all()
+    unresolved_replacement = AslabReplacement.objects.filter(
+        outgoing_assignment__asleb_id=OuterRef('asleb_id'),
+        status__in=UNRESOLVED_REPLACEMENT_STATUSES,
+        transfer_month__lte=OuterRef('bulan'),
+        slot__periode__selesai__gte=OuterRef('bulan'),
+    )
+    return queryset.annotate(replacement_held=Exists(unresolved_replacement))
+
 
 def payment_eligible_honors(queryset=None):
-    queryset = queryset if queryset is not None else HonorAsleb.objects.all()
-    return queryset.exclude(reassignment_audits__status=HonorReassignment.STATUS_HELD)
+    correction_required = HonorReassignment.objects.filter(
+        honor_id=OuterRef('pk'),
+        status=HonorReassignment.STATUS_CORRECTION_REQUIRED,
+    )
+    return with_replacement_hold_state(queryset).annotate(
+        replacement_correction_required=Exists(correction_required),
+    ).filter(
+        replacement_held=False,
+        replacement_correction_required=False,
+    )
 
 
 def _lock_replacement_for_honor(replacement):
