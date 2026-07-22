@@ -23,10 +23,24 @@ from .views import (
     update_period_dates,
     end_period_manually,
 )
+from .replacement_views import (
+    AcceptOfferView, CandidateSubmissionView, CreateOfferView, DeclineOfferView,
+    EndAssignmentView, LimitedOpeningView, ReplacementDetailView,
+    ReplacementListView, VerifyOfferView,
+)
 
 app_name = 'pendaftaran_asleb'
 
 urlpatterns = [
+    path('pergantian/', ReplacementListView.as_view(), name='replacement_list'),
+    path('pergantian/<int:pk>/', ReplacementDetailView.as_view(), name='replacement_detail'),
+    path('pergantian/akhiri/<int:assignment_id>/', EndAssignmentView.as_view(), name='replacement_end'),
+    path('pergantian/<int:pk>/tawaran/', CreateOfferView.as_view(), name='replacement_offer_create'),
+    path('tawaran/<int:pk>/terima/', AcceptOfferView.as_view(), name='replacement_offer_accept'),
+    path('tawaran/<int:pk>/tolak/', DeclineOfferView.as_view(), name='replacement_offer_decline'),
+    path('tawaran/<int:pk>/data/', CandidateSubmissionView.as_view(), name='replacement_candidate_data'),
+    path('tawaran/<int:pk>/verifikasi/', VerifyOfferView.as_view(), name='replacement_verify'),
+    path('pergantian/<int:pk>/pendaftaran-terbatas/', LimitedOpeningView.as_view(), name='replacement_opening'),
     path('qr/', registration_qr, name='registration_qr'),
     path('', PendaftaranAslebListView.as_view(), name='pendaftaran_list'),
     path('daftar/', PendaftaranAslebPublicCreateView.as_view(), name='pendaftaran_public'),

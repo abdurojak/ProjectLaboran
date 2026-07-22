@@ -80,14 +80,18 @@
                                     <i data-lucide="eye" class="h-4 w-4"></i><span>Detail</span>
                                 </a>
                                 {% if can_end_asleb and asleb.status == 'aktif' %}
-                                <form method="post" action="{% url 'asleb:asleb_end_membership' asleb.pk %}" data-confirm-message="Keluarkan {{ asleb.nama }} dari Aslab? Akun akan kembali menjadi Mahasiswa dan wajib menyertakan alasan." class="inline" data-end-asleb-form>
-                                    {% csrf_token %}
-                                    <input type="hidden" name="alasan_pengeluaran" value="">
-                                    <button type="submit" class="inline-flex items-center gap-1 text-orange-600 hover:text-orange-700" data-end-asleb-trigger data-asleb-name="{{ asleb.nama|escape }}">
-                                        <i data-lucide="user-round-x" class="h-4 w-4"></i>
-                                        <span>Keluarkan Aslab</span>
-                                    </button>
-                                </form>
+                                    {% if asleb.active_assignments %}
+                                        {% for assignment in asleb.active_assignments %}
+                                        <a class="inline-flex items-center gap-1 text-orange-600 hover:text-orange-700" href="{% url 'pendaftaran_asleb:replacement_end' assignment.pk %}">
+                                            <i data-lucide="user-round-x" class="h-4 w-4"></i>
+                                            <span>Ganti/Akhiri Masa Tugas{% if asleb.active_assignments|length > 1 %} · {{ assignment.slot.matkul.kode }}{% endif %}</span>
+                                        </a>
+                                        {% endfor %}
+                                    {% else %}
+                                        <span class="inline-flex items-center gap-1 text-xs font-medium text-amber-700" title="Data lama belum memiliki pemetaan slot penugasan.">
+                                            <i data-lucide="triangle-alert" class="h-4 w-4"></i>Penugasan lama belum terpetakan
+                                        </span>
+                                    {% endif %}
                                 {% endif %}
                             </div>
                         </td>
@@ -105,14 +109,12 @@
 {% endblock %}
 
 {% block extra_script %}
-{% include "components/confirmation_modal.html" with title="Konfirmasi Perubahan Data Aslab" confirm_label="Lanjutkan" confirm_icon="user-round-check" %}
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const form = document.getElementById('asleb-filter-form');
         const searchInput = document.getElementById('id_q');
         const statusSelect = document.getElementById('id_status');
         let searchTimer = null;
-        const reasonButtons = document.querySelectorAll('[data-end-asleb-trigger]');
 
         if (searchInput) {
             searchInput.addEventListener('input', function () {
@@ -129,34 +131,6 @@
             });
         }
 
-        reasonButtons.forEach(function (button) {
-            button.addEventListener('click', function (event) {
-                const submitForm = button.closest('form[data-end-asleb-form]');
-                if (!submitForm) {
-                    return;
-                }
-                const reasonInput = submitForm.querySelector('input[name="alasan_pengeluaran"]');
-                if (!reasonInput || reasonInput.value.trim()) {
-                    return;
-                }
-
-                event.preventDefault();
-                event.stopPropagation();
-
-                const personName = button.dataset.aslebName || 'Aslab ini';
-                const reason = window.prompt(`Masukkan alasan mengeluarkan ${personName} dari Aslab:`, '');
-                if (reason === null) {
-                    return;
-                }
-                const trimmedReason = reason.trim();
-                if (!trimmedReason) {
-                    window.alert('Alasan pengeluaran wajib diisi.');
-                    return;
-                }
-                reasonInput.value = trimmedReason;
-                button.click();
-            });
-        });
     });
 </script>
 {% endblock %}

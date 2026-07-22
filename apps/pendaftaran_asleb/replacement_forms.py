@@ -31,6 +31,70 @@ class DirectOfferForm(forms.Form):
         return deadline
 
 
+class EndAssignmentForm(forms.Form):
+    reason_type = forms.ChoiceField(choices=[
+        ('resignation', 'Mengundurkan diri'),
+        ('dismissal', 'Diberhentikan'),
+        ('other', 'Alasan lain'),
+    ])
+    reason = forms.CharField(widget=forms.Textarea(attrs={'rows': 4}))
+    effective_date = forms.DateField(widget=forms.DateInput(attrs={'type': 'date'}))
+    method = forms.ChoiceField(choices=[
+        ('undecided', 'Tentukan nanti'),
+        ('direct_offer', 'Penawaran langsung'),
+        ('limited_registration', 'Pendaftaran terbatas'),
+    ])
+
+
+class DeclineOfferForm(forms.Form):
+    reason = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 3}))
+
+
+class LimitedOpeningForm(forms.Form):
+    opens_at = forms.DateTimeField(widget=forms.DateTimeInput(attrs={'type': 'datetime-local'}))
+    closes_at = forms.DateTimeField(widget=forms.DateTimeInput(attrs={'type': 'datetime-local'}))
+    program_studi = forms.CharField(required=False)
+    cohort = forms.IntegerField(required=False, min_value=1, label='Angkatan')
+    allowed_candidates = forms.ModelMultipleChoiceField(
+        queryset=Pengguna.objects.none(), required=False, label='Kandidat yang diizinkan',
+    )
+    requirements = forms.CharField(
+        required=False, label='Persyaratan tambahan', widget=forms.Textarea(attrs={'rows': 3}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['allowed_candidates'].queryset = Pengguna.objects.filter(
+            role='mahasiswa', is_verified=True,
+        ).order_by('nama_pengguna')
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get('opens_at') and cleaned.get('closes_at'):
+            if cleaned['closes_at'] <= cleaned['opens_at']:
+                self.add_error('closes_at', 'Waktu penutupan harus setelah pembukaan.')
+        return cleaned
+
+
+class VerificationForm(forms.Form):
+    ACTION_ACTIVATE = 'activate'
+    ACTION_REVISION = 'revision'
+    action = forms.ChoiceField(choices=[
+        (ACTION_ACTIVATE, 'Verifikasi dan aktifkan'),
+        (ACTION_REVISION, 'Kembalikan untuk revisi'),
+    ])
+    active_date = forms.DateField(required=False, widget=forms.DateInput(attrs={'type': 'date'}))
+    notes = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 4}))
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get('action') == self.ACTION_ACTIVATE and not cleaned.get('active_date'):
+            self.add_error('active_date', 'Tanggal aktif wajib diisi.')
+        if cleaned.get('action') == self.ACTION_REVISION and not (cleaned.get('notes') or '').strip():
+            self.add_error('notes', 'Catatan revisi wajib diisi.')
+        return cleaned
+
+
 class ReplacementCandidateForm(PendaftaranAslebForm):
     """Candidate form bound to one offer; the service performs the authoritative save."""
 

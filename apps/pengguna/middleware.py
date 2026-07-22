@@ -12,6 +12,11 @@ class PenggunaLoginRequiredMiddleware:
         'laporan_preview',
         'laporan_download',
     }
+    MAHASISWA_ALLOWED_REPLACEMENT_URLS = {
+        'replacement_offer_accept',
+        'replacement_offer_decline',
+        'replacement_candidate_data',
+    }
     MAHASISWA_ALLOWED_KALENDER_URLS = {
         'kegiatan_list',
         'kegiatan_create',
@@ -130,7 +135,10 @@ class PenggunaLoginRequiredMiddleware:
 
     def mahasiswa_can_access(self, namespace, path, resolved, pengguna):
         if namespace == 'pendaftaran_asleb':
-            return resolved.url_name == 'rekening_update'
+            return (
+                resolved.url_name == 'rekening_update'
+                or resolved.url_name in self.MAHASISWA_ALLOWED_REPLACEMENT_URLS
+            )
 
         if namespace == 'kalender':
             return resolved.url_name in self.MAHASISWA_ALLOWED_KALENDER_URLS
