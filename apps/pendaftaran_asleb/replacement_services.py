@@ -102,8 +102,11 @@ def create_direct_offer(*, replacement_id, candidate_id, deadline, actor):
         candidate = Pengguna.objects.select_for_update().get(pk=candidate_id)
     except Pengguna.DoesNotExist as exc:
         raise ValidationError('Kandidat tidak ditemukan.') from exc
-    if replacement.status in {AslabReplacement.STATUS_ACTIVE, AslabReplacement.STATUS_CANCELLED}:
-        raise ValidationError('Proses penggantian sudah tidak aktif.')
+    if replacement.status not in {
+        AslabReplacement.STATUS_WAITING_ACTION,
+        AslabReplacement.STATUS_SEARCHING,
+    }:
+        raise ValidationError('Status proses penggantian tidak dapat menerima penawaran baru.')
     if slot.status != AslabSlot.STATUS_VACANT:
         raise ValidationError('Slot penggantian tidak lagi kosong.')
     if candidate.role != 'mahasiswa' or not candidate.is_verified:
@@ -171,7 +174,6 @@ def decline_offer(*, offer_id, candidate, reason=''):
     return offer
 
 
-@transaction.atomic
 def expire_due_offers(*, now=None):
     now = now or timezone.now()
     if timezone.is_naive(now):
@@ -181,20 +183,28 @@ def expire_due_offers(*, now=None):
         .values_list('pk', flat=True))
     expired = 0
     for offer_id in ids:
-        replacement, slot, offer = _lock_offer(offer_id)
-        _validate_offer_transition(
-            replacement=replacement, slot=slot, transition='expire')
-        if offer.status != AslabOffer.STATUS_WAITING or offer.deadline > now:
-            continue
-        previous = replacement.status
-        offer.status = AslabOffer.STATUS_EXPIRED
-        offer.save(update_fields=['status'])
-        replacement.status = AslabReplacement.STATUS_WAITING_ACTION
-        replacement.save(update_fields=['status', 'updated_at'])
-        _audit(replacement, None, 'offer_expired', previous, replacement.status,
-               metadata={'offer_id': offer.pk, 'expired_at': now.isoformat()})
-        expired += 1
+        expired += int(_expire_due_offer(offer_id=offer_id, now=now))
     return expired
+
+
+@transaction.atomic
+def _expire_due_offer(*, offer_id, now):
+    replacement, slot, offer = _lock_offer(offer_id)
+    if (
+        replacement.status != OFFER_TRANSITION_PARENT_STATES['expire']
+        or slot.status != AslabSlot.STATUS_VACANT
+        or offer.status != AslabOffer.STATUS_WAITING
+        or offer.deadline > now
+    ):
+        return False
+    previous = replacement.status
+    offer.status = AslabOffer.STATUS_EXPIRED
+    offer.save(update_fields=['status'])
+    replacement.status = AslabReplacement.STATUS_WAITING_ACTION
+    replacement.save(update_fields=['status', 'updated_at'])
+    _audit(replacement, None, 'offer_expired', previous, replacement.status,
+           metadata={'offer_id': offer.pk, 'expired_at': now.isoformat()})
+    return True
 
 
 @transaction.atomic
