@@ -446,6 +446,17 @@ class DirectOfferServiceTests(TestCase):
             otomatis=True,
         ).exists())
 
+    def test_period_completion_never_awards_resigned_or_replaced_assignments(self):
+        outgoing_user = Pengguna.objects.get(nim_nik=self.replacement.outgoing_assignment.asleb.nim)
+        self.replacement.outgoing_assignment.status = AslabAssignment.STATUS_REPLACED
+        self.replacement.outgoing_assignment.save(update_fields=['status'])
+
+        sync_expired_asleb_periods(date(2027, 1, 1))
+
+        self.assertFalse(PengalamanPengguna.objects.filter(
+            pengguna=outgoing_user, otomatis=True,
+        ).exists())
+
     def test_rejects_unauthorized_ineligible_conflicting_and_invalid_deadline(self):
         invalid = self.user('BAD-OFF', 'Bad', 'admin')
         for overrides, message in [
@@ -693,6 +704,27 @@ class DirectOfferServiceTests(TestCase):
         self.assertFalse(AslabAssignment.objects.filter(menggantikan=self.replacement.outgoing_assignment).exists())
         self.candidate.refresh_from_db()
         self.assertEqual(self.candidate.role, 'mahasiswa')
+
+    def test_activation_locks_replacement_before_slot_and_offer(self):
+        offer = self.submitted_offer()
+
+        with CaptureQueriesContext(connection) as queries:
+            activate_replacement(
+                offer_id=offer.pk, actor=self.laboran, active_date=date(2026, 9, 5),
+            )
+
+        locking_sql = [
+            query['sql'].lower() for query in queries.captured_queries
+            if 'for update' in query['sql'].lower()
+        ]
+        replacement_table = AslabReplacement._meta.db_table.lower()
+        slot_table = AslabSlot._meta.db_table.lower()
+        offer_table = AslabOffer._meta.db_table.lower()
+        replacement_index = next(i for i, sql in enumerate(locking_sql) if replacement_table in sql)
+        slot_index = next(i for i, sql in enumerate(locking_sql) if slot_table in sql)
+        offer_index = next(i for i, sql in enumerate(locking_sql) if offer_table in sql)
+        self.assertLess(replacement_index, slot_index)
+        self.assertLess(slot_index, offer_index)
 
     def test_submit_forces_links_identity_and_revision_reuses_row(self):
         offer = accept_offer(offer_id=self.create_offer().pk, candidate=self.candidate)
@@ -1376,3 +1408,38 @@ class DirectOfferConcurrencyTests(TransactionTestCase):
         self.assertEqual(AslabAssignment.objects.filter(
             menggantikan=self.replacement.outgoing_assignment,
         ).count(), 1)
+
+    def test_activation_racing_return_has_consistent_terminal_pair_without_deadlock(self):
+        offer = accept_offer(offer_id=self.offer().pk, candidate=self.candidate)
+        canonical_offer = AslabOffer.objects.select_related(
+            'replacement__slot__matkul').get(pk=offer.pk)
+        form = self.form(canonical_offer, self.candidate)
+        self.assertTrue(form.is_valid(), form.errors)
+        submit_offer_registration(
+            offer_id=offer.pk, candidate=self.candidate, registration_form=form,
+        )
+
+        outcomes = self.run_race([
+            lambda: activate_replacement(
+                offer_id=offer.pk,
+                actor=Pengguna.objects.get(pk=self.laboran.pk),
+                active_date=date(2026, 9, 1),
+            ).pk,
+            lambda: return_offer_for_revision(
+                offer_id=offer.pk,
+                actor=Pengguna.objects.get(pk=self.laboran.pk),
+                notes='Perbaiki data bersamaan aktivasi',
+            ).status,
+        ])
+
+        offer.refresh_from_db()
+        self.replacement.refresh_from_db()
+        self.assertFalse(any(kind == 'unexpected' for kind, _ in outcomes), outcomes)
+        self.assertIn(
+            (offer.status, self.replacement.status),
+            {
+                (AslabOffer.STATUS_VERIFIED, AslabReplacement.STATUS_ACTIVE),
+                (AslabOffer.STATUS_ACCEPTED_INCOMPLETE,
+                 AslabReplacement.STATUS_COMPLETING_DATA),
+            },
+        )

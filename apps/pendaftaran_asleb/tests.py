@@ -855,8 +855,8 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertIsNotNone(period.diakhiri_pada)
         self.assertEqual(akun_asleb.role, 'mahasiswa')
         self.assertEqual(asleb.status, 'nonaktif')
-        self.assertFalse(JadwalPraktikum.objects.filter(pk=jadwal_diajukan.pk).exists())
-        self.assertFalse(JadwalPraktikum.objects.filter(pk=jadwal_diterima.pk).exists())
+        self.assertTrue(JadwalPraktikum.objects.filter(pk=jadwal_diajukan.pk).exists())
+        self.assertTrue(JadwalPraktikum.objects.filter(pk=jadwal_diterima.pk).exists())
 
     def test_laboran_mengakhiri_periode_tetap_menampilkan_riwayat_honor_aslab_nonaktif(self):
         period = PeriodeAsleb.get_for_date(timezone.localdate())

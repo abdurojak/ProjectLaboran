@@ -786,7 +786,7 @@ class AslebViewTests(TestCase):
         self.assertEqual(hasil.nilai_laporan, 90)
         self.assertEqual(hasil.nilai, 85)
 
-    def test_peserta_dikosongkan_saat_periode_asleb_berakhir_nilai_tetap_tersimpan(self):
+    def test_peserta_dinonaktifkan_saat_periode_berakhir_dan_nilai_tetap_terhubung(self):
         today = timezone.localdate()
         period = PeriodeAsleb.objects.create(
             tahun=today.year,
@@ -829,14 +829,14 @@ class AslebViewTests(TestCase):
 
         sync_expired_asleb_periods(today)
 
-        self.assertFalse(PesertaPraktikum.objects.exists())
+        self.assertTrue(PesertaPraktikum.objects.filter(pk=peserta.pk, aktif=False).exists())
         hasil.refresh_from_db()
-        self.assertIsNone(hasil.peserta)
+        self.assertEqual(hasil.peserta, peserta)
         self.assertEqual(hasil.peserta_nim, '0640020099')
         self.assertEqual(hasil.peserta_nama, 'Mahasiswa Nilai')
         self.assertEqual(hasil.nilai, 90)
 
-    def test_periode_berakhir_membersihkan_data_aslab_lama_kecuali_modul(self):
+    def test_periode_berakhir_memfinalisasi_operasional_tanpa_menghapus_histori(self):
         today = timezone.localdate()
         period = PeriodeAsleb.objects.create(
             tahun=today.year,
@@ -923,7 +923,7 @@ class AslebViewTests(TestCase):
             peserta=peserta,
             file_laporan=SimpleUploadedFile('laporan.pdf', b'%PDF-1.4', content_type='application/pdf'),
         )
-        PermintaanPerubahanJadwal.objects.create(
+        change_request = PermintaanPerubahanJadwal.objects.create(
             jadwal=jadwal,
             matkul=self.matkul,
             ruangan=self.test_room,
@@ -940,14 +940,20 @@ class AslebViewTests(TestCase):
         self.assertEqual(akun_aslab.role, 'mahasiswa')
         self.assertEqual(self.asleb.status, 'nonaktif')
         self.assertTrue(ModulPraktikum.objects.filter(pk=modul.pk).exists())
-        self.assertFalse(PesertaPraktikum.objects.exists())
-        self.assertFalse(AbsensiAsleb.objects.exists())
-        self.assertFalse(AbsensiMasukAsleb.objects.exists())
-        self.assertFalse(PengingatAbsensiAsleb.objects.exists())
-        self.assertFalse(TugasLaporanPraktikum.objects.exists())
-        self.assertFalse(PengumpulanLaporanPraktikum.objects.exists())
-        self.assertFalse(JadwalPraktikum.objects.filter(pk=jadwal.pk).exists())
-        self.assertFalse(PermintaanPerubahanJadwal.objects.exists())
+        self.assertTrue(PesertaPraktikum.objects.filter(pk=peserta.pk).exists())
+        self.assertTrue(AbsensiAsleb.objects.filter(asleb=self.asleb).exists())
+        self.assertTrue(AbsensiMasukAsleb.objects.filter(asleb=self.asleb).exists())
+        self.assertTrue(PengingatAbsensiAsleb.objects.filter(asleb=self.asleb).exists())
+        self.assertTrue(TugasLaporanPraktikum.objects.filter(pk=tugas.pk).exists())
+        self.assertTrue(PengumpulanLaporanPraktikum.objects.filter(tugas=tugas).exists())
+        self.assertTrue(JadwalPraktikum.objects.filter(pk=jadwal.pk).exists())
+        self.assertTrue(PermintaanPerubahanJadwal.objects.filter(jadwal=jadwal).exists())
+        tugas.refresh_from_db()
+        peserta.refresh_from_db()
+        change_request.refresh_from_db()
+        self.assertFalse(tugas.aktif)
+        self.assertFalse(peserta.aktif)
+        self.assertEqual(change_request.status, 'ditolak')
         pengalaman = PengalamanPengguna.objects.get(pengguna=akun_aslab, otomatis=True)
         self.assertIn(str(self.matkul), pengalaman.deskripsi)
 
