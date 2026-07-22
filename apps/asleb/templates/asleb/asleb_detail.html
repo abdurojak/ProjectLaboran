@@ -11,6 +11,22 @@
             <p class="mt-2 text-sm text-slate-500">Detail data asisten laboratorium.</p>
         </div>
         <div class="flex flex-wrap gap-3">
+            {% if asleb.active_assignments %}
+                {% for assignment in asleb.active_assignments %}
+                <a class="btn-primary bg-orange-600 hover:bg-orange-700" href="{% url 'pendaftaran_asleb:replacement_end' assignment.pk %}">
+                    <i data-lucide="user-round-x" class="h-4 w-4"></i><span>Ganti/Akhiri Masa Tugas{% if asleb.active_assignments|length > 1 %} · {{ assignment.slot.matkul.kode }}{% endif %}</span>
+                </a>
+                {% endfor %}
+            {% elif has_operational_history %}
+                <span class="inline-flex items-center gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
+                    <i data-lucide="shield-alert" class="h-4 w-4"></i>Histori operasional dilindungi
+                </span>
+            {% else %}
+                <form method="post" action="{% url 'asleb:asleb_delete' asleb.pk %}" data-confirm-message="Hapus data Aslab yang belum pernah digunakan ini?">
+                    {% csrf_token %}
+                    <button type="submit" class="btn-secondary text-red-700"><i data-lucide="trash-2" class="h-4 w-4"></i><span>Hapus entri salah</span></button>
+                </form>
+            {% endif %}
             <a class="btn-secondary" href="{% url 'asleb:asleb_list' %}">
                 <i data-lucide="arrow-left" class="h-4 w-4"></i><span>Kembali</span>
             </a>
@@ -29,4 +45,8 @@
         <div class="rounded-3xl bg-slate-50 p-5 md:col-span-2"><div class="text-sm font-semibold text-slate-500">Catatan</div><div class="mt-2 text-base leading-7 text-slate-700">{{ asleb.catatan|default:"-" }}</div></div>
     </div>
 </section>
+{% endblock %}
+
+{% block extra_script %}
+{% include "components/confirmation_modal.html" with title="Konfirmasi Hapus Data" confirm_label="Hapus" confirm_icon="trash-2" %}
 {% endblock %}
