@@ -102,7 +102,7 @@ class DirectOfferServiceTests(TestCase):
         self.assertEqual(declined.decline_reason, 'Tidak bersedia')
         self.assertEqual(self.replacement.status, AslabReplacement.STATUS_WAITING_ACTION)
 
-        third = self.create_offer(deadline=self.now + timezone.timedelta(seconds=1))
+        third = self.create_offer(deadline=self.now + timezone.timedelta(days=1))
         self.assertEqual(expire_due_offers(now=third.deadline), 1)
         self.assertEqual(expire_due_offers(now=third.deadline), 0)
         third.refresh_from_db()
@@ -118,8 +118,33 @@ class DirectOfferServiceTests(TestCase):
             with self.subTest(overrides=overrides):
                 with self.assertRaisesMessage(ValidationError, message): self.create_offer(**overrides)
         self.create_offer()
-        with self.assertRaisesMessage(ValidationError, 'aktif'):
+        with self.assertRaisesMessage(ValidationError, 'Status'):
             self.create_offer()
+
+    def test_create_offer_only_allows_waiting_action_or_searching_parent(self):
+        rejected_states = [
+            AslabReplacement.STATUS_WAITING_CONSENT,
+            AslabReplacement.STATUS_COMPLETING_DATA,
+            AslabReplacement.STATUS_WAITING_VERIFICATION,
+            AslabReplacement.STATUS_ACTIVE,
+            AslabReplacement.STATUS_CANCELLED,
+        ]
+        for status in rejected_states:
+            with self.subTest(status=status):
+                self.replacement.status = status
+                self.replacement.save(update_fields=['status'])
+                with self.assertRaisesMessage(ValidationError, 'Status'):
+                    self.create_offer()
+                self.assertFalse(AslabOffer.objects.filter(replacement=self.replacement).exists())
+
+        for status in (AslabReplacement.STATUS_WAITING_ACTION, AslabReplacement.STATUS_SEARCHING):
+            with self.subTest(status=status):
+                self.replacement.status = status
+                self.replacement.save(update_fields=['status'])
+                offer = self.create_offer()
+                self.assertEqual(offer.status, AslabOffer.STATUS_WAITING)
+                offer.status = AslabOffer.STATUS_CANCELLED
+                offer.save(update_fields=['status'])
 
     def test_offer_ownership_and_deadline_are_enforced(self):
         offer = self.create_offer(deadline=self.now + timezone.timedelta(seconds=1))
@@ -137,8 +162,6 @@ class DirectOfferServiceTests(TestCase):
              lambda: accept_offer(offer_id=offer.pk, candidate=self.candidate)),
             ('decline cancelled', AslabReplacement.STATUS_CANCELLED, AslabSlot.STATUS_VACANT,
              lambda: decline_offer(offer_id=offer.pk, candidate=self.candidate)),
-            ('expire occupied', AslabReplacement.STATUS_WAITING_CONSENT, AslabSlot.STATUS_ACTIVE,
-             lambda: expire_due_offers(now=offer.deadline)),
         ]
         for label, parent_status, slot_status, operation in cases:
             with self.subTest(label=label):
@@ -150,6 +173,38 @@ class DirectOfferServiceTests(TestCase):
                     operation()
                 offer.refresh_from_db()
                 self.assertEqual(offer.status, AslabOffer.STATUS_WAITING)
+
+    def test_expiry_batch_skips_stale_offer_without_rolling_back_valid_offer(self):
+        valid_offer = self.create_offer(deadline=self.now + timezone.timedelta(seconds=1))
+
+        other_candidate = self.user('EXP-OTHER', 'Expiry Other', 'mahasiswa')
+        other_course = MataKuliahAsleb.objects.create(
+            kode='EXP02', kode_mk='EXP02', nama='Expiry Other', dosen='Dosen', kelas='TIF-02')
+        other_slot = AslabSlot.objects.create(
+            periode=self.period, matkul=other_course, nomor=1, status=AslabSlot.STATUS_VACANT)
+        other_asleb = Asleb.objects.create(
+            nama='Old Expiry', nim='OLD-EXP', no_hp='081', email='old-exp@example.com',
+            program_studi='TI', semester=5, status='nonaktif', periode_aktif=self.period,
+            tanggal_bergabung=date(2026, 7, 1))
+        other_assignment = AslabAssignment.objects.create(
+            slot=other_slot, asleb=other_asleb, mulai_pada=date(2026, 7, 1),
+            berakhir_pada=date(2026, 9, 1), status=AslabAssignment.STATUS_RESIGNED)
+        stale_replacement = AslabReplacement.objects.create(
+            slot=other_slot, outgoing_assignment=other_assignment,
+            effective_date=date(2026, 9, 1), transfer_month=date(2026, 9, 1),
+            created_by=self.laboran, method=AslabReplacement.METHOD_DIRECT_OFFER,
+            status=AslabReplacement.STATUS_CANCELLED)
+        stale_offer = AslabOffer.objects.create(
+            replacement=stale_replacement, candidate=other_candidate,
+            deadline=valid_offer.deadline)
+
+        self.assertEqual(expire_due_offers(now=valid_offer.deadline), 1)
+        valid_offer.refresh_from_db()
+        stale_offer.refresh_from_db()
+        stale_replacement.refresh_from_db()
+        self.assertEqual(valid_offer.status, AslabOffer.STATUS_EXPIRED)
+        self.assertEqual(stale_offer.status, AslabOffer.STATUS_WAITING)
+        self.assertEqual(stale_replacement.status, AslabReplacement.STATUS_CANCELLED)
 
     def test_submit_and_return_reject_stale_or_cancelled_parent(self):
         offer = accept_offer(offer_id=self.create_offer().pk, candidate=self.candidate)
