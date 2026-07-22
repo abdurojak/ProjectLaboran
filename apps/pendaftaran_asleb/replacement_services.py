@@ -30,10 +30,12 @@ def eligible_candidate_queryset(replacement):
     ).values_list('asleb__nim', flat=True)
     conflicting_offers = AslabOffer.objects.filter(
         status__in=AslabOffer.LIVE_STATUSES,
+        replacement__slot__periode_id=slot.periode_id,
     ).values_list('candidate_id', flat=True)
     live_registrations = PendaftaranAsleb.objects.filter(
         jenis=PendaftaranAsleb.JENIS_REPLACEMENT,
         status__in=PendaftaranAsleb.LIVE_REPLACEMENT_STATUSES,
+        replacement_process__slot__periode_id=slot.periode_id,
     ).values_list('candidate_user_id', flat=True)
     return Pengguna.objects.filter(role='mahasiswa', is_verified=True).exclude(
         nim_nik__in=assigned_nims,
@@ -54,11 +56,28 @@ def _lock_offer(offer_id):
         raise ValidationError('Penawaran tidak ditemukan.')
     replacement = AslabReplacement.objects.select_for_update().select_related(
         'slot__periode', 'slot__matkul').get(pk=replacement_id)
-    AslabSlot.objects.select_for_update().get(pk=replacement.slot_id)
+    slot = AslabSlot.objects.select_for_update().get(pk=replacement.slot_id)
     offers = list(AslabOffer.objects.select_for_update().filter(
         replacement_id=replacement_id).order_by('pk'))
     offer = next(item for item in offers if item.pk == offer_id)
-    return replacement, offer
+    return replacement, slot, offer
+
+
+OFFER_TRANSITION_PARENT_STATES = {
+    'accept': AslabReplacement.STATUS_WAITING_CONSENT,
+    'decline': AslabReplacement.STATUS_WAITING_CONSENT,
+    'expire': AslabReplacement.STATUS_WAITING_CONSENT,
+    'submit': AslabReplacement.STATUS_COMPLETING_DATA,
+    'return': AslabReplacement.STATUS_WAITING_VERIFICATION,
+}
+
+
+def _validate_offer_transition(*, replacement, slot, transition):
+    expected = OFFER_TRANSITION_PARENT_STATES[transition]
+    if replacement.status != expected or slot.status != AslabSlot.STATUS_VACANT:
+        raise ValidationError(
+            'Proses tidak dapat melanjutkan transisi penawaran karena parent atau slot sudah berubah.'
+        )
 
 
 def _require_owner(offer, candidate):
@@ -109,9 +128,11 @@ def create_direct_offer(*, replacement_id, candidate_id, deadline, actor):
 
 @transaction.atomic
 def accept_offer(*, offer_id, candidate):
-    replacement, offer = _lock_offer(offer_id)
+    replacement, slot, offer = _lock_offer(offer_id)
     Pengguna.objects.select_for_update().get(pk=offer.candidate_id)
     _require_owner(offer, candidate)
+    _validate_offer_transition(
+        replacement=replacement, slot=slot, transition='accept')
     if offer.status != AslabOffer.STATUS_WAITING:
         raise ValidationError('Penawaran tidak lagi menunggu persetujuan.')
     now = timezone.now()
@@ -131,9 +152,11 @@ def accept_offer(*, offer_id, candidate):
 
 @transaction.atomic
 def decline_offer(*, offer_id, candidate, reason=''):
-    replacement, offer = _lock_offer(offer_id)
+    replacement, slot, offer = _lock_offer(offer_id)
     Pengguna.objects.select_for_update().get(pk=offer.candidate_id)
     _require_owner(offer, candidate)
+    _validate_offer_transition(
+        replacement=replacement, slot=slot, transition='decline')
     if offer.status != AslabOffer.STATUS_WAITING or timezone.now() >= offer.deadline:
         raise ValidationError('Penawaran tidak lagi menunggu dan belum kedaluwarsa.')
     previous = replacement.status
@@ -158,7 +181,9 @@ def expire_due_offers(*, now=None):
         .values_list('pk', flat=True))
     expired = 0
     for offer_id in ids:
-        replacement, offer = _lock_offer(offer_id)
+        replacement, slot, offer = _lock_offer(offer_id)
+        _validate_offer_transition(
+            replacement=replacement, slot=slot, transition='expire')
         if offer.status != AslabOffer.STATUS_WAITING or offer.deadline > now:
             continue
         previous = replacement.status
@@ -175,9 +200,11 @@ def expire_due_offers(*, now=None):
 @transaction.atomic
 def submit_offer_registration(*, offer_id, candidate, registration_form):
     """Persist an already validated ReplacementCandidateForm under authoritative row locks."""
-    replacement, offer = _lock_offer(offer_id)
+    replacement, slot, offer = _lock_offer(offer_id)
     locked_candidate = Pengguna.objects.select_for_update().get(pk=offer.candidate_id)
     _require_owner(offer, candidate)
+    _validate_offer_transition(
+        replacement=replacement, slot=slot, transition='submit')
     if locked_candidate.role != 'mahasiswa' or not locked_candidate.is_verified:
         raise ValidationError('Kandidat harus mahasiswa terverifikasi.')
     if offer.status != AslabOffer.STATUS_ACCEPTED_INCOMPLETE:
@@ -236,7 +263,9 @@ def return_offer_for_revision(*, offer_id, actor, notes):
     notes = (notes or '').strip()
     if not notes:
         raise ValidationError('Catatan revisi wajib diisi.')
-    replacement, offer = _lock_offer(offer_id)
+    replacement, slot, offer = _lock_offer(offer_id)
+    _validate_offer_transition(
+        replacement=replacement, slot=slot, transition='return')
     if offer.status != AslabOffer.STATUS_SUBMITTED or not offer.registration_id:
         raise ValidationError('Hanya penawaran yang sudah diajukan yang dapat direvisi.')
     PendaftaranAsleb.objects.select_for_update().get(pk=offer.registration_id)
