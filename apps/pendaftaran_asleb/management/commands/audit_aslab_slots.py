@@ -56,7 +56,9 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         categories = defaultdict(list)
-        active_aslebs = Asleb.objects.filter(status='aktif').order_by('pk')
+        active_aslebs = Asleb.objects.filter(status='aktif').select_related(
+            'periode_aktif'
+        ).order_by('pk')
 
         for asleb in active_aslebs:
             if asleb.periode_aktif_id is None:
