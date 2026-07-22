@@ -37,11 +37,13 @@ from .models import (
     Asleb,
     HasilPraktikumMahasiswa,
     HonorAsleb,
+    HonorReassignment,
     ModulPraktikum,
     PengaturanAbsensiAsleb,
     PengingatAbsensiAsleb,
     PengumpulanLaporanPraktikum,
     PesertaPraktikum,
+    SuratHonorAsleb,
     TugasLaporanPraktikum,
 )
 from .views import get_praktikum_matkul_queryset
@@ -1202,6 +1204,50 @@ class AslebViewTests(TestCase):
         self.assertEqual(honor.status, 'dibayar')
         self.assertEqual(honor.pic_transfer, 'Lab Admin')
         self.assertTrue(honor.bukti_transfer)
+
+    @patch('apps.asleb.views.generate_surat_honor_pdf', return_value=b'%PDF-1.4\n%%EOF')
+    def test_honor_ditahan_visible_tetapi_tidak_dapat_dibayar_atau_masuk_surat(self, _pdf):
+        assignment = self.create_active_assignment()
+        held = HonorAsleb.objects.create(
+            asleb=self.asleb, bulan=date(2026, 10, 1), total_pertemuan=3,
+            status='diproses', assigned_laboran=self.pengguna,
+        )
+        other = Asleb.objects.create(
+            nama='Aslab Tidak Ditahan', nim='HON-FREE', no_hp='0812',
+            program_studi='Informatika', semester=5, tanggal_bergabung=date(2026, 7, 1),
+        )
+        eligible = HonorAsleb.objects.create(
+            asleb=other, bulan=date(2026, 10, 1), total_pertemuan=2,
+            status='diproses', assigned_laboran=self.pengguna,
+        )
+        from apps.pendaftaran_asleb.replacement_services import end_assignment_for_replacement
+        end_assignment_for_replacement(
+            assignment_id=assignment.pk, actor=self.pengguna, reason_type='resignation',
+            reason='Mengundurkan diri', effective_date=date(2026, 10, 5),
+        )
+
+        response = self.client.get(reverse('asleb:honor_list'), {'bulan': '2026-10'})
+        self.assertContains(response, self.asleb.nama)
+        self.assertContains(response, 'Ditahan - menunggu pengganti aktif')
+        self.assertNotContains(response, reverse('asleb:honor_confirm_transfer', args=[held.pk]))
+
+        self.client.post(reverse('asleb:honor_confirm_transfer', args=[held.pk]), {
+            'tanggal_transfer': '2026-10-31', 'pic_transfer': 'Lab Laboran',
+            'bukti_transfer': SimpleUploadedFile('bukti.jpg', b'bukti', content_type='image/jpeg'),
+        })
+        held.refresh_from_db()
+        self.assertEqual(held.status, 'diproses')
+
+        response = self.client.post(reverse('asleb:surat_honor_generate'), {
+            'bulan': '2026-10', 'nomor_surat': '001/HON/X/2026',
+            'tanggal_surat': '2026-10-31', 'perihal': 'Honor Oktober',
+        })
+        self.assertRedirects(response, reverse('asleb:surat_honor_list'))
+        surat = SuratHonorAsleb.objects.get()
+        self.assertEqual(list(surat.honors.all()), [eligible])
+        self.assertTrue(HonorReassignment.objects.filter(
+            honor=held, status=HonorReassignment.STATUS_HELD,
+        ).exists())
 
     def test_ttd_kepala_laboratorium_di_lampiran_rata_kanan(self):
         lab_name = next(iter(LAB_SIGNATURES))

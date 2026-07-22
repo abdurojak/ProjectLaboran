@@ -11,7 +11,7 @@ from django.test import RequestFactory, TestCase, TransactionTestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
-from apps.asleb.models import Asleb, HonorAsleb, HonorReassignment
+from apps.asleb.models import Asleb, HonorAsleb, HonorReassignment, SuratHonorAsleb
 from apps.asleb.views import HonorAslebListView
 from apps.pengguna.models import PengalamanPengguna, Pengguna
 
@@ -33,6 +33,8 @@ from .replacement_services import (
     end_assignment_for_replacement,
     end_single_active_assignment_for_replacement,
     expire_due_offers,
+    hold_replacement_honor,
+    payment_eligible_honors,
     reassign_replacement_honor,
     return_offer_for_revision,
     submit_offer_registration,
@@ -88,7 +90,30 @@ class HonorReassignmentTests(TestCase):
             replacement=self.replacement, incoming_asleb=self.incoming, actor=self.laboran,
         )
 
+    def replacement_registration(self, **overrides):
+        candidate = self.user('USR-NEW-HON', 'Aslab Baru', 'mahasiswa')
+        values = {
+            'nama': self.incoming.nama,
+            'nim': self.incoming.nim,
+            'no_hp': self.incoming.no_hp,
+            'email': self.incoming.email,
+            'program_studi': self.incoming.program_studi,
+            'semester': self.incoming.semester,
+            'matkul': self.course,
+            'periode': self.period,
+            'metode_rekening': 'bank_lain',
+            'rekening': '99887766',
+            'nama_pemilik_rekening': 'Aslab Baru',
+            'status': 'diterima',
+            'jenis': PendaftaranAsleb.JENIS_REPLACEMENT,
+            'replacement_process': self.replacement,
+            'candidate_user': candidate,
+        }
+        values.update(overrides)
+        return PendaftaranAsleb.objects.create(**values)
+
     def test_prior_month_untouched_and_effective_through_period_end_reassigned(self):
+        self.replacement_registration()
         prior = self.honor(self.outgoing, date(2026, 9, 1))
         effective = self.honor(self.outgoing, date(2026, 10, 1))
         future = self.honor(self.outgoing, date(2026, 12, 1))
@@ -117,6 +142,7 @@ class HonorReassignmentTests(TestCase):
         self.assertEqual(audit.final_asleb, self.incoming)
 
     def test_idempotent_and_does_not_fabricate_missing_months(self):
+        self.replacement_registration()
         existing = self.honor(self.outgoing, date(2026, 11, 1))
 
         first = self.run_service()
@@ -146,6 +172,77 @@ class HonorReassignmentTests(TestCase):
         view.request = request
 
         self.assertIn(historical, view.get_queryset())
+
+    def test_hold_is_idempotent_visible_and_excluded_from_payment_selection(self):
+        honor = self.honor(self.outgoing, date(2026, 10, 1))
+
+        self.assertEqual(hold_replacement_honor(replacement=self.replacement, actor=self.laboran), 1)
+        self.assertEqual(hold_replacement_honor(replacement=self.replacement, actor=self.laboran), 0)
+
+        audit = HonorReassignment.objects.get(honor=honor)
+        self.assertEqual(audit.status, HonorReassignment.STATUS_HELD)
+        self.assertIn(honor, HonorAsleb.objects.all())
+        self.assertNotIn(honor, payment_eligible_honors(HonorAsleb.objects.all()))
+
+    def test_held_audit_requires_real_honor_row(self):
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                HonorReassignment.objects.create(
+                    replacement=self.replacement,
+                    honor=None,
+                    bulan=date(2026, 10, 1),
+                    original_asleb=self.outgoing,
+                    status=HonorReassignment.STATUS_HELD,
+                    reason='Invalid null hold',
+                    acted_by=self.laboran,
+                )
+
+    def test_issued_document_is_locked_and_requires_correction(self):
+        honor = self.honor(self.outgoing, date(2026, 10, 1))
+        surat = SuratHonorAsleb.objects.create(
+            bulan=date(2026, 10, 1), nomor_surat='001/HON/X/2026',
+            file_pdf='surat_honor_asleb/issued.pdf', dibuat_oleh=self.laboran,
+        )
+        surat.honors.add(honor)
+
+        self.run_service()
+
+        honor.refresh_from_db()
+        audit = HonorReassignment.objects.get(honor=honor)
+        self.assertEqual(honor.asleb, self.outgoing)
+        self.assertEqual(audit.status, HonorReassignment.STATUS_CORRECTION_REQUIRED)
+        self.assertEqual(audit.final_asleb, self.incoming)
+
+    def test_unlocked_reassignment_uses_incoming_registration_account(self):
+        self.replacement_registration()
+        honor = self.honor(self.outgoing, date(2026, 10, 1))
+        honor.metode_transfer = 'bni'
+        honor.nomor_transfer = 'OLD-ACCOUNT'
+        honor.nama_pemilik_transfer = 'Aslab Lama'
+        HonorAsleb.objects.filter(pk=honor.pk).update(
+            metode_transfer=honor.metode_transfer,
+            nomor_transfer=honor.nomor_transfer,
+            nama_pemilik_transfer=honor.nama_pemilik_transfer,
+        )
+
+        self.run_service()
+
+        honor.refresh_from_db()
+        self.assertEqual(honor.asleb, self.incoming)
+        self.assertEqual(honor.metode_transfer, 'bank_lain')
+        self.assertEqual(honor.nomor_transfer, '99887766')
+        self.assertEqual(honor.nama_pemilik_transfer, 'Aslab Baru')
+
+    def test_missing_incoming_account_rolls_back_without_mutation(self):
+        self.replacement_registration(rekening='', nama_pemilik_rekening='')
+        honor = self.honor(self.outgoing, date(2026, 10, 1))
+
+        with self.assertRaisesMessage(ValidationError, 'rekening'):
+            self.run_service()
+
+        honor.refresh_from_db()
+        self.assertEqual(honor.asleb, self.outgoing)
+        self.assertFalse(HonorReassignment.objects.exists())
 
 
 class DirectOfferServiceTests(TestCase):
@@ -715,6 +812,32 @@ class TerminationServiceTests(TestCase):
         self.assertTrue(PengalamanPengguna.objects.filter(pk=experience.pk).exists())
         self.assertTrue(HonorAsleb.objects.filter(pk=honor.pk).exists())
         self.assertEqual(PengalamanPengguna.objects.filter(pengguna=self.student).count(), 1)
+
+    def test_termination_holds_existing_effective_and_future_period_honor(self):
+        prior = HonorAsleb.objects.create(
+            asleb=self.asleb, bulan=date(2026, 9, 1), jumlah=49000,
+        )
+        effective = HonorAsleb.objects.create(
+            asleb=self.asleb, bulan=date(2026, 10, 1), jumlah=49000,
+        )
+        future = HonorAsleb.objects.create(
+            asleb=self.asleb, bulan=date(2026, 12, 1), jumlah=49000,
+        )
+
+        replacement = self.end()
+
+        self.assertFalse(HonorReassignment.objects.filter(honor=prior).exists())
+        self.assertEqual(
+            set(HonorReassignment.objects.filter(replacement=replacement).values_list(
+                'honor_id', flat=True,
+            )),
+            {effective.pk, future.pk},
+        )
+        self.assertFalse(
+            HonorReassignment.objects.filter(replacement=replacement).exclude(
+                status=HonorReassignment.STATUS_HELD,
+            ).exists()
+        )
 
 
 @skipUnless(connection.vendor == 'mysql', 'MySQL row-lock behavior required')

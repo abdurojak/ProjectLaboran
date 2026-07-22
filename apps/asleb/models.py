@@ -301,6 +301,10 @@ class HonorReassignment(models.Model):
                 ),
                 name='honor_reassignment_final_guard',
             ),
+            models.CheckConstraint(
+                check=~models.Q(status='held', honor__isnull=True),
+                name='held_honor_requires_row',
+            ),
         ]
 
 
@@ -318,6 +322,9 @@ class SuratHonorAsleb(models.Model):
     tanggal_surat = models.DateField(default=timezone.localdate)
     perihal = models.CharField(max_length=200, default='Laporan Kegiatan Asisten Laboratorium Jurusan Teknik Informatika')
     file_pdf = models.FileField(upload_to='surat_honor_asleb/')
+    honors = models.ManyToManyField(
+        HonorAsleb, related_name='issued_honor_letters', blank=True,
+    )
     dibuat_oleh = models.ForeignKey(
         'pengguna.Pengguna',
         on_delete=models.SET_NULL,
