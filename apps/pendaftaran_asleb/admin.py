@@ -43,6 +43,8 @@ class AslabOfferAdmin(ReadOnlyWorkflowAdmin):
         'candidate', 'replacement__slot',
         'replacement__outgoing_assignment__asleb',
         'replacement__outgoing_assignment__slot',
+        'replacement__outgoing_assignment__slot__periode',
+        'replacement__outgoing_assignment__slot__matkul',
         'registration', 'verified_by',
     )
     readonly_fields = [field.name for field in AslabOffer._meta.fields]
@@ -56,6 +58,8 @@ class LimitedReplacementOpeningAdmin(ReadOnlyWorkflowAdmin):
         'replacement__slot',
         'replacement__outgoing_assignment__asleb',
         'replacement__outgoing_assignment__slot',
+        'replacement__outgoing_assignment__slot__periode',
+        'replacement__outgoing_assignment__slot__matkul',
     )
     readonly_fields = [field.name for field in LimitedReplacementOpening._meta.fields]
 
@@ -68,6 +72,8 @@ class AslabReplacementAuditAdmin(ReadOnlyWorkflowAdmin):
         'replacement__slot',
         'replacement__outgoing_assignment__asleb',
         'replacement__outgoing_assignment__slot',
+        'replacement__outgoing_assignment__slot__periode',
+        'replacement__outgoing_assignment__slot__matkul',
         'actor',
     )
     readonly_fields = [field.name for field in AslabReplacementAudit._meta.fields]
