@@ -206,6 +206,109 @@ class LimitedRegistrationTests(TestCase):
                 opening_id=opening.pk, registration_id=registration.pk, actor=self.laboran,
             )
 
+    def test_selection_rechecks_same_period_live_offer_without_filling_opening(self):
+        opening = self.open()
+        registration = self.apply(opening)
+        other_course = MataKuliahAsleb.objects.create(
+            kode='LIM03', kode_mk='LIM03', nama='Other Offer', dosen='Dosen', kelas='TIF-03',
+        )
+        other_slot = AslabSlot.objects.create(
+            periode=self.period, matkul=other_course, nomor=1,
+            status=AslabSlot.STATUS_VACANT,
+        )
+        other_asleb = Asleb.objects.create(
+            nama='Other Old', nim='OLD-LIM-2', no_hp='081', email='old2@example.com',
+            program_studi='TI', semester=5, status='nonaktif', periode_aktif=self.period,
+            tanggal_bergabung=date(2026, 7, 1),
+        )
+        other_assignment = AslabAssignment.objects.create(
+            slot=other_slot, asleb=other_asleb, mulai_pada=date(2026, 7, 1),
+            berakhir_pada=date(2026, 9, 1), status=AslabAssignment.STATUS_RESIGNED,
+        )
+        other_replacement = AslabReplacement.objects.create(
+            slot=other_slot, outgoing_assignment=other_assignment,
+            effective_date=date(2026, 9, 1), transfer_month=date(2026, 9, 1),
+            created_by=self.laboran, method=AslabReplacement.METHOD_DIRECT_OFFER,
+            status=AslabReplacement.STATUS_WAITING_CONSENT,
+        )
+        AslabOffer.objects.create(
+            replacement=other_replacement, candidate=self.candidate,
+            deadline=self.now + timezone.timedelta(days=2),
+        )
+
+        with self.assertRaisesMessage(ValidationError, 'penawaran aktif'):
+            select_limited_candidate(
+                opening_id=opening.pk, registration_id=registration.pk, actor=self.laboran,
+            )
+
+        opening.refresh_from_db(); self.replacement.refresh_from_db()
+        self.assertEqual(opening.status, LimitedReplacementOpening.STATUS_OPEN)
+        self.assertEqual(self.replacement.status, AslabReplacement.STATUS_SEARCHING)
+        self.assertFalse(AslabOffer.objects.filter(replacement=self.replacement).exists())
+
+    def test_selection_rechecks_active_assignment_and_other_live_registration(self):
+        opening = self.open()
+        registration = self.apply(opening)
+        active_asleb = Asleb.objects.create(
+            nama=self.candidate.nama_pengguna, nim=self.candidate.nim_nik,
+            no_hp=self.candidate.no_hp, email=self.candidate.email,
+            program_studi=self.candidate.prodi, semester=5, status='aktif',
+            periode_aktif=self.period, tanggal_bergabung=date(2026, 7, 1),
+        )
+        active_course = MataKuliahAsleb.objects.create(
+            kode='LIM-ACT', kode_mk='LIM-ACT', nama='Active Conflict',
+            dosen='Dosen', kelas='TIF-05',
+        )
+        active_slot = AslabSlot.objects.create(
+            periode=self.period, matkul=active_course, nomor=1,
+            status=AslabSlot.STATUS_ACTIVE,
+        )
+        active_assignment = AslabAssignment.objects.create(
+            slot=active_slot, asleb=active_asleb, mulai_pada=date(2026, 7, 1),
+            status=AslabAssignment.STATUS_ACTIVE,
+        )
+        with self.assertRaisesMessage(ValidationError, 'penugasan aktif'):
+            select_limited_candidate(
+                opening_id=opening.pk, registration_id=registration.pk, actor=self.laboran,
+            )
+        active_assignment.status = AslabAssignment.STATUS_TERMINATED
+        active_assignment.berakhir_pada = date(2026, 8, 1)
+        active_assignment.save(update_fields=['status', 'berakhir_pada'])
+
+        other_slot = AslabSlot.objects.create(
+            periode=self.period, matkul=active_course, nomor=2,
+            status=AslabSlot.STATUS_VACANT,
+        )
+        outgoing = Asleb.objects.create(
+            nama='Other Old Registration', nim='OLD-LIVE-REG', no_hp='081',
+            email='old-live-reg@example.com', program_studi='TI', semester=5,
+            status='nonaktif', periode_aktif=self.period,
+            tanggal_bergabung=date(2026, 7, 1),
+        )
+        outgoing_assignment = AslabAssignment.objects.create(
+            slot=other_slot, asleb=outgoing, mulai_pada=date(2026, 7, 1),
+            berakhir_pada=date(2026, 8, 1), status=AslabAssignment.STATUS_RESIGNED,
+        )
+        other_replacement = AslabReplacement.objects.create(
+            slot=other_slot, outgoing_assignment=outgoing_assignment,
+            effective_date=date(2026, 8, 1), transfer_month=date(2026, 8, 1),
+            created_by=self.laboran,
+        )
+        PendaftaranAsleb.objects.create(
+            nama=self.candidate.nama_pengguna, nim=self.candidate.nim_nik,
+            no_hp=self.candidate.no_hp, email=self.candidate.email,
+            program_studi=self.candidate.prodi, semester=5, matkul=active_course,
+            periode=self.period, jenis=PendaftaranAsleb.JENIS_REPLACEMENT,
+            replacement_process=other_replacement, candidate_user=self.candidate,
+            status='diajukan',
+        )
+        with self.assertRaisesMessage(ValidationError, 'pendaftaran aktif lain'):
+            select_limited_candidate(
+                opening_id=opening.pk, registration_id=registration.pk, actor=self.laboran,
+            )
+        opening.refresh_from_db()
+        self.assertEqual(opening.status, LimitedReplacementOpening.STATUS_OPEN)
+
     def test_close_is_idempotent_and_expired_opening_cannot_apply_or_select(self):
         opening = self.open()
         registration = self.apply(opening)
@@ -299,6 +402,55 @@ class LimitedRegistrationConcurrencyTests(TransactionTestCase):
         self.assertEqual(AslabOffer.objects.filter(replacement=self.replacement).count(), 1)
         opening.refresh_from_db()
         self.assertEqual(opening.status, LimitedReplacementOpening.STATUS_FILLED)
+
+    def test_limited_selection_races_direct_offer_for_same_candidate_and_period(self):
+        opening = self.open()
+        registration = self.apply(opening)
+        other_course = MataKuliahAsleb.objects.create(
+            kode='RACE-LIM', kode_mk='RACE-LIM', nama='Direct Race',
+            dosen='Dosen', kelas='TIF-04',
+        )
+        other_slot = AslabSlot.objects.create(
+            periode=self.period, matkul=other_course, nomor=1,
+            status=AslabSlot.STATUS_VACANT,
+        )
+        other_asleb = Asleb.objects.create(
+            nama='Race Old', nim='OLD-RACE-LIM', no_hp='081', email='race-old@example.com',
+            program_studi='TI', semester=5, status='nonaktif', periode_aktif=self.period,
+            tanggal_bergabung=date(2026, 7, 1),
+        )
+        other_assignment = AslabAssignment.objects.create(
+            slot=other_slot, asleb=other_asleb, mulai_pada=date(2026, 7, 1),
+            berakhir_pada=date(2026, 9, 1), status=AslabAssignment.STATUS_RESIGNED,
+        )
+        other_replacement = AslabReplacement.objects.create(
+            slot=other_slot, outgoing_assignment=other_assignment,
+            effective_date=date(2026, 9, 1), transfer_month=date(2026, 9, 1),
+            created_by=self.laboran,
+        )
+
+        results = self.race([
+            lambda: select_limited_candidate(
+                opening_id=opening.pk, registration_id=registration.pk,
+                actor=Pengguna.objects.get(pk=self.laboran.pk),
+            ).pk,
+            lambda: create_direct_offer(
+                replacement_id=other_replacement.pk, candidate_id=self.candidate.pk,
+                deadline=self.now + timezone.timedelta(days=2),
+                actor=Pengguna.objects.get(pk=self.laboran.pk),
+            ).pk,
+        ])
+
+        self.assertEqual(sum(kind == 'ok' for kind, _ in results), 1)
+        offers = AslabOffer.objects.filter(candidate=self.candidate)
+        self.assertEqual(offers.count(), 1)
+        opening.refresh_from_db(); self.replacement.refresh_from_db()
+        if offers.get().replacement_id == self.replacement.pk:
+            self.assertEqual(opening.status, LimitedReplacementOpening.STATUS_FILLED)
+            self.assertEqual(self.replacement.status, AslabReplacement.STATUS_WAITING_CONSENT)
+        else:
+            self.assertEqual(opening.status, LimitedReplacementOpening.STATUS_OPEN)
+            self.assertEqual(self.replacement.status, AslabReplacement.STATUS_SEARCHING)
 
 
 class HonorReassignmentTests(TestCase):

@@ -274,6 +274,32 @@ def eligible_candidate_queryset(replacement):
     ).exclude(pk__in=conflicting_offers).exclude(pk__in=live_registrations)
 
 
+def _validate_candidate_period_conflicts(
+    *, candidate, period_id, exclude_replacement_id=None,
+):
+    if AslabAssignment.objects.filter(
+        slot__periode_id=period_id, asleb__nim=candidate.nim_nik,
+        status=AslabAssignment.STATUS_ACTIVE,
+    ).exists():
+        raise ValidationError('Kandidat sudah memiliki penugasan aktif pada periode ini.')
+    offers = AslabOffer.objects.filter(
+        candidate=candidate, replacement__slot__periode_id=period_id,
+        status__in=AslabOffer.LIVE_STATUSES,
+    )
+    registrations = PendaftaranAsleb.objects.filter(
+        candidate_user=candidate, replacement_process__slot__periode_id=period_id,
+        jenis=PendaftaranAsleb.JENIS_REPLACEMENT,
+        status__in=PendaftaranAsleb.LIVE_REPLACEMENT_STATUSES,
+    )
+    if exclude_replacement_id is not None:
+        offers = offers.exclude(replacement_id=exclude_replacement_id)
+        registrations = registrations.exclude(replacement_process_id=exclude_replacement_id)
+    if offers.exists():
+        raise ValidationError('Kandidat memiliki penawaran aktif pada periode ini.')
+    if registrations.exists():
+        raise ValidationError('Kandidat memiliki pendaftaran aktif lain pada periode ini.')
+
+
 def _validate_limited_times(*, opens_at, closes_at):
     if timezone.is_naive(opens_at) or timezone.is_naive(closes_at):
         raise ValidationError('Waktu pendaftaran terbatas harus timezone-aware.')
@@ -399,29 +425,17 @@ def _validate_opening_live(*, replacement, slot, opening, now):
 def submit_limited_application(*, opening_id, candidate, cleaned_data, files):
     from .replacement_forms import LimitedReplacementApplicationForm
 
+    try:
+        candidate = Pengguna.objects.select_for_update().get(pk=candidate.pk)
+    except Pengguna.DoesNotExist as exc:
+        raise ValidationError('Kandidat tidak ditemukan.') from exc
     replacement, slot, opening = _lock_limited_opening(opening_id)
     now = timezone.now()
     _validate_opening_live(
         replacement=replacement, slot=slot, opening=opening, now=now,
     )
-    candidate = Pengguna.objects.select_for_update().get(pk=candidate.pk)
     _validate_limited_candidate_filters(opening=opening, candidate=candidate)
-    if AslabAssignment.objects.select_for_update().filter(
-        slot__periode=slot.periode, asleb__nim=candidate.nim_nik,
-        status=AslabAssignment.STATUS_ACTIVE,
-    ).exists():
-        raise ValidationError('Kandidat sudah memiliki penugasan pada periode ini.')
-    if AslabOffer.objects.select_for_update().filter(
-        candidate=candidate, replacement__slot__periode=slot.periode,
-        status__in=AslabOffer.LIVE_STATUSES,
-    ).exists():
-        raise ValidationError('Kandidat memiliki penawaran aktif pada periode ini.')
-    if PendaftaranAsleb.objects.select_for_update().filter(
-        candidate_user=candidate, replacement_process__slot__periode=slot.periode,
-        jenis=PendaftaranAsleb.JENIS_REPLACEMENT,
-        status__in=PendaftaranAsleb.LIVE_REPLACEMENT_STATUSES,
-    ).exists():
-        raise ValidationError('Kandidat memiliki pendaftaran aktif pada periode ini.')
+    _validate_candidate_period_conflicts(candidate=candidate, period_id=slot.periode_id)
     data = dict(cleaned_data or {})
     data.update({
         'nama': candidate.nama_pengguna, 'nim': candidate.nim_nik,
@@ -449,6 +463,12 @@ def submit_limited_application(*, opening_id, candidate, cleaned_data, files):
 def select_limited_candidate(*, opening_id, registration_id, actor):
     if not can_manage_lab_operations(actor):
         raise ValidationError('Hanya laboran yang dapat memilih kandidat pengganti.')
+    candidate_id = PendaftaranAsleb.objects.filter(pk=registration_id).values_list(
+        'candidate_user_id', flat=True,
+    ).first()
+    if candidate_id is None:
+        raise ValidationError('Pendaftaran kandidat tidak ditemukan.')
+    candidate = Pengguna.objects.select_for_update().get(pk=candidate_id)
     replacement, slot, opening = _lock_limited_opening(opening_id)
     now = timezone.now()
     _validate_opening_live(
@@ -461,7 +481,8 @@ def select_limited_candidate(*, opening_id, registration_id, actor):
     selected = next((item for item in registrations if item.pk == registration_id), None)
     if selected is None or selected.status != 'diajukan':
         raise ValidationError('Pendaftaran kandidat tidak valid atau tidak lagi aktif.')
-    candidate = Pengguna.objects.select_for_update().get(pk=selected.candidate_user_id)
+    if selected.candidate_user_id != candidate.pk:
+        raise ValidationError('Kandidat pendaftaran berubah selama seleksi.')
     _validate_limited_candidate_filters(opening=opening, candidate=candidate)
     if (
         selected.replacement_process_id != replacement.pk
@@ -476,6 +497,10 @@ def select_limited_candidate(*, opening_id, registration_id, actor):
         or selected.periode_id != slot.periode_id
     ):
         raise ValidationError('Data pendaftaran kandidat tidak canonical.')
+    _validate_candidate_period_conflicts(
+        candidate=candidate, period_id=slot.periode_id,
+        exclude_replacement_id=replacement.pk,
+    )
     try:
         offer = AslabOffer.objects.create(
             replacement=replacement, candidate=candidate, registration=selected,
@@ -712,15 +737,15 @@ def create_direct_offer(*, replacement_id, candidate_id, deadline, actor):
     if timezone.is_naive(deadline) or deadline <= timezone.now():
         raise ValidationError('Batas persetujuan harus berupa waktu masa depan.')
     try:
+        candidate = Pengguna.objects.select_for_update().get(pk=candidate_id)
+    except Pengguna.DoesNotExist as exc:
+        raise ValidationError('Kandidat tidak ditemukan.') from exc
+    try:
         replacement = AslabReplacement.objects.select_for_update().select_related(
             'slot__periode', 'slot__matkul').get(pk=replacement_id)
     except AslabReplacement.DoesNotExist as exc:
         raise ValidationError('Proses penggantian tidak ditemukan.') from exc
     slot = AslabSlot.objects.select_for_update().get(pk=replacement.slot_id)
-    try:
-        candidate = Pengguna.objects.select_for_update().get(pk=candidate_id)
-    except Pengguna.DoesNotExist as exc:
-        raise ValidationError('Kandidat tidak ditemukan.') from exc
     if replacement.status not in {
         AslabReplacement.STATUS_WAITING_ACTION,
         AslabReplacement.STATUS_SEARCHING,
@@ -731,7 +756,9 @@ def create_direct_offer(*, replacement_id, candidate_id, deadline, actor):
     if candidate.role != 'mahasiswa' or not candidate.is_verified:
         raise ValidationError('Kandidat harus mahasiswa terverifikasi.')
     if not eligible_candidate_queryset(replacement).filter(pk=candidate.pk).exists():
-        raise ValidationError('Kandidat memiliki penugasan, penawaran, atau pendaftaran aktif yang berkonflik.')
+        raise ValidationError(
+            'Kandidat memiliki penugasan, penawaran, atau pendaftaran aktif yang berkonflik.'
+        )
     previous = replacement.status
     try:
         offer = AslabOffer.objects.create(
