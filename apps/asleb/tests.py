@@ -502,6 +502,55 @@ class AslebViewTests(TestCase):
         self.assertEqual(self.asleb.status, 'aktif')
         self.assertFalse(AslabReplacement.objects.exists())
 
+    def test_end_membership_with_multiple_active_assignments_is_safe(self):
+        first_assignment = self.create_active_assignment()
+        other_course = MataKuliahAsleb.objects.create(
+            kode='AMBIGU_TIF01', kode_mk='AMB01', nama='Assignment Ambigu',
+            dosen='Dosen Test', kelas='TIF-02',
+        )
+        other_slot = AslabSlot.objects.create(
+            periode=first_assignment.slot.periode, matkul=other_course, nomor=1,
+        )
+        second_assignment = AslabAssignment.objects.create(
+            slot=other_slot, asleb=self.asleb, mulai_pada=date(2026, 7, 1),
+            status=AslabAssignment.STATUS_ACTIVE,
+        )
+
+        response = self.client.post(
+            reverse('asleb:asleb_end_membership', args=[self.asleb.pk]),
+            {'alasan_pengeluaran': 'Pelanggaran aturan.'},
+            follow=True,
+        )
+
+        first_assignment.refresh_from_db()
+        second_assignment.refresh_from_db()
+        self.assertContains(response, 'pilih mata kuliah/slot tertentu')
+        self.assertEqual(first_assignment.status, AslabAssignment.STATUS_ACTIVE)
+        self.assertEqual(second_assignment.status, AslabAssignment.STATUS_ACTIVE)
+        self.assertFalse(AslabReplacement.objects.exists())
+
+    @patch('apps.asleb.views.timezone.localdate', return_value=date(2026, 10, 15))
+    @patch('apps.asleb.views.end_assignment_for_replacement')
+    def test_end_membership_does_not_send_global_notification_when_access_remains(
+        self, end_assignment, _localdate,
+    ):
+        assignment = self.create_active_assignment()
+        end_assignment.return_value = AslabReplacement(
+            outgoing_assignment=assignment, slot=assignment.slot,
+        )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse('asleb:asleb_end_membership', args=[self.asleb.pk]),
+                {'alasan_pengeluaran': 'Mengakhiri satu penugasan.'},
+                follow=True,
+            )
+
+        self.assertContains(response, 'Satu penugasan Aslab')
+        self.assertNotContains(response, 'notifikasi telah dikirim')
+        self.assertFalse(Notifikasi.objects.filter(pengguna__nim_nik=self.asleb.nim).exists())
+        self.assertEqual(len(mail.outbox), 0)
+
     def test_data_aslab_tidak_menampilkan_tombol_edit_dan_hapus(self):
         response = self.client.get(reverse('asleb:asleb_list'))
 
