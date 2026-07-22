@@ -289,17 +289,13 @@ class PendaftaranAsleb(models.Model):
         return f'{self.nama} - {self.matkul}'
 
     def clean(self):
-        super().clean()
-        expected_id = (
+        self.live_candidate_user_id = (
             self.candidate_user_id
             if self.jenis == self.JENIS_REPLACEMENT
             and self.status in self.LIVE_REPLACEMENT_STATUSES
             else None
         )
-        if self.live_candidate_user_id != expected_id:
-            raise ValidationError({
-                'live_candidate_user': 'Guard pendaftaran pengganti aktif tidak sesuai.',
-            })
+        super().clean()
 
     def save(self, *args, **kwargs):
         self.live_candidate_user_id = (
@@ -654,10 +650,20 @@ class AslabOffer(models.Model):
         ]
 
     def clean(self):
+        self.live_replacement_id = (
+            self.replacement_id if self.status in self.LIVE_STATUSES else None
+        )
         super().clean()
-        expected_id = self.replacement_id if self.status in self.LIVE_STATUSES else None
-        if self.live_replacement_id != expected_id:
-            raise ValidationError({'live_replacement': 'Guard penawaran aktif tidak sesuai.'})
+        if self.registration_id:
+            errors = []
+            if self.registration.jenis != PendaftaranAsleb.JENIS_REPLACEMENT:
+                errors.append('Pendaftaran harus berjenis penggantian.')
+            if self.registration.replacement_process_id != self.replacement_id:
+                errors.append('Pendaftaran harus berasal dari proses penggantian yang sama.')
+            if self.registration.candidate_user_id != self.candidate_id:
+                errors.append('Pendaftaran harus dimiliki kandidat yang sama.')
+            if errors:
+                raise ValidationError({'registration': errors})
 
     def save(self, *args, **kwargs):
         self.live_replacement_id = (

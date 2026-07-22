@@ -125,6 +125,22 @@ class AslabReplacementModelTests(TestCase):
         values.update(overrides)
         return values
 
+    def test_plain_live_replacement_registration_full_clean_derives_guard(self):
+        replacement = self.create_replacement()
+        registration = PendaftaranAsleb(
+            **self.replacement_registration_values(replacement)
+        )
+        registration.full_clean()
+        self.assertEqual(registration.live_candidate_user_id, self.candidate.pk)
+
+    def test_plain_regular_registration_full_clean_remains_compatible(self):
+        registration = PendaftaranAsleb(
+            nama='Regular Plain', nim='10014', no_hp='08123', program_studi='TI',
+            semester=5, matkul=self.course, periode=self.period,
+        )
+        registration.full_clean()
+        self.assertIsNone(registration.live_candidate_user_id)
+
     def test_two_live_replacement_registrations_are_rejected(self):
         replacement = self.create_replacement()
         values = self.replacement_registration_values(replacement)
@@ -256,6 +272,67 @@ class AslabReplacementModelTests(TestCase):
         with self.assertRaises(FieldDoesNotExist):
             AslabOffer._meta.get_field('notes')
 
+    def test_plain_live_offer_full_clean_derives_guard(self):
+        replacement = self.create_replacement()
+        offer = AslabOffer(
+            replacement=replacement,
+            candidate=self.candidate,
+            deadline=timezone.now() + timedelta(days=3),
+        )
+        offer.full_clean()
+        self.assertEqual(offer.live_replacement_id, replacement.pk)
+
+    def test_offer_registration_must_match_kind_process_and_candidate(self):
+        replacement = self.create_replacement()
+        valid = PendaftaranAsleb.objects.create(
+            **self.replacement_registration_values(replacement)
+        )
+        regular = PendaftaranAsleb.objects.create(
+            nama='Regular Offer', nim='10015', no_hp='08123', program_studi='TI',
+            semester=5, matkul=self.course, periode=self.period,
+        )
+        other_candidate = self.create_user('mahasiswa', '90007')
+        wrong_candidate = PendaftaranAsleb.objects.create(
+            **self.replacement_registration_values(
+                replacement, candidate_user=other_candidate, nim='10016',
+            )
+        )
+        other_slot = AslabSlot.objects.create(
+            periode=self.period, matkul=self.course, nomor=2,
+        )
+        other_asleb = Asleb.objects.create(
+            nama='Other Outgoing', nim='99004', no_hp='08123', program_studi='TI',
+            semester=5, tanggal_bergabung=self.period.mulai,
+        )
+        other_assignment = AslabAssignment.objects.create(
+            slot=other_slot, asleb=other_asleb, mulai_pada=self.period.mulai,
+            status=AslabAssignment.STATUS_ACTIVE,
+        )
+        other_replacement = self.create_replacement(
+            slot=other_slot, outgoing_assignment=other_assignment,
+        )
+        wrong_process = PendaftaranAsleb.objects.create(
+            **self.replacement_registration_values(
+                other_replacement, nim='10017',
+            )
+        )
+
+        for registration in (regular, wrong_candidate, wrong_process):
+            offer = AslabOffer(
+                replacement=replacement, candidate=self.candidate,
+                registration=registration,
+                deadline=timezone.now() + timedelta(days=3),
+            )
+            with self.assertRaises(ValidationError):
+                offer.full_clean()
+
+        offer = AslabOffer(
+            replacement=replacement, candidate=self.candidate,
+            registration=valid,
+            deadline=timezone.now() + timedelta(days=3),
+        )
+        offer.full_clean()
+
     def test_replacement_dates_must_share_month_and_transfer_first_day(self):
         for transfer_month in (date(2026, 8, 2), date(2026, 9, 1)):
             replacement = AslabReplacement(
@@ -325,6 +402,21 @@ class AslabReplacementModelTests(TestCase):
         ):
             model_admin = admin_class(model, admin.site)
             self.assertFalse(model_admin.has_change_permission(None, None))
+
+    def test_nested_workflow_admin_relations_are_preloaded(self):
+        for admin_class in (
+            AslabOfferAdmin,
+            LimitedReplacementOpeningAdmin,
+            AslabReplacementAuditAdmin,
+        ):
+            self.assertIn(
+                'replacement__outgoing_assignment__asleb',
+                admin_class.list_select_related,
+            )
+            self.assertIn(
+                'replacement__outgoing_assignment__slot',
+                admin_class.list_select_related,
+            )
 
     def test_protected_and_set_null_relations(self):
         actor = self.create_user('laboran', '90005')
