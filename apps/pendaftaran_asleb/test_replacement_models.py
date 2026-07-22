@@ -94,6 +94,7 @@ class AslabReplacementModelTests(TestCase):
         self.assertEqual(registration.jenis, PendaftaranAsleb.JENIS_REGULER)
         self.assertIsNone(registration.replacement_process_id)
         self.assertIsNone(registration.candidate_user_id)
+        self.assertIsNone(registration.live_candidate_user_id)
 
     def test_database_rejects_registration_linkage_inconsistent_with_kind(self):
         replacement = self.create_replacement()
@@ -114,18 +115,72 @@ class AslabReplacementModelTests(TestCase):
                 with transaction.atomic():
                     PendaftaranAsleb.objects.bulk_create([row])
 
-    def test_replacement_registration_is_unique_per_process_and_candidate(self):
-        replacement = self.create_replacement()
+    def replacement_registration_values(self, replacement, **overrides):
         values = {
             'nama': 'Candidate', 'nim': '10013', 'no_hp': '08123',
             'program_studi': 'TI', 'semester': 5, 'matkul': self.course,
             'periode': self.period, 'jenis': PendaftaranAsleb.JENIS_REPLACEMENT,
             'replacement_process': replacement, 'candidate_user': self.candidate,
         }
+        values.update(overrides)
+        return values
+
+    def test_two_live_replacement_registrations_are_rejected(self):
+        replacement = self.create_replacement()
+        values = self.replacement_registration_values(replacement)
         PendaftaranAsleb.objects.create(**values)
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
                 PendaftaranAsleb.objects.create(**values)
+
+    def test_rejected_history_allows_new_live_reapplication(self):
+        replacement = self.create_replacement()
+        values = self.replacement_registration_values(replacement)
+        historical = PendaftaranAsleb.objects.create(**values, status='ditolak')
+        current = PendaftaranAsleb.objects.create(**values)
+        self.assertIsNone(historical.live_candidate_user_id)
+        self.assertEqual(current.live_candidate_user_id, self.candidate.pk)
+
+    def test_partial_status_transition_releases_and_restores_live_guard(self):
+        replacement = self.create_replacement()
+        registration = PendaftaranAsleb.objects.create(
+            **self.replacement_registration_values(replacement)
+        )
+        self.assertEqual(registration.live_candidate_user_id, self.candidate.pk)
+
+        registration.status = 'ditolak'
+        fields = {'status'}
+        registration.save(update_fields=fields)
+        self.assertEqual(fields, {'status'})
+        registration.refresh_from_db()
+        self.assertIsNone(registration.live_candidate_user_id)
+
+        registration.status = 'diajukan'
+        fields = ('status',)
+        registration.save(update_fields=fields)
+        self.assertEqual(fields, ('status',))
+        registration.refresh_from_db()
+        self.assertEqual(registration.live_candidate_user_id, self.candidate.pk)
+
+    def test_partial_candidate_attname_transition_updates_live_guard(self):
+        replacement = self.create_replacement()
+        registration = PendaftaranAsleb.objects.create(
+            **self.replacement_registration_values(replacement)
+        )
+        other_candidate = self.create_user('mahasiswa', '90006')
+        registration.candidate_user_id = other_candidate.pk
+        fields = ['candidate_user_id']
+        registration.save(update_fields=fields)
+        self.assertEqual(fields, ['candidate_user_id'])
+        registration.refresh_from_db()
+        self.assertEqual(registration.live_candidate_user_id, other_candidate.pk)
+
+    def test_bulk_create_cannot_bypass_live_registration_guard(self):
+        replacement = self.create_replacement()
+        row = PendaftaranAsleb(**self.replacement_registration_values(replacement))
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                PendaftaranAsleb.objects.bulk_create([row])
 
     def test_outgoing_assignment_can_own_only_one_replacement(self):
         self.create_replacement()
