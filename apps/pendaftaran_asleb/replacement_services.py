@@ -13,6 +13,7 @@ from .models import (
     AslabAssignment, AslabOffer, AslabReplacement, AslabReplacementAudit, AslabSlot,
     PendaftaranAsleb,
 )
+from .services import sync_asleb_person_from_registration
 
 
 REASON_STATUS_MAP = {
@@ -299,6 +300,124 @@ def _validate_offer_transition(*, replacement, slot, transition):
 def _require_owner(offer, candidate):
     if candidate is None or offer.candidate_id != candidate.pk:
         raise ValidationError('Penawaran ini hanya dapat diproses oleh kandidat yang dituju.')
+
+
+def _validate_activation_registration(*, offer, replacement, slot, candidate, registration):
+    if (
+        offer.registration_id != registration.pk
+        or registration.jenis != PendaftaranAsleb.JENIS_REPLACEMENT
+        or registration.replacement_process_id != replacement.pk
+        or registration.candidate_user_id != candidate.pk
+        or registration.nim != candidate.nim_nik
+        or registration.nama != candidate.nama_pengguna
+        or registration.no_hp != candidate.no_hp
+        or registration.email != candidate.email
+        or registration.program_studi != candidate.prodi
+        or registration.matkul_id != slot.matkul_id
+        or registration.periode_id != slot.periode_id
+        or registration.status != 'diajukan'
+    ):
+        raise ValidationError('Data pendaftaran pengganti tidak canonical.')
+    required = {
+        'nama': registration.nama,
+        'nim': registration.nim,
+        'no_hp': registration.no_hp,
+        'program_studi': registration.program_studi,
+        'rekening': registration.rekening,
+        'nama_pemilik_rekening': registration.nama_pemilik_rekening,
+        'transkrip': registration.transkrip,
+        'tanda_tangan': registration.tanda_tangan,
+    }
+    if any(not value for value in required.values()) or registration.nilai_transkrip not in {'A', 'B'}:
+        raise ValidationError('Data pendaftaran pengganti belum lengkap atau belum valid.')
+
+
+@transaction.atomic
+def activate_replacement(*, offer_id, actor, active_date):
+    if not can_manage_lab_operations(actor):
+        raise ValidationError('Hanya laboran yang dapat mengaktifkan pengganti.')
+    try:
+        offer = AslabOffer.objects.select_for_update().get(pk=offer_id)
+    except AslabOffer.DoesNotExist as exc:
+        raise ValidationError('Penawaran tidak ditemukan.') from exc
+    replacement = AslabReplacement.objects.select_for_update().select_related(
+        'slot__periode', 'slot__matkul', 'outgoing_assignment',
+    ).get(pk=offer.replacement_id)
+    slot = AslabSlot.objects.select_for_update().select_related('periode', 'matkul').get(
+        pk=replacement.slot_id,
+    )
+    assignments = list(AslabAssignment.objects.select_for_update().filter(
+        slot_id=slot.pk,
+    ).order_by('pk'))
+    candidate = Pengguna.objects.select_for_update().get(pk=offer.candidate_id)
+    if not offer.registration_id:
+        raise ValidationError('Data pendaftaran pengganti belum diajukan.')
+    registration = PendaftaranAsleb.objects.select_for_update().get(pk=offer.registration_id)
+    existing_asleb = Asleb.objects.select_for_update().filter(nim=candidate.nim_nik).first()
+
+    if offer.status != AslabOffer.STATUS_SUBMITTED:
+        raise ValidationError('Penawaran harus berstatus submitted sebelum aktivasi.')
+    if replacement.status != AslabReplacement.STATUS_WAITING_VERIFICATION:
+        raise ValidationError('Proses penggantian tidak menunggu verifikasi.')
+    if slot.status != AslabSlot.STATUS_VACANT or replacement.slot_id != slot.pk:
+        raise ValidationError('Slot penggantian tidak lagi kosong atau tidak sesuai.')
+    if candidate.role != 'mahasiswa' or not candidate.is_verified:
+        raise ValidationError('Kandidat harus mahasiswa terverifikasi.')
+    if not isinstance(active_date, date) or not slot.periode.mulai <= active_date <= slot.periode.selesai:
+        raise ValidationError('Tanggal aktif harus berada dalam periode penugasan.')
+    outgoing = next(
+        (item for item in assignments if item.pk == replacement.outgoing_assignment_id), None,
+    )
+    if outgoing is None or outgoing.berakhir_pada is None or active_date < outgoing.berakhir_pada:
+        raise ValidationError('Tanggal aktif tidak boleh sebelum penugasan lama berakhir.')
+    if any(item.status == AslabAssignment.STATUS_ACTIVE for item in assignments):
+        raise ValidationError('Slot sudah memiliki penugasan aktif.')
+    _validate_activation_registration(
+        offer=offer, replacement=replacement, slot=slot,
+        candidate=candidate, registration=registration,
+    )
+
+    incoming_asleb = sync_asleb_person_from_registration(
+        registration, period=slot.periode, status='aktif', joined_on=active_date,
+    )
+    if existing_asleb and incoming_asleb.pk != existing_asleb.pk:
+        raise ValidationError('Data Aslab kandidat berubah selama aktivasi.')
+    assignment = AslabAssignment.objects.create(
+        slot=slot,
+        asleb=incoming_asleb,
+        source_pendaftaran=registration,
+        mulai_pada=active_date,
+        status=AslabAssignment.STATUS_ACTIVE,
+        menggantikan=outgoing,
+    )
+    registration.status = 'diterima'
+    registration.save(update_fields=['status', 'diperbarui_pada'])
+    offer.status = AslabOffer.STATUS_VERIFIED
+    offer.verified_at = timezone.now()
+    offer.verified_by = actor
+    offer.save(update_fields=['status', 'verified_at', 'verified_by'])
+    previous = replacement.status
+    replacement.incoming_assignment = assignment
+    replacement.status = AslabReplacement.STATUS_ACTIVE
+    replacement.activated_by = actor
+    replacement.save(update_fields=[
+        'incoming_assignment', 'status', 'activated_by', 'updated_at',
+    ])
+    slot.status = AslabSlot.STATUS_ACTIVE
+    slot.save(update_fields=['status', 'diperbarui_pada'])
+    candidate.role = 'asisten_lab'
+    candidate.save(update_fields=['role', 'diperbarui_pada'])
+    reassign_replacement_honor(
+        replacement=replacement, incoming_asleb=incoming_asleb, actor=actor,
+    )
+    _audit(
+        replacement, actor, 'replacement_activated', previous, replacement.status,
+        metadata={
+            'offer_id': offer.pk, 'assignment_id': assignment.pk,
+            'active_date': active_date.isoformat(),
+        },
+    )
+    return assignment
 
 
 @transaction.atomic

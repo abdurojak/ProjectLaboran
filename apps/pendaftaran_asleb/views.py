@@ -48,6 +48,7 @@ from .services import (
     open_current_registration,
     end_asleb_period,
     sync_expired_asleb_periods,
+    sync_asleb_person_from_registration,
 )
 from .utils import analyze_transcript, get_public_registration_url, is_passing_grade
 
@@ -750,20 +751,9 @@ def send_pendaftaran_status_email(pendaftaran):
 
 
 def create_or_update_asleb_from_pendaftaran(pendaftaran):
-    Asleb.objects.update_or_create(
-        nim=pendaftaran.nim,
-        defaults={
-            'nama': pendaftaran.nama,
-            'no_hp': pendaftaran.no_hp,
-            'email': pendaftaran.email,
-            'program_studi': pendaftaran.program_studi,
-            'semester': pendaftaran.semester,
-            'matkul': str(pendaftaran.matkul),
-            'status': 'aktif',
-            'periode_aktif': pendaftaran.periode or get_current_period(),
-            'tanggal_bergabung': timezone.localdate(),
-            'catatan': f'Digenerate dari pendaftaran aslab tanggal {pendaftaran.tanggal_daftar:%d-%m-%Y}.',
-        },
+    sync_asleb_person_from_registration(
+        pendaftaran,
+        period=pendaftaran.periode or get_current_period(),
     )
     promote_pengguna_to_asisten_lab(pendaftaran)
 

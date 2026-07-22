@@ -20,11 +20,36 @@ from apps.core.emails import send_branded_email
 from apps.kalender.realtime import send_user_notification
 from apps.pengguna.models import PengalamanPengguna, Pengguna
 
-from .models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb, PeriodeAsleb, RiwayatAsleb
+from .models import (
+    AslabAssignment, MataKuliahAsleb, PendaftaranAsleb,
+    PengaturanPendaftaranAsleb, PeriodeAsleb, RiwayatAsleb,
+)
 
 
 def get_current_period(value=None):
     return PeriodeAsleb.get_for_date(value or timezone.localdate())
+
+
+def sync_asleb_person_from_registration(registration, *, period, status='aktif', joined_on=None):
+    """Keep regular and replacement activation mapped to Asleb identically."""
+    return Asleb.objects.update_or_create(
+        nim=registration.nim,
+        defaults={
+            'nama': registration.nama,
+            'no_hp': registration.no_hp,
+            'email': registration.email,
+            'program_studi': registration.program_studi,
+            'semester': registration.semester,
+            'matkul': str(registration.matkul),
+            'status': status,
+            'periode_aktif': period,
+            'tanggal_bergabung': joined_on or timezone.localdate(),
+            'catatan': (
+                f'Digenerate dari pendaftaran aslab tanggal '
+                f'{registration.tanggal_daftar:%d-%m-%Y}.'
+            ),
+        },
+    )[0]
 
 
 def is_registration_open(value=None):
@@ -83,15 +108,25 @@ def _append_matkul_to_description(existing_description, matkul):
     return f'{current} Mata kuliah: {matkul}.'
 
 
-def record_asleb_experience(pengguna, asleb, period=None):
+def record_asleb_experience(pengguna, asleb, period=None, assignment=None):
     if not pengguna:
         return None
 
     period = period or asleb.periode_aktif
     end_date = getattr(period, 'selesai', None) or timezone.localdate()
-    start_date = getattr(period, 'mulai', None) or asleb.tanggal_bergabung or end_date
-    month_key = end_date.strftime('%Y-%m')
-    source_key = f'aslab-experience:{pengguna.pk}:{month_key}'
+    start_date = (
+        getattr(assignment, 'mulai_pada', None)
+        or getattr(period, 'mulai', None)
+        or asleb.tanggal_bergabung
+        or end_date
+    )
+    source_key = (
+        f'aslab-assignment-experience:{assignment.pk}'
+        if assignment else f'aslab-experience:{pengguna.pk}:{end_date:%Y-%m}'
+    )
+    description = _append_matkul_to_description('', asleb.matkul or 'laboratorium')
+    if assignment and assignment.menggantikan_id:
+        description = f'{description} Menyelesaikan masa tugas sebagai aslab pengganti.'
     defaults = {
         'pengguna': pengguna,
         'jabatan': 'Asisten Laboratorium',
@@ -99,7 +134,7 @@ def record_asleb_experience(pengguna, asleb, period=None):
         'tanggal_mulai': start_date,
         'tanggal_selesai': end_date,
         'masih_berjalan': False,
-        'deskripsi': _append_matkul_to_description('', asleb.matkul or 'laboratorium'),
+        'deskripsi': description,
         'otomatis': True,
     }
     experience, created = PengalamanPengguna.objects.update_or_create(
@@ -216,6 +251,7 @@ def notify_manual_asleb_removal(asleb, pengguna, *, reason, acted_by=None):
     )
 
 
+@transaction.atomic
 def sync_expired_asleb_periods(value=None):
     today = value or timezone.localdate()
     expired = Asleb.objects.filter(
@@ -224,6 +260,15 @@ def sync_expired_asleb_periods(value=None):
         periode_aktif__selesai__lt=today,
     )
     expired_rows = list(expired.select_related('periode_aktif'))
+    completing_assignments = list(
+        AslabAssignment.objects.select_for_update().select_related(
+            'asleb', 'slot__periode', 'menggantikan',
+        ).filter(
+            status=AslabAssignment.STATUS_ACTIVE,
+            slot__periode__selesai__lt=today,
+        ).order_by('pk')
+    )
+    assignment_asleb_ids = {assignment.asleb_id for assignment in completing_assignments}
     expired_nims = [item.nim for item in expired_rows]
     affected_matkul = [item.matkul for item in expired_rows if item.matkul]
     affected_matkul_ids = list(PendaftaranAsleb.objects.filter(
@@ -281,20 +326,37 @@ def sync_expired_asleb_periods(value=None):
         item.nim_nik: item
         for item in Pengguna.objects.filter(nim_nik__in=expired_nims)
     }
+    for assignment in completing_assignments:
+        assignment.status = AslabAssignment.STATUS_COMPLETED
+        assignment.berakhir_pada = assignment.slot.periode.selesai
+        assignment.save(update_fields=['status', 'berakhir_pada', 'diperbarui_pada'])
+        if not AslabAssignment.objects.filter(
+            asleb_id=assignment.asleb_id,
+            status=AslabAssignment.STATUS_ACTIVE,
+        ).exists():
+            Asleb.objects.filter(pk=assignment.asleb_id).update(status='nonaktif')
+        pengguna = users_by_nim.get(assignment.asleb.nim)
+        if pengguna:
+            record_asleb_experience(
+                pengguna, assignment.asleb, assignment.slot.periode,
+                assignment=assignment,
+            )
+
     for asleb in expired_rows:
         pengguna = users_by_nim.get(asleb.nim)
         period = asleb.periode_aktif
-        if not pengguna or not period:
+        if not pengguna or not period or asleb.pk in assignment_asleb_ids:
             continue
         record_asleb_experience(pengguna, asleb, period)
 
     demoted = 0
     for pengguna in Pengguna.objects.filter(role='asisten_lab', nim_nik__in=expired_nims):
-        has_active_period = Asleb.objects.filter(
-            nim=pengguna.nim_nik,
-            status='aktif',
-            periode_aktif__mulai__lte=today,
-            periode_aktif__selesai__gte=today,
+        has_active_period = AslabAssignment.objects.filter(
+            asleb__nim=pengguna.nim_nik,
+            status=AslabAssignment.STATUS_ACTIVE,
+        ).exists() or Asleb.objects.filter(
+            nim=pengguna.nim_nik, status='aktif',
+            periode_aktif__mulai__lte=today, periode_aktif__selesai__gte=today,
         ).exists()
         if not has_active_period:
             pengguna.role = 'mahasiswa'
