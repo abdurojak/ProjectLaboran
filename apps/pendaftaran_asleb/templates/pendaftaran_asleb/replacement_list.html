@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Pergantian Aslab{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div class="flex flex-wrap items-end justify-between gap-4">
+    <div><p class="text-sm font-bold uppercase text-emerald-700">Aslab</p><h2 class="mt-2 text-3xl font-black text-slate-900">Pergantian Aslab</h2><p class="mt-2 text-sm text-slate-500">Pantau slot kosong, persetujuan kandidat, verifikasi, dan pengalihan honor.</p></div>
+    <a class="btn-secondary" href="{% url 'asleb:asleb_list' %}"><i data-lucide="users" class="h-4 w-4"></i><span>Data Aslab</span></a>
+  </div>
+  <div class="surface-card overflow-hidden"><div class="overflow-x-auto"><table><thead><tr><th>Mata kuliah / slot</th><th>Aslab lama</th><th>Kandidat</th><th>Status</th><th>Batas waktu</th><th>Honor</th><th>Aksi</th></tr></thead><tbody>
+  {% for item in replacements %}
+    {% with offer=item.offers.all|first %}
+    <tr><td><strong>{{ item.slot.matkul.nama }}</strong><div class="text-xs text-slate-500">Slot {{ item.slot.nomor }} · {{ item.slot.periode }}</div></td><td>{{ item.outgoing_assignment.asleb.nama }}</td><td>{% if item.incoming_assignment %}{{ item.incoming_assignment.asleb.nama }}{% elif offer %}{{ offer.candidate.nama_pengguna }}{% else %}-{% endif %}</td><td><span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-bold">{{ item.get_status_display }}</span></td><td>{% if offer %}{{ offer.deadline|date:"d M Y H:i" }}{% else %}-{% endif %}</td><td>{% for audit in item.honor_reassignments.all %}{% if audit.status == 'held' %}<span class="text-amber-700">Ditahan</span>{% elif audit.status == 'correction_required' %}<span class="text-red-700">Perlu koreksi</span>{% endif %}{% empty %}-{% endfor %}</td><td><a class="inline-flex items-center gap-1 font-semibold text-brand-700" href="{% url 'pendaftaran_asleb:replacement_detail' item.pk %}"><i data-lucide="eye" class="h-4 w-4"></i>Detail</a></td></tr>
+    {% endwith %}
+  {% empty %}<tr><td colspan="7" class="py-12 text-center text-slate-500">Belum ada proses pergantian.</td></tr>{% endfor %}
+  </tbody></table></div></div>
+</section>
+{% endblock %}

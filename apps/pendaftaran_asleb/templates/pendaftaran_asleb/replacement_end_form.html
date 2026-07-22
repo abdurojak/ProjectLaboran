@@ -1,0 +1,5 @@
+{% extends "base.html" %}{% block title %}Akhiri Masa Tugas{% endblock %}{% block content %}
+<section class="mx-auto max-w-3xl space-y-6"><div><p class="text-sm font-bold uppercase text-orange-700">Pergantian Aslab</p><h2 class="mt-2 text-3xl font-black">Ganti/Akhiri Masa Tugas</h2><p class="mt-2 text-sm text-slate-500">{{ assignment.asleb.nama }} · {{ assignment.slot.matkul.nama }} · Slot {{ assignment.slot.nomor }}</p></div>
+<div class="surface-card border-l-4 border-amber-400 p-5 text-sm"><strong>Batas honor bulanan</strong><p class="mt-2">Honor sebelum bulan efektif tetap menjadi hak aslab lama. Honor bulan berjalan dan berikutnya dialihkan setelah pengganti aktif.</p></div>
+<form method="post" class="surface-card space-y-5 p-6">{% csrf_token %}{{ form.non_field_errors }}{% for field in form %}<div><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}</div>{% endfor %}<div class="flex gap-3"><button class="btn-primary" type="submit"><i data-lucide="user-round-x" class="h-4 w-4"></i>Konfirmasi</button><a class="btn-secondary" href="{% url 'asleb:asleb_list' %}">Batal</a></div></form></section>
+{% endblock %}

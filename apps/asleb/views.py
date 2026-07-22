@@ -9,7 +9,7 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.db import IntegrityError, transaction
-from django.db.models import Avg, Count, Q, Sum
+from django.db.models import Avg, Count, Prefetch, Q, Sum
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.response import TemplateResponse
@@ -115,7 +115,13 @@ class AslebListView(LabOperationsRequiredMixin, ListView):
     context_object_name = 'asleb_list'
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        queryset = super().get_queryset().prefetch_related(Prefetch(
+            'assignments',
+            queryset=AslabAssignment.objects.filter(
+                status=AslabAssignment.STATUS_ACTIVE,
+            ).select_related('slot__matkul', 'slot__periode').order_by('pk'),
+            to_attr='active_assignments',
+        ))
         search = self.request.GET.get('q', '').strip()
         status = self.request.GET.get('status', '').strip()
 

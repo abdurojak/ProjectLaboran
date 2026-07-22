@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Detail Pergantian Aslab{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <div class="flex flex-wrap items-start justify-between gap-4"><div><p class="text-sm font-bold uppercase text-emerald-700">Slot {{ replacement.slot.nomor }}</p><h2 class="mt-2 text-3xl font-black">{{ replacement.slot.matkul.nama }}</h2><p class="mt-2 text-sm text-slate-500">{{ replacement.slot.periode }}</p></div><span class="rounded-full bg-slate-100 px-4 py-2 text-sm font-bold">{{ replacement.get_status_display }}</span></div>
+  <div class="grid gap-5 md:grid-cols-2"><div class="surface-card p-5"><h3 class="font-bold">Penugasan lama</h3><dl class="mt-4 grid grid-cols-2 gap-3 text-sm"><dt>Aslab</dt><dd>{{ replacement.outgoing_assignment.asleb.nama }}</dd><dt>Efektif berakhir</dt><dd>{{ replacement.effective_date|date:"d M Y" }}</dd><dt>Honor dialihkan</dt><dd>{{ replacement.transfer_month|date:"F Y" }}</dd></dl></div><div class="surface-card p-5"><h3 class="font-bold">Kandidat</h3>{% with offer=replacement.offers.all|first %}<p class="mt-4">{% if replacement.incoming_assignment %}{{ replacement.incoming_assignment.asleb.nama }}{% elif offer %}{{ offer.candidate.nama_pengguna }} · {{ offer.get_status_display }}{% else %}Belum ditentukan{% endif %}</p>{% if offer %}<p class="mt-2 text-sm text-slate-500">Batas {{ offer.deadline|date:"d M Y H:i" }}</p>{% endif %}{% endwith %}</div></div>
+  <div class="flex flex-wrap gap-3">
+    {% if replacement.status == 'waiting_action' or replacement.status == 'searching' %}<a class="btn-primary" href="{% url 'pendaftaran_asleb:replacement_offer_create' replacement.pk %}"><i data-lucide="send" class="h-4 w-4"></i>Penawaran langsung</a><a class="btn-secondary" href="{% url 'pendaftaran_asleb:replacement_opening' replacement.pk %}"><i data-lucide="user-plus" class="h-4 w-4"></i>Pendaftaran terbatas</a>{% endif %}
+    {% with offer=replacement.offers.all|first %}{% if offer.status == 'submitted' %}<a class="btn-primary" href="{% url 'pendaftaran_asleb:replacement_verify' offer.pk %}"><i data-lucide="badge-check" class="h-4 w-4"></i>Verifikasi kandidat</a>{% endif %}{% endwith %}
+    <a class="btn-secondary" href="{% url 'pendaftaran_asleb:replacement_list' %}"><i data-lucide="arrow-left" class="h-4 w-4"></i>Kembali</a>
+  </div>
+  <div class="surface-card p-5"><h3 class="font-bold">Riwayat proses</h3><div class="mt-4 space-y-3">{% for audit in replacement.audit_entries.all %}<div class="border-b border-slate-100 pb-3 text-sm"><strong>{{ audit.action }}</strong><span class="ml-2 text-slate-500">{{ audit.created_at|date:"d M Y H:i" }}</span>{% if audit.reason %}<p class="mt-1 text-slate-600">{{ audit.reason }}</p>{% endif %}</div>{% empty %}<p class="text-sm text-slate-500">Belum ada riwayat.</p>{% endfor %}</div></div>
+</section>
+{% endblock %}
