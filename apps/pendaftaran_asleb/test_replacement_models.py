@@ -417,6 +417,14 @@ class AslabReplacementModelTests(TestCase):
                 'replacement__outgoing_assignment__slot',
                 admin_class.list_select_related,
             )
+            self.assertIn(
+                'replacement__outgoing_assignment__slot__periode',
+                admin_class.list_select_related,
+            )
+            self.assertIn(
+                'replacement__outgoing_assignment__slot__matkul',
+                admin_class.list_select_related,
+            )
 
     def test_protected_and_set_null_relations(self):
         actor = self.create_user('laboran', '90005')
