@@ -6,6 +6,7 @@ from unittest import skipUnless
 from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import DatabaseError, IntegrityError, close_old_connections, connection, transaction
 from django.test import RequestFactory, TestCase, TransactionTestCase
 from django.test.utils import CaptureQueriesContext
@@ -603,9 +604,22 @@ class HonorReassignmentTests(TestCase):
         )
 
     def honor(self, asleb, month, status='draft'):
+        values = {
+            'asleb': asleb,
+            'bulan': month,
+            'total_pertemuan': 2,
+            'jumlah': 98000,
+            'status': status,
+            'assigned_laboran': self.laboran,
+        }
+        if status == 'dibayar':
+            values.update({
+                'tanggal_transfer': month,
+                'pic_transfer': self.laboran.nama_pengguna,
+                'bukti_transfer': SimpleUploadedFile('bukti.pdf', b'%PDF-1.4 test'),
+            })
         return HonorAsleb.objects.create(
-            asleb=asleb, bulan=month, total_pertemuan=2, jumlah=98000, status=status,
-            assigned_laboran=self.laboran,
+            **values,
         )
 
     def run_service(self):
@@ -1277,6 +1291,7 @@ class DirectOfferServiceTests(TestCase):
         self.candidate.refresh_from_db()
         self.assertEqual(self.candidate.role, 'mahasiswa')
 
+    @skipUnless(connection.vendor == 'mysql', 'SQL lock order assertion requires MySQL.')
     def test_activation_locks_asleb_identities_before_replacement_slot_and_offer(self):
         offer = self.submitted_offer()
         existing = Asleb.objects.create(
