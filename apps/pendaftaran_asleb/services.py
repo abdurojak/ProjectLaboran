@@ -266,6 +266,8 @@ def sync_expired_asleb_periods(value=None):
     )
     assignment_asleb_ids = {assignment.asleb_id for assignment in completing_assignments}
     expired_nims = [item.nim for item in expired_rows]
+    experience_nims = set(expired_nims)
+    experience_nims.update(assignment.asleb.nim for assignment in completing_assignments)
     affected_matkul = [item.matkul for item in expired_rows if item.matkul]
     affected_matkul_ids = list(PendaftaranAsleb.objects.filter(
         nim__in=expired_nims,
@@ -326,7 +328,7 @@ def sync_expired_asleb_periods(value=None):
 
     users_by_nim = {
         item.nim_nik: item
-        for item in Pengguna.objects.filter(nim_nik__in=expired_nims)
+        for item in Pengguna.objects.filter(nim_nik__in=experience_nims)
     }
     for assignment in completing_assignments:
         assignment.status = AslabAssignment.STATUS_COMPLETED
