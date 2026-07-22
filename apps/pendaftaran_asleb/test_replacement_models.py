@@ -5,7 +5,9 @@ from io import StringIO
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+from django.contrib import admin
 from django.core.exceptions import ValidationError
+from django.core.exceptions import FieldDoesNotExist
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import IntegrityError, connection, transaction
@@ -26,6 +28,12 @@ from apps.pendaftaran_asleb.models import (
     MataKuliahAsleb,
     PendaftaranAsleb,
     PeriodeAsleb,
+)
+from apps.pendaftaran_asleb.admin import (
+    AslabOfferAdmin,
+    AslabReplacementAdmin,
+    AslabReplacementAuditAdmin,
+    LimitedReplacementOpeningAdmin,
 )
 
 
@@ -70,7 +78,11 @@ class AslabReplacementModelTests(TestCase):
         return AslabReplacement.objects.create(**values)
 
     def create_offer(self, replacement, candidate=None, **overrides):
-        values = {'replacement': replacement, 'candidate': candidate or self.candidate}
+        values = {
+            'replacement': replacement,
+            'candidate': candidate or self.candidate,
+            'deadline': timezone.now() + timedelta(days=3),
+        }
         values.update(overrides)
         return AslabOffer.objects.create(**values)
 
@@ -79,9 +91,41 @@ class AslabReplacementModelTests(TestCase):
             nama='Regular', nim='10001', no_hp='08123', program_studi='TI',
             semester=5, matkul=self.course, periode=self.period,
         )
-        self.assertEqual(registration.jenis, PendaftaranAsleb.JENIS_REGULAR)
+        self.assertEqual(registration.jenis, PendaftaranAsleb.JENIS_REGULER)
         self.assertIsNone(registration.replacement_process_id)
         self.assertIsNone(registration.candidate_user_id)
+
+    def test_database_rejects_registration_linkage_inconsistent_with_kind(self):
+        replacement = self.create_replacement()
+        invalid_rows = [
+            PendaftaranAsleb(
+                nama='Regular Linked', nim='10011', no_hp='08123', program_studi='TI',
+                semester=5, matkul=self.course, periode=self.period,
+                replacement_process=replacement, candidate_user=self.candidate,
+            ),
+            PendaftaranAsleb(
+                nama='Replacement Unlinked', nim='10012', no_hp='08123',
+                program_studi='TI', semester=5, matkul=self.course, periode=self.period,
+                jenis=PendaftaranAsleb.JENIS_REPLACEMENT,
+            ),
+        ]
+        for row in invalid_rows:
+            with self.assertRaises(IntegrityError):
+                with transaction.atomic():
+                    PendaftaranAsleb.objects.bulk_create([row])
+
+    def test_replacement_registration_is_unique_per_process_and_candidate(self):
+        replacement = self.create_replacement()
+        values = {
+            'nama': 'Candidate', 'nim': '10013', 'no_hp': '08123',
+            'program_studi': 'TI', 'semester': 5, 'matkul': self.course,
+            'periode': self.period, 'jenis': PendaftaranAsleb.JENIS_REPLACEMENT,
+            'replacement_process': replacement, 'candidate_user': self.candidate,
+        }
+        PendaftaranAsleb.objects.create(**values)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                PendaftaranAsleb.objects.create(**values)
 
     def test_outgoing_assignment_can_own_only_one_replacement(self):
         self.create_replacement()
@@ -132,8 +176,30 @@ class AslabReplacementModelTests(TestCase):
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
                 AslabOffer.objects.bulk_create([
-                    AslabOffer(replacement=replacement, candidate=self.candidate),
+                    AslabOffer(
+                        replacement=replacement, candidate=self.candidate,
+                        deadline=timezone.now() + timedelta(days=3),
+                    ),
                 ])
+
+    def test_offer_deadline_is_required_at_model_and_database_layers(self):
+        replacement = self.create_replacement()
+        offer = AslabOffer(
+            replacement=replacement,
+            live_replacement=replacement,
+            candidate=self.candidate,
+        )
+        with self.assertRaises(ValidationError):
+            offer.full_clean()
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                AslabOffer.objects.bulk_create([offer])
+
+    def test_offer_has_specific_notes_fields(self):
+        self.assertIsNotNone(AslabOffer._meta.get_field('verification_notes'))
+        self.assertIsNotNone(AslabOffer._meta.get_field('decline_reason'))
+        with self.assertRaises(FieldDoesNotExist):
+            AslabOffer._meta.get_field('notes')
 
     def test_replacement_dates_must_share_month_and_transfer_first_day(self):
         for transfer_month in (date(2026, 8, 2), date(2026, 9, 1)):
@@ -153,6 +219,57 @@ class AslabReplacementModelTests(TestCase):
         )
         with self.assertRaises(ValidationError):
             opening.full_clean()
+
+    def test_replacement_slot_must_match_outgoing_assignment(self):
+        other_slot = AslabSlot.objects.create(
+            periode=self.period, matkul=self.course, nomor=2,
+        )
+        replacement = AslabReplacement(
+            slot=other_slot, outgoing_assignment=self.assignment,
+            effective_date=date(2026, 8, 15), transfer_month=date(2026, 8, 1),
+            created_by=self.creator,
+        )
+        with self.assertRaises(ValidationError):
+            replacement.full_clean()
+
+    def test_incoming_assignment_must_match_slot_and_replace_outgoing(self):
+        incoming_asleb = Asleb.objects.create(
+            nama='Incoming', nim='99003', no_hp='08123', program_studi='TI',
+            semester=5, tanggal_bergabung=self.period.mulai,
+        )
+        other_slot = AslabSlot.objects.create(
+            periode=self.period, matkul=self.course, nomor=2,
+        )
+        wrong_slot = AslabAssignment.objects.create(
+            slot=other_slot, asleb=incoming_asleb, mulai_pada=date(2026, 8, 15),
+            status=AslabAssignment.STATUS_PENDING, menggantikan=self.assignment,
+        )
+        replacement = AslabReplacement(
+            slot=self.slot, outgoing_assignment=self.assignment,
+            incoming_assignment=wrong_slot, effective_date=date(2026, 8, 15),
+            transfer_month=date(2026, 8, 1), created_by=self.creator,
+        )
+        with self.assertRaises(ValidationError):
+            replacement.full_clean()
+
+        wrong_slot.delete()
+        wrong_lineage = AslabAssignment.objects.create(
+            slot=self.slot, asleb=incoming_asleb, mulai_pada=date(2026, 8, 15),
+            status=AslabAssignment.STATUS_PENDING,
+        )
+        replacement.incoming_assignment = wrong_lineage
+        with self.assertRaises(ValidationError):
+            replacement.full_clean()
+
+    def test_workflow_admins_disallow_changes(self):
+        for admin_class, model in (
+            (AslabReplacementAdmin, AslabReplacement),
+            (AslabOfferAdmin, AslabOffer),
+            (LimitedReplacementOpeningAdmin, LimitedReplacementOpening),
+            (AslabReplacementAuditAdmin, AslabReplacementAudit),
+        ):
+            model_admin = admin_class(model, admin.site)
+            self.assertFalse(model_admin.has_change_permission(None, None))
 
     def test_protected_and_set_null_relations(self):
         actor = self.create_user('laboran', '90005')

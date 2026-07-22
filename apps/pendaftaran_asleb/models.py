@@ -151,10 +151,10 @@ class PeriodeAsleb(models.Model):
 
 
 class PendaftaranAsleb(models.Model):
-    JENIS_REGULAR = 'regular'
+    JENIS_REGULER = 'reguler'
     JENIS_REPLACEMENT = 'replacement'
     JENIS_CHOICES = [
-        (JENIS_REGULAR, 'Reguler'),
+        (JENIS_REGULER, 'Reguler'),
         (JENIS_REPLACEMENT, 'Pengganti'),
     ]
     STATUS_CHOICES = [
@@ -212,7 +212,7 @@ class PendaftaranAsleb(models.Model):
     skor_nilai = models.PositiveSmallIntegerField(default=0)
     alasan = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='diajukan')
-    jenis = models.CharField(max_length=16, choices=JENIS_CHOICES, default=JENIS_REGULAR)
+    jenis = models.CharField(max_length=16, choices=JENIS_CHOICES, default=JENIS_REGULER)
     replacement_process = models.ForeignKey(
         'AslabReplacement',
         on_delete=models.PROTECT,
@@ -233,6 +233,27 @@ class PendaftaranAsleb(models.Model):
 
     class Meta:
         ordering = ['matkul__nama', 'matkul__kelas', '-skor_nilai', 'dibuat_pada', 'nama']
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    models.Q(
+                        jenis='reguler',
+                        replacement_process__isnull=True,
+                        candidate_user__isnull=True,
+                    )
+                    | models.Q(
+                        jenis='replacement',
+                        replacement_process__isnull=False,
+                        candidate_user__isnull=False,
+                    )
+                ),
+                name='registration_replacement_linkage_guard',
+            ),
+            models.UniqueConstraint(
+                fields=['replacement_process', 'candidate_user'],
+                name='unique_replacement_registration_candidate',
+            ),
+        ]
         verbose_name = 'Pendaftaran Aslab'
         verbose_name_plural = 'Pendaftaran Aslab'
 
@@ -485,6 +506,16 @@ class AslabReplacement(models.Model):
     def clean(self):
         super().clean()
         errors = {}
+        if (
+            self.slot_id and self.outgoing_assignment_id
+            and self.slot_id != self.outgoing_assignment.slot_id
+        ):
+            errors['slot'] = 'Slot harus sama dengan penugasan aslab yang keluar.'
+        if self.incoming_assignment_id:
+            if self.slot_id != self.incoming_assignment.slot_id:
+                errors['incoming_assignment'] = 'Penugasan masuk harus menggunakan slot yang sama.'
+            elif self.incoming_assignment.menggantikan_id != self.outgoing_assignment_id:
+                errors['incoming_assignment'] = 'Penugasan masuk harus menggantikan penugasan yang keluar.'
         if self.transfer_month and self.transfer_month.day != 1:
             errors['transfer_month'] = 'Bulan transfer harus menggunakan tanggal pertama.'
         if (
@@ -534,7 +565,7 @@ class AslabOffer(models.Model):
         null=True, blank=True,
     )
     status = models.CharField(max_length=24, choices=STATUS_CHOICES, default=STATUS_WAITING)
-    deadline = models.DateTimeField(null=True, blank=True)
+    deadline = models.DateTimeField()
     responded_at = models.DateTimeField(null=True, blank=True)
     submitted_at = models.DateTimeField(null=True, blank=True)
     verified_at = models.DateTimeField(null=True, blank=True)
@@ -542,7 +573,8 @@ class AslabOffer(models.Model):
         'pengguna.Pengguna', on_delete=models.SET_NULL, related_name='aslab_offers_verified',
         null=True, blank=True,
     )
-    notes = models.TextField(blank=True)
+    verification_notes = models.TextField(blank=True)
+    decline_reason = models.TextField(blank=True)
 
     class Meta:
         ordering = ['-id']
