@@ -151,6 +151,12 @@ class PeriodeAsleb(models.Model):
 
 
 class PendaftaranAsleb(models.Model):
+    JENIS_REGULAR = 'regular'
+    JENIS_REPLACEMENT = 'replacement'
+    JENIS_CHOICES = [
+        (JENIS_REGULAR, 'Reguler'),
+        (JENIS_REPLACEMENT, 'Pengganti'),
+    ]
     STATUS_CHOICES = [
         ('diajukan', 'Diajukan'),
         ('diterima', 'Diterima'),
@@ -206,6 +212,21 @@ class PendaftaranAsleb(models.Model):
     skor_nilai = models.PositiveSmallIntegerField(default=0)
     alasan = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='diajukan')
+    jenis = models.CharField(max_length=16, choices=JENIS_CHOICES, default=JENIS_REGULAR)
+    replacement_process = models.ForeignKey(
+        'AslabReplacement',
+        on_delete=models.PROTECT,
+        related_name='registrations',
+        null=True,
+        blank=True,
+    )
+    candidate_user = models.ForeignKey(
+        'pengguna.Pengguna',
+        on_delete=models.PROTECT,
+        related_name='aslab_registrations',
+        null=True,
+        blank=True,
+    )
     tanggal_daftar = models.DateField(auto_now_add=True)
     dibuat_pada = models.DateTimeField(auto_now_add=True)
     diperbarui_pada = models.DateTimeField(auto_now=True)
@@ -408,6 +429,206 @@ class AslabAssignment(models.Model):
 
     def __str__(self):
         return f'{self.asleb} - {self.slot} - {self.get_status_display()}'
+
+
+class AslabReplacement(models.Model):
+    METHOD_UNDECIDED = 'undecided'
+    METHOD_DIRECT_OFFER = 'direct_offer'
+    METHOD_LIMITED_REGISTRATION = 'limited_registration'
+    METHOD_CHOICES = [
+        (METHOD_UNDECIDED, 'Belum Ditentukan'),
+        (METHOD_DIRECT_OFFER, 'Penawaran Langsung'),
+        (METHOD_LIMITED_REGISTRATION, 'Pendaftaran Terbatas'),
+    ]
+    STATUS_WAITING_ACTION = 'waiting_action'
+    STATUS_SEARCHING = 'searching'
+    STATUS_WAITING_CONSENT = 'waiting_consent'
+    STATUS_COMPLETING_DATA = 'completing_data'
+    STATUS_WAITING_VERIFICATION = 'waiting_verification'
+    STATUS_ACTIVE = 'active'
+    STATUS_CANCELLED = 'cancelled'
+    STATUS_CHOICES = [
+        (STATUS_WAITING_ACTION, 'Menunggu Tindakan'),
+        (STATUS_SEARCHING, 'Mencari Pengganti'),
+        (STATUS_WAITING_CONSENT, 'Menunggu Persetujuan'),
+        (STATUS_COMPLETING_DATA, 'Melengkapi Data'),
+        (STATUS_WAITING_VERIFICATION, 'Menunggu Verifikasi'),
+        (STATUS_ACTIVE, 'Aktif'),
+        (STATUS_CANCELLED, 'Dibatalkan'),
+    ]
+
+    slot = models.ForeignKey(AslabSlot, on_delete=models.PROTECT, related_name='replacements')
+    outgoing_assignment = models.OneToOneField(
+        AslabAssignment, on_delete=models.PROTECT, related_name='replacement_process'
+    )
+    incoming_assignment = models.OneToOneField(
+        AslabAssignment, on_delete=models.PROTECT, related_name='incoming_replacement_process',
+        null=True, blank=True,
+    )
+    effective_date = models.DateField()
+    transfer_month = models.DateField()
+    method = models.CharField(max_length=24, choices=METHOD_CHOICES, default=METHOD_UNDECIDED)
+    status = models.CharField(max_length=24, choices=STATUS_CHOICES, default=STATUS_WAITING_ACTION)
+    created_by = models.ForeignKey(
+        'pengguna.Pengguna', on_delete=models.PROTECT, related_name='aslab_replacements_created'
+    )
+    activated_by = models.ForeignKey(
+        'pengguna.Pengguna', on_delete=models.SET_NULL,
+        related_name='aslab_replacements_activated', null=True, blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def clean(self):
+        super().clean()
+        errors = {}
+        if self.transfer_month and self.transfer_month.day != 1:
+            errors['transfer_month'] = 'Bulan transfer harus menggunakan tanggal pertama.'
+        if (
+            self.effective_date and self.transfer_month
+            and (self.effective_date.year, self.effective_date.month)
+            != (self.transfer_month.year, self.transfer_month.month)
+        ):
+            errors['transfer_month'] = 'Bulan transfer harus sesuai dengan tanggal efektif.'
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return f'Penggantian {self.outgoing_assignment} ({self.get_status_display()})'
+
+
+class AslabOffer(models.Model):
+    STATUS_WAITING = 'waiting'
+    STATUS_ACCEPTED_INCOMPLETE = 'accepted_incomplete'
+    STATUS_SUBMITTED = 'submitted'
+    STATUS_VERIFIED = 'verified'
+    STATUS_DECLINED = 'declined'
+    STATUS_EXPIRED = 'expired'
+    STATUS_CANCELLED = 'cancelled'
+    STATUS_CHOICES = [
+        (STATUS_WAITING, 'Menunggu'),
+        (STATUS_ACCEPTED_INCOMPLETE, 'Diterima, Data Belum Lengkap'),
+        (STATUS_SUBMITTED, 'Diajukan'),
+        (STATUS_VERIFIED, 'Terverifikasi'),
+        (STATUS_DECLINED, 'Ditolak'),
+        (STATUS_EXPIRED, 'Kedaluwarsa'),
+        (STATUS_CANCELLED, 'Dibatalkan'),
+    ]
+    LIVE_STATUSES = {STATUS_WAITING, STATUS_ACCEPTED_INCOMPLETE, STATUS_SUBMITTED}
+
+    replacement = models.ForeignKey(
+        AslabReplacement, on_delete=models.PROTECT, related_name='offers'
+    )
+    live_replacement = models.OneToOneField(
+        AslabReplacement, on_delete=models.PROTECT, related_name='live_offer',
+        null=True, blank=True, editable=False,
+    )
+    candidate = models.ForeignKey(
+        'pengguna.Pengguna', on_delete=models.PROTECT, related_name='aslab_offers'
+    )
+    registration = models.OneToOneField(
+        PendaftaranAsleb, on_delete=models.SET_NULL, related_name='replacement_offer',
+        null=True, blank=True,
+    )
+    status = models.CharField(max_length=24, choices=STATUS_CHOICES, default=STATUS_WAITING)
+    deadline = models.DateTimeField(null=True, blank=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    verified_by = models.ForeignKey(
+        'pengguna.Pengguna', on_delete=models.SET_NULL, related_name='aslab_offers_verified',
+        null=True, blank=True,
+    )
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-id']
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    models.Q(status__in=['waiting', 'accepted_incomplete', 'submitted'],
+                             live_replacement__isnull=False,
+                             live_replacement=models.F('replacement'))
+                    | (~models.Q(status__in=['waiting', 'accepted_incomplete', 'submitted'])
+                       & models.Q(live_replacement__isnull=True))
+                ),
+                name='aslab_offer_live_replacement_guard',
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        expected_id = self.replacement_id if self.status in self.LIVE_STATUSES else None
+        if self.live_replacement_id != expected_id:
+            raise ValidationError({'live_replacement': 'Guard penawaran aktif tidak sesuai.'})
+
+    def save(self, *args, **kwargs):
+        self.live_replacement_id = (
+            self.replacement_id if self.status in self.LIVE_STATUSES else None
+        )
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None:
+            persisted_fields = set(update_fields)
+            if persisted_fields.intersection({'status', 'replacement', 'replacement_id'}):
+                persisted_fields.add('live_replacement')
+            kwargs['update_fields'] = persisted_fields
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.candidate} - {self.replacement} ({self.get_status_display()})'
+
+
+class LimitedReplacementOpening(models.Model):
+    STATUS_DRAFT = 'draft'
+    STATUS_OPEN = 'open'
+    STATUS_CLOSED = 'closed'
+    STATUS_FILLED = 'filled'
+    STATUS_CHOICES = [
+        (STATUS_DRAFT, 'Draf'), (STATUS_OPEN, 'Dibuka'),
+        (STATUS_CLOSED, 'Ditutup'), (STATUS_FILLED, 'Terisi'),
+    ]
+
+    replacement = models.OneToOneField(
+        AslabReplacement, on_delete=models.PROTECT, related_name='limited_opening'
+    )
+    opens_at = models.DateTimeField()
+    closes_at = models.DateTimeField()
+    program_studi = models.CharField(max_length=120, blank=True)
+    cohort = models.PositiveSmallIntegerField(null=True, blank=True)
+    allowed_candidates = models.ManyToManyField(
+        'pengguna.Pengguna', related_name='limited_replacement_openings', blank=True
+    )
+    additional_requirements = models.TextField(blank=True)
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=STATUS_DRAFT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        super().clean()
+        if self.opens_at and self.closes_at and self.closes_at <= self.opens_at:
+            raise ValidationError({'closes_at': 'Waktu penutupan harus setelah pembukaan.'})
+
+
+class AslabReplacementAudit(models.Model):
+    replacement = models.ForeignKey(
+        AslabReplacement, on_delete=models.PROTECT, related_name='audit_entries'
+    )
+    actor = models.ForeignKey(
+        'pengguna.Pengguna', on_delete=models.SET_NULL,
+        related_name='aslab_replacement_audits', null=True, blank=True,
+    )
+    action = models.CharField(max_length=80)
+    previous_state = models.CharField(max_length=24, blank=True)
+    new_state = models.CharField(max_length=24, blank=True)
+    reason = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at', 'id']
 
 
 class PengaturanBiayaTransfer(models.Model):
