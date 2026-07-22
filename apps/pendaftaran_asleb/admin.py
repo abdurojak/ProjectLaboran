@@ -1,6 +1,8 @@
 from django.contrib import admin
 
 from .models import (
+    AslabAssignment,
+    AslabSlot,
     MataKuliahAsleb,
     PendaftaranAsleb,
     PengaturanBiayaTransfer,
@@ -8,6 +10,53 @@ from .models import (
     PeriodeAsleb,
     RiwayatAsleb,
 )
+
+
+@admin.register(AslabSlot)
+class AslabSlotAdmin(admin.ModelAdmin):
+    list_display = ('periode', 'matkul', 'nomor', 'status', 'dibuat_pada', 'diperbarui_pada')
+    list_filter = ('periode', 'matkul', 'status', 'nomor')
+    list_select_related = ('periode', 'matkul')
+    readonly_fields = ('periode', 'matkul', 'nomor', 'status', 'dibuat_pada', 'diperbarui_pada')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(AslabAssignment)
+class AslabAssignmentAdmin(admin.ModelAdmin):
+    list_display = (
+        'periode', 'matkul', 'nomor_slot', 'asleb', 'status',
+        'mulai_pada', 'berakhir_pada',
+    )
+    list_filter = ('slot__periode', 'slot__matkul', 'status')
+    list_select_related = ('slot__periode', 'slot__matkul', 'asleb')
+    readonly_fields = (
+        'slot', 'active_slot', 'asleb', 'source_pendaftaran', 'mulai_pada',
+        'berakhir_pada', 'status', 'alasan_berakhir', 'diakhiri_oleh',
+        'menggantikan', 'dibuat_pada', 'diperbarui_pada',
+    )
+
+    @admin.display(ordering='slot__periode', description='Periode')
+    def periode(self, obj):
+        return obj.slot.periode
+
+    @admin.display(ordering='slot__matkul', description='Mata Kuliah')
+    def matkul(self, obj):
+        return obj.slot.matkul
+
+    @admin.display(ordering='slot__nomor', description='Slot')
+    def nomor_slot(self, obj):
+        return obj.slot.nomor
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(MataKuliahAsleb)
