@@ -8,6 +8,7 @@ from unittest.mock import patch
 from django.core.exceptions import ValidationError
 from django.db import DatabaseError, IntegrityError, close_old_connections, connection, transaction
 from django.test import TestCase, TransactionTestCase
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from apps.asleb.models import Asleb, HonorAsleb
@@ -145,6 +146,22 @@ class DirectOfferServiceTests(TestCase):
                 self.assertEqual(offer.status, AslabOffer.STATUS_WAITING)
                 offer.status = AslabOffer.STATUS_CANCELLED
                 offer.save(update_fields=['status'])
+
+    def test_create_offer_does_not_lock_offer_history_rows(self):
+        historical = AslabOffer.objects.create(
+            replacement=self.replacement, candidate=self.candidate,
+            deadline=self.now + timezone.timedelta(days=1),
+            status=AslabOffer.STATUS_DECLINED)
+        self.assertIsNone(historical.live_replacement_id)
+        with CaptureQueriesContext(connection) as queries:
+            self.create_offer()
+        offer_table = AslabOffer._meta.db_table.lower()
+        history_locks = [
+            query['sql'] for query in queries.captured_queries
+            if offer_table in query['sql'].lower()
+            and 'for update' in query['sql'].lower()
+        ]
+        self.assertEqual(history_locks, [])
 
     def test_offer_ownership_and_deadline_are_enforced(self):
         offer = self.create_offer(deadline=self.now + timezone.timedelta(seconds=1))
@@ -857,10 +874,26 @@ class DirectOfferConcurrencyTests(TransactionTestCase):
         ])
         offer.refresh_from_db()
         self.replacement.refresh_from_db()
-        self.assertIn(offer.status, {
-            AslabOffer.STATUS_ACCEPTED_INCOMPLETE, AslabOffer.STATUS_EXPIRED})
-        self.assertIn(self.replacement.status, {
-            AslabReplacement.STATUS_COMPLETING_DATA, AslabReplacement.STATUS_WAITING_ACTION})
+        self.assertIn(
+            (offer.status, self.replacement.status),
+            {
+                (AslabOffer.STATUS_ACCEPTED_INCOMPLETE,
+                 AslabReplacement.STATUS_COMPLETING_DATA),
+                (AslabOffer.STATUS_EXPIRED,
+                 AslabReplacement.STATUS_WAITING_ACTION),
+            },
+        )
+        terminal_audits = AslabReplacementAudit.objects.filter(
+            replacement=self.replacement,
+            action__in=['offer_accepted', 'offer_expired'],
+        )
+        self.assertEqual(terminal_audits.count(), 1)
+        expected_action = (
+            'offer_accepted'
+            if offer.status == AslabOffer.STATUS_ACCEPTED_INCOMPLETE
+            else 'offer_expired'
+        )
+        self.assertEqual(terminal_audits.get().action, expected_action)
         self.assertGreaterEqual(sum(kind == 'success' for kind, _ in outcomes), 1)
 
     def test_concurrent_submit_creates_one_registration(self):

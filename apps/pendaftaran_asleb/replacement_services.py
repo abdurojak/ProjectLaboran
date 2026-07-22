@@ -101,7 +101,6 @@ def create_direct_offer(*, replacement_id, candidate_id, deadline, actor):
     except AslabReplacement.DoesNotExist as exc:
         raise ValidationError('Proses penggantian tidak ditemukan.') from exc
     slot = AslabSlot.objects.select_for_update().get(pk=replacement.slot_id)
-    list(AslabOffer.objects.select_for_update().filter(replacement=replacement).order_by('pk'))
     try:
         candidate = Pengguna.objects.select_for_update().get(pk=candidate_id)
     except Pengguna.DoesNotExist as exc:
