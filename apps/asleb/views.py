@@ -236,9 +236,9 @@ class HonorAslebListView(HonorAccessMixin, ListView):
         status = self.request.GET.get('status', '').strip()
 
         if pengguna and pengguna.role == LABORAN_ROLE:
-            queryset = queryset.filter(assigned_laboran=pengguna, asleb__status='aktif')
+            queryset = queryset.filter(assigned_laboran=pengguna)
         elif pengguna and pengguna.role == ASISTEN_LAB_ROLE:
-            queryset = queryset.filter(asleb__nim=pengguna.nim_nik, asleb__status='aktif')
+            queryset = queryset.filter(asleb__nim=pengguna.nim_nik)
         elif pengguna:
             queryset = queryset.none()
 
@@ -272,9 +272,9 @@ class HonorAslebListView(HonorAccessMixin, ListView):
         pengguna = getattr(self.request, 'current_pengguna', None)
         base_honor_qs = HonorAsleb.objects.all()
         if pengguna and pengguna.role == LABORAN_ROLE:
-            base_honor_qs = base_honor_qs.filter(assigned_laboran=pengguna, asleb__status='aktif')
+            base_honor_qs = base_honor_qs.filter(assigned_laboran=pengguna)
         elif pengguna and pengguna.role == ASISTEN_LAB_ROLE:
-            base_honor_qs = base_honor_qs.filter(asleb__nim=pengguna.nim_nik, asleb__status='aktif')
+            base_honor_qs = base_honor_qs.filter(asleb__nim=pengguna.nim_nik)
         elif pengguna:
             base_honor_qs = base_honor_qs.none()
 

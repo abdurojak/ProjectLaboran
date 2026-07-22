@@ -858,7 +858,7 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertFalse(JadwalPraktikum.objects.filter(pk=jadwal_diajukan.pk).exists())
         self.assertFalse(JadwalPraktikum.objects.filter(pk=jadwal_diterima.pk).exists())
 
-    def test_laboran_mengakhiri_periode_menyembunyikan_rekap_honor_aslab_nonaktif(self):
+    def test_laboran_mengakhiri_periode_tetap_menampilkan_riwayat_honor_aslab_nonaktif(self):
         period = PeriodeAsleb.get_for_date(timezone.localdate())
         akun_asleb = Pengguna.objects.create(
             nama_pengguna='Aslab Honor Periode', nim_nik='0640020888',
@@ -892,7 +892,7 @@ class PendaftaranAslebViewTests(TestCase):
         after_response = self.client.get(reverse('asleb:honor_list'), {
             'bulan': timezone.localdate().replace(day=1).strftime('%Y-%m'),
         })
-        self.assertNotContains(after_response, 'Aslab Honor Periode')
+        self.assertContains(after_response, 'Aslab Honor Periode')
 
     def test_laboran_mengakhiri_periode_otomatis_menandai_honor_lama_dibayar(self):
         period = PeriodeAsleb.get_for_date(timezone.localdate())

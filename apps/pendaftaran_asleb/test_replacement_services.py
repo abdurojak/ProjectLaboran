@@ -7,11 +7,12 @@ from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
 from django.db import DatabaseError, IntegrityError, close_old_connections, connection, transaction
-from django.test import TestCase, TransactionTestCase
+from django.test import RequestFactory, TestCase, TransactionTestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
-from apps.asleb.models import Asleb, HonorAsleb
+from apps.asleb.models import Asleb, HonorAsleb, HonorReassignment
+from apps.asleb.views import HonorAslebListView
 from apps.pengguna.models import PengalamanPengguna, Pengguna
 
 from .models import (
@@ -32,9 +33,119 @@ from .replacement_services import (
     end_assignment_for_replacement,
     end_single_active_assignment_for_replacement,
     expire_due_offers,
+    reassign_replacement_honor,
     return_offer_for_revision,
     submit_offer_registration,
 )
+
+
+class HonorReassignmentTests(TestCase):
+    def setUp(self):
+        self.period = PeriodeAsleb.objects.create(
+            tahun=2026, semester=2, mulai=date(2026, 7, 1), selesai=date(2026, 12, 31),
+            pendaftaran_mulai=date(2026, 7, 1), pendaftaran_selesai=date(2026, 7, 30),
+        )
+        self.course = MataKuliahAsleb.objects.create(
+            kode='HON01', kode_mk='HON01', nama='Honor Replacement', dosen='Dosen', kelas='TIF-01',
+        )
+        self.slot = AslabSlot.objects.create(
+            periode=self.period, matkul=self.course, nomor=1, status=AslabSlot.STATUS_VACANT,
+        )
+        self.laboran = self.user('LAB-HON', 'Laboran Honor', 'laboran')
+        self.outgoing = self.asleb('OLD-HON', 'Aslab Lama', 'nonaktif')
+        self.incoming = self.asleb('NEW-HON', 'Aslab Baru', 'aktif')
+        assignment = AslabAssignment.objects.create(
+            slot=self.slot, asleb=self.outgoing, mulai_pada=date(2026, 7, 1),
+            berakhir_pada=date(2026, 10, 5), status=AslabAssignment.STATUS_RESIGNED,
+        )
+        self.replacement = AslabReplacement.objects.create(
+            slot=self.slot, outgoing_assignment=assignment, effective_date=date(2026, 10, 5),
+            transfer_month=date(2026, 10, 1), created_by=self.laboran,
+        )
+
+    def user(self, nim, name, role):
+        return Pengguna.objects.create(
+            nama_pengguna=name, nim_nik=nim, email=f'{nim.lower()}@example.com', password='secret',
+            no_hp='08123', alamat='Jakarta', fakultas='FTI', prodi='TI', gender='laki_laki',
+            role=role, is_verified=True,
+        )
+
+    def asleb(self, nim, name, status):
+        return Asleb.objects.create(
+            nama=name, nim=nim, no_hp='08123', email=f'{nim.lower()}@example.com',
+            program_studi='TI', semester=5, status=status, periode_aktif=self.period,
+            tanggal_bergabung=date(2026, 7, 1),
+        )
+
+    def honor(self, asleb, month, status='draft'):
+        return HonorAsleb.objects.create(
+            asleb=asleb, bulan=month, total_pertemuan=2, jumlah=98000, status=status,
+            assigned_laboran=self.laboran,
+        )
+
+    def run_service(self):
+        return reassign_replacement_honor(
+            replacement=self.replacement, incoming_asleb=self.incoming, actor=self.laboran,
+        )
+
+    def test_prior_month_untouched_and_effective_through_period_end_reassigned(self):
+        prior = self.honor(self.outgoing, date(2026, 9, 1))
+        effective = self.honor(self.outgoing, date(2026, 10, 1))
+        future = self.honor(self.outgoing, date(2026, 12, 1))
+
+        self.run_service()
+
+        prior.refresh_from_db(); effective.refresh_from_db(); future.refresh_from_db()
+        self.assertEqual(prior.asleb, self.outgoing)
+        self.assertEqual(effective.asleb, self.incoming)
+        self.assertEqual(future.asleb, self.incoming)
+        self.assertFalse(HonorReassignment.objects.filter(honor=prior).exists())
+        self.assertEqual(
+            set(HonorReassignment.objects.values_list('status', flat=True)),
+            {HonorReassignment.STATUS_REASSIGNED},
+        )
+
+    def test_paid_honor_is_not_rewritten_and_requires_correction(self):
+        paid = self.honor(self.outgoing, date(2026, 10, 1), status='dibayar')
+
+        self.run_service()
+
+        paid.refresh_from_db()
+        audit = HonorReassignment.objects.get(honor=paid)
+        self.assertEqual(paid.asleb, self.outgoing)
+        self.assertEqual(audit.status, HonorReassignment.STATUS_CORRECTION_REQUIRED)
+        self.assertIsNone(audit.final_asleb)
+
+    def test_idempotent_and_does_not_fabricate_missing_months(self):
+        existing = self.honor(self.outgoing, date(2026, 11, 1))
+
+        first = self.run_service()
+        second = self.run_service()
+
+        self.assertEqual(first, second)
+        self.assertEqual(HonorAsleb.objects.count(), 1)
+        self.assertEqual(HonorReassignment.objects.count(), 1)
+        audit = HonorReassignment.objects.get(honor=existing)
+        self.assertEqual(audit.original_asleb, self.outgoing)
+        self.assertEqual(audit.final_asleb, self.incoming)
+
+    def test_honor_after_period_end_is_untouched(self):
+        outside = self.honor(self.outgoing, date(2027, 1, 1))
+
+        self.run_service()
+
+        outside.refresh_from_db()
+        self.assertEqual(outside.asleb, self.outgoing)
+        self.assertFalse(HonorReassignment.objects.exists())
+
+    def test_laboran_honor_history_keeps_inactive_outgoing_aslab_visible(self):
+        historical = self.honor(self.outgoing, date(2026, 9, 1))
+        request = RequestFactory().get('/asleb/honor/')
+        request.current_pengguna = self.laboran
+        view = HonorAslebListView()
+        view.request = request
+
+        self.assertIn(historical, view.get_queryset())
 
 
 class DirectOfferServiceTests(TestCase):

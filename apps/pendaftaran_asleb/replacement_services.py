@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from apps.asleb.models import Asleb
+from apps.asleb.models import Asleb, HonorAsleb, HonorReassignment
 from apps.core.permissions import can_manage_lab_operations
 from apps.pengguna.models import Pengguna
 
@@ -19,6 +19,81 @@ REASON_STATUS_MAP = {
     'dismissal': AslabAssignment.STATUS_TERMINATED,
     'other': AslabAssignment.STATUS_TERMINATED,
 }
+
+
+@transaction.atomic
+def reassign_replacement_honor(*, replacement, incoming_asleb, actor):
+    """Move existing unlocked monthly honor rows and record every decision."""
+    try:
+        locked_replacement = AslabReplacement.objects.select_for_update().select_related(
+            'slot__periode', 'outgoing_assignment',
+        ).get(pk=replacement.pk)
+    except AslabReplacement.DoesNotExist as exc:
+        raise ValidationError('Proses penggantian tidak ditemukan.') from exc
+
+    asleb_ids = sorted({
+        locked_replacement.outgoing_assignment.asleb_id,
+        incoming_asleb.pk,
+    })
+    locked_aslebs = {
+        item.pk: item for item in Asleb.objects.select_for_update().filter(
+            pk__in=asleb_ids,
+        ).order_by('pk')
+    }
+    outgoing = locked_aslebs.get(locked_replacement.outgoing_assignment.asleb_id)
+    incoming = locked_aslebs.get(incoming_asleb.pk)
+    if outgoing is None or incoming is None:
+        raise ValidationError('Data aslab asal atau pengganti tidak ditemukan.')
+
+    period_end = locked_replacement.slot.periode.selesai.replace(day=1)
+    honors = list(HonorAsleb.objects.select_for_update().filter(
+        asleb=outgoing,
+        bulan__gte=locked_replacement.transfer_month,
+        bulan__lte=period_end,
+    ).order_by('pk'))
+    audited_honor_ids = set(HonorReassignment.objects.select_for_update().filter(
+        replacement=locked_replacement,
+        honor_id__in=[honor.pk for honor in honors],
+    ).order_by('pk').values_list('honor_id', flat=True))
+
+    for honor in honors:
+        if honor.pk in audited_honor_ids:
+            continue
+        month = honor.bulan.replace(day=1)
+        if honor.status == 'dibayar':
+            HonorReassignment.objects.create(
+                replacement=locked_replacement,
+                honor=honor,
+                bulan=month,
+                original_asleb=outgoing,
+                final_asleb=None,
+                status=HonorReassignment.STATUS_CORRECTION_REQUIRED,
+                reason='Honor sudah terkunci/dibayar dan memerlukan koreksi manual.',
+                acted_by=actor,
+            )
+            continue
+        honor.asleb = incoming
+        honor.save(update_fields=['asleb', 'diperbarui_pada'])
+        HonorReassignment.objects.create(
+            replacement=locked_replacement,
+            honor=honor,
+            bulan=month,
+            original_asleb=outgoing,
+            final_asleb=incoming,
+            status=HonorReassignment.STATUS_REASSIGNED,
+            reason='Honor dialihkan mulai bulan efektif penggantian aslab.',
+            acted_by=actor,
+        )
+
+    statuses = HonorReassignment.objects.filter(
+        replacement=locked_replacement,
+    ).values_list('status', flat=True)
+    return {
+        'reassigned': sum(status == HonorReassignment.STATUS_REASSIGNED for status in statuses),
+        'correction_required': sum(
+            status == HonorReassignment.STATUS_CORRECTION_REQUIRED for status in statuses
+        ),
+    }
 
 
 def eligible_candidate_queryset(replacement):
