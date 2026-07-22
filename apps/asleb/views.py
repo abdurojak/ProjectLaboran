@@ -6,6 +6,7 @@ from io import BytesIO
 from html import escape
 
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.db import IntegrityError, transaction
 from django.db.models import Avg, Count, Q, Sum
@@ -26,8 +27,9 @@ from apps.jadwal.models import JadwalPraktikum
 from apps.kalender.realtime import send_attendance_update, send_data_refresh, send_honor_update
 from apps.pengguna.models import Pengguna
 from apps.pendaftaran_asleb.forms import PengaturanBiayaTransferForm
-from apps.pendaftaran_asleb.models import PengaturanBiayaTransfer
-from apps.pendaftaran_asleb.services import deactivate_asleb_membership, notify_manual_asleb_removal
+from apps.pendaftaran_asleb.models import AslabAssignment, PengaturanBiayaTransfer
+from apps.pendaftaran_asleb.replacement_services import end_assignment_for_replacement
+from apps.pendaftaran_asleb.services import notify_manual_asleb_removal
 
 from .forms import (
     AbsensiAslebForm,
@@ -151,13 +153,30 @@ def end_asleb_membership(request, pk):
         messages.error(request, 'Alasan pengeluaran Aslab wajib diisi sebelum akun dinonaktifkan.')
         return redirect('asleb:asleb_list')
 
-    result = deactivate_asleb_membership(
-        asleb,
-        forced=True,
-        reason=alasan_pengeluaran,
-        acted_by=pengguna,
-    )
-    akun = result.get('akun')
+    assignment = AslabAssignment.objects.filter(
+        asleb=asleb,
+        status=AslabAssignment.STATUS_ACTIVE,
+    ).order_by('pk').first()
+    if assignment is None:
+        messages.error(
+            request,
+            'Aslab ini belum memiliki penugasan aktif. Jalankan audit slot sebelum mengakhiri masa tugas.',
+        )
+        return redirect('asleb:asleb_list')
+
+    try:
+        end_assignment_for_replacement(
+            assignment_id=assignment.pk,
+            actor=pengguna,
+            reason_type='dismissal',
+            reason=alasan_pengeluaran,
+            effective_date=timezone.localdate(),
+        )
+    except ValidationError as exc:
+        messages.error(request, ' '.join(exc.messages))
+        return redirect('asleb:asleb_list')
+
+    akun = Pengguna.objects.filter(nim_nik=asleb.nim).first()
     if akun:
         transaction.on_commit(
             lambda asleb_item=asleb, akun_item=akun, reason=alasan_pengeluaran, actor=pengguna:
@@ -166,7 +185,8 @@ def end_asleb_membership(request, pk):
 
     messages.success(
         request,
-        f'{asleb.nama} dikeluarkan dari Aslab. Role akun kembali menjadi Mahasiswa dan notifikasi telah dikirim.',
+        f'{asleb.nama} dikeluarkan dari Aslab dan proses penggantian berhasil dibuat. '
+        'notifikasi telah dikirim.',
     )
     return redirect('asleb:asleb_list')
 
