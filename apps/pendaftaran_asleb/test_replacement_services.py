@@ -130,6 +130,90 @@ class DirectOfferServiceTests(TestCase):
             with self.assertRaisesMessage(ValidationError, 'kedaluwarsa'):
                 accept_offer(offer_id=offer.pk, candidate=self.candidate)
 
+    def test_accept_decline_and_expire_reject_stale_or_cancelled_parent_and_occupied_slot(self):
+        offer = self.create_offer()
+        cases = [
+            ('accept stale', AslabReplacement.STATUS_WAITING_ACTION, AslabSlot.STATUS_VACANT,
+             lambda: accept_offer(offer_id=offer.pk, candidate=self.candidate)),
+            ('decline cancelled', AslabReplacement.STATUS_CANCELLED, AslabSlot.STATUS_VACANT,
+             lambda: decline_offer(offer_id=offer.pk, candidate=self.candidate)),
+            ('expire occupied', AslabReplacement.STATUS_WAITING_CONSENT, AslabSlot.STATUS_ACTIVE,
+             lambda: expire_due_offers(now=offer.deadline)),
+        ]
+        for label, parent_status, slot_status, operation in cases:
+            with self.subTest(label=label):
+                self.replacement.status = parent_status
+                self.replacement.save(update_fields=['status'])
+                self.slot.status = slot_status
+                self.slot.save(update_fields=['status'])
+                with self.assertRaisesMessage(ValidationError, 'transisi'):
+                    operation()
+                offer.refresh_from_db()
+                self.assertEqual(offer.status, AslabOffer.STATUS_WAITING)
+
+    def test_submit_and_return_reject_stale_or_cancelled_parent(self):
+        offer = accept_offer(offer_id=self.create_offer().pk, candidate=self.candidate)
+        form = self.candidate_form(offer)
+        self.assertTrue(form.is_valid(), form.errors)
+        self.replacement.status = AslabReplacement.STATUS_CANCELLED
+        self.replacement.save(update_fields=['status'])
+        with self.assertRaisesMessage(ValidationError, 'transisi'):
+            submit_offer_registration(
+                offer_id=offer.pk, candidate=self.candidate, registration_form=form)
+        offer.refresh_from_db()
+        self.assertEqual(offer.status, AslabOffer.STATUS_ACCEPTED_INCOMPLETE)
+
+        self.replacement.status = AslabReplacement.STATUS_COMPLETING_DATA
+        self.replacement.save(update_fields=['status'])
+        registration = submit_offer_registration(
+            offer_id=offer.pk, candidate=self.candidate, registration_form=form)
+        self.replacement.status = AslabReplacement.STATUS_WAITING_ACTION
+        self.replacement.save(update_fields=['status'])
+        with self.assertRaisesMessage(ValidationError, 'transisi'):
+            return_offer_for_revision(offer_id=offer.pk, actor=self.laboran, notes='Perbaiki')
+        offer.refresh_from_db()
+        self.assertEqual(offer.status, AslabOffer.STATUS_SUBMITTED)
+        self.assertEqual(offer.registration_id, registration.pk)
+
+    def test_candidate_offer_and_registration_conflicts_are_scoped_to_replacement_period(self):
+        other_period = PeriodeAsleb.objects.create(
+            tahun=2027, semester=1, mulai=date(2027, 1, 1), selesai=date(2027, 6, 30),
+            pendaftaran_mulai=date(2027, 1, 1), pendaftaran_selesai=date(2027, 1, 30),
+        )
+        other_slot = AslabSlot.objects.create(
+            periode=other_period, matkul=self.course, nomor=1, status=AslabSlot.STATUS_VACANT)
+        other_asleb = Asleb.objects.create(
+            nama='Other Old', nim='OLD-OTHER', no_hp='081', email='old-other@example.com',
+            program_studi='TI', semester=5, status='nonaktif', periode_aktif=other_period,
+            tanggal_bergabung=date(2027, 1, 1))
+        other_assignment = AslabAssignment.objects.create(
+            slot=other_slot, asleb=other_asleb, mulai_pada=date(2027, 1, 1),
+            berakhir_pada=date(2027, 2, 1), status=AslabAssignment.STATUS_RESIGNED)
+        other_replacement = AslabReplacement.objects.create(
+            slot=other_slot, outgoing_assignment=other_assignment, effective_date=date(2027, 2, 1),
+            transfer_month=date(2027, 2, 1), created_by=self.laboran,
+            method=AslabReplacement.METHOD_DIRECT_OFFER,
+            status=AslabReplacement.STATUS_WAITING_CONSENT)
+        AslabOffer.objects.create(
+            replacement=other_replacement, candidate=self.candidate,
+            deadline=self.now + timezone.timedelta(days=3))
+
+        offer = self.create_offer()
+        self.assertEqual(offer.candidate, self.candidate)
+
+        offer.status = AslabOffer.STATUS_DECLINED
+        offer.save(update_fields=['status'])
+        registration = PendaftaranAsleb.objects.create(
+            nama=self.candidate.nama_pengguna, nim=self.candidate.nim_nik, no_hp='081',
+            email=self.candidate.email, program_studi='TI', semester=5, matkul=self.course,
+            periode=other_period, jenis=PendaftaranAsleb.JENIS_REPLACEMENT,
+            replacement_process=other_replacement, candidate_user=self.candidate,
+            status='diajukan')
+        self.replacement.status = AslabReplacement.STATUS_WAITING_ACTION
+        self.replacement.save(update_fields=['status'])
+        second = self.create_offer()
+        self.assertEqual(second.candidate, registration.candidate_user)
+
     def candidate_form(self, offer, **changes):
         transcript_content = changes.pop('transcript_content', b'OFF01 Offer Test Nilai A')
         include_files = changes.pop('include_files', True)
