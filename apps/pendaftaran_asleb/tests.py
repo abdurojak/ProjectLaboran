@@ -728,8 +728,8 @@ class PendaftaranAslebViewTests(TestCase):
         response = self.client.get(reverse('pendaftaran_asleb:pendaftaran_public'))
 
         self.assertContains(response, 'registration-check-card')
-        self.assertContains(response, '.registration-check-label')
-        self.assertContains(response, '.registration-check-input')
+        self.assertContains(response, 'registration-check-label flex cursor-pointer gap-4')
+        self.assertContains(response, 'class="registration-check-input"')
         self.assertContains(response, 'Verifikasi dan Pernyataan Data')
         self.assertContains(response, 'Pernyataan Kesanggupan Tugas')
         self.assertContains(response, 'bersedia menjalankan tugas dan kewajiban sebagai Asisten Laboratorium')
