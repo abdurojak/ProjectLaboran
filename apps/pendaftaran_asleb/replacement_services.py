@@ -57,9 +57,13 @@ def _lock_offer(offer_id):
     replacement = AslabReplacement.objects.select_for_update().select_related(
         'slot__periode', 'slot__matkul').get(pk=replacement_id)
     slot = AslabSlot.objects.select_for_update().get(pk=replacement.slot_id)
-    offers = list(AslabOffer.objects.select_for_update().filter(
-        replacement_id=replacement_id).order_by('pk'))
-    offer = next(item for item in offers if item.pk == offer_id)
+    try:
+        offer = AslabOffer.objects.select_for_update().get(
+            pk=offer_id, replacement_id=replacement.pk)
+    except AslabOffer.DoesNotExist as exc:
+        raise ValidationError('Penawaran tidak lagi terkait dengan proses penggantian.') from exc
+    replacement.slot = slot
+    offer.replacement = replacement
     return replacement, slot, offer
 
 
@@ -209,7 +213,9 @@ def _expire_due_offer(*, offer_id, now):
 
 @transaction.atomic
 def submit_offer_registration(*, offer_id, candidate, registration_form):
-    """Persist an already validated ReplacementCandidateForm under authoritative row locks."""
+    """Rebind raw form input to locked workflow rows, validate, then persist it."""
+    from .replacement_forms import ReplacementCandidateForm
+
     replacement, slot, offer = _lock_offer(offer_id)
     locked_candidate = Pengguna.objects.select_for_update().get(pk=offer.candidate_id)
     _require_owner(offer, candidate)
@@ -219,9 +225,12 @@ def submit_offer_registration(*, offer_id, candidate, registration_form):
         raise ValidationError('Kandidat harus mahasiswa terverifikasi.')
     if offer.status != AslabOffer.STATUS_ACCEPTED_INCOMPLETE:
         raise ValidationError('Penawaran belum siap menerima data kandidat.')
-    if not getattr(registration_form, 'is_bound', False) or not registration_form.is_valid():
-        raise ValidationError('Data pendaftaran kandidat belum valid.')
-    if registration_form.offer.pk != offer.pk or registration_form.candidate.pk != candidate.pk:
+    if (
+        not isinstance(registration_form, ReplacementCandidateForm)
+        or not registration_form.is_bound
+        or registration_form.offer.pk != offer.pk
+        or registration_form.candidate.pk != candidate.pk
+    ):
         raise ValidationError('Form pendaftaran tidak sesuai dengan penawaran.')
     registrations = list(PendaftaranAsleb.objects.select_for_update().filter(
         replacement_process=replacement).order_by('pk'))
@@ -230,7 +239,18 @@ def submit_offer_registration(*, offer_id, candidate, registration_form):
         raise ValidationError('Riwayat pendaftaran penawaran tidak ditemukan.')
     if existing and registration_form.instance.pk != existing.pk:
         raise ValidationError('Revisi harus menggunakan pendaftaran yang sudah terhubung.')
-    registration = registration_form.save(commit=False)
+    if not existing and registration_form.instance.pk:
+        raise ValidationError('Pendaftaran baru tidak boleh menggunakan instance yang sudah ada.')
+    canonical_form = ReplacementCandidateForm(
+        data=registration_form.data,
+        files=registration_form.files,
+        offer=offer,
+        candidate=locked_candidate,
+        instance=existing,
+    )
+    if not canonical_form.is_valid():
+        raise ValidationError('Data pendaftaran kandidat belum valid.')
+    registration = canonical_form.save(commit=False)
     registration.pk = existing.pk if existing else None
     registration._state.adding = existing is None
     registration.nama = locked_candidate.nama_pengguna

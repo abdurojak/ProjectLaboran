@@ -320,6 +320,34 @@ class DirectOfferServiceTests(TestCase):
         )
         self.assertEqual(result.pk, registration.pk)
 
+    def test_submit_revalidates_manipulated_same_pk_form_against_canonical_slot(self):
+        offer = accept_offer(offer_id=self.create_offer().pk, candidate=self.candidate)
+        wrong_course = MataKuliahAsleb.objects.create(
+            kode='ADV02', kode_mk='ADV02', nama='Adversarial Course', dosen='Dosen', kelas='TIF-02')
+        wrong_slot = AslabSlot.objects.create(
+            periode=self.period, matkul=wrong_course, nomor=1, status=AslabSlot.STATUS_VACANT)
+        manipulated_offer = AslabOffer.objects.get(pk=offer.pk)
+        manipulated_replacement = AslabReplacement.objects.get(pk=self.replacement.pk)
+        manipulated_replacement.slot = wrong_slot
+        manipulated_offer.replacement = manipulated_replacement
+        form = self.candidate_form(
+            manipulated_offer,
+            matkul=wrong_course.pk,
+            transcript_content=b'ADV02 Adversarial Course Nilai A\nOFF01 Offer Test Nilai C',
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+
+        with self.assertRaisesMessage(ValidationError, 'valid'):
+            submit_offer_registration(
+                offer_id=offer.pk, candidate=self.candidate, registration_form=form)
+
+        offer.refresh_from_db()
+        self.replacement.refresh_from_db()
+        self.assertEqual(offer.status, AslabOffer.STATUS_ACCEPTED_INCOMPLETE)
+        self.assertIsNone(offer.registration_id)
+        self.assertEqual(self.replacement.status, AslabReplacement.STATUS_COMPLETING_DATA)
+        self.assertFalse(PendaftaranAsleb.objects.filter(replacement_process=self.replacement).exists())
+
     def test_forms_filter_candidates_reject_tampering_and_require_files_payment_grade(self):
         unverified = self.user('UNV-OFF', 'Unverified', 'mahasiswa', verified=False)
         offer_form = DirectOfferForm(replacement=self.replacement, actor=self.laboran)
@@ -707,3 +735,172 @@ class TerminationConcurrencyTests(TransactionTestCase):
         self.assignment.refresh_from_db()
         self.assertEqual(self.assignment.status, AslabAssignment.STATUS_ACTIVE)
         self.assertFalse(AslabReplacement.objects.exists())
+
+
+@skipUnless(connection.vendor == 'mysql', 'MySQL row-lock behavior required')
+class DirectOfferConcurrencyTests(TransactionTestCase):
+    reset_sequences = True
+
+    def setUp(self):
+        self.period = PeriodeAsleb.objects.create(
+            tahun=2026, semester=2, mulai=date(2026, 7, 1), selesai=date(2026, 12, 31),
+            pendaftaran_mulai=date(2026, 7, 1), pendaftaran_selesai=date(2026, 7, 30))
+        self.laboran = self.user('LAB-RACE', 'Laboran Race', 'laboran')
+        self.candidate = self.user('STU-RACE', 'Candidate Race', 'mahasiswa')
+        self.replacement = self.make_replacement('RACE01', 1)
+
+    def user(self, nim, name, role):
+        return Pengguna.objects.create(
+            nama_pengguna=name, nim_nik=nim, email=f'{nim.lower()}@example.com', password='secret',
+            no_hp='08123', alamat='Jakarta', fakultas='FTI', prodi='TI', gender='laki_laki',
+            role=role)
+
+    def make_replacement(self, code, number):
+        course = MataKuliahAsleb.objects.create(
+            kode=code, kode_mk=code, nama=f'Course {code}', dosen='Dosen', kelas=code)
+        slot = AslabSlot.objects.create(
+            periode=self.period, matkul=course, nomor=number, status=AslabSlot.STATUS_VACANT)
+        old = Asleb.objects.create(
+            nama=f'Old {code}', nim=f'OLD-{code}', no_hp='081',
+            email=f'old-{code.lower()}@example.com', program_studi='TI', semester=5,
+            status='nonaktif', periode_aktif=self.period, tanggal_bergabung=date(2026, 7, 1))
+        assignment = AslabAssignment.objects.create(
+            slot=slot, asleb=old, mulai_pada=date(2026, 7, 1),
+            berakhir_pada=date(2026, 9, 1), status=AslabAssignment.STATUS_RESIGNED)
+        return AslabReplacement.objects.create(
+            slot=slot, outgoing_assignment=assignment, effective_date=date(2026, 9, 1),
+            transfer_month=date(2026, 9, 1), created_by=self.laboran)
+
+    def offer(self, replacement=None, candidate=None, deadline=None):
+        return create_direct_offer(
+            replacement_id=(replacement or self.replacement).pk,
+            candidate_id=(candidate or self.candidate).pk,
+            deadline=deadline or timezone.now() + timezone.timedelta(days=1),
+            actor=self.laboran)
+
+    def form(self, offer, candidate):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        png = base64.b64decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=')
+        data = {
+            'nama': candidate.nama_pengguna, 'nim': candidate.nim_nik, 'no_hp': candidate.no_hp,
+            'email': candidate.email, 'program_studi': candidate.prodi, 'semester': 5,
+            'matkul': offer.replacement.slot.matkul_id, 'metode_rekening': 'bni',
+            'rekening': '123456', 'nama_pemilik_rekening': candidate.nama_pengguna,
+            'nilai_transkrip': 'A', 'alasan': 'Siap',
+        }
+        files = {
+            'transkrip': SimpleUploadedFile(
+                'transkrip.txt',
+                f'{offer.replacement.slot.matkul.kode_mk} Nilai A'.encode()),
+            'tanda_tangan': SimpleUploadedFile('sign.png', png, content_type='image/png'),
+        }
+        return ReplacementCandidateForm(data=data, files=files, offer=offer, candidate=candidate)
+
+    def run_race(self, operations):
+        barrier = Barrier(2)
+        results = Queue()
+
+        def run(operation):
+            close_old_connections()
+            try:
+                barrier.wait(timeout=10)
+                results.put(('success', operation()))
+            except (ValidationError, IntegrityError) as exc:
+                results.put(('clean_error', exc.__class__.__name__))
+            except Exception as exc:
+                results.put(('unexpected', repr(exc)))
+            finally:
+                close_old_connections()
+
+        threads = [Thread(target=run, args=(operation,)) for operation in operations]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=20)
+        outcomes = [results.get(timeout=2) for _ in threads]
+        self.assertFalse(any(thread.is_alive() for thread in threads), outcomes)
+        self.assertFalse(any(kind == 'unexpected' for kind, _value in outcomes), outcomes)
+        return outcomes
+
+    def test_concurrent_offers_same_replacement_create_one_live_offer(self):
+        other = self.user('STU-RACE-2', 'Candidate Race 2', 'mahasiswa')
+        deadline = timezone.now() + timezone.timedelta(days=1)
+        outcomes = self.run_race([
+            lambda candidate_id=candidate_id: create_direct_offer(
+                replacement_id=self.replacement.pk, candidate_id=candidate_id,
+                deadline=deadline, actor=Pengguna.objects.get(pk=self.laboran.pk))
+            for candidate_id in (self.candidate.pk, other.pk)
+        ])
+        self.assertCountEqual([kind for kind, _ in outcomes], ['success', 'clean_error'])
+        self.assertEqual(AslabOffer.objects.filter(replacement=self.replacement).count(), 1)
+
+    def test_same_candidate_concurrent_offers_in_period_create_one(self):
+        second = self.make_replacement('RACE02', 1)
+        deadline = timezone.now() + timezone.timedelta(days=1)
+        outcomes = self.run_race([
+            lambda replacement_id=replacement_id: create_direct_offer(
+                replacement_id=replacement_id, candidate_id=self.candidate.pk,
+                deadline=deadline, actor=Pengguna.objects.get(pk=self.laboran.pk))
+            for replacement_id in (self.replacement.pk, second.pk)
+        ])
+        self.assertCountEqual([kind for kind, _ in outcomes], ['success', 'clean_error'])
+        self.assertEqual(AslabOffer.objects.filter(candidate=self.candidate).count(), 1)
+
+    def test_accept_racing_expiry_has_one_terminal_transition(self):
+        deadline = timezone.now() + timezone.timedelta(days=1)
+        offer = self.offer(deadline=deadline)
+        outcomes = self.run_race([
+            lambda: accept_offer(
+                offer_id=offer.pk, candidate=Pengguna.objects.get(pk=self.candidate.pk)).status,
+            lambda: expire_due_offers(now=deadline),
+        ])
+        offer.refresh_from_db()
+        self.replacement.refresh_from_db()
+        self.assertIn(offer.status, {
+            AslabOffer.STATUS_ACCEPTED_INCOMPLETE, AslabOffer.STATUS_EXPIRED})
+        self.assertIn(self.replacement.status, {
+            AslabReplacement.STATUS_COMPLETING_DATA, AslabReplacement.STATUS_WAITING_ACTION})
+        self.assertGreaterEqual(sum(kind == 'success' for kind, _ in outcomes), 1)
+
+    def test_concurrent_submit_creates_one_registration(self):
+        offer = accept_offer(offer_id=self.offer().pk, candidate=self.candidate)
+
+        def submit():
+            canonical_offer = AslabOffer.objects.select_related(
+                'replacement__slot__matkul').get(pk=offer.pk)
+            candidate = Pengguna.objects.get(pk=self.candidate.pk)
+            return submit_offer_registration(
+                offer_id=offer.pk, candidate=candidate,
+                registration_form=self.form(canonical_offer, candidate)).pk
+
+        outcomes = self.run_race([submit, submit])
+        self.assertCountEqual([kind for kind, _ in outcomes], ['success', 'clean_error'])
+        self.assertEqual(PendaftaranAsleb.objects.filter(
+            replacement_process=self.replacement).count(), 1)
+
+    def test_submit_racing_return_preserves_single_registration_link(self):
+        offer = accept_offer(offer_id=self.offer().pk, candidate=self.candidate)
+
+        def submit():
+            canonical_offer = AslabOffer.objects.select_related(
+                'replacement__slot__matkul').get(pk=offer.pk)
+            candidate = Pengguna.objects.get(pk=self.candidate.pk)
+            return submit_offer_registration(
+                offer_id=offer.pk, candidate=candidate,
+                registration_form=self.form(canonical_offer, candidate)).pk
+
+        def revise():
+            return return_offer_for_revision(
+                offer_id=offer.pk, actor=Pengguna.objects.get(pk=self.laboran.pk),
+                notes='Concurrent revision').status
+
+        outcomes = self.run_race([submit, revise])
+        offer.refresh_from_db()
+        self.replacement.refresh_from_db()
+        self.assertEqual(PendaftaranAsleb.objects.filter(
+            replacement_process=self.replacement).count(), 1)
+        self.assertIsNotNone(offer.registration_id)
+        self.assertIn(offer.status, {
+            AslabOffer.STATUS_SUBMITTED, AslabOffer.STATUS_ACCEPTED_INCOMPLETE})
+        self.assertFalse(any(kind == 'unexpected' for kind, _ in outcomes), outcomes)
