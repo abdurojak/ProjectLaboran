@@ -18,7 +18,10 @@ def matching_registration(asleb):
         ).select_related('matkul').order_by('pk')
     )
     if len(candidates) == 1:
-        return candidates[0], None
+        candidate = candidates[0]
+        if not asleb.matkul or str(candidate.matkul) == asleb.matkul:
+            return candidate, None
+        return None, 'COURSE_MISMATCH'
     if len(candidates) > 1 and asleb.matkul:
         exact = [item for item in candidates if str(item.matkul) == asleb.matkul]
         if len(exact) == 1:
@@ -33,8 +36,23 @@ class Command(BaseCommand):
         parser.add_argument(
             '--strict',
             action='store_true',
-            help='Exit nonzero when any active legacy Aslab row is unresolved.',
+            help='Exit nonzero when unresolved legacy rows or occupancy issues exist.',
         )
+
+    def raise_for_strict_issues(self, categories):
+        issue_categories = (
+            'NO_PERIOD',
+            'COURSE_MISMATCH',
+            'AMBIGUOUS',
+            'UNMATCHED',
+            'OVER_CAPACITY',
+            'MISSING_ASSIGNMENT',
+            'DUPLICATE_OCCUPANCY',
+            'INCONSISTENT_OCCUPANCY',
+        )
+        issue_count = sum(len(categories[name]) for name in issue_categories)
+        if issue_count:
+            raise CommandError(f'{issue_count} Aslab slot audit issue(s) found')
 
     def handle(self, *args, **options):
         categories = defaultdict(list)
@@ -91,6 +109,7 @@ class Command(BaseCommand):
 
         ordered_categories = (
             'NO_PERIOD',
+            'COURSE_MISMATCH',
             'AMBIGUOUS',
             'UNMATCHED',
             'OVER_CAPACITY',
@@ -105,9 +124,5 @@ class Command(BaseCommand):
         if not any(categories.values()):
             self.stdout.write('OK: no unresolved active legacy rows or occupancy issues')
 
-        unresolved = sum(
-            len(categories[name])
-            for name in ('NO_PERIOD', 'AMBIGUOUS', 'UNMATCHED', 'OVER_CAPACITY', 'MISSING_ASSIGNMENT')
-        )
-        if options['strict'] and unresolved:
-            raise CommandError(f'{unresolved} active legacy Aslab row(s) unresolved')
+        if options['strict']:
+            self.raise_for_strict_issues(categories)

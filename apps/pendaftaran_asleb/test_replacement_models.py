@@ -1,3 +1,4 @@
+from collections import defaultdict
 from datetime import date
 from importlib import import_module
 from io import StringIO
@@ -332,6 +333,15 @@ class AslabBackfillTests(TestCase):
             selected,
         )
 
+    def test_single_registration_with_conflicting_legacy_course_is_not_assigned(self):
+        self.create_registration('10010')
+        self.create_active_asleb('10010', 'Conflicting exact course label')
+
+        self.run_backfill()
+
+        self.assertFalse(AslabAssignment.objects.exists())
+        self.assertFalse(AslabSlot.objects.exists())
+
     def test_ambiguous_and_unmatched_rows_are_not_assigned(self):
         other_course = self.create_course('TEST_B', 'TIF-02')
         self.create_registration('10003')
@@ -395,6 +405,16 @@ class AslabBackfillTests(TestCase):
 
 
 class AuditAslabSlotsCommandTests(AslabBackfillTests):
+    def test_audit_reports_single_candidate_course_mismatch_and_strict_fails(self):
+        self.create_registration('20009')
+        self.create_active_asleb('20009', 'Conflicting exact course label')
+        output = StringIO()
+
+        with self.assertRaises(CommandError):
+            call_command('audit_aslab_slots', '--strict', stdout=output)
+
+        self.assertIn('COURSE_MISMATCH: 20009', output.getvalue())
+
     def test_audit_reports_categories_without_modifying_data(self):
         other_course = self.create_course('TEST_B', 'TIF-02')
         self.create_registration('20001')
@@ -449,3 +469,26 @@ class AuditAslabSlotsCommandTests(AslabBackfillTests):
         report = output.getvalue()
         self.assertIn('OVER_CAPACITY: 20007', report)
         self.assertIn('INCONSISTENT_OCCUPANCY:', report)
+
+    def test_strict_fails_for_inconsistent_occupancy(self):
+        registrations = [
+            self.create_registration('20010'),
+            self.create_registration('20011'),
+        ]
+        self.create_active_asleb('20010')
+        self.run_backfill()
+        AslabAssignment.objects.update(source_pendaftaran=registrations[1])
+
+        with self.assertRaises(CommandError):
+            call_command('audit_aslab_slots', '--strict', stdout=StringIO())
+
+    def test_strict_gate_fails_for_duplicate_occupancy_category(self):
+        command_module = import_module(
+            'apps.pendaftaran_asleb.management.commands.audit_aslab_slots'
+        )
+        categories = defaultdict(list, {
+            'DUPLICATE_OCCUPANCY': ['slot 1 assignments [1, 2]'],
+        })
+
+        with self.assertRaises(CommandError):
+            command_module.Command().raise_for_strict_issues(categories)
