@@ -16,7 +16,14 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 from reportlab.lib.enums import TA_RIGHT
 
-from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, PeriodeAsleb
+from apps.pendaftaran_asleb.models import (
+    AslabAssignment,
+    AslabReplacement,
+    AslabSlot,
+    MataKuliahAsleb,
+    PendaftaranAsleb,
+    PeriodeAsleb,
+)
 from apps.pendaftaran_asleb.services import deactivate_asleb_membership, sync_expired_asleb_periods
 from apps.kalender.models import Notifikasi
 from apps.pengguna.models import PengalamanPengguna, Pengguna
@@ -150,6 +157,19 @@ class AslebViewTests(TestCase):
             'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
         )
         return SimpleUploadedFile(name, image, content_type='image/png')
+
+    def create_active_assignment(self):
+        period = PeriodeAsleb.objects.create(
+            tahun=2026, semester=2, mulai=date(2026, 7, 1), selesai=date(2026, 12, 31),
+            pendaftaran_mulai=date(2026, 7, 1), pendaftaran_selesai=date(2026, 7, 30),
+        )
+        slot = AslabSlot.objects.create(periode=period, matkul=self.matkul, nomor=1)
+        self.asleb.periode_aktif = period
+        self.asleb.save(update_fields=['periode_aktif', 'diperbarui_pada'])
+        return AslabAssignment.objects.create(
+            slot=slot, asleb=self.asleb, mulai_pada=date(2026, 7, 1),
+            status=AslabAssignment.STATUS_ACTIVE,
+        )
 
     def test_form_absensi_menyediakan_upload_bukti_foto_dan_video_manual(self):
         PendaftaranAsleb.objects.create(
@@ -406,7 +426,8 @@ class AslebViewTests(TestCase):
         self.assertEqual(self.asleb.status, 'aktif')
         self.assertFalse(PengalamanPengguna.objects.filter(pengguna=akun_asleb).exists())
 
-    def test_laboran_dapat_mengeluarkan_asleb_dengan_alasan_tanpa_masuk_pengalaman(self):
+    @patch('apps.asleb.views.timezone.localdate', return_value=date(2026, 10, 15))
+    def test_laboran_dapat_mengeluarkan_asleb_dengan_alasan_tanpa_masuk_pengalaman(self, _localdate):
         laboran = Pengguna.objects.create(
             nama_pengguna='Laboran Terminasi', nim_nik='LAB-TERM-2',
             email='laboran-term-2@trisakti.ac.id', password='rahasia123',
@@ -422,6 +443,7 @@ class AslebViewTests(TestCase):
         session = self.client.session
         session['pengguna_id'] = laboran.pk
         session.save()
+        assignment = self.create_active_assignment()
 
         with self.captureOnCommitCallbacks(execute=True):
             response = self.client.post(
@@ -435,6 +457,9 @@ class AslebViewTests(TestCase):
         self.assertContains(response, 'notifikasi telah dikirim')
         self.assertEqual(akun_asleb.role, 'mahasiswa')
         self.assertEqual(self.asleb.status, 'nonaktif')
+        assignment.refresh_from_db()
+        self.assertEqual(assignment.status, AslabAssignment.STATUS_TERMINATED)
+        self.assertTrue(AslabReplacement.objects.filter(outgoing_assignment=assignment).exists())
         self.assertFalse(PengalamanPengguna.objects.filter(pengguna=akun_asleb).exists())
         self.assertTrue(Notifikasi.objects.filter(
             pengguna=akun_asleb,
@@ -442,6 +467,40 @@ class AslebViewTests(TestCase):
         ).exists())
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn('Status Asisten Lab Dinonaktifkan', mail.outbox[0].subject)
+
+    @patch('apps.asleb.views.timezone.localdate', return_value=date(2026, 10, 15))
+    @patch('apps.asleb.views.end_assignment_for_replacement')
+    def test_end_membership_delegates_to_replacement_service(self, end_assignment, _localdate):
+        assignment = self.create_active_assignment()
+        end_assignment.return_value = AslabReplacement(
+            outgoing_assignment=assignment, slot=assignment.slot,
+        )
+
+        response = self.client.post(
+            reverse('asleb:asleb_end_membership', args=[self.asleb.pk]),
+            {'alasan_pengeluaran': 'Pelanggaran aturan.'},
+        )
+
+        self.assertRedirects(response, reverse('asleb:asleb_list'))
+        end_assignment.assert_called_once_with(
+            assignment_id=assignment.pk,
+            actor=self.pengguna,
+            reason_type='dismissal',
+            reason='Pelanggaran aturan.',
+            effective_date=date(2026, 10, 15),
+        )
+
+    def test_end_membership_legacy_without_assignment_is_safe(self):
+        response = self.client.post(
+            reverse('asleb:asleb_end_membership', args=[self.asleb.pk]),
+            {'alasan_pengeluaran': 'Pelanggaran aturan.'},
+            follow=True,
+        )
+
+        self.asleb.refresh_from_db()
+        self.assertContains(response, 'belum memiliki penugasan aktif')
+        self.assertEqual(self.asleb.status, 'aktif')
+        self.assertFalse(AslabReplacement.objects.exists())
 
     def test_data_aslab_tidak_menampilkan_tombol_edit_dan_hapus(self):
         response = self.client.get(reverse('asleb:asleb_list'))
