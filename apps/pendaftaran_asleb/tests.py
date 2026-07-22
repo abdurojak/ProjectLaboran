@@ -2,6 +2,7 @@ import base64
 import shutil
 import tempfile
 from datetime import date, timedelta
+from html.parser import HTMLParser
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -23,6 +24,19 @@ from .models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsle
 from .services import get_asleb_experience, is_registration_open, sync_expired_asleb_periods
 from .utils import analyze_transcript, extract_grade_from_transcript, get_public_registration_url
 from .views import WIZARD_SESSION_KEY
+
+
+class ClassTokenHTMLParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.elements = []
+
+    def handle_starttag(self, tag, attrs):
+        attributes = dict(attrs)
+        self.elements.append((tag, set(attributes.get('class', '').split())))
+
+    def has_class(self, tag, class_name):
+        return any(element_tag == tag and class_name in classes for element_tag, classes in self.elements)
 
 
 class PendaftaranAslebViewTests(TestCase):
@@ -726,10 +740,12 @@ class PendaftaranAslebViewTests(TestCase):
         session.save()
 
         response = self.client.get(reverse('pendaftaran_asleb:pendaftaran_public'))
+        parser = ClassTokenHTMLParser()
+        parser.feed(response.content.decode(response.charset))
 
         self.assertContains(response, 'registration-check-card')
-        self.assertContains(response, 'registration-check-label flex cursor-pointer gap-4')
-        self.assertContains(response, 'class="registration-check-input"')
+        self.assertTrue(parser.has_class('label', 'registration-check-label'))
+        self.assertTrue(parser.has_class('input', 'registration-check-input'))
         self.assertContains(response, 'Verifikasi dan Pernyataan Data')
         self.assertContains(response, 'Pernyataan Kesanggupan Tugas')
         self.assertContains(response, 'bersedia menjalankan tugas dan kewajiban sebagai Asisten Laboratorium')

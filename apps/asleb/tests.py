@@ -858,6 +858,10 @@ class AslebViewTests(TestCase):
             tanggal_absensi=timezone.localdate(),
             foto_absensi=SimpleUploadedFile('foto.jpg', b'foto', content_type='image/jpeg'),
         )
+        original_asleb_id = attendance.asleb_id
+        original_jadwal_id = attendance.jadwal_id
+        original_date = attendance.tanggal_absensi
+        original_status = attendance.status
 
         deactivate_asleb_membership(
             self.asleb,
@@ -866,7 +870,11 @@ class AslebViewTests(TestCase):
             acted_by=self.pengguna,
         )
 
-        self.assertTrue(AbsensiMasukAsleb.objects.filter(pk=attendance.pk).exists())
+        attendance.refresh_from_db()
+        self.assertEqual(attendance.asleb_id, original_asleb_id)
+        self.assertEqual(attendance.jadwal_id, original_jadwal_id)
+        self.assertEqual(attendance.tanggal_absensi, original_date)
+        self.assertEqual(attendance.status, original_status)
 
     def test_honor_asleb_mengikuti_rumus_excel(self):
         self.create_pendaftaran_history(self.asleb.nim, 3)
