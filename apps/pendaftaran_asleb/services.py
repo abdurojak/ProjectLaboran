@@ -7,12 +7,8 @@ from django.db import transaction
 from django.urls import reverse
 
 from apps.asleb.models import (
-    AbsensiAsleb,
-    AbsensiMasukAsleb,
     Asleb,
     HonorAsleb,
-    PengingatAbsensiAsleb,
-    PengumpulanLaporanPraktikum,
     PesertaPraktikum,
     TugasLaporanPraktikum,
 )
@@ -305,22 +301,22 @@ def sync_expired_asleb_periods(value=None):
         if changed_fields:
             honor.save(update_fields=changed_fields + ['diperbarui_pada'])
 
-    if expired_rows:
-        expired_row_ids = [item.pk for item in expired_rows]
-        AbsensiAsleb.objects.filter(asleb_id__in=expired_row_ids).delete()
-        AbsensiMasukAsleb.objects.filter(asleb_id__in=expired_row_ids).delete()
-        PengingatAbsensiAsleb.objects.filter(asleb_id__in=expired_row_ids).delete()
-
     if affected_matkul or affected_matkul_ids:
-        from apps.jadwal.models import JadwalPraktikum, PermintaanPerubahanJadwal
-        PengumpulanLaporanPraktikum.objects.filter(tugas__matkul_id__in=affected_matkul_ids).delete()
-        TugasLaporanPraktikum.objects.filter(matkul_id__in=affected_matkul_ids).delete()
-        JadwalPraktikum.objects.filter(
-            mata_kuliah__in=affected_matkul,
-        ).delete()
+        from apps.jadwal.models import PermintaanPerubahanJadwal
+        PesertaPraktikum.objects.filter(
+            matkul_id__in=affected_matkul_ids,
+        ).update(aktif=False)
+        TugasLaporanPraktikum.objects.filter(
+            matkul_id__in=affected_matkul_ids, aktif=True,
+        ).update(aktif=False)
         PermintaanPerubahanJadwal.objects.filter(
             diajukan_oleh__nim_nik__in=expired_nims,
-        ).delete()
+            status='diajukan',
+        ).update(
+            status='ditolak',
+            catatan_laboran='Ditutup otomatis karena periode penugasan aslab telah berakhir.',
+            diproses_pada=timezone.now(),
+        )
 
     users_by_nim = {
         item.nim_nik: item
@@ -362,8 +358,6 @@ def sync_expired_asleb_periods(value=None):
             pengguna.role = 'mahasiswa'
             pengguna.save(update_fields=['role', 'diperbarui_pada'])
             demoted += 1
-    if expired_nims:
-        PesertaPraktikum.objects.all().delete()
     return len(expired_nims), demoted
 
 

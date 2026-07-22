@@ -1,11 +1,13 @@
-from datetime import time
+from datetime import date, time
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb
+from apps.pendaftaran_asleb.models import (
+    AslabAssignment, AslabSlot, MataKuliahAsleb, PendaftaranAsleb, PeriodeAsleb,
+)
 from apps.pengguna.models import Pengguna
 from apps.ruangan.models import GrupRuanganGabungan, RuanganLab
 from apps.asleb.models import AbsensiAsleb, Asleb, PesertaPraktikum
@@ -47,6 +49,8 @@ class JadwalViewTests(TestCase):
             kode='LAB-SKI',
             defaults={'nama': 'Lab Sistem Keamanan Informasi', 'kapasitas': 18, 'warna': 'amber', 'aktif': True},
         )
+        combined_group = GrupRuanganGabungan.objects.create(nama='RPL dan SKI Test')
+        combined_group.ruangan.set([self.lab_rpl, self.lab_ski])
         self.matkul = MataKuliahAsleb.objects.create(
             kode='TEST_JADWAL_BASIS_DATA',
             nama='Praktikum Basis Data',
@@ -265,7 +269,7 @@ class JadwalViewTests(TestCase):
         session.save()
         return mahasiswa
 
-    def login_as_asisten_lab(self):
+    def login_as_asisten_lab(self, matkul=None):
         aslab = Pengguna.objects.create(
             nama_pengguna='Aslab Jadwal',
             nim_nik='2201003',
@@ -281,24 +285,38 @@ class JadwalViewTests(TestCase):
         session = self.client.session
         session['pengguna_id'] = aslab.pk
         session.save()
+        if matkul is not None:
+            period = PeriodeAsleb.objects.create(
+                tahun=2026, semester=2, mulai=date(2026, 7, 1), selesai=date(2026, 12, 31),
+                pendaftaran_mulai=date(2026, 7, 1), pendaftaran_selesai=date(2026, 7, 30),
+            )
+            person = Asleb.objects.create(
+                nama=aslab.nama_pengguna, nim=aslab.nim_nik, no_hp=aslab.no_hp,
+                email=aslab.email, program_studi=aslab.prodi, semester=5,
+                matkul=str(matkul), status='aktif', periode_aktif=period,
+                tanggal_bergabung=period.mulai,
+            )
+            slot = AslabSlot.objects.create(
+                periode=period, matkul=matkul, nomor=1, status=AslabSlot.STATUS_ACTIVE,
+            )
+            AslabAssignment.objects.create(
+                slot=slot, asleb=person, mulai_pada=period.mulai,
+                status=AslabAssignment.STATUS_ACTIVE,
+            )
         return aslab
 
-    def activate_asisten_lab(self, pengguna, matkul):
-        return Asleb.objects.create(
-            nama=pengguna.nama_pengguna,
-            nim=pengguna.nim_nik,
-            no_hp=pengguna.no_hp,
-            email=pengguna.email,
-            program_studi=pengguna.prodi,
-            matkul=str(matkul),
-            semester=5,
-            status='aktif',
-            tanggal_bergabung=timezone.localdate(),
-        )
-
     def test_form_jadwal_aslab_hanya_menampilkan_matkul_yang_diterima_atau_digenerate(self):
-        aslab = self.login_as_asisten_lab()
-        self.activate_asisten_lab(aslab, self.matkul)
+        aslab = self.login_as_asisten_lab(self.matkul)
+        PendaftaranAsleb.objects.create(
+            nama=aslab.nama_pengguna,
+            nim=aslab.nim_nik,
+            no_hp=aslab.no_hp,
+            email=aslab.email,
+            program_studi=aslab.prodi,
+            semester=5,
+            matkul=self.matkul,
+            status='digenerate',
+        )
         PendaftaranAsleb.objects.create(
             nama=aslab.nama_pengguna,
             nim=aslab.nim_nik,
@@ -316,8 +334,17 @@ class JadwalViewTests(TestCase):
         self.assertNotContains(response, str(self.matkul_lain))
 
     def test_aslab_tidak_bisa_mengajukan_jadwal_dengan_matkul_yang_bukan_miliknya(self):
-        aslab = self.login_as_asisten_lab()
-        self.activate_asisten_lab(aslab, self.matkul)
+        aslab = self.login_as_asisten_lab(self.matkul)
+        PendaftaranAsleb.objects.create(
+            nama=aslab.nama_pengguna,
+            nim=aslab.nim_nik,
+            no_hp=aslab.no_hp,
+            email=aslab.email,
+            program_studi=aslab.prodi,
+            semester=5,
+            matkul=self.matkul,
+            status='digenerate',
+        )
 
         response = self.client.post(reverse('jadwal:jadwal_create'), {
             'matkul': self.matkul_lain.pk,
@@ -332,8 +359,17 @@ class JadwalViewTests(TestCase):
         self.assertFalse(JadwalPraktikum.objects.filter(hari='rabu').exists())
 
     def test_aslab_tidak_bisa_mengajukan_jadwal_kedua_untuk_matkul_yang_sama(self):
-        aslab = self.login_as_asisten_lab()
-        self.activate_asisten_lab(aslab, self.matkul)
+        aslab = self.login_as_asisten_lab(self.matkul)
+        PendaftaranAsleb.objects.create(
+            nama=aslab.nama_pengguna,
+            nim=aslab.nim_nik,
+            no_hp=aslab.no_hp,
+            email=aslab.email,
+            program_studi=aslab.prodi,
+            semester=5,
+            matkul=self.matkul,
+            status='digenerate',
+        )
         PesertaPraktikum.objects.create(
             matkul=self.matkul,
             nim='0640020999',
@@ -354,8 +390,17 @@ class JadwalViewTests(TestCase):
         self.assertEqual(JadwalPraktikum.objects.filter(mata_kuliah=str(self.matkul)).count(), 1)
 
     def test_aslab_melihat_list_praktikum_saya_berdasarkan_matkulnya(self):
-        aslab = self.login_as_asisten_lab()
-        self.activate_asisten_lab(aslab, self.matkul)
+        aslab = self.login_as_asisten_lab(self.matkul)
+        PendaftaranAsleb.objects.create(
+            nama=aslab.nama_pengguna,
+            nim=aslab.nim_nik,
+            no_hp=aslab.no_hp,
+            email=aslab.email,
+            program_studi=aslab.prodi,
+            semester=5,
+            matkul=self.matkul,
+            status='digenerate',
+        )
         JadwalPraktikum.objects.create(
             mata_kuliah=str(self.matkul),
             kelas=self.matkul.kelas,
@@ -437,8 +482,17 @@ class JadwalViewTests(TestCase):
                 self.assertNotContains(response, 'jadwal-pengampu')
 
     def test_aslab_hanya_bisa_mengelola_jadwal_praktikum_miliknya(self):
-        aslab = self.login_as_asisten_lab()
-        self.activate_asisten_lab(aslab, self.matkul)
+        aslab = self.login_as_asisten_lab(self.matkul)
+        PendaftaranAsleb.objects.create(
+            nama=aslab.nama_pengguna,
+            nim=aslab.nim_nik,
+            no_hp=aslab.no_hp,
+            email=aslab.email,
+            program_studi=aslab.prodi,
+            semester=5,
+            matkul=self.matkul,
+            status='digenerate',
+        )
         jadwal_milik_aslab = JadwalPraktikum.objects.first()
         jadwal_lain = JadwalPraktikum.objects.create(
             mata_kuliah=str(self.matkul_lain),
@@ -504,8 +558,12 @@ class JadwalViewTests(TestCase):
         self.assertEqual(jadwal.get_display_ruangan_kapasitas(), 38)
 
     def test_aslab_tidak_dapat_memilih_lab_sebelum_peserta_diinput_laboran(self):
-        aslab = self.login_as_asisten_lab()
-        self.activate_asisten_lab(aslab, self.matkul_lain)
+        aslab = self.login_as_asisten_lab(self.matkul_lain)
+        PendaftaranAsleb.objects.create(
+            nama=aslab.nama_pengguna, nim=aslab.nim_nik, no_hp=aslab.no_hp,
+            email=aslab.email, program_studi=aslab.prodi, semester=5,
+            matkul=self.matkul_lain, status='digenerate',
+        )
 
         response = self.client.get(reverse('jadwal:jadwal_create'))
 
@@ -528,8 +586,12 @@ class JadwalViewTests(TestCase):
         self.assertContains(response, 'Ruangan tambahan hanya berlaku untuk lab dalam grup ruangan gabungan aktif')
 
     def test_edit_jadwal_aslab_menunggu_persetujuan_laboran(self):
-        aslab = self.login_as_asisten_lab()
-        self.activate_asisten_lab(aslab, self.matkul)
+        aslab = self.login_as_asisten_lab(self.matkul)
+        PendaftaranAsleb.objects.create(
+            nama=aslab.nama_pengguna, nim=aslab.nim_nik, no_hp=aslab.no_hp,
+            email=aslab.email, program_studi=aslab.prodi, semester=5,
+            matkul=self.matkul, status='digenerate',
+        )
         PesertaPraktikum.objects.create(matkul=self.matkul, nim='0640099999', nama='Peserta Jadwal')
         jadwal = JadwalPraktikum.objects.get(mata_kuliah=str(self.matkul))
 

@@ -336,16 +336,24 @@ def _validate_activation_registration(*, offer, replacement, slot, candidate, re
 def activate_replacement(*, offer_id, actor, active_date):
     if not can_manage_lab_operations(actor):
         raise ValidationError('Hanya laboran yang dapat mengaktifkan pengganti.')
+    replacement_id = AslabOffer.objects.filter(pk=offer_id).values_list(
+        'replacement_id', flat=True,
+    ).first()
+    if replacement_id is None:
+        raise ValidationError('Penawaran tidak ditemukan.')
     try:
-        offer = AslabOffer.objects.select_for_update().get(pk=offer_id)
-    except AslabOffer.DoesNotExist as exc:
+        replacement = AslabReplacement.objects.select_for_update().get(pk=replacement_id)
+    except AslabReplacement.DoesNotExist as exc:
         raise ValidationError('Penawaran tidak ditemukan.') from exc
-    replacement = AslabReplacement.objects.select_for_update().select_related(
-        'slot__periode', 'slot__matkul', 'outgoing_assignment',
-    ).get(pk=offer.replacement_id)
     slot = AslabSlot.objects.select_for_update().select_related('periode', 'matkul').get(
         pk=replacement.slot_id,
     )
+    try:
+        offer = AslabOffer.objects.select_for_update().get(
+            pk=offer_id, replacement_id=replacement.pk,
+        )
+    except AslabOffer.DoesNotExist as exc:
+        raise ValidationError('Penawaran tidak lagi terkait dengan proses penggantian.') from exc
     assignments = list(AslabAssignment.objects.select_for_update().filter(
         slot_id=slot.pk,
     ).order_by('pk'))
