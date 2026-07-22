@@ -22,6 +22,7 @@ from .models import (
     AslabReplacement,
     AslabReplacementAudit,
     AslabSlot,
+    LimitedReplacementOpening,
     MataKuliahAsleb,
     PeriodeAsleb,
     PendaftaranAsleb,
@@ -36,13 +37,268 @@ from .replacement_services import (
     end_single_active_assignment_for_replacement,
     expire_due_offers,
     hold_replacement_honor,
+    close_limited_registration,
+    open_limited_registration,
     payment_eligible_honors,
     reconcile_retrospective_honor,
     reassign_replacement_honor,
     return_offer_for_revision,
+    select_limited_candidate,
+    submit_limited_application,
     submit_offer_registration,
 )
 from .services import sync_expired_asleb_periods
+
+
+class LimitedRegistrationTests(TestCase):
+    def setUp(self):
+        self.now = timezone.now()
+        self.period = PeriodeAsleb.objects.create(
+            tahun=2026, semester=2, mulai=date(2026, 7, 1), selesai=date(2026, 12, 31),
+            pendaftaran_mulai=date(2026, 7, 1), pendaftaran_selesai=date(2026, 7, 30),
+        )
+        self.course = MataKuliahAsleb.objects.create(
+            kode='LIM01', kode_mk='LIM01', nama='Limited Test', dosen='Dosen', kelas='TIF-01',
+        )
+        self.slot = AslabSlot.objects.create(
+            periode=self.period, matkul=self.course, nomor=1, status=AslabSlot.STATUS_VACANT,
+        )
+        self.laboran = self.user('LAB-LIM', 'Laboran', 'laboran')
+        self.candidate = self.user('20230001', 'Candidate', 'mahasiswa')
+        outgoing = Asleb.objects.create(
+            nama='Old', nim='OLD-LIM', no_hp='081', email='old@example.com',
+            program_studi='TI', semester=5, status='nonaktif', periode_aktif=self.period,
+            tanggal_bergabung=date(2026, 7, 1),
+        )
+        assignment = AslabAssignment.objects.create(
+            slot=self.slot, asleb=outgoing, mulai_pada=date(2026, 7, 1),
+            berakhir_pada=date(2026, 9, 1), status=AslabAssignment.STATUS_RESIGNED,
+        )
+        self.replacement = AslabReplacement.objects.create(
+            slot=self.slot, outgoing_assignment=assignment, effective_date=date(2026, 9, 1),
+            transfer_month=date(2026, 9, 1), created_by=self.laboran,
+        )
+
+    def user(self, nim, name, role, verified=True, prodi='TI'):
+        return Pengguna.objects.create(
+            nama_pengguna=name, nim_nik=nim, email=f'{nim}@example.com', password='secret',
+            no_hp='08123', alamat='Jakarta', fakultas='FTI', prodi=prodi,
+            gender='laki_laki', role=role, is_verified=verified,
+        )
+
+    def open(self, **overrides):
+        values = dict(
+            replacement_id=self.replacement.pk, actor=self.laboran,
+            opens_at=self.now, closes_at=self.now + timezone.timedelta(days=5),
+        )
+        values.update(overrides)
+        return open_limited_registration(**values)
+
+    def application_data(self, **changes):
+        values = {
+            'semester': 5, 'metode_rekening': 'bni', 'rekening': '123456',
+            'nama_pemilik_rekening': 'Candidate', 'nilai_transkrip': 'A', 'alasan': 'Siap',
+        }
+        values.update(changes)
+        return values
+
+    def application_files(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        png = base64.b64decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+        )
+        return {
+            'transkrip': SimpleUploadedFile('transkrip.txt', b'LIM01 Limited Test Nilai A'),
+            'tanda_tangan': SimpleUploadedFile('sign.png', png, content_type='image/png'),
+        }
+
+    def apply(self, opening, candidate=None):
+        return submit_limited_application(
+            opening_id=opening.pk, candidate=candidate or self.candidate,
+            cleaned_data=self.application_data(), files=self.application_files(),
+        )
+
+    def test_opening_is_isolated_authorized_and_time_bounded(self):
+        from .models import PengaturanPendaftaranAsleb
+        setting = PengaturanPendaftaranAsleb.get_solo()
+        setting.dibuka = False
+        setting.save(update_fields=['dibuka'])
+
+        opening = self.open()
+
+        setting.refresh_from_db(); self.replacement.refresh_from_db()
+        self.assertEqual(opening.status, LimitedReplacementOpening.STATUS_OPEN)
+        self.assertFalse(setting.dibuka)
+        self.assertEqual(self.replacement.method, AslabReplacement.METHOD_LIMITED_REGISTRATION)
+        with self.assertRaisesMessage(ValidationError, 'laboran'):
+            open_limited_registration(
+                replacement_id=self.replacement.pk, actor=self.candidate,
+                opens_at=self.now, closes_at=self.now + timezone.timedelta(days=1),
+            )
+        with self.assertRaises(ValidationError):
+            open_limited_registration(
+                replacement_id=self.replacement.pk, actor=self.laboran,
+                opens_at=self.now, closes_at=self.now,
+            )
+
+    def test_server_side_eligibility_filters_and_immutable_identity(self):
+        opening = self.open(program_studi='TI', cohort=2023,
+                            allowed_candidate_ids=[self.candidate.pk])
+        other = self.user('20230002', 'Other', 'mahasiswa')
+        wrong_program = self.user('20230003', 'Wrong', 'mahasiswa', prodi='SI')
+        wrong_cohort = self.user('20220001', 'Old Cohort', 'mahasiswa')
+        for candidate in (other, wrong_program, wrong_cohort):
+            with self.subTest(candidate=candidate.pk), self.assertRaises(ValidationError):
+                self.apply(opening, candidate)
+
+        registration = self.apply(opening)
+        self.assertEqual(registration.matkul, self.course)
+        self.assertEqual(registration.periode, self.period)
+        self.assertEqual(registration.jenis, PendaftaranAsleb.JENIS_REPLACEMENT)
+        self.assertEqual(registration.replacement_process, self.replacement)
+        self.assertEqual(registration.candidate_user, self.candidate)
+
+    def test_apply_requires_open_window_verified_student_and_no_period_conflict(self):
+        opening = self.open(opens_at=self.now + timezone.timedelta(hours=1))
+        with self.assertRaisesMessage(ValidationError, 'belum dibuka'):
+            self.apply(opening)
+        opening.opens_at = self.now - timezone.timedelta(hours=1)
+        opening.closes_at = self.now - timezone.timedelta(seconds=1)
+        opening.save(update_fields=['opens_at', 'closes_at'])
+        with self.assertRaisesMessage(ValidationError, 'ditutup'):
+            self.apply(opening)
+
+    def test_selection_creates_consent_offer_and_rejects_other_applications(self):
+        opening = self.open()
+        selected = self.apply(opening)
+        other_candidate = self.user('20230002', 'Other', 'mahasiswa')
+        other = self.apply(opening, other_candidate)
+
+        offer = select_limited_candidate(
+            opening_id=opening.pk, registration_id=selected.pk, actor=self.laboran,
+        )
+
+        opening.refresh_from_db(); other.refresh_from_db(); self.replacement.refresh_from_db()
+        self.assertEqual(offer.status, AslabOffer.STATUS_WAITING)
+        self.assertEqual(offer.registration, selected)
+        self.assertEqual(other.status, 'ditolak')
+        self.assertEqual(opening.status, LimitedReplacementOpening.STATUS_FILLED)
+        self.assertEqual(self.replacement.status, AslabReplacement.STATUS_WAITING_CONSENT)
+        self.assertEqual(self.candidate.role, 'mahasiswa')
+
+    def test_selection_rechecks_filters_and_canonical_application(self):
+        opening = self.open(program_studi='TI', cohort=2023)
+        registration = self.apply(opening)
+        self.candidate.prodi = 'SI'
+        self.candidate.save(update_fields=['prodi'])
+        with self.assertRaisesMessage(ValidationError, 'Program studi'):
+            select_limited_candidate(
+                opening_id=opening.pk, registration_id=registration.pk, actor=self.laboran,
+            )
+        self.candidate.prodi = 'TI'
+        self.candidate.save(update_fields=['prodi'])
+        registration.matkul = MataKuliahAsleb.objects.create(
+            kode='LIM02', kode_mk='LIM02', nama='Tampered', dosen='Dosen', kelas='TIF-02',
+        )
+        registration.save(update_fields=['matkul'])
+        with self.assertRaisesMessage(ValidationError, 'canonical'):
+            select_limited_candidate(
+                opening_id=opening.pk, registration_id=registration.pk, actor=self.laboran,
+            )
+
+    def test_close_is_idempotent_and_expired_opening_cannot_apply_or_select(self):
+        opening = self.open()
+        registration = self.apply(opening)
+        first = close_limited_registration(opening_id=opening.pk, actor=self.laboran)
+        second = close_limited_registration(opening_id=opening.pk, actor=self.laboran)
+        self.assertEqual(first.pk, second.pk)
+        self.assertEqual(AslabReplacementAudit.objects.filter(
+            replacement=self.replacement, action='limited_registration_closed').count(), 1)
+        with self.assertRaises(ValidationError):
+            select_limited_candidate(
+                opening_id=opening.pk, registration_id=registration.pk, actor=self.laboran,
+            )
+
+
+@skipUnless(connection.vendor == 'mysql', 'Concurrency contract uses MySQL row locks.')
+class LimitedRegistrationConcurrencyTests(TransactionTestCase):
+    reset_sequences = True
+
+    user = LimitedRegistrationTests.user
+    open = LimitedRegistrationTests.open
+    application_data = LimitedRegistrationTests.application_data
+    application_files = LimitedRegistrationTests.application_files
+    apply = LimitedRegistrationTests.apply
+
+    def setUp(self):
+        LimitedRegistrationTests.setUp(self)
+
+    def race(self, operations):
+        barrier = Barrier(len(operations))
+        results = Queue()
+
+        def run(operation):
+            close_old_connections()
+            try:
+                barrier.wait(timeout=10)
+                results.put(('ok', operation()))
+            except Exception as exc:  # the losing transaction is part of the assertion
+                results.put(('error', exc))
+            finally:
+                close_old_connections()
+
+        threads = [Thread(target=run, args=(operation,)) for operation in operations]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=20)
+        self.assertTrue(all(not thread.is_alive() for thread in threads))
+        return [results.get_nowait() for _ in operations]
+
+    def test_concurrent_open_creates_exactly_one_opening(self):
+        def operation():
+            return open_limited_registration(
+                replacement_id=self.replacement.pk,
+                actor=Pengguna.objects.get(pk=self.laboran.pk),
+                opens_at=self.now, closes_at=self.now + timezone.timedelta(days=2),
+            ).pk
+
+        results = self.race([operation, operation])
+        self.assertEqual(sum(kind == 'ok' for kind, _ in results), 1)
+        self.assertEqual(LimitedReplacementOpening.objects.count(), 1)
+
+    def test_concurrent_apply_keeps_one_live_application_per_candidate(self):
+        opening = self.open()
+
+        def operation():
+            return submit_limited_application(
+                opening_id=opening.pk,
+                candidate=Pengguna.objects.get(pk=self.candidate.pk),
+                cleaned_data=self.application_data(), files=self.application_files(),
+            ).pk
+
+        results = self.race([operation, operation])
+        self.assertEqual(sum(kind == 'ok' for kind, _ in results), 1)
+        self.assertEqual(PendaftaranAsleb.objects.filter(
+            replacement_process=self.replacement, status='diajukan').count(), 1)
+
+    def test_concurrent_select_fills_opening_once(self):
+        opening = self.open()
+        first = self.apply(opening)
+        second_candidate = self.user('20230002', 'Other', 'mahasiswa')
+        second = self.apply(opening, second_candidate)
+
+        def operation(registration_id):
+            return lambda: select_limited_candidate(
+                opening_id=opening.pk, registration_id=registration_id,
+                actor=Pengguna.objects.get(pk=self.laboran.pk),
+            ).pk
+
+        results = self.race([operation(first.pk), operation(second.pk)])
+        self.assertEqual(sum(kind == 'ok' for kind, _ in results), 1)
+        self.assertEqual(AslabOffer.objects.filter(replacement=self.replacement).count(), 1)
+        opening.refresh_from_db()
+        self.assertEqual(opening.status, LimitedReplacementOpening.STATUS_FILLED)
 
 
 class HonorReassignmentTests(TestCase):

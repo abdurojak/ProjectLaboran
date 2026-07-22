@@ -100,3 +100,65 @@ class ReplacementCandidateForm(PendaftaranAslebForm):
         if commit:
             instance.save()
         return instance
+
+
+class LimitedReplacementApplicationForm(PendaftaranAslebForm):
+    """Application data bound to a locked limited opening and candidate."""
+
+    def __init__(self, *args, opening, candidate, **kwargs):
+        self.opening = opening
+        self.candidate = candidate
+        super().__init__(*args, **kwargs)
+        slot = opening.replacement.slot
+        self.fields['matkul'].queryset = self.fields['matkul'].queryset.filter(pk=slot.matkul_id)
+        self.fields['matkul'].initial = slot.matkul_id
+        self.fields['rekening'].required = True
+        self.fields['nama_pemilik_rekening'].required = True
+        for name in ('nama', 'nim', 'no_hp', 'email', 'program_studi'):
+            self.fields[name].required = False
+            self.fields[name].widget = forms.HiddenInput()
+
+    class Meta(PendaftaranAslebForm.Meta):
+        fields = [
+            'nama', 'nim', 'no_hp', 'email', 'program_studi', 'semester', 'matkul',
+            'transkrip', 'tanda_tangan', 'metode_rekening', 'rekening',
+            'nama_pemilik_rekening', 'nilai_transkrip', 'alasan',
+        ]
+
+    def clean(self):
+        cleaned = super().clean()
+        slot = self.opening.replacement.slot
+        submitted_course = cleaned.get('matkul')
+        if submitted_course and submitted_course.pk != slot.matkul_id:
+            self.add_error('matkul', 'Mata kuliah tidak dapat diubah.')
+        cleaned.update({
+            'nama': self.candidate.nama_pengguna,
+            'nim': self.candidate.nim_nik,
+            'no_hp': self.candidate.no_hp,
+            'email': self.candidate.email,
+            'program_studi': self.candidate.prodi,
+            'matkul': slot.matkul,
+        })
+        if not cleaned.get('transkrip'):
+            self.add_error('transkrip', 'Transkrip wajib diunggah.')
+        if not cleaned.get('tanda_tangan'):
+            self.add_error('tanda_tangan', 'Tanda tangan wajib diunggah.')
+        return cleaned
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        slot = self.opening.replacement.slot
+        instance.nama = self.candidate.nama_pengguna
+        instance.nim = self.candidate.nim_nik
+        instance.no_hp = self.candidate.no_hp
+        instance.email = self.candidate.email
+        instance.program_studi = self.candidate.prodi
+        instance.matkul = slot.matkul
+        instance.periode = slot.periode
+        instance.jenis = PendaftaranAsleb.JENIS_REPLACEMENT
+        instance.replacement_process = self.opening.replacement
+        instance.candidate_user = self.candidate
+        instance.status = 'diajukan'
+        if commit:
+            instance.save()
+        return instance

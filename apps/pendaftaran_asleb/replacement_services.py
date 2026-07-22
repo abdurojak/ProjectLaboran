@@ -11,7 +11,7 @@ from apps.pengguna.models import Pengguna
 
 from .models import (
     AslabAssignment, AslabOffer, AslabReplacement, AslabReplacementAudit, AslabSlot,
-    PendaftaranAsleb,
+    LimitedReplacementOpening, PendaftaranAsleb,
 )
 from .services import sync_asleb_person_from_registration
 
@@ -272,6 +272,248 @@ def eligible_candidate_queryset(replacement):
     return Pengguna.objects.filter(role='mahasiswa', is_verified=True).exclude(
         nim_nik__in=assigned_nims,
     ).exclude(pk__in=conflicting_offers).exclude(pk__in=live_registrations)
+
+
+def _validate_limited_times(*, opens_at, closes_at):
+    if timezone.is_naive(opens_at) or timezone.is_naive(closes_at):
+        raise ValidationError('Waktu pendaftaran terbatas harus timezone-aware.')
+    if opens_at >= closes_at:
+        raise ValidationError('Waktu pembukaan harus sebelum waktu penutupan.')
+
+
+def _candidate_cohort(candidate):
+    prefix = (candidate.nim_nik or '')[:4]
+    return int(prefix) if prefix.isdigit() else None
+
+
+def _validate_limited_candidate_filters(*, opening, candidate):
+    if candidate.role != 'mahasiswa' or not candidate.is_verified:
+        raise ValidationError('Kandidat harus mahasiswa terverifikasi.')
+    if opening.program_studi and candidate.prodi.casefold() != opening.program_studi.casefold():
+        raise ValidationError('Program studi kandidat tidak memenuhi pembatasan.')
+    if opening.cohort is not None and _candidate_cohort(candidate) != opening.cohort:
+        raise ValidationError('Angkatan kandidat tidak memenuhi pembatasan.')
+    allowed_ids = set(opening.allowed_candidates.values_list('pk', flat=True))
+    if allowed_ids and candidate.pk not in allowed_ids:
+        raise ValidationError('Kandidat tidak termasuk daftar yang diizinkan.')
+
+
+def _reject_live_opening_applications(opening, *, except_registration_id=None):
+    registrations = PendaftaranAsleb.objects.select_for_update().filter(
+        replacement_process=opening.replacement,
+        jenis=PendaftaranAsleb.JENIS_REPLACEMENT,
+        status__in=PendaftaranAsleb.LIVE_REPLACEMENT_STATUSES,
+    ).order_by('pk')
+    if except_registration_id is not None:
+        registrations = registrations.exclude(pk=except_registration_id)
+    for registration in registrations:
+        registration.status = 'ditolak'
+        registration.save(update_fields=['status'])
+
+
+@transaction.atomic
+def open_limited_registration(
+    *, replacement_id, actor, opens_at, closes_at, program_studi='', cohort=None,
+    allowed_candidate_ids=(), requirements='',
+):
+    if not can_manage_lab_operations(actor):
+        raise ValidationError('Hanya laboran yang dapat membuka pendaftaran terbatas.')
+    _validate_limited_times(opens_at=opens_at, closes_at=closes_at)
+    if closes_at <= timezone.now():
+        raise ValidationError('Waktu penutupan harus berada di masa depan.')
+    if cohort is not None and (not isinstance(cohort, int) or cohort < 1):
+        raise ValidationError('Angkatan kandidat tidak valid.')
+    try:
+        replacement = AslabReplacement.objects.select_for_update().get(pk=replacement_id)
+    except AslabReplacement.DoesNotExist as exc:
+        raise ValidationError('Proses penggantian tidak ditemukan.') from exc
+    slot = AslabSlot.objects.select_for_update().select_related('matkul', 'periode').get(
+        pk=replacement.slot_id,
+    )
+    if replacement.status not in {
+        AslabReplacement.STATUS_WAITING_ACTION, AslabReplacement.STATUS_SEARCHING,
+    }:
+        raise ValidationError('Status proses tidak dapat membuka pendaftaran terbatas.')
+    if slot.status != AslabSlot.STATUS_VACANT:
+        raise ValidationError('Slot penggantian tidak lagi kosong.')
+    if LimitedReplacementOpening.objects.select_for_update().filter(
+        replacement=replacement,
+    ).exists():
+        raise ValidationError('Pendaftaran terbatas untuk proses ini sudah pernah dibuat.')
+    try:
+        opening = LimitedReplacementOpening.objects.create(
+            replacement=replacement, opens_at=opens_at, closes_at=closes_at,
+            program_studi=(program_studi or '').strip(), cohort=cohort,
+            additional_requirements=(requirements or '').strip(),
+            status=LimitedReplacementOpening.STATUS_OPEN,
+        )
+        candidate_ids = sorted(set(allowed_candidate_ids or ()))
+        if candidate_ids:
+            candidates = list(Pengguna.objects.filter(pk__in=candidate_ids).order_by('pk'))
+            if len(candidates) != len(candidate_ids):
+                raise ValidationError('Daftar kandidat yang diizinkan tidak valid.')
+            opening.allowed_candidates.set(candidates)
+    except IntegrityError as exc:
+        raise ValidationError('Pendaftaran terbatas untuk proses ini sudah dibuat.') from exc
+    previous = replacement.status
+    replacement.method = AslabReplacement.METHOD_LIMITED_REGISTRATION
+    replacement.status = AslabReplacement.STATUS_SEARCHING
+    replacement.save(update_fields=['method', 'status', 'updated_at'])
+    _audit(replacement, actor, 'limited_registration_opened', previous, replacement.status,
+           metadata={'opening_id': opening.pk, 'quota': 1})
+    return opening
+
+
+def _lock_limited_opening(opening_id):
+    replacement_id = LimitedReplacementOpening.objects.filter(pk=opening_id).values_list(
+        'replacement_id', flat=True,
+    ).first()
+    if replacement_id is None:
+        raise ValidationError('Pendaftaran terbatas tidak ditemukan.')
+    replacement = AslabReplacement.objects.select_for_update().get(pk=replacement_id)
+    slot = AslabSlot.objects.select_for_update().select_related('matkul', 'periode').get(
+        pk=replacement.slot_id,
+    )
+    opening = LimitedReplacementOpening.objects.select_for_update().get(
+        pk=opening_id, replacement=replacement,
+    )
+    replacement.slot = slot
+    opening.replacement = replacement
+    return replacement, slot, opening
+
+
+def _validate_opening_live(*, replacement, slot, opening, now):
+    if opening.status != LimitedReplacementOpening.STATUS_OPEN:
+        raise ValidationError('Pendaftaran terbatas sudah ditutup.')
+    if replacement.status != AslabReplacement.STATUS_SEARCHING:
+        raise ValidationError('Proses penggantian tidak sedang mencari kandidat.')
+    if slot.status != AslabSlot.STATUS_VACANT:
+        raise ValidationError('Slot penggantian tidak lagi kosong.')
+    if now < opening.opens_at:
+        raise ValidationError('Pendaftaran terbatas belum dibuka.')
+    if now >= opening.closes_at:
+        raise ValidationError('Pendaftaran terbatas sudah ditutup.')
+
+
+@transaction.atomic
+def submit_limited_application(*, opening_id, candidate, cleaned_data, files):
+    from .replacement_forms import LimitedReplacementApplicationForm
+
+    replacement, slot, opening = _lock_limited_opening(opening_id)
+    now = timezone.now()
+    _validate_opening_live(
+        replacement=replacement, slot=slot, opening=opening, now=now,
+    )
+    candidate = Pengguna.objects.select_for_update().get(pk=candidate.pk)
+    _validate_limited_candidate_filters(opening=opening, candidate=candidate)
+    if AslabAssignment.objects.select_for_update().filter(
+        slot__periode=slot.periode, asleb__nim=candidate.nim_nik,
+        status=AslabAssignment.STATUS_ACTIVE,
+    ).exists():
+        raise ValidationError('Kandidat sudah memiliki penugasan pada periode ini.')
+    if AslabOffer.objects.select_for_update().filter(
+        candidate=candidate, replacement__slot__periode=slot.periode,
+        status__in=AslabOffer.LIVE_STATUSES,
+    ).exists():
+        raise ValidationError('Kandidat memiliki penawaran aktif pada periode ini.')
+    if PendaftaranAsleb.objects.select_for_update().filter(
+        candidate_user=candidate, replacement_process__slot__periode=slot.periode,
+        jenis=PendaftaranAsleb.JENIS_REPLACEMENT,
+        status__in=PendaftaranAsleb.LIVE_REPLACEMENT_STATUSES,
+    ).exists():
+        raise ValidationError('Kandidat memiliki pendaftaran aktif pada periode ini.')
+    data = dict(cleaned_data or {})
+    data.update({
+        'nama': candidate.nama_pengguna, 'nim': candidate.nim_nik,
+        'no_hp': candidate.no_hp, 'email': candidate.email,
+        'program_studi': candidate.prodi, 'matkul': slot.matkul_id,
+    })
+    form = LimitedReplacementApplicationForm(
+        data=data, files=files, opening=opening, candidate=candidate,
+    )
+    if not form.is_valid():
+        raise ValidationError('Data pendaftaran kandidat belum valid.')
+    registration = form.save(commit=False)
+    registration.full_clean()
+    try:
+        registration.save()
+    except IntegrityError as exc:
+        raise ValidationError('Kandidat sudah memiliki pendaftaran penggantian aktif.') from exc
+    _audit(replacement, candidate, 'limited_application_submitted', replacement.status,
+           replacement.status, metadata={'opening_id': opening.pk,
+                                         'registration_id': registration.pk})
+    return registration
+
+
+@transaction.atomic
+def select_limited_candidate(*, opening_id, registration_id, actor):
+    if not can_manage_lab_operations(actor):
+        raise ValidationError('Hanya laboran yang dapat memilih kandidat pengganti.')
+    replacement, slot, opening = _lock_limited_opening(opening_id)
+    now = timezone.now()
+    _validate_opening_live(
+        replacement=replacement, slot=slot, opening=opening, now=now,
+    )
+    registrations = list(PendaftaranAsleb.objects.select_for_update().filter(
+        replacement_process=replacement,
+        jenis=PendaftaranAsleb.JENIS_REPLACEMENT,
+    ).order_by('pk'))
+    selected = next((item for item in registrations if item.pk == registration_id), None)
+    if selected is None or selected.status != 'diajukan':
+        raise ValidationError('Pendaftaran kandidat tidak valid atau tidak lagi aktif.')
+    candidate = Pengguna.objects.select_for_update().get(pk=selected.candidate_user_id)
+    _validate_limited_candidate_filters(opening=opening, candidate=candidate)
+    if (
+        selected.replacement_process_id != replacement.pk
+        or selected.jenis != PendaftaranAsleb.JENIS_REPLACEMENT
+        or selected.candidate_user_id != candidate.pk
+        or selected.nim != candidate.nim_nik
+        or selected.nama != candidate.nama_pengguna
+        or selected.no_hp != candidate.no_hp
+        or selected.email != candidate.email
+        or selected.program_studi != candidate.prodi
+        or selected.matkul_id != slot.matkul_id
+        or selected.periode_id != slot.periode_id
+    ):
+        raise ValidationError('Data pendaftaran kandidat tidak canonical.')
+    try:
+        offer = AslabOffer.objects.create(
+            replacement=replacement, candidate=candidate, registration=selected,
+            deadline=opening.closes_at, status=AslabOffer.STATUS_WAITING,
+        )
+    except IntegrityError as exc:
+        raise ValidationError('Proses atau kandidat sudah memiliki penawaran aktif.') from exc
+    _reject_live_opening_applications(opening, except_registration_id=selected.pk)
+    opening.status = LimitedReplacementOpening.STATUS_FILLED
+    opening.save(update_fields=['status', 'updated_at'])
+    previous = replacement.status
+    replacement.status = AslabReplacement.STATUS_WAITING_CONSENT
+    replacement.save(update_fields=['status', 'updated_at'])
+    _audit(replacement, actor, 'limited_candidate_selected', previous, replacement.status,
+           metadata={'opening_id': opening.pk, 'registration_id': selected.pk,
+                     'offer_id': offer.pk, 'quota': 1})
+    return offer
+
+
+@transaction.atomic
+def close_limited_registration(*, opening_id, actor):
+    if not can_manage_lab_operations(actor):
+        raise ValidationError('Hanya laboran yang dapat menutup pendaftaran terbatas.')
+    replacement, _slot, opening = _lock_limited_opening(opening_id)
+    if opening.status in {
+        LimitedReplacementOpening.STATUS_CLOSED, LimitedReplacementOpening.STATUS_FILLED,
+    }:
+        return opening
+    previous = replacement.status
+    _reject_live_opening_applications(opening)
+    opening.status = LimitedReplacementOpening.STATUS_CLOSED
+    opening.save(update_fields=['status', 'updated_at'])
+    if replacement.status == AslabReplacement.STATUS_SEARCHING:
+        replacement.status = AslabReplacement.STATUS_WAITING_ACTION
+        replacement.save(update_fields=['status', 'updated_at'])
+    _audit(replacement, actor, 'limited_registration_closed', previous, replacement.status,
+           metadata={'opening_id': opening.pk})
+    return opening
 
 
 def _audit(replacement, actor, action, previous, new, reason='', metadata=None):
