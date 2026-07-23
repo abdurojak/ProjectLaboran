@@ -877,6 +877,39 @@ class PenggunaAuthTests(TestCase):
         self.assertRedirects(response, reverse('dashboard:home'))
         self.assertEqual(self.client.session['pengguna_id'], self.pengguna.pk)
 
+    def test_login_admin_dari_browser_mobile_berakhir_di_dashboard(self):
+        self.pengguna.role = 'admin'
+        self.pengguna.save(update_fields=['role', 'diperbarui_pada'])
+
+        response = self.client.post(
+            reverse('pengguna:login'),
+            {
+                'jenis_login': 'karyawan',
+                'nim_nik': self.pengguna.nim_nik,
+                'password': 'rahasia123',
+            },
+            HTTP_USER_AGENT='Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/126 Mobile Safari/537.36',
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.resolver_match.namespace, 'dashboard')
+        self.assertEqual(self.client.session['pengguna_id'], self.pengguna.pk)
+        self.assertNotContains(response, 'Pilih jenis akun, lalu masuk ke dashboard LabHub.')
+
+    def test_halaman_login_dan_redirect_sesi_aktif_tidak_disimpan_cache(self):
+        login_response = self.client.get(reverse('pengguna:login'))
+        self.assertIn('no-store', login_response['Cache-Control'])
+
+        session = self.client.session
+        session['pengguna_id'] = self.pengguna.pk
+        session.save()
+        redirect_response = self.client.get(reverse('pengguna:login'))
+
+        self.assertEqual(redirect_response.status_code, 302)
+        self.assertEqual(redirect_response.url, reverse('dashboard:home'))
+        self.assertIn('no-store', redirect_response['Cache-Control'])
+
     def test_session_aktif_mengalihkan_login_dan_register_ke_dashboard(self):
         session = self.client.session
         session['pengguna_id'] = self.pengguna.pk

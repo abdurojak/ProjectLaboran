@@ -85,6 +85,14 @@
 
 {% block extra_script %}
 <script>
+    window.addEventListener('pageshow', function (event) {
+        // Chrome Android dapat memulihkan halaman login lama dari back-forward cache
+        // meskipun sesi sudah aktif. Muat ulang agar middleware mengarahkannya ke dashboard.
+        if (event.persisted) {
+            window.location.reload();
+        }
+    });
+
     document.addEventListener('DOMContentLoaded', function () {
         const identifierInput = document.getElementById('id_nim_nik');
         const loginChoices = document.querySelectorAll('input[name="jenis_login"]');

@@ -85,6 +85,13 @@ class PenggunaLoginRequiredMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
+    @staticmethod
+    def disable_client_cache(response):
+        response['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
+        response['Pragma'] = 'no-cache'
+        response['Expires'] = '0'
+        return response
+
     def __call__(self, request):
         forgot_password_url = reverse('pengguna:forgot_password')
         health_url = reverse('health')
@@ -121,7 +128,7 @@ class PenggunaLoginRequiredMiddleware:
             link_barang_tertinggal_to_pengguna(pengguna)
 
             if path in {login_url, register_url}:
-                return redirect('dashboard:home')
+                return self.disable_client_cache(redirect('dashboard:home'))
 
         if not pengguna_id and not is_exempt:
             return redirect(f'{login_url}?next={path}')
@@ -160,10 +167,14 @@ class PenggunaLoginRequiredMiddleware:
                     return redirect('dashboard:home')
 
         response = self.get_response(request)
-        if pengguna_id and not is_exempt:
-            response['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
-            response['Pragma'] = 'no-cache'
-            response['Expires'] = '0'
+        if path in {
+            forgot_password_url,
+            login_url,
+            register_url,
+            reset_password_url,
+            verify_register_url,
+        } or (pengguna_id and not is_exempt):
+            self.disable_client_cache(response)
         return response
 
     def can_access_media(self, pengguna, path):
