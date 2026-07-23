@@ -237,7 +237,31 @@
                     <p class="text-xs font-black uppercase tracking-[0.2em] text-teal-700">Katalog Alat</p>
                     <h3 class="mt-2 text-2xl font-black text-slate-900">Pilih alat untuk dipinjam</h3>
                 </div>
-                <span class="rounded-full bg-teal-50 px-3 py-1 text-xs font-black text-teal-700">{{ catalog_products|length }} produk</span>
+                <span class="rounded-full bg-teal-50 px-3 py-1 text-xs font-black text-teal-700" data-catalog-count>{{ catalog_products|length }} produk</span>
+            </div>
+
+            <div class="mb-5 rounded-3xl border border-slate-200 bg-slate-50/70 p-3 md:p-4">
+                <label for="id_catalog_search" class="text-xs font-black uppercase tracking-[0.16em] text-slate-500">Cari barang</label>
+                <div class="mt-2 flex min-w-0 items-center gap-2">
+                    <div class="relative min-w-0 flex-1">
+                        <i data-lucide="search" class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"></i>
+                        <input
+                            id="id_catalog_search"
+                            type="search"
+                            class="w-full pl-11 pr-4"
+                            placeholder="Cari nama, kode, atau lokasi barang"
+                            autocomplete="off"
+                            data-catalog-search
+                        >
+                    </div>
+                    <button type="button" class="btn-secondary hidden shrink-0 gap-2 px-4" data-catalog-search-clear>
+                        <i data-lucide="x" class="h-4 w-4"></i>
+                        <span class="hidden sm:inline">Bersihkan</span>
+                    </button>
+                </div>
+                <p class="mt-2 text-xs font-semibold text-slate-500" data-catalog-search-status aria-live="polite">
+                    Ketik untuk mencari barang secara langsung.
+                </p>
             </div>
 
             <div class="loan-shop-grid">
@@ -290,9 +314,14 @@
                 </article>
                 {% empty %}
                 <div class="rounded-3xl border border-dashed border-slate-200 px-4 py-10 text-center text-sm font-semibold text-slate-500">
-                    Belum ada alat yang cocok dengan pencarian.
+                    Belum ada barang yang tersedia pada katalog.
                 </div>
                 {% endfor %}
+                {% if catalog_products %}
+                <div class="hidden rounded-3xl border border-dashed border-slate-200 px-4 py-10 text-center text-sm font-semibold text-slate-500" data-catalog-search-empty>
+                    Barang tidak ditemukan. Coba gunakan nama, kode, atau lokasi lain.
+                </div>
+                {% endif %}
             </div>
         </div>
 
@@ -741,7 +770,71 @@
         const clearButton = shop.querySelector('[data-cart-clear]');
         const modal = document.querySelector('[data-product-modal]');
         const modalHost = modal ? modal.closest('[data-app-content]') : null;
+        const catalogSearch = shop.querySelector('[data-catalog-search]');
+        const catalogSearchClear = shop.querySelector('[data-catalog-search-clear]');
+        const catalogSearchStatus = shop.querySelector('[data-catalog-search-status]');
+        const catalogSearchEmpty = shop.querySelector('[data-catalog-search-empty]');
+        const catalogCount = shop.querySelector('[data-catalog-count]');
+        const productCards = Array.from(shop.querySelectorAll('[data-product-card]'));
         const selected = new Map();
+
+        function normalizeSearchValue(value) {
+            return (value || '')
+                .toLocaleLowerCase('id-ID')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .trim();
+        }
+
+        function filterCatalog() {
+            const keyword = normalizeSearchValue(catalogSearch ? catalogSearch.value : '');
+            let visibleCount = 0;
+
+            productCards.forEach(function (card) {
+                const searchableValue = normalizeSearchValue([
+                    card.dataset.productName,
+                    card.dataset.productCode,
+                    card.dataset.productDetailCode,
+                    card.dataset.productLocation,
+                ].join(' '));
+                const isVisible = !keyword || searchableValue.includes(keyword);
+                card.classList.toggle('hidden', !isVisible);
+                if (isVisible) {
+                    visibleCount += 1;
+                }
+            });
+
+            if (catalogSearchClear) {
+                catalogSearchClear.classList.toggle('hidden', !keyword);
+            }
+            if (catalogSearchEmpty) {
+                catalogSearchEmpty.classList.toggle('hidden', visibleCount > 0);
+            }
+            if (catalogCount) {
+                catalogCount.textContent = keyword
+                    ? visibleCount + ' dari ' + productCards.length + ' produk'
+                    : productCards.length + ' produk';
+            }
+            if (catalogSearchStatus) {
+                catalogSearchStatus.textContent = keyword
+                    ? (visibleCount
+                        ? visibleCount + ' barang ditemukan.'
+                        : 'Tidak ada barang yang cocok dengan pencarian.')
+                    : 'Ketik untuk mencari barang secara langsung.';
+            }
+        }
+
+        if (catalogSearch) {
+            catalogSearch.addEventListener('input', filterCatalog);
+        }
+        if (catalogSearchClear) {
+            catalogSearchClear.addEventListener('click', function () {
+                catalogSearch.value = '';
+                filterCatalog();
+                catalogSearch.focus();
+            });
+        }
+        filterCatalog();
 
         function splitValues(value, separator) {
             return (value || '').split(separator).map(function (item) {

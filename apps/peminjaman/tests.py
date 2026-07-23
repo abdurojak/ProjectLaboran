@@ -514,6 +514,19 @@ class PeminjamanViewsTests(TestCase):
             'data-product-photos="/media/barang/kamera-cover.jpg||/media/barang/galeri/kamera-samping.jpg"',
         )
 
+    def test_katalog_peminjaman_memiliki_pencarian_barang_instannya(self):
+        self.pengguna.role = 'mahasiswa'
+        self.pengguna.save(update_fields=['role'])
+
+        response = self.client.get(reverse('peminjaman:peminjaman_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-catalog-search')
+        self.assertContains(response, 'Cari nama, kode, atau lokasi barang')
+        self.assertContains(response, 'data-catalog-search-clear')
+        self.assertContains(response, 'data-catalog-search-status')
+        self.assertContains(response, 'function filterCatalog()')
+
     def test_form_edit_menampilkan_detail_barang_terpilih_sebagai_badge(self):
         response = self.client.get(reverse('peminjaman:peminjaman_update', args=[self.peminjaman.pk]))
 
