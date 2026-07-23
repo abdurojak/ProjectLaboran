@@ -28,35 +28,16 @@ class AuthProvider extends ChangeNotifier {
   Future<void> restoreSession() async {
     initializing = true;
     notifyListeners();
-    final accessToken = await storage.accessToken;
-    final cachedUser = await storage.cachedUser;
-    if (accessToken == null) {
-      user = null;
-      initializing = false;
-      notifyListeners();
-      return;
-    }
-
-    // Tampilkan dashboard dari profil terenkripsi tanpa menunggu jaringan.
-    user = cachedUser;
-    if (cachedUser != null) {
-      initializing = false;
-      notifyListeners();
-    }
-
     try {
-      final data = await api.profile();
-      final refreshedUser = UserProfile.fromJson(
-        Map<String, dynamic>.from(data['user'] as Map),
-      );
-      user = refreshedUser;
-      await storage.saveUser(refreshedUser);
-    } catch (_) {
-      // Gangguan jaringan tidak boleh mengeluarkan sesi yang masih tersimpan.
-      // ApiService akan memanggil _expireSession jika token benar-benar invalid.
-      if (cachedUser == null && user == null) {
-        await storage.clear();
+      if (await storage.accessToken != null) {
+        final data = await api.profile();
+        user = UserProfile.fromJson(
+          Map<String, dynamic>.from(data['user'] as Map),
+        );
       }
+    } catch (_) {
+      await storage.clear();
+      user = null;
     } finally {
       initializing = false;
       notifyListeners();
@@ -69,7 +50,6 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
     try {
       user = await api.login(identifier.trim(), password);
-      await storage.saveUser(user!);
       return true;
     } on ApiException catch (exception) {
       error = exception.message;

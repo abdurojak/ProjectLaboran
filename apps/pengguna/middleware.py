@@ -120,6 +120,9 @@ class PenggunaLoginRequiredMiddleware:
             link_peserta_praktikum_to_pengguna(pengguna)
             link_barang_tertinggal_to_pengguna(pengguna)
 
+            if path in {login_url, register_url}:
+                return redirect('dashboard:home')
+
         if not pengguna_id and not is_exempt:
             return redirect(f'{login_url}?next={path}')
 

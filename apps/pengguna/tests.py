@@ -877,6 +877,20 @@ class PenggunaAuthTests(TestCase):
         self.assertRedirects(response, reverse('dashboard:home'))
         self.assertEqual(self.client.session['pengguna_id'], self.pengguna.pk)
 
+    def test_session_aktif_mengalihkan_login_dan_register_ke_dashboard(self):
+        session = self.client.session
+        session['pengguna_id'] = self.pengguna.pk
+        session.save()
+
+        for url in [reverse('pengguna:login'), reverse('pengguna:register')]:
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertRedirects(
+                    response,
+                    reverse('dashboard:home'),
+                    fetch_redirect_response=False,
+                )
+
     def test_login_menolak_next_url_domain_luar(self):
         response = self.client.post(
             f"{reverse('pengguna:login')}?next=https://evil.example/phish",
