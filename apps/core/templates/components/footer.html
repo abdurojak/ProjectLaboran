@@ -1,0 +1,71 @@
+{% load static %}
+<style>
+    [data-app-footer] {
+        border-color: var(--dashboard-surface-border);
+        color: var(--text-main);
+    }
+
+    [data-app-footer] .app-footer-muted {
+        color: var(--text-muted);
+    }
+
+    [data-app-footer] .app-footer-copyright {
+        border-color: rgba(15, 23, 42, 0.10);
+    }
+
+    html[data-theme="dark"] [data-app-footer] .app-footer-copyright {
+        border-color: rgba(148, 163, 184, 0.16);
+    }
+</style>
+<footer class="mt-2 w-full min-w-0 border-t pt-8" data-app-footer aria-label="Footer LabHub">
+        <div class="grid gap-8 px-5 py-8 sm:px-7 md:grid-cols-2 lg:grid-cols-[1fr_1.45fr_0.65fr] lg:gap-10 lg:px-9">
+            <div class="flex min-w-0 flex-col items-start">
+                <img src="{% static 'core/img/labhub-logo.png' %}" alt="Logo LabHub" class="h-24 w-24 object-contain sm:h-28 sm:w-28">
+                <div class="mt-4 min-w-0">
+                    <p class="text-lg font-black">LabHub</p>
+                    <p class="app-footer-muted mt-1 text-sm leading-6">Laboran Teknik Informatika Usakti</p>
+                </div>
+            </div>
+
+            <address class="min-w-0 not-italic">
+                <h2 class="text-xs font-black uppercase tracking-[0.16em] text-teal-300">Hubungi Kami</h2>
+                <div class="app-footer-muted mt-4 grid gap-3 text-sm leading-6">
+                    <a href="tel:+6285894488626" class="inline-flex w-fit max-w-full items-start gap-2 break-words transition hover:text-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-300">
+                        <i data-lucide="phone" class="mt-1 h-4 w-4 shrink-0"></i>
+                        <span>+62 858-9448-8626</span>
+                    </a>
+                    <a href="mailto:Labtif.fti@trisakti.ac.id" class="inline-flex w-fit max-w-full items-start gap-2 break-all transition hover:text-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-300">
+                        <i data-lucide="mail" class="mt-1 h-4 w-4 shrink-0"></i>
+                        <span>Labtif.fti@trisakti.ac.id</span>
+                    </a>
+                    <p class="flex items-start gap-2">
+                        <i data-lucide="map-pin" class="mt-1 h-4 w-4 shrink-0"></i>
+                        <span>Jl. Kyai Tapa No. 1, Grogol, Jakarta Barat, Indonesia</span>
+                    </p>
+                    <a href="https://www.google.com/maps/place/Jurusan+Teknik+Informatika,+Fakultas+Teknologi+Industri,+Universitas+Trisakti/@-6.1683104,106.7911298,20z/data=!4m6!3m5!1s0x2e69f65d26ceefe7:0xb84109785f169340!8m2!3d-6.1680678!4d106.7916257!16s%2Fg%2F11f159bkjk?entry=ttu&amp;g_ep=EgoyMDI2MDcyMC4wIKXMDSoASAFQAw%3D%3D" target="_blank" rel="noopener noreferrer" class="inline-flex w-fit items-center gap-2 font-bold text-teal-300 transition hover:text-teal-200 focus:outline-none focus:ring-2 focus:ring-teal-300">
+                        <i data-lucide="external-link" class="h-4 w-4"></i>
+                        <span>Lihat lokasi di Google Maps</span>
+                    </a>
+                </div>
+            </address>
+
+            <nav class="app-footer-muted grid content-start gap-2 text-sm font-bold md:col-span-2 lg:col-span-1" aria-label="Tautan footer">
+                <a href="{% url 'dashboard:home' %}" class="inline-flex min-h-10 items-center gap-2 transition hover:text-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-300">
+                    <i data-lucide="layout-dashboard" class="h-4 w-4"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="{% url 'pengguna:detail' current_pengguna.pk %}" class="inline-flex min-h-10 items-center gap-2 transition hover:text-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-300">
+                    <i data-lucide="user-round" class="h-4 w-4"></i>
+                    <span>Profil</span>
+                </a>
+                <a href="{% url 'core:bantuan' %}" class="inline-flex min-h-10 items-center gap-2 transition hover:text-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-300">
+                    <i data-lucide="circle-help" class="h-4 w-4"></i>
+                    <span>Bantuan</span>
+                </a>
+            </nav>
+        </div>
+
+        <div class="app-footer-copyright app-footer-muted border-t px-5 py-4 text-center text-xs leading-5 sm:px-7">
+            Copyright &copy; 2026 Laboran Teknik Informatika Usakti
+        </div>
+</footer>

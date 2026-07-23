@@ -2373,6 +2373,9 @@
                 </div>
                 {% endif %}
                 {% block content %}{% endblock %}
+                {% if current_pengguna %}
+                {% include "components/footer.html" %}
+                {% endif %}
             </div>
         </section>
     </main>
