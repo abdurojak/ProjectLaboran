@@ -131,11 +131,51 @@
         justify-content: center;
         background: rgba(15, 23, 42, 0.58);
         padding: 1rem;
+        overflow: hidden;
+        overscroll-behavior: contain;
         backdrop-filter: blur(12px);
     }
 
     .loan-detail-modal.is-open {
         display: flex;
+    }
+
+    .loan-detail-modal > .surface-card {
+        max-height: calc(100dvh - 2rem);
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        overscroll-behavior: contain;
+        scrollbar-gutter: stable;
+    }
+
+    html.loan-detail-open,
+    html.loan-detail-open body {
+        overflow: hidden !important;
+        overscroll-behavior: none;
+    }
+
+    /* data-app-content memakai transform untuk animasi halaman. Saat modal
+       terbuka transform harus dilepas agar posisi fixed kembali ke viewport. */
+    [data-app-content].loan-modal-host-open {
+        transform: none !important;
+        animation: none !important;
+    }
+
+    .loan-cart-row {
+        display: grid;
+        min-width: 0;
+        max-width: 100%;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 0.75rem;
+        overflow: hidden;
+    }
+
+    .loan-cart-row-label {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     html[data-theme="dark"] .loan-product-card {
@@ -700,6 +740,7 @@
         const cartSubmit = shop.querySelector('[data-cart-submit]');
         const clearButton = shop.querySelector('[data-cart-clear]');
         const modal = document.querySelector('[data-product-modal]');
+        const modalHost = modal ? modal.closest('[data-app-content]') : null;
         const selected = new Map();
 
         function splitValues(value, separator) {
@@ -744,11 +785,12 @@
             selected.forEach(function (label, id) {
                 const row = document.createElement('div');
                 row.dataset.cartRow = 'true';
-                row.className = 'flex items-center justify-between gap-3 rounded-2xl bg-white px-3 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-200';
+                row.className = 'loan-cart-row rounded-2xl bg-white px-3 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-200';
 
                 const text = document.createElement('span');
-                text.className = 'min-w-0 truncate';
+                text.className = 'loan-cart-row-label';
                 text.textContent = label;
+                text.title = label;
 
                 const removeButton = document.createElement('button');
                 removeButton.type = 'button';
@@ -799,6 +841,10 @@
             }
             modal.classList.remove('is-open');
             modal.setAttribute('aria-hidden', 'true');
+            document.documentElement.classList.remove('loan-detail-open');
+            if (modalHost) {
+                modalHost.classList.remove('loan-modal-host-open');
+            }
         }
 
         function setText(selector, value) {
@@ -875,6 +921,14 @@
                 renderModalPhoto(0);
                 modal.classList.add('is-open');
                 modal.setAttribute('aria-hidden', 'false');
+                document.documentElement.classList.add('loan-detail-open');
+                if (modalHost) {
+                    modalHost.classList.add('loan-modal-host-open');
+                }
+                const closeButton = modal.querySelector('[data-modal-close]');
+                if (closeButton) {
+                    closeButton.focus({preventScroll: true});
+                }
             });
         });
 
@@ -896,6 +950,11 @@
             });
             modal.addEventListener('click', function (event) {
                 if (event.target === modal) {
+                    closeModal();
+                }
+            });
+            modal.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape' && modal.classList.contains('is-open')) {
                     closeModal();
                 }
             });
