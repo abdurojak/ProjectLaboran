@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../models/schedule.dart';
-import '../utils/app_theme.dart';
 import 'status_badge.dart';
 
 class ScheduleCard extends StatelessWidget {
@@ -11,6 +10,7 @@ class ScheduleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Card(
       child: InkWell(
         onTap: onTap,
@@ -27,13 +27,10 @@ class ScheduleCard extends StatelessWidget {
                     width: 46,
                     height: 46,
                     decoration: BoxDecoration(
-                      color: AppTheme.teal.withValues(alpha: .1),
+                      color: scheme.primary.withValues(alpha: .14),
                       borderRadius: BorderRadius.circular(15),
                     ),
-                    child: const Icon(
-                      Icons.science_outlined,
-                      color: AppTheme.teal,
-                    ),
+                    child: Icon(Icons.science_outlined, color: scheme.primary),
                   ),
                   const SizedBox(width: 13),
                   Expanded(
@@ -60,9 +57,12 @@ class ScheduleCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const Padding(
-                    padding: EdgeInsets.only(top: 2),
-                    child: Icon(Icons.chevron_right, color: Color(0xFF94A3B8)),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Icon(
+                      Icons.chevron_right,
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
@@ -112,23 +112,26 @@ class _Info extends StatelessWidget {
   final int maxLines;
 
   @override
-  Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.max,
-    children: [
-      Icon(icon, size: 16, color: AppTheme.teal),
-      const SizedBox(width: 6),
-      Expanded(
-        child: Text(
-          text,
-          maxLines: maxLines,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Row(
+      mainAxisSize: MainAxisSize.max,
+      children: [
+        Icon(icon, size: 16, color: scheme.primary),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            text,
+            maxLines: maxLines,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: scheme.onSurfaceVariant,
+            ),
           ),
         ),
-      ),
-    ],
-  );
+      ],
+    );
+  }
 }

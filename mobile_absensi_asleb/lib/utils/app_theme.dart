@@ -25,24 +25,34 @@ class AppTheme {
           primary: const Color(0xFF5EEAD4),
           onPrimary: const Color(0xFF003736),
           secondary: const Color(0xFF7DD3FC),
-          outline: const Color(0xFF405268),
-          outlineVariant: const Color(0xFF26384C),
+          outline: const Color(0xFF60748B),
+          outlineVariant: const Color(0xFF3B5067),
           surfaceContainerLow: const Color(0xFF132235),
           surfaceContainer: const Color(0xFF17283C),
           surfaceContainerHigh: const Color(0xFF1D3046),
-          onSurface: const Color(0xFFF1F5F9),
-          onSurfaceVariant: const Color(0xFFB7C5D6),
+          onSurface: const Color(0xFFF8FAFC),
+          onSurfaceVariant: const Color(0xFFD5DFEA),
         );
     return _buildTheme(scheme, const Color(0xFF081421));
   }
 
   static ThemeData _buildTheme(ColorScheme scheme, Color background) {
     final isDark = scheme.brightness == Brightness.dark;
+    final baseTextTheme = ThemeData(brightness: scheme.brightness).textTheme;
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
       scaffoldBackgroundColor: background,
       fontFamily: 'sans-serif',
+      textTheme: baseTextTheme.apply(
+        bodyColor: scheme.onSurface,
+        displayColor: scheme.onSurface,
+      ),
+      primaryTextTheme: baseTextTheme.apply(
+        bodyColor: scheme.onPrimary,
+        displayColor: scheme.onPrimary,
+      ),
+      iconTheme: IconThemeData(color: scheme.onSurfaceVariant),
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
         foregroundColor: scheme.onSurface,
@@ -50,7 +60,7 @@ class AppTheme {
         centerTitle: false,
       ),
       cardTheme: CardThemeData(
-        color: scheme.surface,
+        color: isDark ? scheme.surfaceContainerLow : scheme.surface,
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
@@ -88,7 +98,7 @@ class AppTheme {
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: scheme.surface,
+        backgroundColor: isDark ? scheme.surfaceContainerLow : scheme.surface,
         indicatorColor: scheme.primaryContainer,
         iconTheme: WidgetStateProperty.resolveWith(
           (states) => IconThemeData(
@@ -102,6 +112,19 @@ class AppTheme {
         ),
       ),
       dividerColor: scheme.outlineVariant,
+      listTileTheme: ListTileThemeData(
+        textColor: scheme.onSurface,
+        iconColor: scheme.onSurfaceVariant,
+      ),
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: isDark
+            ? scheme.surfaceContainerHigh
+            : scheme.inverseSurface,
+        contentTextStyle: TextStyle(
+          color: isDark ? scheme.onSurface : scheme.onInverseSurface,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
       dialogTheme: DialogThemeData(backgroundColor: scheme.surface),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: scheme.surface,

@@ -16,6 +16,29 @@ class _LoginScreenState extends State<LoginScreen> {
   final _identifier = TextEditingController();
   final _password = TextEditingController();
   bool _obscure = true;
+  bool _rememberCredentials = false;
+  bool _loadingCredentials = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreSavedCredentials();
+  }
+
+  Future<void> _restoreSavedCredentials() async {
+    final saved = await context
+        .read<AuthProvider>()
+        .storage
+        .getSavedCredentials();
+    if (!mounted) return;
+
+    _identifier.text = saved.identifier;
+    _password.text = saved.password;
+    setState(() {
+      _rememberCredentials = saved.remember;
+      _loadingCredentials = false;
+    });
+  }
 
   @override
   void dispose() {
@@ -26,7 +49,18 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    await context.read<AuthProvider>().login(_identifier.text, _password.text);
+    final auth = context.read<AuthProvider>();
+    final success = await auth.login(_identifier.text, _password.text);
+    if (!success) return;
+
+    if (_rememberCredentials) {
+      await auth.storage.saveCredentials(
+        identifier: _identifier.text,
+        password: _password.text,
+      );
+    } else {
+      await auth.storage.clearCredentials();
+    }
   }
 
   @override
@@ -146,6 +180,58 @@ class _LoginScreenState extends State<LoginScreen> {
                                   (value == null || value.isEmpty)
                                   ? 'Password wajib diisi.'
                                   : null,
+                            ),
+                            const SizedBox(height: 10),
+                            InkWell(
+                              borderRadius: BorderRadius.circular(14),
+                              onTap: _loadingCredentials
+                                  ? null
+                                  : () => setState(
+                                      () => _rememberCredentials =
+                                          !_rememberCredentials,
+                                    ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 2,
+                                  vertical: 6,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Checkbox(
+                                      value: _rememberCredentials,
+                                      onChanged: _loadingCredentials
+                                          ? null
+                                          : (value) => setState(
+                                              () => _rememberCredentials =
+                                                  value ?? false,
+                                            ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    const Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Ingat data login',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
+                                          SizedBox(height: 2),
+                                          Text(
+                                            'Simpan NIM/NIK dan password dengan aman di perangkat ini.',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Color(0xFF64748B),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                             if (auth.error != null) ...[
                               const SizedBox(height: 14),

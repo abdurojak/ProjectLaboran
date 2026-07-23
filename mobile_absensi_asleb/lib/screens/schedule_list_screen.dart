@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/attendance_provider.dart';
-import '../utils/app_theme.dart';
 import '../widgets/schedule_card.dart';
 import '../widgets/state_views.dart';
 import 'schedule_detail_screen.dart';
@@ -26,6 +25,7 @@ class _ScheduleListScreenState extends State<ScheduleListScreen> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AttendanceProvider>();
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -60,19 +60,22 @@ class _ScheduleListScreenState extends State<ScheduleListScreen> {
                     return Container(
                       padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
-                        color: AppTheme.teal.withValues(alpha: .08),
+                        color: scheme.primary.withValues(alpha: .14),
                         borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: scheme.primary.withValues(alpha: .28),
+                        ),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.info_outline, color: AppTheme.teal),
+                          Icon(Icons.info_outline, color: scheme.primary),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
                               'Absensi hanya aktif pada hari dan rentang waktu jadwal.',
                               style: TextStyle(
                                 fontWeight: FontWeight.w700,
-                                color: Theme.of(context).colorScheme.onSurface,
+                                color: scheme.onSurface,
                               ),
                             ),
                           ),
