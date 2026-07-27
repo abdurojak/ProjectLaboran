@@ -68,18 +68,49 @@
                 </div>
             </address>
 
-            <nav class="app-footer-muted grid content-start gap-2 text-sm font-bold md:col-span-2 lg:col-span-1" aria-label="Tautan footer">
-                <a href="{% url 'dashboard:home' %}" class="inline-flex min-h-10 items-center gap-2 transition hover:text-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-300">
-                    <i data-lucide="layout-dashboard" class="h-4 w-4"></i>
-                    <span>Dashboard</span>
+            <nav class="app-footer-muted grid content-start gap-2 text-sm font-bold md:col-span-2 lg:col-span-1" aria-label="Sosial media dan situs program studi">
+                <h2 class="mb-2 text-xs font-black uppercase tracking-[0.16em] text-teal-600">Ikuti Kami</h2>
+                <a href="https://www.instagram.com/usaktif/" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-10 items-center gap-3 transition hover:text-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-300">
+                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-pink-100">
+                        <img src="{% static 'core/img/social/instagram.svg' %}" alt="" class="h-4 w-4">
+                    </span>
+                    <span>Instagram</span>
+                    <i data-lucide="external-link" class="ml-auto h-3.5 w-3.5"></i>
                 </a>
-                <a href="{% url 'pengguna:detail' current_pengguna.pk %}" class="inline-flex min-h-10 items-center gap-2 transition hover:text-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-300">
-                    <i data-lucide="user-round" class="h-4 w-4"></i>
-                    <span>Profil</span>
+                <a href="https://x.com/usaktif/" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-10 items-center gap-3 transition hover:text-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-300">
+                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-slate-200">
+                        <img src="{% static 'core/img/social/x.svg' %}" alt="" class="h-3.5 w-3.5">
+                    </span>
+                    <span>X</span>
+                    <i data-lucide="external-link" class="ml-auto h-3.5 w-3.5"></i>
                 </a>
-                <a href="{% url 'core:bantuan' %}" class="inline-flex min-h-10 items-center gap-2 transition hover:text-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-300">
-                    <i data-lucide="circle-help" class="h-4 w-4"></i>
-                    <span>Bantuan</span>
+                <a href="https://www.tiktok.com/@usaktif" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-10 items-center gap-3 transition hover:text-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-300">
+                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-cyan-50">
+                        <img src="{% static 'core/img/social/tiktok.svg' %}" alt="" class="h-4 w-4">
+                    </span>
+                    <span>TikTok</span>
+                    <i data-lucide="external-link" class="ml-auto h-3.5 w-3.5"></i>
+                </a>
+                <a href="https://www.youtube.com/@usaktif" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-10 items-center gap-3 transition hover:text-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-300">
+                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-red-100">
+                        <img src="{% static 'core/img/social/youtube.svg' %}" alt="" class="h-4 w-4">
+                    </span>
+                    <span>YouTube</span>
+                    <i data-lucide="external-link" class="ml-auto h-3.5 w-3.5"></i>
+                </a>
+                <a href="https://informatika.fti.trisakti.ac.id/" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-10 items-center gap-3 transition hover:text-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-300">
+                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-teal-100 text-teal-700">
+                        <i data-lucide="globe-2" class="h-4 w-4"></i>
+                    </span>
+                    <span>Prodi Informatika</span>
+                    <i data-lucide="external-link" class="ml-auto h-3.5 w-3.5"></i>
+                </a>
+                <a href="https://sistem-informasi.fti.trisakti.ac.id/" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-10 items-center gap-3 transition hover:text-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-300">
+                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-100 text-blue-700">
+                        <i data-lucide="globe-2" class="h-4 w-4"></i>
+                    </span>
+                    <span>Prodi Sistem Informasi</span>
+                    <i data-lucide="external-link" class="ml-auto h-3.5 w-3.5"></i>
                 </a>
             </nav>
         </div>
