@@ -7,6 +7,7 @@ import '../models/attendance.dart';
 import '../providers/attendance_provider.dart';
 import '../widgets/state_views.dart';
 import '../widgets/status_badge.dart';
+import '../widgets/labhub_loading.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -37,7 +38,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
       body: RefreshIndicator(
         onRefresh: state.loadHistory,
         child: state.loading && state.history.isEmpty
-            ? const Center(child: CircularProgressIndicator())
+            ? const Center(
+                child: LabHubLoading(label: 'Memuat riwayat absensi...'),
+              )
             : state.history.isEmpty
             ? ListView(
                 children: const [

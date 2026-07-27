@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/attendance_provider.dart';
 import '../widgets/schedule_card.dart';
+import '../widgets/labhub_loading.dart';
 import '../widgets/state_views.dart';
 import 'schedule_detail_screen.dart';
 
@@ -36,7 +37,9 @@ class _ScheduleListScreenState extends State<ScheduleListScreen> {
       body: RefreshIndicator(
         onRefresh: state.loadSchedules,
         child: state.loading && state.schedules.isEmpty
-            ? const Center(child: CircularProgressIndicator())
+            ? const Center(
+                child: LabHubLoading(label: 'Memuat jadwal praktikum...'),
+              )
             : state.schedules.isEmpty
             ? ListView(
                 children: const [

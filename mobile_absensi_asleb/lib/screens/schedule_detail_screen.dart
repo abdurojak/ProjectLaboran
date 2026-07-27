@@ -5,6 +5,7 @@ import '../models/schedule.dart';
 import '../providers/attendance_provider.dart';
 import '../utils/app_theme.dart';
 import '../widgets/status_badge.dart';
+import '../widgets/labhub_loading.dart';
 import 'check_in_screen.dart';
 
 class ScheduleDetailScreen extends StatelessWidget {
@@ -26,7 +27,9 @@ class ScheduleDetailScreen extends StatelessWidget {
         ),
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(
+              child: LabHubLoading(label: 'Memuat detail jadwal...'),
+            );
           }
           if (snapshot.hasError) {
             return Center(

@@ -331,6 +331,95 @@ class MobileAbsensiApiTests(TestCase):
         self.assertEqual(deleted.status_code, 204, deleted.data)
         self.assertFalse(InventarisBarang.objects.filter(pk=inventory.pk).exists())
 
+    def test_laboran_dapat_mengubah_data_dan_menambah_stok_inventaris(self):
+        old_location = Lokasi.objects.create(nama_lokasi='Rak Lama Mobile')
+        new_location = Lokasi.objects.create(nama_lokasi='Rak Baru Mobile')
+        inventory = InventarisBarang.objects.create(
+            nama='Sensor Lama',
+            jumlah=1,
+            keterangan='Keterangan lama',
+        )
+        Barang.objects.create(
+            inventaris=inventory,
+            nama=inventory.nama,
+            jumlah=1,
+            lokasi=old_location,
+        )
+        self.authenticate_laboran()
+
+        response = self.client.patch(
+            reverse('mobile_api:laboran_inventory_detail', args=[inventory.pk]),
+            {
+                'nama': 'Sensor Baru',
+                'jumlah': 3,
+                'lokasi_id': new_location.pk,
+                'keterangan': 'Keterangan baru',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        inventory.refresh_from_db()
+        self.assertEqual(inventory.nama, 'Sensor Baru')
+        self.assertEqual(inventory.jumlah, 3)
+        self.assertEqual(inventory.keterangan, 'Keterangan baru')
+        self.assertEqual(inventory.detail_barang.count(), 3)
+        self.assertFalse(
+            inventory.detail_barang.exclude(
+                nama='Sensor Baru',
+                jumlah=3,
+                lokasi=new_location,
+            ).exists()
+        )
+
+    def test_stok_tidak_dapat_dikurangi_jika_unit_memiliki_riwayat(self):
+        location = Lokasi.objects.create(nama_lokasi='Rak Aman Mobile')
+        inventory = InventarisBarang.objects.create(nama='Router Aman', jumlah=3)
+        protected_units = [
+            Barang.objects.create(
+                inventaris=inventory,
+                nama=inventory.nama,
+                jumlah=3,
+                lokasi=location,
+            )
+            for _ in range(2)
+        ]
+        Barang.objects.create(
+            inventaris=inventory,
+            nama=inventory.nama,
+            jumlah=3,
+            lokasi=location,
+        )
+        for index, unit in enumerate(protected_units):
+            PeminjamanAlat.objects.create(
+                barang=unit,
+                nama_peminjam=f'Mahasiswa Lama {index}',
+                nim=f'064002008{index}',
+                no_hp='0812',
+                tanggal_pinjam=date.today(),
+                tanggal_kembali=date.today(),
+                status='dikembalikan',
+            )
+        self.authenticate_laboran()
+
+        response = self.client.patch(
+            reverse('mobile_api:laboran_inventory_detail', args=[inventory.pk]),
+            {
+                'nama': inventory.nama,
+                'jumlah': 1,
+                'lokasi_id': location.pk,
+                'keterangan': '',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 409, response.data)
+        self.assertEqual(
+            response.data['code'],
+            'inventory_units_have_loan_history',
+        )
+        self.assertEqual(inventory.detail_barang.count(), 3)
+
     def test_laboran_tidak_dapat_menghapus_inventaris_dengan_riwayat_peminjaman(self):
         location = Lokasi.objects.create(nama_lokasi='Rak Riwayat Mobile')
         inventory = InventarisBarang.objects.create(nama='Router Riwayat', jumlah=1)

@@ -69,6 +69,38 @@ class LaboranProvider extends ChangeNotifier {
   Future<InventoryItem> loadInventoryDetail(int id) =>
       api.laboranInventoryDetail(id);
 
+  Future<InventoryItem?> updateInventory({
+    required int id,
+    required String name,
+    required int quantity,
+    required int locationId,
+    required String description,
+  }) async {
+    submitting = true;
+    error = null;
+    notifyListeners();
+    try {
+      final updated = await api.updateLaboranInventory(
+        id: id,
+        name: name,
+        quantity: quantity,
+        locationId: locationId,
+        description: description,
+      );
+      inventory = inventory
+          .map((item) => item.id == updated.id ? updated : item)
+          .toList();
+      await loadDashboard();
+      return updated;
+    } on ApiException catch (exception) {
+      error = exception.message;
+      return null;
+    } finally {
+      submitting = false;
+      notifyListeners();
+    }
+  }
+
   Future<bool> deleteInventory(int id) async {
     submitting = true;
     error = null;

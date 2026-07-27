@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../models/inventory_item.dart';
 import '../providers/laboran_provider.dart';
 import '../utils/app_theme.dart';
+import '../widgets/labhub_loading.dart';
 
 class LaboranInventoryScreen extends StatefulWidget {
   const LaboranInventoryScreen({super.key});
@@ -64,10 +65,10 @@ class _LaboranInventoryScreenState extends State<LaboranInventoryScreen> {
             ),
             const SizedBox(height: 16),
             if (state.loading && state.inventory.isEmpty)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(50),
-                  child: CircularProgressIndicator(),
+              const Padding(
+                padding: EdgeInsets.all(50),
+                child: Center(
+                  child: LabHubLoading(label: 'Memuat inventaris...'),
                 ),
               )
             else if (state.error != null && state.inventory.isEmpty)
@@ -259,6 +260,15 @@ class _InventoryDetailScreenState extends State<_InventoryDetailScreen> {
     }
   }
 
+  Future<void> editItem(InventoryItem item) async {
+    final updated = await Navigator.push<InventoryItem>(
+      context,
+      MaterialPageRoute(builder: (_) => _EditInventoryScreen(item: item)),
+    );
+    if (updated == null || !mounted) return;
+    setState(() => detail = Future.value(updated));
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
@@ -281,7 +291,9 @@ class _InventoryDetailScreenState extends State<_InventoryDetailScreen> {
               ),
             );
           }
-          return const Center(child: CircularProgressIndicator());
+          return const Center(
+            child: LabHubLoading(label: 'Memuat detail barang...'),
+          );
         }
         return ListView(
           padding: const EdgeInsets.fromLTRB(18, 8, 18, 30),
@@ -329,6 +341,14 @@ class _InventoryDetailScreenState extends State<_InventoryDetailScreen> {
                   : item.keterangan,
             ),
             const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: context.watch<LaboranProvider>().submitting
+                  ? null
+                  : () => editItem(item),
+              icon: const Icon(Icons.edit_outlined),
+              label: const Text('Edit Barang'),
+            ),
+            const SizedBox(height: 10),
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
                 foregroundColor: const Color(0xFFDC2626),
@@ -345,6 +365,170 @@ class _InventoryDetailScreenState extends State<_InventoryDetailScreen> {
       },
     ),
   );
+}
+
+class _EditInventoryScreen extends StatefulWidget {
+  const _EditInventoryScreen({required this.item});
+
+  final InventoryItem item;
+
+  @override
+  State<_EditInventoryScreen> createState() => _EditInventoryScreenState();
+}
+
+class _EditInventoryScreenState extends State<_EditInventoryScreen> {
+  final formKey = GlobalKey<FormState>();
+  late final TextEditingController name;
+  late final TextEditingController quantity;
+  late final TextEditingController description;
+  int? locationId;
+
+  @override
+  void initState() {
+    super.initState();
+    name = TextEditingController(text: widget.item.nama);
+    quantity = TextEditingController(text: '${widget.item.jumlah}');
+    description = TextEditingController(text: widget.item.keterangan);
+    locationId = widget.item.locations.isEmpty
+        ? null
+        : widget.item.locations.first['id'] as int?;
+  }
+
+  @override
+  void dispose() {
+    name.dispose();
+    quantity.dispose();
+    description.dispose();
+    super.dispose();
+  }
+
+  Future<void> submit() async {
+    if (!formKey.currentState!.validate()) return;
+    final provider = context.read<LaboranProvider>();
+    final updated = await provider.updateInventory(
+      id: widget.item.id,
+      name: name.text.trim(),
+      quantity: int.parse(quantity.text),
+      locationId: locationId!,
+      description: description.text.trim(),
+    );
+    if (!mounted) return;
+    if (updated != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Inventaris berhasil diperbarui.')),
+      );
+      Navigator.pop(context, updated);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(provider.error ?? 'Inventaris gagal diperbarui.'),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<LaboranProvider>();
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'Edit Inventaris',
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
+      ),
+      body: Stack(
+        children: [
+          Form(
+            key: formKey,
+            child: ListView(
+              padding: const EdgeInsets.all(18),
+              children: [
+                TextFormField(
+                  controller: name,
+                  decoration: const InputDecoration(labelText: 'Nama barang'),
+                  validator: (value) => value == null || value.trim().isEmpty
+                      ? 'Nama barang wajib diisi.'
+                      : null,
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: quantity,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Jumlah stok'),
+                  validator: (value) => (int.tryParse(value ?? '') ?? 0) < 1
+                      ? 'Jumlah stok minimal 1.'
+                      : null,
+                ),
+                const SizedBox(height: 14),
+                DropdownButtonFormField<int>(
+                  initialValue: locationId,
+                  decoration: const InputDecoration(
+                    labelText: 'Lokasi penyimpanan',
+                  ),
+                  items: provider.locations
+                      .map(
+                        (location) => DropdownMenuItem<int>(
+                          value: location['id'] as int,
+                          child: Text(location['nama'] as String),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: provider.submitting
+                      ? null
+                      : (value) => setState(() => locationId = value),
+                  validator: (value) =>
+                      value == null ? 'Pilih lokasi penyimpanan.' : null,
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: description,
+                  minLines: 3,
+                  maxLines: 6,
+                  decoration: const InputDecoration(
+                    labelText: 'Keterangan (opsional)',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Stok hanya dapat dikurangi dari unit yang belum memiliki '
+                  'riwayat peminjaman.',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: 12,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: provider.submitting ? null : submit,
+                  icon: provider.submitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.save_outlined),
+                  label: Text(
+                    provider.submitting
+                        ? 'Menyimpan perubahan...'
+                        : 'Simpan Perubahan',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (provider.submitting)
+            const Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              child: LinearProgressIndicator(minHeight: 3),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 class _InventoryGallery extends StatelessWidget {

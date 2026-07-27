@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/attendance_provider.dart';
 import '../services/api_exception.dart';
+import '../widgets/labhub_loading.dart';
 
 class AdminChatScreen extends StatefulWidget {
   const AdminChatScreen({super.key});
@@ -164,7 +165,9 @@ class _AdminChatScreenState extends State<AdminChatScreen> {
             ),
           Expanded(
             child: loading && messages.isEmpty
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(
+                    child: LabHubLoading(label: 'Memuat percakapan...'),
+                  )
                 : ListView.builder(
                     controller: scrollController,
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),

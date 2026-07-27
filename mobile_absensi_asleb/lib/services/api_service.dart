@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -23,7 +25,27 @@ class ApiService {
     dio.interceptors.add(
       QueuedInterceptorsWrapper(
         onRequest: (options, handler) async {
-          final token = await storage.accessToken;
+          var token = await storage.accessToken;
+          if (!_isAuthenticationPath(options.path) &&
+              token != null &&
+              _isTokenExpiring(token)) {
+            token = await _refreshAccessToken();
+            if (token == null) {
+              return handler.reject(
+                DioException(
+                  requestOptions: options,
+                  response: Response(
+                    requestOptions: options,
+                    statusCode: 401,
+                    data: const {
+                      'detail':
+                          'Sesi Anda sudah berakhir. Silakan login kembali.',
+                    },
+                  ),
+                ),
+              );
+            }
+          }
           if (token != null) options.headers['Authorization'] = 'Bearer $token';
           handler.next(options);
         },
@@ -32,29 +54,13 @@ class ApiService {
               error.requestOptions.extra['retried'] == true) {
             return handler.next(error);
           }
-          final refresh = await storage.refreshToken;
-          if (refresh == null) return handler.next(error);
-          try {
-            final refreshDio = Dio(
-              BaseOptions(baseUrl: AppConstants.apiBaseUrl),
-            );
-            final response = await refreshDio.post(
-              'auth/refresh/',
-              data: {'refresh': refresh},
-            );
-            final tokens = Map<String, dynamic>.from(
-              response.data['tokens'] as Map,
-            );
-            await storage.saveTokens(tokens);
-            final request = error.requestOptions;
-            request.extra['retried'] = true;
-            request.headers['Authorization'] = 'Bearer ${tokens['access']}';
-            return handler.resolve(await dio.fetch(request));
-          } catch (_) {
-            await storage.clear();
-            onSessionExpired?.call();
-            return handler.next(error);
-          }
+          final access = await _refreshAccessToken();
+          if (access == null) return handler.next(error);
+
+          final request = error.requestOptions;
+          request.extra['retried'] = true;
+          request.headers['Authorization'] = 'Bearer $access';
+          return handler.resolve(await dio.fetch(request));
         },
       ),
     );
@@ -63,6 +69,63 @@ class ApiService {
   final Dio dio;
   final TokenStorage storage;
   void Function()? onSessionExpired;
+  Future<String?>? _activeRefresh;
+
+  bool _isAuthenticationPath(String path) =>
+      path.endsWith('auth/login/') || path.endsWith('auth/refresh/');
+
+  bool _isTokenExpiring(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return true;
+      final payload = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      );
+      final expiresAt = DateTime.fromMillisecondsSinceEpoch(
+        (payload['exp'] as num).toInt() * 1000,
+        isUtc: true,
+      );
+      return expiresAt.isBefore(
+        DateTime.now().toUtc().add(const Duration(seconds: 45)),
+      );
+    } catch (_) {
+      return true;
+    }
+  }
+
+  Future<String?> _refreshAccessToken() {
+    final activeRefresh = _activeRefresh;
+    if (activeRefresh != null) return activeRefresh;
+
+    final refresh = _performTokenRefresh();
+    _activeRefresh = refresh;
+    return refresh.whenComplete(() {
+      if (identical(_activeRefresh, refresh)) _activeRefresh = null;
+    });
+  }
+
+  Future<String?> _performTokenRefresh() async {
+    final refresh = await storage.refreshToken;
+    if (refresh == null) {
+      onSessionExpired?.call();
+      return null;
+    }
+
+    try {
+      final refreshDio = Dio(BaseOptions(baseUrl: AppConstants.apiBaseUrl));
+      final response = await refreshDio.post(
+        'auth/refresh/',
+        data: {'refresh': refresh},
+      );
+      final tokens = Map<String, dynamic>.from(response.data['tokens'] as Map);
+      await storage.saveTokens(tokens);
+      return tokens['access'] as String;
+    } catch (_) {
+      await storage.clear();
+      onSessionExpired?.call();
+      return null;
+    }
+  }
 
   Future<UserProfile> login(String identifier, String password) async {
     try {
@@ -168,6 +231,31 @@ class ApiService {
   Future<void> deleteLaboranInventory(int id) async {
     try {
       await dio.delete('laboran/inventory/$id/');
+    } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
+  }
+
+  Future<InventoryItem> updateLaboranInventory({
+    required int id,
+    required String name,
+    required int quantity,
+    required int locationId,
+    required String description,
+  }) async {
+    try {
+      final response = await dio.patch(
+        'laboran/inventory/$id/',
+        data: {
+          'nama': name,
+          'jumlah': quantity,
+          'lokasi_id': locationId,
+          'keterangan': description,
+        },
+      );
+      return InventoryItem.fromJson(
+        Map<String, dynamic>.from(response.data as Map),
+      );
     } on DioException catch (error) {
       throw ApiException.fromDio(error);
     }

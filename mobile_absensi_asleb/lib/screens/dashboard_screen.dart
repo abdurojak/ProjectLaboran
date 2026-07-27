@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/attendance_provider.dart';
 import '../utils/app_theme.dart';
+import '../widgets/labhub_loading.dart';
 import '../widgets/schedule_card.dart';
 import '../widgets/state_views.dart';
 import 'schedule_detail_screen.dart';
@@ -132,7 +133,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   if (state.loading && state.todaySchedules.isEmpty)
                     const Padding(
                       padding: EdgeInsets.all(40),
-                      child: Center(child: CircularProgressIndicator()),
+                      child: Center(
+                        child: LabHubLoading(
+                          label: 'Menyiapkan jadwal hari ini...',
+                        ),
+                      ),
                     )
                   else if (state.error != null)
                     _ErrorCard(

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/attendance_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/laboran_provider.dart';
 import '../services/api_exception.dart';
 import 'admin_chat_screen.dart';
 
@@ -22,9 +23,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final provider = context.read<AttendanceProvider>();
-      if (provider.profile == null) provider.loadDashboard();
-      _ensureGreeting(provider);
+      _loadRoleContext();
     });
   }
 
@@ -66,10 +65,26 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
     }
   }
 
-  void _ensureGreeting(AttendanceProvider provider) {
-    final name = provider.profile?.nama ?? 'Asisten Lab';
-    final greeting =
-        'Halo $name, saya Bot Bantuan LabHub. Mau tanya jadwal, absensi, honor, atau kendala aplikasi?';
+  Future<void> _loadRoleContext() async {
+    final auth = context.read<AuthProvider>();
+    if (auth.user?.role == 'laboran') {
+      final provider = context.read<LaboranProvider>();
+      if (provider.summary.isEmpty) await provider.loadDashboard();
+    } else {
+      final provider = context.read<AttendanceProvider>();
+      if (provider.profile == null) await provider.loadDashboard();
+    }
+    if (!mounted) return;
+    _ensureGreeting(
+      auth.user?.nama ?? 'Pengguna',
+      isLaboran: auth.user?.role == 'laboran',
+    );
+  }
+
+  void _ensureGreeting(String name, {required bool isLaboran}) {
+    final greeting = isLaboran
+        ? 'Halo $name, saya Bot Bantuan LabHub. Mau tanya inventaris, peminjaman, atau kendala aplikasi?'
+        : 'Halo $name, saya Bot Bantuan LabHub. Mau tanya jadwal, absensi, honor, atau kendala aplikasi?';
     if (!mounted) return;
     setState(() {
       if (messages.isEmpty) {
@@ -83,8 +98,35 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   }
 
   Future<String?> _localFallbackAnswer(String question) async {
-    final provider = context.read<AttendanceProvider>();
     final normalized = question.toLowerCase();
+    final auth = context.read<AuthProvider>();
+
+    if (auth.user?.role == 'laboran') {
+      final provider = context.read<LaboranProvider>();
+      if (normalized.contains('barang') ||
+          normalized.contains('inventaris') ||
+          normalized.contains('pinjam')) {
+        if (provider.summary.isEmpty) await provider.loadDashboard();
+        final total = provider.summary['total_barang'] ?? 0;
+        final units = provider.summary['total_unit'] ?? 0;
+        final pending = provider.summary['menunggu_persetujuan'] ?? 0;
+        final borrowed = provider.summary['sedang_dipinjam'] ?? 0;
+        return 'Ringkasan inventaris: $total jenis barang dengan $units unit. '
+            'Peminjaman menunggu persetujuan: $pending, sedang dipinjam: $borrowed.';
+      }
+      if (normalized.contains('halo') ||
+          normalized.contains('hai') ||
+          normalized.contains('hi') ||
+          normalized.contains('pagi') ||
+          normalized.contains('siang') ||
+          normalized.contains('sore') ||
+          normalized.contains('malam')) {
+        return 'Halo ${auth.user?.nama ?? 'Laboran'}. Saya siap membantu informasi inventaris, peminjaman, dan penggunaan aplikasi Laboran.';
+      }
+      return 'Maaf, koneksi bot server sedang bermasalah. Saya masih bisa membantu ringkasan inventaris dan peminjaman Laboran.';
+    }
+
+    final provider = context.read<AttendanceProvider>();
 
     if (normalized.contains('jadwal')) {
       if (provider.schedules.isEmpty) {
@@ -126,7 +168,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
         normalized.contains('siang') ||
         normalized.contains('sore') ||
         normalized.contains('malam')) {
-      final name = provider.profile?.nama ?? 'Asisten Lab';
+      final name = auth.user?.nama ?? provider.profile?.nama ?? 'Asisten Lab';
       return 'Halo $name. Saya siap bantu. Coba tanyakan jadwal praktikum, status absensi, honor/gaji, atau riwayat absensi Anda.';
     }
 
@@ -139,11 +181,8 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<AttendanceProvider>();
-    final isAsleb = context.watch<AuthProvider>().user?.role == 'asisten_lab';
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _ensureGreeting(provider),
-    );
+    final auth = context.watch<AuthProvider>();
+    final isAsleb = auth.user?.role == 'asisten_lab';
     return Scaffold(
       appBar: AppBar(
         title: const Text('Chat Bantuan'),

@@ -559,6 +559,71 @@ class LaboranInventoryDetailView(APIView):
         return Response(inventory_payload(request, inventory))
 
     @transaction.atomic
+    def patch(self, request, pk):
+        inventory = (
+            InventarisBarang.objects.select_for_update()
+            .filter(pk=pk)
+            .first()
+        )
+        if inventory is None:
+            return api_error(
+                'Barang inventaris tidak ditemukan.',
+                'inventory_not_found',
+                http_status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = LaboranInventoryCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = serializer.validated_data
+        requested_quantity = values['jumlah']
+        units = list(
+            Barang.objects.select_for_update()
+            .filter(inventaris=inventory)
+            .order_by('-pk')
+        )
+        difference = requested_quantity - len(units)
+
+        if difference < 0:
+            removable = list(
+                Barang.objects.filter(
+                    pk__in=[unit.pk for unit in units],
+                    peminjaman__isnull=True,
+                )
+                .order_by('-pk')[: abs(difference)]
+            )
+            if len(removable) != abs(difference):
+                return api_error(
+                    'Stok tidak dapat dikurangi karena sebagian unit memiliki '
+                    'riwayat peminjaman. Tambahkan stok atau pilih jumlah yang lebih besar.',
+                    'inventory_units_have_loan_history',
+                    http_status=status.HTTP_409_CONFLICT,
+                )
+            Barang.objects.filter(pk__in=[unit.pk for unit in removable]).delete()
+        elif difference > 0:
+            for _ in range(difference):
+                Barang.objects.create(
+                    inventaris=inventory,
+                    nama=values['nama'],
+                    jumlah=requested_quantity,
+                    lokasi=values['lokasi'],
+                    kondisi='baik',
+                )
+
+        inventory.nama = values['nama']
+        inventory.jumlah = requested_quantity
+        inventory.keterangan = values.get('keterangan', '')
+        inventory.save(
+            update_fields=['nama', 'jumlah', 'keterangan', 'diperbarui_pada']
+        )
+        inventory.detail_barang.update(
+            nama=inventory.nama,
+            jumlah=requested_quantity,
+            lokasi=values['lokasi'],
+        )
+        inventory = self.get_object(pk)
+        return Response(inventory_payload(request, inventory))
+
+    @transaction.atomic
     def delete(self, request, pk):
         inventory = InventarisBarang.objects.select_for_update().filter(pk=pk).first()
         if inventory is None:

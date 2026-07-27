@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/auth_provider.dart';
 import '../providers/laboran_provider.dart';
+import '../widgets/labhub_loading.dart';
 import '../utils/app_theme.dart';
 
 class LaboranDashboardScreen extends StatefulWidget {
@@ -81,10 +82,10 @@ class _LaboranDashboardScreenState extends State<LaboranDashboardScreen> {
             ),
             const SizedBox(height: 22),
             if (state.loading && state.summary.isEmpty)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(50),
-                  child: CircularProgressIndicator(),
+              const Padding(
+                padding: EdgeInsets.all(50),
+                child: Center(
+                  child: LabHubLoading(label: 'Menyiapkan dashboard...'),
                 ),
               )
             else if (state.error != null)

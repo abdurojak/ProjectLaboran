@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../models/loan_item.dart';
 import '../providers/laboran_provider.dart';
+import '../widgets/labhub_loading.dart';
 import '../utils/app_theme.dart';
 
 class LaboranLoansScreen extends StatefulWidget {
@@ -56,10 +57,10 @@ class _LaboranLoansScreenState extends State<LaboranLoansScreen> {
             ),
             const SizedBox(height: 18),
             if (state.loading && state.loans.isEmpty)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(50),
-                  child: CircularProgressIndicator(),
+              const Padding(
+                padding: EdgeInsets.all(50),
+                child: Center(
+                  child: LabHubLoading(label: 'Memuat peminjaman...'),
                 ),
               )
             else if (state.error != null && state.loans.isEmpty)
