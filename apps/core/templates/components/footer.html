@@ -1,121 +1,241 @@
 {% load static %}
 <style>
     [data-app-footer] {
-        border-color: var(--dashboard-surface-border);
-        color: var(--text-main);
+        --footer-panel: color-mix(in srgb, var(--dashboard-surface-bg) 92%, transparent);
+        --footer-border: var(--dashboard-surface-border);
+        --footer-text: var(--text-main);
+        --footer-muted: var(--text-muted);
+        --footer-accent: #14b8a6;
+        color: var(--footer-text);
+    }
+
+    [data-app-footer] .app-footer-panel {
+        display: grid;
+        grid-template-columns: minmax(15rem, 1.05fr) minmax(20rem, 1.4fr) auto;
+        align-items: center;
+        gap: clamp(1.25rem, 2.5vw, 3rem);
+        border: 1px solid var(--footer-border);
+        border-block: 3px solid var(--footer-text);
+        border-radius: 1.4rem;
+        background: var(--footer-panel);
+        padding: clamp(1rem, 1.6vw, 1.5rem);
+        box-shadow: var(--dashboard-surface-shadow);
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+    }
+
+    [data-app-footer] .app-footer-brand {
+        display: grid;
+        grid-template-columns: 4.6rem minmax(0, 1fr);
+        align-items: center;
+        gap: 1rem;
+        min-width: 0;
+    }
+
+    [data-app-footer] .app-footer-logo {
+        display: grid;
+        width: 4.6rem;
+        height: 4.6rem;
+        place-items: center;
+        overflow: hidden;
+        border: 2px solid color-mix(in srgb, var(--footer-text) 78%, transparent);
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--dashboard-surface-bg) 82%, transparent);
+    }
+
+    [data-app-footer] .app-footer-logo img {
+        width: 3.65rem;
+        height: 3.65rem;
+        object-fit: contain;
+    }
+
+    [data-app-footer] .app-footer-kicker {
+        color: var(--footer-accent);
+        font-size: 0.68rem;
+        font-weight: 900;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+    }
+
+    [data-app-footer] .app-footer-title {
+        margin-top: 0.2rem;
+        color: var(--footer-text);
+        font-size: clamp(1.05rem, 1.35vw, 1.35rem);
+        font-weight: 950;
+        line-height: 1.1;
     }
 
     [data-app-footer] .app-footer-muted {
-        color: var(--text-muted);
+        color: var(--footer-muted);
+    }
+
+    [data-app-footer] .app-footer-contact {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.55rem 1.25rem;
+        min-width: 0;
+        font-size: 0.78rem;
+        line-height: 1.35;
+    }
+
+    [data-app-footer] .app-footer-contact > * {
+        display: flex;
+        min-width: 0;
+        align-items: flex-start;
+        gap: 0.55rem;
+    }
+
+    [data-app-footer] .app-footer-contact svg {
+        width: 0.95rem;
+        height: 0.95rem;
+        flex: 0 0 auto;
+        margin-top: 0.05rem;
+        color: var(--footer-accent);
+    }
+
+    [data-app-footer] .app-footer-contact span {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+
+    [data-app-footer] .app-footer-links {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0.45rem;
+    }
+
+    [data-app-footer] .app-footer-link {
+        display: inline-grid;
+        width: 2.65rem;
+        height: 2.65rem;
+        place-items: center;
+        border: 1px solid var(--footer-border);
+        border-radius: 0.9rem;
+        background: color-mix(in srgb, var(--dashboard-surface-bg) 86%, transparent);
+        color: var(--footer-text);
+        transition: transform 160ms ease, border-color 160ms ease, color 160ms ease;
+    }
+
+    [data-app-footer] .app-footer-link:hover {
+        border-color: var(--footer-accent);
+        color: var(--footer-accent);
+        transform: translateY(-2px);
+    }
+
+    [data-app-footer] .app-footer-link svg {
+        width: 1.05rem;
+        height: 1.05rem;
     }
 
     [data-app-footer] .app-footer-copyright {
-        border-color: rgba(15, 23, 42, 0.10);
+        padding: 0.8rem 0.5rem 0;
+        color: var(--footer-muted);
+        text-align: center;
+        font-size: 0.7rem;
     }
 
-    html[data-theme="dark"] [data-app-footer] .app-footer-copyright {
-        border-color: rgba(148, 163, 184, 0.16);
+    @media (max-width: 1023px) {
+        [data-app-footer] .app-footer-panel {
+            grid-template-columns: minmax(14rem, 0.9fr) minmax(18rem, 1.2fr);
+        }
+
+        [data-app-footer] .app-footer-links {
+            grid-column: 1 / -1;
+            justify-content: center;
+        }
+    }
+
+    @media (max-width: 767px) {
+        [data-app-footer] {
+            margin-top: 0 !important;
+        }
+
+        [data-app-footer] .app-footer-panel {
+            grid-template-columns: minmax(0, 1fr);
+            gap: 1rem;
+            border-radius: 1.15rem;
+            padding: 1rem;
+        }
+
+        [data-app-footer] .app-footer-brand {
+            grid-template-columns: 3.8rem minmax(0, 1fr);
+        }
+
+        [data-app-footer] .app-footer-logo {
+            width: 3.8rem;
+            height: 3.8rem;
+        }
+
+        [data-app-footer] .app-footer-logo img {
+            width: 3rem;
+            height: 3rem;
+        }
+
+        [data-app-footer] .app-footer-contact {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        [data-app-footer] .app-footer-links {
+            grid-column: auto;
+            justify-content: flex-start;
+        }
     }
 </style>
-<footer class="mt-2 w-full min-w-0 border-t pt-8" data-app-footer aria-label="Footer LabHub">
-        <div class="grid gap-8 px-5 py-8 sm:px-7 md:grid-cols-2 lg:grid-cols-[1fr_1.45fr_0.65fr] lg:gap-10 lg:px-9">
-            <div class="flex min-w-0 flex-col items-start">
-                <img src="{% static 'core/img/labhub-logo.png' %}" alt="Logo LabHub" class="h-24 w-24 object-contain sm:h-28 sm:w-28">
-                <div class="mt-4 min-w-0">
-                    <p class="text-lg font-black">LabHub</p>
-                    <p class="app-footer-muted mt-1 text-sm leading-6">Laboran Teknik Informatika Usakti</p>
-                </div>
+
+<footer class="mt-2 w-full min-w-0 pt-6" data-app-footer aria-label="Footer LabHub">
+    <div class="app-footer-panel">
+        <div class="app-footer-brand">
+            <span class="app-footer-logo">
+                <img src="{% static 'core/img/labhub-logo.png' %}" alt="Logo LabHub">
+            </span>
+            <div class="min-w-0">
+                <p class="app-footer-kicker">Portal Laboratorium</p>
+                <p class="app-footer-title">LabHub</p>
+                <p class="app-footer-muted mt-1 truncate text-xs font-semibold">Laboran Teknik Informatika Usakti</p>
             </div>
-
-            <address class="min-w-0 not-italic">
-                <h2 class="text-xs font-black uppercase tracking-[0.16em] text-teal-300">Hubungi Kami</h2>
-                <div class="app-footer-muted mt-4 grid gap-3 text-sm leading-6">
-                    <a href="tel:+6285894488626" class="inline-flex w-fit max-w-full items-start gap-2 break-words transition hover:text-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-300">
-                        <i data-lucide="phone" class="mt-1 h-4 w-4 shrink-0"></i>
-                        <span>+62 858-9448-8626</span>
-                    </a>
-                    <a href="mailto:Labtif.fti@trisakti.ac.id" class="inline-flex w-fit max-w-full items-start gap-2 break-all transition hover:text-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-300">
-                        <i data-lucide="mail" class="mt-1 h-4 w-4 shrink-0"></i>
-                        <span>Labtif.fti@trisakti.ac.id</span>
-                    </a>
-                    <p class="flex items-start gap-2">
-                        <i data-lucide="map-pin" class="mt-1 h-4 w-4 shrink-0"></i>
-                        <span>Jl. Kyai Tapa No. 1, Grogol, Jakarta Barat, Indonesia</span>
-                    </p>
-                    <div class="relative mt-1 aspect-[16/7] min-h-36 w-full max-w-xl overflow-hidden rounded-md border border-slate-300/30 bg-slate-200">
-                        <iframe
-                            src="https://www.google.com/maps?q=-6.1680678,106.7916257&amp;z=18&amp;output=embed"
-                            title="Preview lokasi Teknik Informatika Universitas Trisakti"
-                            class="pointer-events-none h-full w-full border-0"
-                            loading="lazy"
-                            referrerpolicy="no-referrer-when-downgrade"
-                            tabindex="-1"
-                            aria-hidden="true"
-                        ></iframe>
-                        <a
-                            href="https://www.google.com/maps/place/Jurusan+Teknik+Informatika,+Fakultas+Teknologi+Industri,+Universitas+Trisakti/@-6.1683104,106.7911298,20z/data=!4m6!3m5!1s0x2e69f65d26ceefe7:0xb84109785f169340!8m2!3d-6.1680678!4d106.7916257!16s%2Fg%2F11f159bkjk?entry=ttu&amp;g_ep=EgoyMDI2MDcyMC4wIKXMDSoASAFQAw%3D%3D"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="absolute inset-0 flex items-end p-3 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-teal-400"
-                            aria-label="Buka lokasi Teknik Informatika Universitas Trisakti di Google Maps"
-                        >
-                            <span class="inline-flex items-center gap-2 rounded-md bg-slate-950/80 px-3 py-2 text-xs font-bold text-white shadow-lg">
-                                <i data-lucide="external-link" class="h-4 w-4"></i>
-                                Buka di Google Maps
-                            </span>
-                        </a>
-                    </div>
-                </div>
-            </address>
-
-            <nav class="app-footer-muted grid content-start gap-2 text-sm font-bold md:col-span-2 lg:col-span-1" aria-label="Sosial media dan situs program studi">
-                <h2 class="mb-2 text-xs font-black uppercase tracking-[0.16em] text-teal-600">Ikuti Kami</h2>
-                <a href="https://www.instagram.com/usaktif/" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-10 items-center gap-3 transition hover:text-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-300">
-                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-pink-100">
-                        <img src="{% static 'core/img/social/instagram.svg' %}" alt="" class="h-4 w-4">
-                    </span>
-                    <span>Instagram</span>
-                    <i data-lucide="external-link" class="ml-auto h-3.5 w-3.5"></i>
-                </a>
-                <a href="https://x.com/usaktif/" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-10 items-center gap-3 transition hover:text-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-300">
-                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-slate-200">
-                        <img src="{% static 'core/img/social/x.svg' %}" alt="" class="h-3.5 w-3.5">
-                    </span>
-                    <span>X</span>
-                    <i data-lucide="external-link" class="ml-auto h-3.5 w-3.5"></i>
-                </a>
-                <a href="https://www.tiktok.com/@usaktif" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-10 items-center gap-3 transition hover:text-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-300">
-                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-cyan-50">
-                        <img src="{% static 'core/img/social/tiktok.svg' %}" alt="" class="h-4 w-4">
-                    </span>
-                    <span>TikTok</span>
-                    <i data-lucide="external-link" class="ml-auto h-3.5 w-3.5"></i>
-                </a>
-                <a href="https://www.youtube.com/@usaktif" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-10 items-center gap-3 transition hover:text-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-300">
-                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-red-100">
-                        <img src="{% static 'core/img/social/youtube.svg' %}" alt="" class="h-4 w-4">
-                    </span>
-                    <span>YouTube</span>
-                    <i data-lucide="external-link" class="ml-auto h-3.5 w-3.5"></i>
-                </a>
-                <a href="https://informatika.fti.trisakti.ac.id/" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-10 items-center gap-3 transition hover:text-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-300">
-                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-teal-100 text-teal-700">
-                        <i data-lucide="globe-2" class="h-4 w-4"></i>
-                    </span>
-                    <span>Prodi Informatika</span>
-                    <i data-lucide="external-link" class="ml-auto h-3.5 w-3.5"></i>
-                </a>
-                <a href="https://sistem-informasi.fti.trisakti.ac.id/" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-10 items-center gap-3 transition hover:text-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-300">
-                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-100 text-blue-700">
-                        <i data-lucide="globe-2" class="h-4 w-4"></i>
-                    </span>
-                    <span>Prodi Sistem Informasi</span>
-                    <i data-lucide="external-link" class="ml-auto h-3.5 w-3.5"></i>
-                </a>
-            </nav>
         </div>
 
-        <div class="app-footer-copyright app-footer-muted border-t px-5 py-4 text-center text-xs leading-5 sm:px-7">
-            Copyright &copy; 2026 Laboran Teknik Informatika Usakti
-        </div>
+        <address class="app-footer-contact app-footer-muted not-italic">
+            <a href="tel:+6285894488626">
+                <i data-lucide="phone"></i>
+                <span>+62 858-9448-8626</span>
+            </a>
+            <a href="mailto:Labtif.fti@trisakti.ac.id">
+                <i data-lucide="mail"></i>
+                <span>Labtif.fti@trisakti.ac.id</span>
+            </a>
+            <p>
+                <i data-lucide="map-pin"></i>
+                <span>Jl. Kyai Tapa No. 1, Grogol, Jakarta Barat</span>
+            </p>
+            <a href="https://www.google.com/maps/place/Jurusan+Teknik+Informatika,+Fakultas+Teknologi+Industri,+Universitas+Trisakti/@-6.1683104,106.7911298,20z/" target="_blank" rel="noopener noreferrer">
+                <i data-lucide="external-link"></i>
+                <span>Lihat lokasi di Google Maps</span>
+            </a>
+        </address>
+
+        <nav class="app-footer-links" aria-label="Tautan footer">
+            <a href="{% url 'dashboard:home' %}" class="app-footer-link" title="Dashboard" aria-label="Dashboard">
+                <i data-lucide="layout-dashboard"></i>
+            </a>
+            <a href="{% url 'pengguna:detail' current_pengguna.pk %}" class="app-footer-link" title="Profil" aria-label="Profil">
+                <i data-lucide="user-round"></i>
+            </a>
+            <a href="{% url 'core:bantuan' %}" class="app-footer-link" title="Bantuan" aria-label="Bantuan">
+                <i data-lucide="circle-help"></i>
+            </a>
+            <a href="https://www.instagram.com/usaktif/" target="_blank" rel="noopener noreferrer" class="app-footer-link" title="Instagram Usakti" aria-label="Instagram Usakti">
+                <img src="{% static 'core/img/social/instagram.svg' %}" alt="" class="h-4 w-4">
+            </a>
+            <a href="https://www.youtube.com/@usaktif" target="_blank" rel="noopener noreferrer" class="app-footer-link" title="YouTube Usakti" aria-label="YouTube Usakti">
+                <img src="{% static 'core/img/social/youtube.svg' %}" alt="" class="h-4 w-4">
+            </a>
+            <a href="https://informatika.fti.trisakti.ac.id/" target="_blank" rel="noopener noreferrer" class="app-footer-link" title="Website Prodi Informatika" aria-label="Website Prodi Informatika">
+                <i data-lucide="globe-2"></i>
+            </a>
+        </nav>
+    </div>
+
+    <p class="app-footer-copyright">Copyright &copy; 2026 Laboran Teknik Informatika Usakti</p>
 </footer>
