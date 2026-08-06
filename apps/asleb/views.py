@@ -65,6 +65,7 @@ from .models import (
     SuratHonorAsleb,
     TugasLaporanPraktikum,
 )
+from .notifications import send_honor_paid_email
 from .surat_honor import generate_surat_honor_pdf, month_year_label
 
 
@@ -2246,6 +2247,10 @@ def confirm_honor_transfer(request, pk):
     honor.pic_transfer = pengguna.nama_pengguna
     honor.status = 'dibayar'
     honor.save()
+    transaction.on_commit(
+        lambda honor_id=honor.pk: send_honor_paid_email(honor_id),
+        robust=True,
+    )
     transaction.on_commit(lambda: send_honor_update(honor, event='honor.paid'))
     messages.success(request, f'Honor {honor.asleb.nama} berhasil dikonfirmasi sudah ditransfer.')
     return redirect('asleb:honor_list')

@@ -1215,26 +1215,57 @@ class AslebViewTests(TestCase):
         self.assertEqual([child['title'] for child in asleb_group['children'] if child['active']], ['Rekap Honorarium'])
 
     def test_konfirmasi_transfer_honor_menyimpan_bukti_dan_status_dibayar(self):
+        asisten_user = Pengguna.objects.create(
+            nama_pengguna=self.asleb.nama,
+            nim_nik=self.asleb.nim,
+            email='siti.aslab@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081234567890',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='asisten_lab',
+            is_verified=True,
+        )
         honor = HonorAsleb.objects.create(
             asleb=self.asleb,
             bulan=date(2026, 4, 1),
             jumlah_praktikum=1,
             total_pertemuan=3,
             status='diproses',
+            assigned_laboran=self.pengguna,
         )
-        bukti = SimpleUploadedFile('bukti-tf.jpg', b'bukti transfer', content_type='image/jpeg')
+        bukti = SimpleUploadedFile(
+            'bukti-tf.pdf',
+            b'%PDF-1.4\n% bukti transfer\n%%EOF',
+            content_type='application/pdf',
+        )
 
-        response = self.client.post(reverse('asleb:honor_confirm_transfer', args=[honor.pk]), {
-            'tanggal_transfer': '2026-04-30',
-            'pic_transfer': 'Lab Admin',
-            'bukti_transfer': bukti,
-        })
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(reverse('asleb:honor_confirm_transfer', args=[honor.pk]), {
+                'tanggal_transfer': '2026-04-30',
+                'pic_transfer': 'Lab Admin',
+                'bukti_transfer': bukti,
+            })
 
         self.assertRedirects(response, reverse('asleb:honor_list'))
         honor.refresh_from_db()
         self.assertEqual(honor.status, 'dibayar')
-        self.assertEqual(honor.pic_transfer, 'Lab Admin')
+        self.assertEqual(honor.pic_transfer, self.pengguna.nama_pengguna)
         self.assertTrue(honor.bukti_transfer)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [asisten_user.email])
+        self.assertIn('Sudah Ditransfer', mail.outbox[0].subject)
+        self.assertIn('Rp 147.000', mail.outbox[0].body)
+        self.assertIn('30 April 2026', mail.outbox[0].body)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(reverse('asleb:honor_confirm_transfer', args=[honor.pk]), {
+                'tanggal_transfer': '2026-04-30',
+                'bukti_transfer': SimpleUploadedFile('ulang.jpg', b'ulang', content_type='image/jpeg'),
+            })
+        self.assertEqual(len(mail.outbox), 1)
 
     @patch('apps.asleb.views.generate_surat_honor_pdf', return_value=b'%PDF-1.4\n%%EOF')
     def test_honor_ditahan_visible_tetapi_tidak_dapat_dibayar_atau_masuk_surat(self, _pdf):
