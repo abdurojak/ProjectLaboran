@@ -4,23 +4,22 @@ from django.db import migrations, models
 
 
 def ensure_modul_columns(apps, schema_editor):
-    table_name = schema_editor.quote_name('asleb_modulpraktikum')
-    vendor = schema_editor.connection.vendor
-    if vendor == 'mysql':
-        with schema_editor.connection.cursor() as cursor:
-            cursor.execute(
-                f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS file_size bigint NULL"
-            )
-            cursor.execute(
-                f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS file_type varchar(20) NOT NULL DEFAULT ''"
-            )
-        return
-
+    raw_table_name = 'asleb_modulpraktikum'
+    table_name = schema_editor.quote_name(raw_table_name)
     with schema_editor.connection.cursor() as cursor:
-        cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN file_size bigint NULL")
-        cursor.execute(
-            f"ALTER TABLE {table_name} ADD COLUMN file_type varchar(20) NOT NULL DEFAULT ''"
-        )
+        existing_columns = {
+            column.name
+            for column in schema_editor.connection.introspection.get_table_description(
+                cursor,
+                raw_table_name,
+            )
+        }
+        if 'file_size' not in existing_columns:
+            cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN file_size bigint NULL")
+        if 'file_type' not in existing_columns:
+            cursor.execute(
+                f"ALTER TABLE {table_name} ADD COLUMN file_type varchar(20) NOT NULL DEFAULT ''"
+            )
 
 
 def populate_modul_file_metadata(apps, schema_editor):
