@@ -61,10 +61,10 @@ flutter build apk --debug --dart-define=API_BASE_URL=http://10.24.80.245/api/mob
 Release APK:
 
 ```powershell
-flutter build apk --release --dart-define=API_BASE_URL=http://10.24.80.245/api/mobile/v1/
+flutter build apk --release --dart-define=API_BASE_URL=https://labhub.example.com/api/mobile/v1/
 ```
 
-Output berada di `build/app/outputs/flutter-apk/`. Untuk distribusi resmi, buat keystore release dan jangan memakai signing debug bawaan.
+Output berada di `build/app/outputs/flutter-apk/`. Build release menonaktifkan HTTP dan wajib memakai keystore resmi. Salin `android/key.properties.example` menjadi `android/key.properties`, isi kredensial keystore, lalu simpan file `.jks` pada lokasi `storeFile`. Kedua file rahasia tersebut sudah diabaikan Git.
 
 ## Catatan Keamanan
 
@@ -72,4 +72,5 @@ Output berada di `build/app/outputs/flutter-apk/`. Untuk distribusi resmi, buat 
 - Foto dan video hanya dapat dipilih melalui kamera pada UI aplikasi.
 - Backend tetap memeriksa role aktif, jadwal, waktu, duplikasi, MIME, isi gambar, durasi MP4, dan ukuran file.
 - Video bersifat opsional dan dibatasi maksimal 15 detik.
-- APK development mengizinkan HTTP LAN. Produksi sebaiknya memakai HTTPS dan menonaktifkan cleartext traffic.
+- APK debug mengizinkan HTTP LAN untuk pengembangan. APK release hanya menerima HTTPS agar password dan JWT tidak dikirim sebagai cleartext.
+- APK release wajib ditandatangani keystore milik LabHub dan tidak lagi memakai debug key.

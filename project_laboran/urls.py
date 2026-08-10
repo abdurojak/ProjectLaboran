@@ -15,10 +15,12 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import include, path
+import re
+
+from django.urls import include, path, re_path
 from django.conf import settings
-from django.conf.urls.static import static
 from django.http import JsonResponse
+from django.views.static import serve as serve_media
 from apps.pengguna.views import SchoolSearchView
 
 urlpatterns = [
@@ -38,4 +40,17 @@ urlpatterns = [
     path('ruangan/', include('apps.ruangan.urls')),
     path('surat/', include('apps.surat.urls')),
     path('admin/', admin.site.urls),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+]
+
+# Uploads must always pass through PenggunaLoginRequiredMiddleware. Serving
+# MEDIA_ROOT directly from the reverse proxy would bypass document ownership
+# checks for transcripts, attendance evidence, reports, and payment receipts.
+media_prefix = settings.MEDIA_URL.strip('/')
+if media_prefix:
+    urlpatterns.append(
+        re_path(
+            rf'^{re.escape(media_prefix)}/(?P<path>.*)$',
+            serve_media,
+            {'document_root': settings.MEDIA_ROOT, 'show_indexes': False},
+        )
+    )

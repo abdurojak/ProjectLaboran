@@ -222,7 +222,25 @@ class ContainerDeploymentContractTests(unittest.TestCase):
 
         self.assertIn("packages: write", workflow)
         self.assertIn("ghcr.io", workflow)
-        self.assertIn("docker/build-push-action", workflow)
+        self.assertIn("needs: test", workflow)
+        self.assertIn("python manage.py test --verbosity 1", workflow)
+        self.assertIn("python manage.py check --deploy", workflow)
+        self.assertIn(
+            "mysql:8.4@sha256:b3b90af2a6552ae30c266fdb7d5dd55f3afb72404bb78d37fe8a23eb857fd3fb",
+            workflow,
+        )
+        self.assertIn(
+            "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1",
+            workflow,
+        )
+        self.assertIn(
+            "docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9",
+            workflow,
+        )
+        self.assertIn(
+            "docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8",
+            workflow,
+        )
         self.assertIn("push: true", workflow)
         self.assertNotIn("runs-on: [self-hosted, linux, x64]", workflow)
         self.assertNotIn("/home/admin/LabTif", workflow)
@@ -240,6 +258,7 @@ class LocalContainerWorkflowContractTests(unittest.TestCase):
         self.assertIn("workflow_run:", workflow)
         self.assertIn("workflows: [Publish Production Container]", workflow)
         self.assertIn("github.event.workflow_run.conclusion == 'success'", workflow)
+        self.assertIn("github.event.workflow_run.head_sha", workflow)
         self.assertIn("runs-on: [self-hosted, linux, x64]", workflow)
         self.assertIn("command -v podman", workflow)
         self.assertIn("container-test.env", workflow)

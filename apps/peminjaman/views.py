@@ -648,17 +648,21 @@ class PeminjamanAlatUpdateView(UpdateView):
     def dispatch(self, request, *args, **kwargs):
         self.object = self.get_object()
         pengguna = getattr(request, 'current_pengguna', None)
+        if not self.can_change(pengguna):
+            messages.warning(request, 'Anda tidak memiliki akses untuk mengedit pengajuan ini.')
+            return redirect('peminjaman:peminjaman_list')
         if self.object.status != 'diajukan':
             messages.warning(request, 'Peminjaman yang sudah diproses atau selesai tidak dapat diedit.')
-            return redirect('peminjaman:peminjaman_list')
-        if pengguna and pengguna.role in BORROWER_ROLES and not self.mahasiswa_can_change(pengguna):
-            messages.warning(request, 'Anda hanya bisa mengedit pengajuan milik sendiri yang masih berstatus Diajukan.')
             return redirect('peminjaman:peminjaman_list')
 
         return super().dispatch(request, *args, **kwargs)
 
-    def mahasiswa_can_change(self, pengguna):
-        return self.object.nim == pengguna.nim_nik and self.object.status == 'diajukan'
+    def can_change(self, pengguna):
+        if not pengguna:
+            return False
+        if pengguna.role in MANAGER_ROLES:
+            return True
+        return pengguna.role in BORROWER_ROLES and self.object.nim == pengguna.nim_nik
 
     def form_valid(self, form):
         with transaction.atomic():
@@ -800,17 +804,21 @@ class PeminjamanAlatDeleteView(PostOnlyDeleteMixin, DeleteView):
     def dispatch(self, request, *args, **kwargs):
         self.object = self.get_object()
         pengguna = getattr(request, 'current_pengguna', None)
+        if not self.can_change(pengguna):
+            messages.warning(request, 'Anda tidak memiliki akses untuk menghapus pengajuan ini.')
+            return redirect('peminjaman:peminjaman_list')
         if self.object.status != 'diajukan':
             messages.warning(request, 'Riwayat peminjaman yang sudah diproses tidak dapat dihapus.')
-            return redirect('peminjaman:peminjaman_list')
-        if pengguna and pengguna.role in BORROWER_ROLES and not self.mahasiswa_can_change(pengguna):
-            messages.warning(request, 'Anda hanya bisa menghapus pengajuan milik sendiri yang masih berstatus Diajukan.')
             return redirect('peminjaman:peminjaman_list')
 
         return super().dispatch(request, *args, **kwargs)
 
-    def mahasiswa_can_change(self, pengguna):
-        return self.object.nim == pengguna.nim_nik and self.object.status == 'diajukan'
+    def can_change(self, pengguna):
+        if not pengguna:
+            return False
+        if pengguna.role in MANAGER_ROLES:
+            return True
+        return pengguna.role in BORROWER_ROLES and self.object.nim == pengguna.nim_nik
 
     def form_valid(self, form):
         transaksi = self.object.transaksi

@@ -51,6 +51,7 @@ def send_peminjaman_request_notifications(peminjaman):
 
 def send_peminjaman_status_notification(peminjaman):
     status_messages = {
+        'ditolak': ('Peminjaman Alat Ditolak', 'Peminjaman ditolak', 'Pengajuan peminjaman alat Anda belum dapat disetujui.'),
         'dipinjam': ('Peminjaman Alat Disetujui', 'Peminjaman disetujui', 'Pengajuan peminjaman alat Anda telah disetujui.'),
         'dikembalikan': ('Peminjaman Alat Dikembalikan', 'Peminjaman selesai', 'Barang telah dicatat kembali ke laboratorium.'),
         'hilang': ('Status Peminjaman: Hilang', 'Barang ditandai hilang', 'Barang pada peminjaman Anda ditandai hilang dan perlu ditindaklanjuti.'),
@@ -66,14 +67,15 @@ def send_peminjaman_status_notification(peminjaman):
     realtime_payload = {
         'event': 'peminjaman.status_changed',
         'source_key': f'peminjaman:{peminjaman.pk}:{peminjaman.status}',
-        'title': f'{title}: {peminjaman.barang.nama}',
-        'message': intro,
+        'title': title,
+        'message': f'{intro} Barang: {peminjaman.barang.nama}.',
         'notification_type': peminjaman.status,
         'related_object_id': peminjaman.pk,
         'related_url': related_url,
         'refresh_paths': ['/peminjaman/', '/kalender/notifikasi/', '/'],
-        'icon': 'package-check' if peminjaman.status == 'dikembalikan' else 'bell-ring',
-        'icon_class': 'bg-emerald-50 text-emerald-700' if peminjaman.status == 'dikembalikan' else 'bg-amber-50 text-amber-700',
+        'icon': 'package-check' if peminjaman.status == 'dikembalikan' else ('x-circle' if peminjaman.status == 'ditolak' else 'bell-ring'),
+        'icon_class': 'bg-emerald-50 text-emerald-700' if peminjaman.status == 'dikembalikan' else ('bg-rose-50 text-rose-700' if peminjaman.status == 'ditolak' else 'bg-amber-50 text-amber-700'),
+        'auto_refresh': True,
     }
     for pengguna in users_for_nim(peminjaman.nim):
         send_user_notification(pengguna.pk, realtime_payload)

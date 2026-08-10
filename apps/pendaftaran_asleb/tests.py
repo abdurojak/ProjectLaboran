@@ -14,16 +14,24 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 
-from apps.asleb.models import Asleb, HonorAsleb
+from apps.asleb.models import Asleb, HonorAsleb, PesertaPraktikum, TugasLaporanPraktikum
 from apps.jadwal.models import JadwalPraktikum
 from apps.pengguna.models import PengalamanPengguna, Pengguna
 from apps.ruangan.models import RuanganLab
 
 from .forms import PendaftaranAslebForm, PendaftaranAslebPublicForm, PublicBerkasPendaftaranForm, RekeningPendaftaranForm
-from .models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb, PeriodeAsleb, RiwayatAsleb
+from .models import (
+    AslabAssignment,
+    AslabSlot,
+    MataKuliahAsleb,
+    PendaftaranAsleb,
+    PengaturanPendaftaranAsleb,
+    PeriodeAsleb,
+    RiwayatAsleb,
+)
 from .services import get_asleb_experience, is_registration_open, sync_expired_asleb_periods
 from .utils import analyze_transcript, extract_grade_from_transcript, get_public_registration_url
-from .views import WIZARD_SESSION_KEY
+from .views import WIZARD_SESSION_KEY, notify_pendaftaran_dibuka
 
 
 class ClassTokenHTMLParser(HTMLParser):
@@ -146,6 +154,28 @@ class PendaftaranAslebViewTests(TestCase):
 
         self.assertRedirects(response, reverse('pendaftaran_asleb:pendaftaran_list'))
         self.assertFalse(PengaturanPendaftaranAsleb.get_solo().dibuka)
+
+    @patch('apps.pendaftaran_asleb.views.send_branded_email', return_value=1)
+    def test_email_pembukaan_memuat_batas_matkul_yang_benar(self, send_email):
+        Pengguna.objects.create(
+            nama_pengguna='Mahasiswa Penerima Email',
+            nim_nik='2401888999',
+            email='penerima@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081234567890',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='mahasiswa',
+            is_verified=True,
+        )
+
+        self.assertEqual(notify_pendaftaran_dibuka(), 1)
+        self.assertEqual(
+            send_email.call_args.kwargs['note'],
+            'Junior dapat mengambil maksimal 1 matkul dan Senior maksimal 2 matkul dalam satu periode.',
+        )
 
     def test_buka_pendaftaran_memulihkan_periode_yang_sudah_diakhiri(self):
         today = timezone.localdate()
@@ -1232,6 +1262,81 @@ class PeriodeAslebTests(TestCase):
         pengalaman = PengalamanPengguna.objects.filter(pengguna=pengguna, otomatis=True)
         self.assertEqual(pengalaman.count(), 1)
         self.assertIn(str(matkul), pengalaman.first().deskripsi)
+
+    def test_penugasan_slot_kedaluwarsa_menurunkan_role_tanpa_periode_legacy(self):
+        period = PeriodeAsleb.get_for_date(date(2025, 3, 1))
+        matkul = MataKuliahAsleb.objects.first()
+        pengguna = Pengguna.objects.create(
+            nama_pengguna='Aslab Slot Selesai', nim_nik='0642201991',
+            email='slot-selesai@std.trisakti.ac.id', password='rahasia123',
+            no_hp='081200000091', alamat='Jakarta', fakultas='Teknologi Industri',
+            prodi='Informatika', gender='laki_laki', role='asisten_lab',
+        )
+        asleb = Asleb.objects.create(
+            nama=pengguna.nama_pengguna, nim=pengguna.nim_nik, no_hp=pengguna.no_hp,
+            email=pengguna.email, program_studi=pengguna.prodi, semester=4,
+            matkul=str(matkul), tanggal_bergabung=period.mulai, periode_aktif=None,
+        )
+        slot = AslabSlot.objects.create(periode=period, matkul=matkul, nomor=1)
+        assignment = AslabAssignment.objects.create(
+            slot=slot,
+            asleb=asleb,
+            mulai_pada=period.mulai,
+            status=AslabAssignment.STATUS_ACTIVE,
+        )
+
+        inactive_count, demoted_count = sync_expired_asleb_periods(date(2025, 7, 1))
+
+        assignment.refresh_from_db()
+        asleb.refresh_from_db()
+        pengguna.refresh_from_db()
+        self.assertEqual((inactive_count, demoted_count), (1, 1))
+        self.assertEqual(assignment.status, AslabAssignment.STATUS_COMPLETED)
+        self.assertEqual(asleb.status, 'nonaktif')
+        self.assertEqual(pengguna.role, 'mahasiswa')
+        self.assertTrue(PengalamanPengguna.objects.filter(
+            pengguna=pengguna,
+            source_key=f'aslab-assignment-experience:{assignment.pk}',
+        ).exists())
+
+    def test_sinkronisasi_periode_lama_tidak_menonaktifkan_data_periode_baru(self):
+        old_period = PeriodeAsleb.get_for_date(date(2025, 3, 1))
+        new_period = PeriodeAsleb.get_for_date(date(2025, 9, 1))
+        matkul = MataKuliahAsleb.objects.first()
+        old_asleb = Asleb.objects.create(
+            nama='Aslab Lama', nim='0642201992', no_hp='081200000092',
+            email='lama@std.trisakti.ac.id', program_studi='Informatika', semester=4,
+            matkul=str(matkul), tanggal_bergabung=old_period.mulai,
+        )
+        new_asleb = Asleb.objects.create(
+            nama='Aslab Baru', nim='0642201993', no_hp='081200000093',
+            email='baru@std.trisakti.ac.id', program_studi='Informatika', semester=4,
+            matkul=str(matkul), tanggal_bergabung=new_period.mulai, periode_aktif=new_period,
+        )
+        old_slot = AslabSlot.objects.create(periode=old_period, matkul=matkul, nomor=1)
+        new_slot = AslabSlot.objects.create(periode=new_period, matkul=matkul, nomor=1)
+        AslabAssignment.objects.create(
+            slot=old_slot, asleb=old_asleb, mulai_pada=old_period.mulai,
+            status=AslabAssignment.STATUS_ACTIVE,
+        )
+        AslabAssignment.objects.create(
+            slot=new_slot, asleb=new_asleb, mulai_pada=new_period.mulai,
+            status=AslabAssignment.STATUS_ACTIVE,
+        )
+        peserta = PesertaPraktikum.objects.create(
+            matkul=matkul, nim='0642202999', nama='Peserta Periode Baru',
+        )
+        tugas = TugasLaporanPraktikum.objects.create(
+            judul='Laporan Periode Baru', matkul=matkul,
+            batas_pengumpulan=timezone.now() + timedelta(days=7),
+        )
+
+        sync_expired_asleb_periods(date(2025, 7, 1))
+
+        peserta.refresh_from_db()
+        tugas.refresh_from_db()
+        self.assertTrue(peserta.aktif)
+        self.assertTrue(tugas.aktif)
 
     def test_batas_matkul_junior_satu_dan_senior_dua(self):
         self.assertEqual(get_asleb_experience('0642201888'), ('junior', 1))

@@ -1,9 +1,13 @@
 from django import forms
 
+from apps.core.upload_validators import validate_safe_image_upload
+
 
 def validate_human_face_photo(uploaded_file):
     if not uploaded_file:
         return
+
+    validate_safe_image_upload(uploaded_file)
 
     try:
         import cv2

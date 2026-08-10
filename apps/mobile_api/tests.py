@@ -147,6 +147,27 @@ class MobileAbsensiApiTests(TestCase):
         laboran_endpoint = self.client.get(reverse('mobile_api:laboran_dashboard'))
         self.assertEqual(laboran_endpoint.status_code, 403)
 
+    @patch('apps.mobile_api.views.bot_answer', return_value='Halo dari LabHub.')
+    def test_laboran_dapat_mengakses_endpoint_mobile_bersama(self, bot_answer):
+        self.authenticate_laboran()
+
+        profile = self.client.get(reverse('mobile_api:profile'))
+        chatbot = self.client.post(
+            reverse('mobile_api:chatbot'),
+            {'message': 'Halo'},
+            format='json',
+        )
+        logout = self.client.post(reverse('mobile_api:logout'))
+
+        self.assertEqual(profile.status_code, 200, profile.data)
+        self.assertEqual(profile.data['user']['role'], 'laboran')
+        self.assertIsNone(profile.data['asleb'])
+        self.assertEqual(chatbot.status_code, 200, chatbot.data)
+        self.assertEqual(chatbot.data['answer'], 'Halo dari LabHub.')
+        bot_answer.assert_called_once_with('Halo', self.laboran)
+        self.assertEqual(logout.status_code, 204)
+        self.assertIsNotNone(MobileSession.objects.get().revoked_at)
+
     def test_asisten_lab_dapat_meneruskan_chat_ke_admin(self):
         self.authenticate()
 

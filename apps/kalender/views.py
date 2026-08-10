@@ -7,7 +7,8 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
-from apps.asleb.models import Asleb, PesertaPraktikum
+from apps.asleb.models import PesertaPraktikum
+from apps.asleb.services import get_active_asleb_matkul_labels
 from apps.core.views import PostOnlyDeleteMixin
 from apps.jadwal.models import JadwalPraktikum
 
@@ -92,11 +93,7 @@ def get_asisten_lab_jadwal_queryset(pengguna):
         return JadwalPraktikum.objects.none()
 
     if pengguna.role == 'asisten_lab':
-        labels = list(
-            Asleb.objects.filter(nim=pengguna.nim_nik, status='aktif')
-            .exclude(matkul='')
-            .values_list('matkul', flat=True)
-        )
+        labels = get_active_asleb_matkul_labels(pengguna)
     else:
         matkul_list = [
             item.matkul
@@ -112,8 +109,8 @@ def get_asisten_lab_jadwal_queryset(pengguna):
         return queryset.filter(mata_kuliah__in=labels, status=JadwalPraktikum.STATUS_DITERIMA).distinct()
 
     query = Q(mata_kuliah__in=labels) if labels else Q(pk__in=[])
-    for asleb in Asleb.objects.filter(nim=pengguna.nim_nik, status='aktif').exclude(matkul=''):
-        mata_kuliah, kelas = parse_asleb_matkul(asleb.matkul)
+    for label in labels:
+        mata_kuliah, kelas = parse_asleb_matkul(label)
         if mata_kuliah and kelas:
             query |= Q(mata_kuliah__iexact=mata_kuliah, kelas__iexact=kelas)
         elif mata_kuliah:

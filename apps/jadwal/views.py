@@ -13,7 +13,7 @@ from django.views.generic import CreateView, DeleteView, DetailView, ListView, U
 
 from apps.core.views import PostOnlyDeleteMixin
 from apps.core.permissions import ADMIN_ROLE, ASISTEN_LAB_ROLE, LABORAN_ROLE
-from apps.asleb.models import Asleb
+from apps.asleb.services import get_active_asleb_matkul_labels
 from apps.kalender.realtime import send_schedule_change_request_update, send_schedule_update
 from apps.pendaftaran_asleb.models import MataKuliahAsleb
 from apps.ruangan.models import GrupRuanganGabungan, RuanganLab
@@ -23,15 +23,7 @@ from .models import JadwalPraktikum, PermintaanPerubahanJadwal
 
 
 def get_aslab_matkul_labels(pengguna):
-    if not pengguna or pengguna.role != 'asisten_lab':
-        return []
-
-    labels = list(
-        Asleb.objects.filter(nim=pengguna.nim_nik, status='aktif')
-        .exclude(matkul='')
-        .values_list('matkul', flat=True)
-    )
-    return list(dict.fromkeys(labels))
+    return get_active_asleb_matkul_labels(pengguna)
 
 
 def can_manage_jadwal(pengguna, jadwal):

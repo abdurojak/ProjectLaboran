@@ -80,13 +80,13 @@
             <label class="flex cursor-pointer items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 p-4">{{ field }}<span class="mb-0 font-bold text-slate-800">{{ field.label }}</span></label>
             {% elif field.name == 'sekolah' %}
             {{ field }}
-            <label for="id_school_search">Nama Sekolah</label>
+            <label for="id_school_search">Nama Sekolah/Kampus</label>
             <div class="relative" data-school-autocomplete data-search-url="{% url 'pengguna:school_search' %}">
                 <input id="id_school_search" type="text" autocomplete="off" class="w-full" placeholder="Ketik minimal 2 huruf nama sekolah/NPSN" data-school-search-input value="{% if object and object.sekolah_snapshot %}{{ object.sekolah_snapshot }}{% endif %}">
                 <div class="pointer-events-none absolute right-4 top-1/2 hidden -translate-y-1/2 text-xs font-black text-brand-700" data-school-loading>Mencari...</div>
                 <div class="school-results-panel absolute left-0 right-0 top-[calc(100%+0.5rem)] z-40 hidden max-h-72 overflow-y-auto rounded-3xl shadow-2xl" data-school-results></div>
             </div>
-            <p class="mt-2 text-xs font-semibold text-slate-500">Pilih jenjang dulu, lalu cari sekolah dari database lokal. Jika tidak ada, pilih input manual.</p>
+            <p class="mt-2 text-xs font-semibold text-slate-500">Cari sekolah atau kampus dari database lokal. Jika tidak ditemukan, pilih input manual.</p>
             {% else %}{{ field.label_tag }}{{ field }}{% endif %}
             {% if field.help_text %}<p class="mt-2 text-xs text-slate-500">{{ field.help_text }}</p>{% endif %}
             {% for error in field.errors %}<p class="mt-2 text-sm font-bold text-rose-600">{{ error }}</p>{% endfor %}
@@ -128,7 +128,6 @@ document.addEventListener('DOMContentLoaded', function () {
     checkbox.addEventListener('change', syncEndDate);
     syncEndDate();
 
-    const levelInput = document.querySelector('[data-education-level]');
     const schoolIdInput = document.querySelector('[data-school-id]');
     const schoolSearch = document.querySelector('[data-school-search-input]');
     const schoolBox = document.querySelector('[data-school-results]');
@@ -136,24 +135,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const schoolAuto = document.querySelector('[data-school-autocomplete]');
     const manualWrap = document.querySelector('[data-school-manual-wrap]');
     const manualInput = document.querySelector('[data-school-manual]');
-    const majorWrap = document.querySelector('[data-major-wrap]');
-    const majorInput = document.querySelector('[data-education-major]');
     let schoolTimer = null;
-
-    function syncEducationFields() {
-        if (!levelInput) return;
-        const level = levelInput.value;
-        if (majorWrap && majorInput) {
-            const showMajor = level === 'SMA' || level === 'SMK';
-            majorWrap.classList.toggle('hidden', !showMajor);
-            majorInput.disabled = !showMajor;
-            if (!showMajor) majorInput.value = '';
-        }
-        if (schoolSearch) {
-            schoolSearch.disabled = !level;
-            schoolSearch.placeholder = level ? 'Ketik minimal 2 huruf nama sekolah/NPSN' : 'Pilih jenjang pendidikan terlebih dahulu';
-        }
-    }
 
     function showManualSchool(show) {
         if (!manualWrap || !manualInput) return;
@@ -214,15 +196,15 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function searchSchools() {
-        if (!schoolAuto || !schoolSearch || !levelInput || !schoolBox) return;
+        if (!schoolAuto || !schoolSearch || !schoolBox) return;
         const query = schoolSearch.value.trim();
         if (schoolIdInput) schoolIdInput.value = '';
-        if (query.length < 2 || !levelInput.value) {
+        if (query.length < 2) {
             schoolBox.classList.add('hidden');
             return;
         }
         if (schoolLoading) schoolLoading.classList.remove('hidden');
-        const url = `${schoolAuto.dataset.searchUrl}?q=${encodeURIComponent(query)}&level=${encodeURIComponent(levelInput.value)}`;
+        const url = `${schoolAuto.dataset.searchUrl}?q=${encodeURIComponent(query)}`;
         fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
             .then(function (response) {
                 if (!response.ok) throw new Error('Pencarian sekolah gagal.');
@@ -239,15 +221,6 @@ document.addEventListener('DOMContentLoaded', function () {
             });
     }
 
-    if (levelInput) {
-        levelInput.addEventListener('change', function () {
-            if (schoolIdInput) schoolIdInput.value = '';
-            if (schoolSearch) schoolSearch.value = '';
-            showManualSchool(false);
-            syncEducationFields();
-        });
-        syncEducationFields();
-    }
     if (schoolSearch) {
         schoolSearch.addEventListener('input', function () {
             showManualSchool(false);

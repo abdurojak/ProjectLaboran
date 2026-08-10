@@ -445,6 +445,11 @@ class AbsensiAsleb(models.Model):
     MODUL_CHOICES = [(number, f'Modul {number}') for number in range(1, 17)]
 
     asleb = models.ForeignKey(Asleb, on_delete=models.CASCADE, related_name='absensi')
+    periode = models.ForeignKey(
+        'pendaftaran_asleb.PeriodeAsleb',
+        on_delete=models.PROTECT,
+        related_name='absensi_asleb',
+    )
     jadwal = models.ForeignKey(
         'jadwal.JadwalPraktikum',
         on_delete=models.SET_NULL,
@@ -477,8 +482,8 @@ class AbsensiAsleb(models.Model):
         ordering = ['-tanggal_praktikum', 'asleb__nama', 'modul']
         constraints = [
             models.UniqueConstraint(
-                fields=['asleb', 'modul_praktikum'],
-                name='unique_absensi_asleb_per_modul_praktikum',
+                fields=['asleb', 'periode', 'modul_praktikum'],
+                name='unique_absensi_asleb_periode_modul_praktikum',
             ),
         ]
         verbose_name = 'Absensi Aslab'
@@ -486,6 +491,23 @@ class AbsensiAsleb(models.Model):
 
     def __str__(self):
         return f'{self.asleb.nama} - Modul {self.modul}'
+
+    def save(self, *args, **kwargs):
+        if not self.periode_id:
+            PeriodeAsleb = apps.get_model('pendaftaran_asleb', 'PeriodeAsleb')
+            attendance_date = self.tanggal_praktikum or timezone.localdate()
+            period = (
+                PeriodeAsleb.objects.filter(
+                    mulai__lte=attendance_date,
+                    selesai__gte=attendance_date,
+                )
+                .order_by('-tahun', '-semester')
+                .first()
+            )
+            if period is None and self.asleb_id:
+                period = getattr(self.asleb, 'periode_aktif', None)
+            self.periode = period or PeriodeAsleb.get_for_date(attendance_date)
+        super().save(*args, **kwargs)
 
 
 class AbsensiMasukAsleb(models.Model):

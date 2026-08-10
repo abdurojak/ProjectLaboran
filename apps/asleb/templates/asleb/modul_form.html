@@ -22,6 +22,17 @@
     </div>
 
     {% if not object %}
+    {% if form.errors %}
+    <div class="rounded-[1.75rem] border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-800" role="alert">
+        <p class="font-black">Modul belum dapat disimpan.</p>
+        <ul class="mt-2 list-disc space-y-1 pl-5 font-semibold">
+            {% for field in form %}
+                {% for error in field.errors %}<li>{{ error }}</li>{% endfor %}
+            {% endfor %}
+            {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+        </ul>
+    </div>
+    {% endif %}
     <div class="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(22rem,0.9fr)]">
         <form method="post" enctype="multipart/form-data" class="surface-card overflow-hidden p-6 md:p-7" data-bulk-modul-form>
             {% csrf_token %}

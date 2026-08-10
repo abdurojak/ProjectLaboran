@@ -682,7 +682,7 @@ def notify_pendaftaran_dibuka():
             ],
             action_url=registration_url,
             action_label='Daftar Sebagai Aslab',
-            note='Junior dapat mengambil maksimal 2 matkul dan Senior maksimal 1 matkul dalam satu periode.',
+            note='Junior dapat mengambil maksimal 1 matkul dan Senior maksimal 2 matkul dalam satu periode.',
             fail_silently=True,
         )
         sent_count += sent

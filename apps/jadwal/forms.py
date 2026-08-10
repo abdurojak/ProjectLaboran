@@ -1,6 +1,6 @@
 from django import forms
 
-from apps.asleb.models import Asleb
+from apps.asleb.services import get_active_asleb_matkul_ids_for_pengguna
 from apps.pendaftaran_asleb.models import MataKuliahAsleb
 from apps.ruangan.models import GrupRuanganGabungan, RuanganLab
 
@@ -58,20 +58,7 @@ class JadwalPraktikumForm(forms.ModelForm):
     def get_matkul_queryset(self):
         queryset = MataKuliahAsleb.objects.filter(aktif=True)
         if self.current_pengguna and self.current_pengguna.role == 'asisten_lab':
-            active_labels = list(
-                Asleb.objects.filter(
-                    nim=self.current_pengguna.nim_nik,
-                    status='aktif',
-                ).exclude(matkul='').values_list('matkul', flat=True)
-            )
-            if not active_labels:
-                return queryset.none()
-
-            active_ids = [
-                matkul.pk
-                for matkul in queryset
-                if str(matkul) in active_labels
-            ]
+            active_ids = get_active_asleb_matkul_ids_for_pengguna(self.current_pengguna)
             return queryset.filter(pk__in=active_ids).distinct()
         return queryset
 

@@ -6,10 +6,6 @@ import tarfile
 import tempfile
 from pathlib import Path
 
-from Cython.Build import cythonize
-from setuptools import Distribution, Extension
-from setuptools.command.build_ext import build_ext
-
 try:
     from deployment.artifact import (
         forbidden_release_reason,
@@ -93,6 +89,12 @@ def _validate_build_paths(source, staging, output):
 
 
 def _compile_protected_modules(staging, protected):
+    # Cython is only required by the protected release build, not by normal
+    # application imports or the regular Django test suite.
+    from Cython.Build import cythonize
+    from setuptools import Distribution, Extension
+    from setuptools.command.build_ext import build_ext
+
     extensions = []
     for protected_path in protected:
         source_path = staging.joinpath(*protected_path.parts)

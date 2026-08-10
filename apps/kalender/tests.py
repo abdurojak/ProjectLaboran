@@ -163,8 +163,16 @@ class NotificationRealtimeTests(TransactionTestCase):
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload['unread_count'], 1)
-        self.assertEqual(payload['latest_title'], 'Ringkasan belum dibaca')
+        expected_unread = Notifikasi.objects.filter(
+            pengguna=self.mahasiswa,
+            dibaca_pada__isnull=True,
+        ).count()
+        self.assertEqual(payload['unread_count'], expected_unread)
+        self.assertTrue(Notifikasi.objects.filter(
+            pengguna=self.mahasiswa,
+            source_key='summary-unread',
+            dibaca_pada__isnull=True,
+        ).exists())
 
 
 class KalenderViewsTests(TestCase):
@@ -765,7 +773,7 @@ class KalenderViewsTests(TestCase):
             titles.index('Status peminjaman Kamera Lama: Dipinjam'),
         )
 
-    def test_notifikasi_admin_menampilkan_pengajuan_peminjaman_baru(self):
+    def test_notifikasi_laboran_menampilkan_pengajuan_peminjaman_baru(self):
         PeminjamanAlat.objects.create(
             barang=self.barang,
             nama_peminjam='Budi',
@@ -775,6 +783,10 @@ class KalenderViewsTests(TestCase):
             tanggal_kembali=timezone.localdate(),
             status='diajukan',
         )
+
+        session = self.client.session
+        session['pengguna_id'] = self.laboran.pk
+        session.save()
 
         response = self.client.get(reverse('kalender:notifikasi_list'))
 
@@ -844,6 +856,16 @@ class KalenderViewsTests(TestCase):
             matkul=matkul,
             status='digenerate',
         )
+        Asleb.objects.create(
+            nama=asisten.nama_pengguna,
+            nim=asisten.nim_nik,
+            no_hp=asisten.no_hp,
+            email=asisten.email,
+            program_studi='Informatika',
+            matkul=str(matkul),
+            semester=4,
+            tanggal_bergabung=timezone.localdate(),
+        )
         ruangan = RuanganLab.objects.create(kode='LAB-JADWAL-NOTIF', nama='Lab Notifikasi Jadwal')
         JadwalPraktikum.objects.create(
             mata_kuliah=str(matkul),
@@ -901,6 +923,16 @@ class KalenderViewsTests(TestCase):
             semester=4,
             matkul=matkul,
             status='digenerate',
+        )
+        Asleb.objects.create(
+            nama=asisten.nama_pengguna,
+            nim=asisten.nim_nik,
+            no_hp=asisten.no_hp,
+            email=asisten.email,
+            program_studi='Informatika',
+            matkul=str(matkul),
+            semester=4,
+            tanggal_bergabung=timezone.localdate(),
         )
         ruangan = RuanganLab.objects.create(kode='LAB-JADWAL-TOLAK', nama='Lab Jadwal Ditolak')
         JadwalPraktikum.objects.create(

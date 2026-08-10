@@ -1,10 +1,63 @@
 from django.core import mail
+from django import forms
 from asgiref.sync import async_to_sync
 from channels.testing import WebsocketCommunicator
 from django.conf import settings
 from django.contrib.sessions.backends.db import SessionStore
-from django.test import TestCase, TransactionTestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import Client, TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
+
+from apps.core.upload_validators import validate_safe_image_upload
+
+
+class SafeImageUploadTests(TestCase):
+    def test_rejects_oversized_image_before_decoding(self):
+        upload = SimpleUploadedFile(
+            'oversized.jpg',
+            b'x' * (1024 * 1024 + 1),
+            content_type='image/jpeg',
+        )
+
+        with self.assertRaisesMessage(forms.ValidationError, 'Ukuran gambar maksimal 1 MB.'):
+            validate_safe_image_upload(upload, max_bytes=1024 * 1024)
+
+    def test_rejects_invalid_image_content(self):
+        upload = SimpleUploadedFile(
+            'fake.jpg',
+            b'not-an-image',
+            content_type='image/jpeg',
+        )
+
+        with self.assertRaisesMessage(forms.ValidationError, 'gambar yang valid'):
+            validate_safe_image_upload(upload)
+
+    @override_settings(PROFILE_PHOTO_MAX_PIXELS=0)
+    def test_rejects_image_with_excessive_pixel_count(self):
+        upload = SimpleUploadedFile(
+            'pixel.gif',
+            (
+                b'GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00'
+                b'\xff\xff\xff!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00'
+                b'\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;'
+            ),
+            content_type='image/gif',
+        )
+
+        with self.assertRaisesMessage(forms.ValidationError, 'Resolusi gambar terlalu besar'):
+            validate_safe_image_upload(upload)
+
+
+class CsrfProtectionTests(TestCase):
+    def test_login_post_without_csrf_token_is_rejected(self):
+        client = Client(enforce_csrf_checks=True)
+
+        response = client.post(
+            reverse('pengguna:login'),
+            {'identity': '0640020001', 'password': 'rahasia123'},
+        )
+
+        self.assertEqual(response.status_code, 403)
 
 
 class GlobalBackgroundTests(TestCase):
@@ -89,11 +142,11 @@ class GlobalBackgroundTests(TestCase):
     def test_table_hover_dark_mode_tidak_terang(self):
         response = self.client.get(reverse('pengguna:login'))
 
-        self.assertContains(response, 'html[data-theme="dark"] tbody tr:hover')
-        self.assertContains(response, 'html[data-theme="dark"] tbody tr[class*="hover:bg-"]:hover')
-        self.assertContains(response, 'background-color: rgba(30, 41, 59, 0.30) !important;')
-        self.assertContains(response, 'html[data-theme="dark"] tbody tr:hover td')
-        self.assertContains(response, 'html[data-theme="dark"] tbody tr:hover .text-slate-900')
+        self.assertContains(response, 'tbody tr:hover,')
+        self.assertContains(response, 'tbody tr[class*="hover:bg-"]:hover')
+        self.assertContains(response, 'background-color: var(--table-row-hover) !important;')
+        self.assertContains(response, 'tbody tr:hover td,')
+        self.assertContains(response, 'tbody tr:hover .text-slate-900')
 
     def test_touch_device_mengurangi_repaint_blur_dan_transisi(self):
         response = self.client.get(reverse('pengguna:login'))
@@ -142,7 +195,18 @@ class GlobalBackgroundTests(TestCase):
         self.assertContains(response, 'dateInput.showPicker();')
 
     def test_confirmation_modal_mencegah_submit_sebelum_disetujui(self):
-        response = self.client.get(reverse('pengguna:login'))
+        pengguna = Pengguna.objects.create(
+            nama_pengguna='User Konfirmasi',
+            nim_nik='0642201099',
+            email='konfirmasi@std.trisakti.ac.id',
+            password='rahasia123',
+            role='mahasiswa',
+        )
+        session = self.client.session
+        session['pengguna_id'] = pengguna.pk
+        session.save()
+
+        response = self.client.get(reverse('dashboard:home'))
 
         self.assertContains(response, "event.stopImmediatePropagation();")
         self.assertContains(response, "}, true);")
@@ -359,7 +423,7 @@ class BantuanTests(TestCase):
 
         response = self.client.get(reverse('pengguna:login'))
 
-        self.assertNotContains(response, 'data-help-floating')
+        self.assertNotContains(response, '<div class="fixed bottom-8 right-1', html=False)
 
     def test_admin_mendapat_floating_chat_dengan_jumlah_antrean(self):
         admin = Pengguna.objects.create(

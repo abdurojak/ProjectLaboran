@@ -502,13 +502,13 @@ class InventarisCrudTests(TestCase):
         self.assertEqual(inventaris.detail_barang.count(), 3)
         self.assertTrue(inventaris.detail_barang.filter(kondisi='baik', lokasi=self.lokasi).count(), 3)
 
-    def test_edit_inventaris_tidak_meminta_lokasi_atau_stok(self):
+    def test_edit_inventaris_boleh_mengubah_stok_tapi_bukan_lokasi_massal(self):
         inventaris = InventarisBarang.objects.create(nama='Osiloskop', jumlah=3)
 
         response = self.client.get(reverse('inventaris:barang_update', args=[inventaris.pk]))
 
         self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, 'name="jumlah"')
+        self.assertContains(response, 'name="jumlah"')
         self.assertNotContains(response, 'name="lokasi"')
 
     def test_delete_inventaris_menghapus_semua_detail_barang(self):

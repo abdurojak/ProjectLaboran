@@ -957,6 +957,8 @@
         </section>
         {% endif %}
 
+        {% if not is_super_admin_dashboard %}
+
         <section class="surface-card min-w-0 overflow-hidden p-6">
             <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
                 <div>
@@ -1347,6 +1349,7 @@
                 </table>
             </div>
         </section>
+        {% endif %}
         {% endif %}
 </div>
 {% endblock %}

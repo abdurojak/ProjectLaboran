@@ -3,6 +3,7 @@ from django.contrib.auth.hashers import check_password
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.db import OperationalError, ProgrammingError
+from apps.core.upload_validators import validate_safe_image_upload
 from .models import Fakultas, PengalamanPengguna, Pengguna, Prodi, School
 from .utils import validate_human_face_photo
 
@@ -129,8 +130,7 @@ class PenggunaAppearanceForm(forms.ModelForm):
 
     def clean_background_image(self):
         image = self.cleaned_data.get('background_image')
-        if image and image.size > 2 * 1024 * 1024:
-            raise forms.ValidationError('Ukuran gambar background maksimal 2 MB.')
+        validate_safe_image_upload(image, max_bytes=2 * 1024 * 1024)
         return image
 
     def save(self, commit=True):
@@ -193,9 +193,16 @@ class PenggunaProfileForm(forms.ModelForm):
 
     def clean_foto(self):
         foto = self.cleaned_data.get('foto')
-        if not (self.current_pengguna and self.current_pengguna.role == 'admin'):
+        if self.current_pengguna and self.current_pengguna.role == 'admin':
+            validate_safe_image_upload(foto)
+        else:
             validate_human_face_photo(foto)
         return foto
+
+    def clean_cover_image(self):
+        cover_image = self.cleaned_data.get('cover_image')
+        validate_safe_image_upload(cover_image)
+        return cover_image
 
     def clean_no_hp(self):
         no_hp = self.cleaned_data.get('no_hp', '').strip()
@@ -269,29 +276,8 @@ class PengalamanPenggunaForm(RiwayatProfilFormBase):
 
 class PendidikanPenggunaForm(RiwayatProfilFormBase):
     category = 'pendidikan'
-    JURUSAN_SMA = [
-        ('', 'Pilih jurusan'),
-        ('IPA', 'IPA'),
-        ('IPS', 'IPS'),
-        ('Bahasa', 'Bahasa'),
-        ('Lainnya', 'Lainnya'),
-    ]
-    JURUSAN_SMK = [
-        ('', 'Pilih jurusan'),
-        ('Rekayasa Perangkat Lunak', 'Rekayasa Perangkat Lunak'),
-        ('Teknik Komputer dan Jaringan', 'Teknik Komputer dan Jaringan'),
-        ('Multimedia', 'Multimedia'),
-        ('Akuntansi', 'Akuntansi'),
-        ('Otomatisasi dan Tata Kelola Perkantoran', 'Otomatisasi dan Tata Kelola Perkantoran'),
-        ('Jurusan lainnya', 'Jurusan lainnya'),
-    ]
-    jenjang_pendidikan = forms.ChoiceField(
-        label='Jenjang Pendidikan',
-        choices=[('', 'Pilih jenjang'), *School.LEVEL_CHOICES],
-        required=True,
-    )
     sekolah = forms.ModelChoiceField(
-        label='Nama Sekolah',
+        label='Nama Sekolah/Kampus',
         queryset=School.objects.none(),
         required=False,
         widget=forms.HiddenInput(attrs={'data-school-id': 'true'}),
@@ -303,16 +289,15 @@ class PendidikanPenggunaForm(RiwayatProfilFormBase):
         widget=forms.TextInput(attrs={'placeholder': 'Contoh: SMA Harapan Bangsa'}),
     )
     bidang_studi = forms.CharField(
-        label='Jurusan',
+        label='Jurusan/Program Studi',
         max_length=150,
         required=False,
-        widget=forms.TextInput(attrs={'placeholder': 'Pilih/isi jurusan'}),
+        widget=forms.TextInput(attrs={'placeholder': 'Contoh: Informatika atau IPA'}),
     )
 
     class Meta:
         model = PengalamanPengguna
         fields = [
-            'jenjang_pendidikan',
             'sekolah',
             'nama_sekolah_manual',
             'bidang_studi',
@@ -347,16 +332,18 @@ class PendidikanPenggunaForm(RiwayatProfilFormBase):
             self.fields['sekolah'].queryset = School.objects.filter(pk=self.instance.sekolah_id)
         else:
             self.fields['sekolah'].queryset = School.objects.none()
-        self.fields['jenjang_pendidikan'].widget.attrs.update({'data-education-level': 'true'})
         self.fields['bidang_studi'].widget.attrs.update({'data-education-major': 'true', 'list': 'education-major-options'})
         self.fields['nama_sekolah_manual'].widget.attrs.update({'data-school-manual': 'true'})
 
     def clean(self):
         cleaned_data = super().clean()
-        level = cleaned_data.get('jenjang_pendidikan')
         school = cleaned_data.get('sekolah')
-        manual = (cleaned_data.get('nama_sekolah_manual') or '').strip()
-        major = (cleaned_data.get('bidang_studi') or '').strip()
+        manual = (
+            cleaned_data.get('nama_sekolah_manual')
+            or self.data.get('organisasi')
+            or ''
+        ).strip()
+        cleaned_data['nama_sekolah_manual'] = manual
         start = cleaned_data.get('tanggal_mulai')
         end = cleaned_data.get('tanggal_selesai')
         still = cleaned_data.get('masih_berjalan')
@@ -365,13 +352,6 @@ class PendidikanPenggunaForm(RiwayatProfilFormBase):
             raise ValidationError('Pilih sekolah dari dropdown atau isi manual, jangan keduanya.')
         if not school and not manual:
             raise ValidationError('Pilih sekolah dari dropdown atau isi nama sekolah manual.')
-        if school and level and school.jenjang != level:
-            self.add_error('sekolah', 'Sekolah yang dipilih tidak sesuai jenjang.')
-        if level in {'SMA', 'SMK'} and not major:
-            self.add_error('bidang_studi', 'Jurusan wajib diisi untuk SMA/SMK.')
-        if level in {'SD', 'SMP'}:
-            cleaned_data['bidang_studi'] = ''
-            self.instance.bidang_studi = ''
         if still:
             cleaned_data['tanggal_selesai'] = None
             self.instance.tanggal_selesai = None
@@ -383,7 +363,7 @@ class PendidikanPenggunaForm(RiwayatProfilFormBase):
         instance = super().save(commit=False)
         school = self.cleaned_data.get('sekolah')
         manual = (self.cleaned_data.get('nama_sekolah_manual') or '').strip()
-        instance.jenjang_pendidikan = self.cleaned_data.get('jenjang_pendidikan') or ''
+        instance.jenjang_pendidikan = school.jenjang if school else ''
         instance.sekolah = school
         instance.sekolah_npsn = school.npsn if school else ''
         instance.sekolah_snapshot = school.nama if school else ''

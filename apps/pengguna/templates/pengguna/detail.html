@@ -533,9 +533,9 @@
                     <label class="flex cursor-pointer items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 p-4">{{ field }}<span class="mb-0 font-bold text-slate-800">{{ field.label }}</span></label>
                     {% elif field.name == 'sekolah' %}
                     {{ field }}
-                    <label for="id_school_search_create_{{ category.key }}">Nama Sekolah</label>
+                    <label for="id_school_search_create_{{ category.key }}">Nama Sekolah/Kampus</label>
                     <div class="relative" data-school-autocomplete data-search-url="{% url 'school_search_global' %}">
-                        <input id="id_school_search_create_{{ category.key }}" type="text" autocomplete="off" class="w-full" placeholder="Pilih jenjang terlebih dahulu" data-school-search-input>
+                        <input id="id_school_search_create_{{ category.key }}" type="text" autocomplete="off" class="w-full" placeholder="Ketik minimal 2 huruf nama sekolah atau NPSN" data-school-search-input>
                         <div class="pointer-events-none absolute right-4 top-1/2 hidden -translate-y-1/2 text-xs font-black text-brand-700" data-school-loading>Mencari...</div>
                         <div class="school-results-panel absolute left-0 right-0 top-[calc(100%+0.5rem)] z-40 hidden max-h-72 overflow-y-auto rounded-3xl shadow-2xl" data-school-results></div>
                     </div>
@@ -577,9 +577,9 @@
                     <label class="flex cursor-pointer items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 p-4">{{ field }}<span class="mb-0 font-bold text-slate-800">{{ field.label }}</span></label>
                     {% elif field.name == 'sekolah' %}
                     {{ field }}
-                    <label for="id_school_search_edit_{{ item_form.item.pk }}">Nama Sekolah</label>
+                    <label for="id_school_search_edit_{{ item_form.item.pk }}">Nama Sekolah/Kampus</label>
                     <div class="relative" data-school-autocomplete data-search-url="{% url 'school_search_global' %}">
-                        <input id="id_school_search_edit_{{ item_form.item.pk }}" type="text" autocomplete="off" class="w-full" placeholder="Pilih jenjang terlebih dahulu" data-school-search-input value="{% if item_form.item.sekolah_snapshot %}{{ item_form.item.sekolah_snapshot }}{% endif %}">
+                        <input id="id_school_search_edit_{{ item_form.item.pk }}" type="text" autocomplete="off" class="w-full" placeholder="Ketik minimal 2 huruf nama sekolah atau NPSN" data-school-search-input value="{% if item_form.item.sekolah_snapshot %}{{ item_form.item.sekolah_snapshot }}{% endif %}">
                         <div class="pointer-events-none absolute right-4 top-1/2 hidden -translate-y-1/2 text-xs font-black text-brand-700" data-school-loading>Mencari...</div>
                         <div class="school-results-panel absolute left-0 right-0 top-[calc(100%+0.5rem)] z-40 hidden max-h-72 overflow-y-auto rounded-3xl shadow-2xl" data-school-results></div>
                     </div>
@@ -714,10 +714,7 @@
             const checkbox = form.querySelector('input[name="masih_berjalan"]');
             const endWrap = form.querySelector('[data-end-date-wrap]');
             const endInput = form.querySelector('input[name="tanggal_selesai"]');
-            const levelInput = form.querySelector('[data-education-level]');
             const schoolSearch = form.querySelector('[data-school-search-input]');
-            const majorWrap = form.querySelector('[data-major-wrap]');
-            const majorInput = form.querySelector('[data-education-major]');
 
             if (checkbox && endWrap && endInput) {
                 endWrap.classList.toggle('hidden', checkbox.checked);
@@ -727,18 +724,9 @@
                 }
             }
 
-            if (majorWrap && majorInput && levelInput) {
-                const showMajor = levelInput.value === 'SMA' || levelInput.value === 'SMK';
-                majorWrap.classList.toggle('hidden', !showMajor);
-                majorInput.disabled = !showMajor;
-                if (!showMajor) {
-                    majorInput.value = '';
-                }
-            }
-
-            if (schoolSearch && levelInput) {
-                schoolSearch.disabled = !levelInput.value;
-                schoolSearch.placeholder = levelInput.value ? 'Ketik minimal 2 huruf nama sekolah/NPSN' : 'Pilih jenjang pendidikan terlebih dahulu';
+            if (schoolSearch) {
+                schoolSearch.disabled = false;
+                schoolSearch.placeholder = 'Ketik minimal 2 huruf nama sekolah atau NPSN';
             }
         }
 
@@ -811,24 +799,15 @@
 
         function setupSchoolAutocomplete(form) {
             const autocomplete = form.querySelector('[data-school-autocomplete]');
-            const levelInput = form.querySelector('[data-education-level]');
             const schoolId = form.querySelector('[data-school-id]');
             const searchInput = form.querySelector('[data-school-search-input]');
             const results = form.querySelector('[data-school-results]');
             const loading = form.querySelector('[data-school-loading]');
             const manualInput = form.querySelector('[data-school-manual]');
-            if (!autocomplete || !levelInput || !searchInput || !results) {
+            if (!autocomplete || !searchInput || !results) {
                 return;
             }
             let timer = null;
-
-            levelInput.addEventListener('change', function () {
-                if (schoolId) schoolId.value = '';
-                searchInput.value = '';
-                results.classList.add('hidden');
-                setManualSchool(form, false);
-                syncExperienceFormState(form);
-            });
 
             searchInput.addEventListener('input', function () {
                 if (schoolId) schoolId.value = '';
@@ -836,12 +815,12 @@
                 clearTimeout(timer);
                 timer = setTimeout(function () {
                     const query = searchInput.value.trim();
-                    if (query.length < 2 || !levelInput.value) {
+                    if (query.length < 2) {
                         results.classList.add('hidden');
                         return;
                     }
                     if (loading) loading.classList.remove('hidden');
-                    const url = `${autocomplete.dataset.searchUrl}?q=${encodeURIComponent(query)}&level=${encodeURIComponent(levelInput.value)}`;
+                    const url = `${autocomplete.dataset.searchUrl}?q=${encodeURIComponent(query)}`;
                     fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
                         .then(function (response) {
                             if (!response.ok) throw new Error('Pencarian sekolah gagal.');

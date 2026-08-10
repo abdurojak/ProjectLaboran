@@ -30,7 +30,12 @@ from apps.pengguna.models import PengalamanPengguna, Pengguna
 from apps.jadwal.models import JadwalPraktikum, PermintaanPerubahanJadwal
 from apps.ruangan.models import RuanganLab
 
-from .forms import AbsensiAslebForm, ENABLE_CAMERA_LOCATION_CAPTURE, get_asleb_matkul
+from .forms import (
+    AbsensiAslebForm,
+    ENABLE_CAMERA_LOCATION_CAPTURE,
+    TugasLaporanPraktikumForm,
+    get_asleb_matkul,
+)
 from .models import (
     AbsensiAsleb,
     AbsensiMasukAsleb,
@@ -293,6 +298,117 @@ class AslebViewTests(TestCase):
         self.assertIn('inline', preview.get('Content-Disposition', ''))
         self.assertIn('attachment', download.get('Content-Disposition', ''))
 
+    def test_mahasiswa_hanya_dapat_membuka_modul_matkul_yang_diikuti(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Peserta Modul',
+            nim_nik='0640020771',
+            email='peserta-modul@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081200000771',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+            is_verified=True,
+        )
+        modul = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=11,
+            judul='Modul Peserta',
+            file=SimpleUploadedFile('modul-peserta.pdf', b'%PDF-1.4\n%%EOF', content_type='application/pdf'),
+        )
+        PesertaPraktikum.objects.create(
+            matkul=self.matkul,
+            pengguna=mahasiswa,
+            nim=mahasiswa.nim_nik,
+            nama=mahasiswa.nama_pengguna,
+        )
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+
+        response = self.client.get(reverse('asleb:modul_preview', args=[modul.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+
+        PesertaPraktikum.objects.filter(pengguna=mahasiswa).update(aktif=False)
+        denied = self.client.get(reverse('asleb:modul_preview', args=[modul.pk]))
+        self.assertRedirects(
+            denied,
+            reverse('asleb:absensi_list'),
+            fetch_redirect_response=False,
+        )
+
+    def test_asisten_senior_dapat_membuka_dan_absen_modul_dari_dua_penugasan(self):
+        pengguna_aslab = Pengguna.objects.create(
+            nama_pengguna='Aslab Senior',
+            nim_nik=self.asleb.nim,
+            email='aslab-senior@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081200000772',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='asisten_lab',
+            is_verified=True,
+        )
+        first_assignment = self.create_active_assignment()
+        second_matkul = MataKuliahAsleb.objects.create(
+            kode='SENIOR_SECOND_COURSE',
+            kode_mk='SSC01',
+            nama='Keamanan Aplikasi',
+            dosen='Dosen Keamanan',
+            kelas='TIF-02',
+        )
+        second_slot = AslabSlot.objects.create(
+            periode=first_assignment.slot.periode,
+            matkul=second_matkul,
+            nomor=1,
+        )
+        AslabAssignment.objects.create(
+            slot=second_slot,
+            asleb=self.asleb,
+            mulai_pada=first_assignment.mulai_pada,
+            status=AslabAssignment.STATUS_ACTIVE,
+        )
+        first_modul = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=12,
+            judul='Modul Pertama',
+            file=SimpleUploadedFile('senior-1.pdf', b'%PDF-1.4\n%%EOF', content_type='application/pdf'),
+        )
+        second_modul = ModulPraktikum.objects.create(
+            matkul=second_matkul,
+            nomor=1,
+            judul='Modul Kedua',
+            file=SimpleUploadedFile('senior-2.pdf', b'%PDF-1.4\n%%EOF', content_type='application/pdf'),
+        )
+        session = self.client.session
+        session['pengguna_id'] = pengguna_aslab.pk
+        session.save()
+
+        first_response = self.client.get(reverse('asleb:modul_preview', args=[first_modul.pk]))
+        second_response = self.client.get(reverse('asleb:modul_preview', args=[second_modul.pk]))
+        second_schedule = JadwalPraktikum.objects.create(
+            mata_kuliah=str(second_matkul),
+            kelas=second_matkul.kelas,
+            ruangan=self.test_room,
+            pengampu=second_matkul.dosen,
+            hari='senin',
+            waktu_mulai='08:00',
+            waktu_selesai='10:00',
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+        form = AbsensiAslebForm(asleb=self.asleb, jadwal=second_schedule)
+
+        self.assertEqual(first_response.status_code, 200)
+        self.assertEqual(second_response.status_code, 200)
+        self.assertIn(second_modul, form.fields['modul_praktikum'].queryset)
+        self.assertNotIn(first_modul, form.fields['modul_praktikum'].queryset)
+
     def test_asisten_lab_tidak_dapat_menambah_modul(self):
         aslab_user = Pengguna.objects.create(
             nama_pengguna='Siti Nurhaliza',
@@ -335,11 +451,38 @@ class AslebViewTests(TestCase):
             'matkul': self.matkul.pk,
             'nomor': 1,
             'judul': 'Pengenalan Struktur Data',
-            'file': SimpleUploadedFile('modul-sda.pdf', b'isi modul', content_type='application/pdf'),
+            'file': SimpleUploadedFile('modul-sda.pdf', b'%PDF-1.4\n%%EOF', content_type='application/pdf'),
         })
 
         self.assertRedirects(response, reverse('asleb:absensi_list'))
         self.assertTrue(ModulPraktikum.objects.filter(matkul=self.matkul, nomor=1, diunggah_oleh=laboran).exists())
+
+    def test_laboran_tidak_dapat_mengunggah_file_palsu_bernama_pdf(self):
+        laboran = Pengguna.objects.create(
+            nama_pengguna='Laboran File Aman',
+            nim_nik='1000000097',
+            email='laboran-file-aman@example.com',
+            password='rahasia123',
+            role='laboran',
+        )
+        session = self.client.session
+        session['pengguna_id'] = laboran.pk
+        session.save()
+
+        response = self.client.post(reverse('asleb:modul_create'), {
+            'matkul': self.matkul.pk,
+            'nomor': 1,
+            'judul': 'File Palsu',
+            'file': SimpleUploadedFile(
+                'modul-palsu.pdf',
+                b'<html><script>alert(1)</script></html>',
+                content_type='application/pdf',
+            ),
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Isi file bukan PDF yang valid.')
+        self.assertFalse(ModulPraktikum.objects.filter(matkul=self.matkul, nomor=1).exists())
 
     def test_laboran_dapat_membuka_absensi_aslab(self):
         laboran = Pengguna.objects.create(
@@ -1115,6 +1258,57 @@ class AslebViewTests(TestCase):
 
         self.assertRedirects(response, reverse('dashboard:home'))
 
+    def test_laboran_tidak_bisa_mengubah_atau_menghapus_honor_laboran_lain(self):
+        laboran_lain = Pengguna.objects.create(
+            nama_pengguna='Laboran Lain',
+            nim_nik='LAB-LAIN-01',
+            email='laboran-lain@example.com',
+            password='rahasia123',
+            no_hp='081200000001',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='laboran',
+        )
+        honor = HonorAsleb.objects.create(
+            asleb=self.asleb,
+            bulan=date(2026, 7, 1),
+            total_pertemuan=3,
+            status='diproses',
+            assigned_laboran=laboran_lain,
+        )
+
+        edit_response = self.client.get(reverse('asleb:honor_update', args=[honor.pk]))
+        delete_response = self.client.post(reverse('asleb:honor_delete', args=[honor.pk]))
+
+        self.assertEqual(edit_response.status_code, 404)
+        self.assertEqual(delete_response.status_code, 404)
+        self.assertTrue(HonorAsleb.objects.filter(pk=honor.pk).exists())
+
+    def test_honor_yang_sudah_dibayar_tidak_bisa_diubah_atau_dihapus(self):
+        honor = HonorAsleb.objects.create(
+            asleb=self.asleb,
+            bulan=date(2026, 7, 1),
+            total_pertemuan=3,
+            status='dibayar',
+            assigned_laboran=self.pengguna,
+            tanggal_transfer=date(2026, 7, 31),
+            pic_transfer=self.pengguna.nama_pengguna,
+            bukti_transfer=SimpleUploadedFile(
+                'bukti-terkunci.pdf',
+                b'%PDF-1.4\n%%EOF',
+                content_type='application/pdf',
+            ),
+        )
+
+        edit_response = self.client.get(reverse('asleb:honor_update', args=[honor.pk]))
+        delete_response = self.client.post(reverse('asleb:honor_delete', args=[honor.pk]))
+
+        self.assertEqual(edit_response.status_code, 404)
+        self.assertEqual(delete_response.status_code, 404)
+        self.assertTrue(HonorAsleb.objects.filter(pk=honor.pk, status='dibayar').exists())
+
     def test_honor_asleb_dua_periode_masih_junior(self):
         self.create_pendaftaran_history(self.asleb.nim, 2)
 
@@ -1392,6 +1586,87 @@ class AslebViewTests(TestCase):
 
         self.assertFalse(second_form.is_valid())
         self.assertIn('modul_praktikum', second_form.errors)
+
+    def test_absensi_modul_yang_sama_boleh_dipakai_pada_periode_baru(self):
+        old_period = PeriodeAsleb.objects.create(
+            tahun=2025,
+            semester=2,
+            mulai=date(2025, 7, 1),
+            selesai=date(2025, 12, 31),
+            pendaftaran_mulai=date(2025, 7, 1),
+            pendaftaran_selesai=date(2025, 7, 30),
+        )
+        current_period = PeriodeAsleb.objects.create(
+            tahun=2026,
+            semester=2,
+            mulai=date(2026, 7, 1),
+            selesai=date(2026, 12, 31),
+            pendaftaran_mulai=date(2026, 7, 1),
+            pendaftaran_selesai=date(2026, 7, 30),
+        )
+        self.asleb.periode_aktif = current_period
+        self.asleb.matkul = str(self.matkul)
+        self.asleb.save(update_fields=['periode_aktif', 'matkul', 'diperbarui_pada'])
+        modul = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=1,
+            judul='Pengenalan Struktur Data',
+            file=SimpleUploadedFile('modul-periode.pdf', b'%PDF-1.4', content_type='application/pdf'),
+        )
+        jadwal = self.create_active_schedule()
+        AbsensiAsleb.objects.create(
+            asleb=self.asleb,
+            periode=old_period,
+            jadwal=jadwal,
+            modul_praktikum=modul,
+            tanggal_praktikum=date(2025, 8, 1),
+            modul=1,
+            materi_praktikum=modul.judul,
+            file_modul=modul.file,
+            bukti_foto=self.make_camera_photo('foto-periode-lama.png'),
+            bukti_video=SimpleUploadedFile('video-periode-lama.mp4', b'video', content_type='video/mp4'),
+        )
+
+        form = AbsensiAslebForm(
+            data={
+                'modul_praktikum': modul.pk,
+                'pekerjaan': 'Membantu praktikum periode baru',
+                'latitude': '-6.1680678',
+                'longitude': '106.7916257',
+                'gps_accuracy': '10',
+            },
+            files={
+                'bukti_foto': self.make_camera_photo('foto-periode-baru.png'),
+                'bukti_video': SimpleUploadedFile('video-periode-baru.mp4', b'video', content_type='video/mp4'),
+            },
+            asleb=self.asleb,
+            jadwal=jadwal,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        attendance = form.save(commit=False)
+        attendance.asleb = self.asleb
+        attendance.save()
+        self.assertEqual(attendance.periode, current_period)
+
+    def test_format_tugas_laporan_menolak_tipe_file_aktif(self):
+        form = TugasLaporanPraktikumForm(
+            data={
+                'judul': 'Laporan Modul 1',
+                'matkul': self.matkul.pk,
+                'pertemuan': 1,
+                'deskripsi': 'Kumpulkan laporan.',
+                'format_file': 'pdf,html',
+                'ukuran_maksimal_mb': 10,
+                'mulai_pengumpulan': '2026-07-01T08:00',
+                'batas_pengumpulan': '2026-07-08T08:00',
+                'aktif': True,
+            },
+            pengguna=self.pengguna,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('format_file', form.errors)
 
     def test_absensi_menolak_nomor_modul_yang_sudah_pernah_diabsen_meski_absensi_lama_tanpa_relasi_modul(self):
         PendaftaranAsleb.objects.create(

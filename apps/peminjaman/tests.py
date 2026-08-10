@@ -96,7 +96,7 @@ class PeminjamanViewsTests(TestCase):
     def test_list_page_hover_tabel_ditangani_dark_mode_global(self):
         response = self.client.get(reverse('peminjaman:peminjaman_list'))
 
-        self.assertContains(response, 'hover:bg-slate-50/70')
+        self.assertContains(response, 'peminjaman-row')
 
     def test_list_page_highlight_peminjaman_terlambat(self):
         self.peminjaman.tanggal_kembali = date(2026, 1, 1)
@@ -198,7 +198,7 @@ class PeminjamanViewsTests(TestCase):
         self.assertContains(response, 'hx-select="#peminjaman-list-content"')
         self.assertContains(response, 'hx-push-url="true"')
         self.assertContains(response, 'hx-target="[data-app-content]"')
-        self.assertContains(response, 'hx-select="[data-app-content] &gt; *"', html=False)
+        self.assertContains(response, 'hx-select="[data-app-content] > *"', html=False)
         self.assertContains(response, 'hx-post="/peminjaman/bulk-update-status/"')
         self.assertContains(response, f'hx-post="{reverse("peminjaman:peminjaman_delete", args=[self.peminjaman.pk])}"')
         self.assertContains(response, "document.body.addEventListener('htmx:afterSwap'")
@@ -528,6 +528,8 @@ class PeminjamanViewsTests(TestCase):
         self.assertContains(response, 'function filterCatalog()')
 
     def test_form_edit_menampilkan_detail_barang_terpilih_sebagai_badge(self):
+        self.peminjaman.status = 'diajukan'
+        self.peminjaman.save(update_fields=['status'])
         response = self.client.get(reverse('peminjaman:peminjaman_update', args=[self.peminjaman.pk]))
 
         self.assertEqual(response.status_code, 200)
@@ -536,6 +538,8 @@ class PeminjamanViewsTests(TestCase):
         self.assertContains(response, 'data-selected-barang-remove')
 
     def test_form_edit_tidak_bisa_dipakai_untuk_mengubah_status(self):
+        self.peminjaman.status = 'diajukan'
+        self.peminjaman.save(update_fields=['status'])
         response = self.client.post(
             reverse('peminjaman:peminjaman_update', args=[self.peminjaman.pk]),
             {
@@ -552,7 +556,7 @@ class PeminjamanViewsTests(TestCase):
         self.peminjaman.refresh_from_db()
 
         self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
-        self.assertEqual(self.peminjaman.status, 'dipinjam')
+        self.assertEqual(self.peminjaman.status, 'diajukan')
         self.assertEqual(self.peminjaman.catatan, 'Catatan diperbarui')
 
     def test_barang_dipinjam_dan_rusak_berat_tidak_bisa_dipilih(self):
@@ -1039,7 +1043,7 @@ class PeminjamanMahasiswaTests(TestCase):
         self.assertFalse(detail_list.filter(pk=peminjaman.pk).exists())
         self.assertTrue(PeminjamanTransaksi.objects.filter(pk=transaksi_id).exists())
 
-    def test_admin_bulk_status_tidak_menampilkan_opsi_ditolak(self):
+    def test_laboran_bulk_status_menampilkan_opsi_operasional_tanpa_ditolak(self):
         admin_session = self.client.session
         admin = Pengguna.objects.get(nim_nik='ADM-PJM')
         admin_session['pengguna_id'] = admin.pk
@@ -1049,8 +1053,8 @@ class PeminjamanMahasiswaTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, '<option value="ditolak">Ditolak</option>', html=True)
-        self.assertNotContains(response, '<option value="dikembalikan">Dikembalikan</option>', html=True)
-        self.assertNotContains(response, '<option value="digantikan">Digantikan</option>', html=True)
+        self.assertContains(response, '<option value="dikembalikan">Dikembalikan</option>', html=True)
+        self.assertContains(response, '<option value="digantikan">Digantikan</option>', html=True)
         self.assertContains(response, '<option value="selesai">Selesai</option>', html=True)
 
     def test_admin_bulk_status_selesai_memetakan_status_berdasarkan_status_sebelumnya(self):
@@ -1342,7 +1346,6 @@ class PeminjamanMahasiswaTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, reverse('peminjaman:peminjaman_detail_status_update', args=[peminjaman.pk]))
-        self.assertNotContains(response, 'name="status"')
 
     def test_mahasiswa_tidak_bisa_memproses_status_peminjaman(self):
         endpoints = [

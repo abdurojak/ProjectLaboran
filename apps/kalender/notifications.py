@@ -3,6 +3,7 @@ from datetime import datetime, time, timedelta
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.asleb.services import get_active_asleb_matkul_labels
 from apps.jadwal.models import JadwalPraktikum
 from apps.peminjaman.models import PeminjamanAlat
 from apps.pendaftaran_asleb.models import PendaftaranAsleb, PengaturanPendaftaranAsleb
@@ -20,16 +21,7 @@ JADWAL_PRAKTIKUM_NOTIFICATION_STATUSES = [
 
 
 def get_aslab_matkul_labels(pengguna):
-    if not pengguna or pengguna.role != 'asisten_lab':
-        return []
-
-    from apps.asleb.models import Asleb
-
-    return sorted(
-        Asleb.objects.filter(nim=pengguna.nim_nik, status='aktif')
-        .exclude(matkul='')
-        .values_list('matkul', flat=True)
-    )
+    return get_active_asleb_matkul_labels(pengguna)
 
 
 def sync_user_notifications(pengguna):

@@ -120,7 +120,13 @@ def record_asleb_experience(pengguna, asleb, period=None, assignment=None):
         f'aslab-assignment-experience:{assignment.pk}'
         if assignment else f'aslab-experience:{pengguna.pk}:{end_date:%Y-%m}'
     )
-    description = _append_matkul_to_description('', asleb.matkul or 'laboratorium')
+    assignment_matkul = (
+        assignment.slot.matkul
+        if assignment and getattr(assignment, 'slot_id', None)
+        else None
+    )
+    experience_matkul = assignment_matkul or asleb.matkul or 'laboratorium'
+    description = _append_matkul_to_description('', experience_matkul)
     if assignment and assignment.menggantikan_id:
         description = f'{description} Menyelesaikan masa tugas sebagai aslab pengganti.'
     defaults = {
@@ -139,7 +145,7 @@ def record_asleb_experience(pengguna, asleb, period=None, assignment=None):
     )
     if not created:
         changed_fields = []
-        merged_description = _append_matkul_to_description(experience.deskripsi, asleb.matkul)
+        merged_description = _append_matkul_to_description(experience.deskripsi, experience_matkul)
         if experience.deskripsi != merged_description:
             experience.deskripsi = merged_description
             changed_fields.append('deskripsi')
@@ -255,7 +261,9 @@ def sync_expired_asleb_periods(value=None):
         periode_aktif__isnull=False,
         periode_aktif__selesai__lt=today,
     )
-    expired_rows = list(expired.select_related('periode_aktif'))
+    expired_rows = list(
+        expired.select_for_update().select_related('periode_aktif').order_by('pk')
+    )
     completing_assignments = list(
         AslabAssignment.objects.select_for_update().select_related(
             'asleb', 'slot__periode', 'menggantikan',
@@ -265,9 +273,11 @@ def sync_expired_asleb_periods(value=None):
         ).order_by('pk')
     )
     assignment_asleb_ids = {assignment.asleb_id for assignment in completing_assignments}
-    expired_nims = [item.nim for item in expired_rows]
-    experience_nims = set(expired_nims)
-    experience_nims.update(assignment.asleb.nim for assignment in completing_assignments)
+    completing_assignment_ids = [assignment.pk for assignment in completing_assignments]
+    affected_asleb_ids = {item.pk for item in expired_rows} | assignment_asleb_ids
+    affected_nims = {item.nim for item in expired_rows}
+    affected_nims.update(assignment.asleb.nim for assignment in completing_assignments)
+    expired_nims = list(affected_nims)
     affected_matkul = [item.matkul for item in expired_rows if item.matkul]
     affected_matkul_ids = list(PendaftaranAsleb.objects.filter(
         nim__in=expired_nims,
@@ -286,8 +296,29 @@ def sync_expired_asleb_periods(value=None):
             for matkul in MataKuliahAsleb.objects.all()
             if str(matkul) in affected_labels
         ])
-    affected_matkul_ids = list(set(affected_matkul_ids))
-    expired.update(status='nonaktif')
+    affected_matkul_ids.extend(
+        assignment.slot.matkul_id
+        for assignment in completing_assignments
+        if assignment.slot.matkul_id
+    )
+    affected_matkul_ids = set(affected_matkul_ids)
+
+    # A delayed cleanup of an old period must never clear participants/tasks
+    # that already belong to a newer active assignment of the same subject.
+    protected_matkul_ids = set(AslabAssignment.objects.filter(
+        status=AslabAssignment.STATUS_ACTIVE,
+        slot__periode__selesai__gte=today,
+    ).exclude(pk__in=completing_assignment_ids).values_list('slot__matkul_id', flat=True))
+    cleanup_matkul_ids = list(affected_matkul_ids - protected_matkul_ids)
+
+    for asleb in expired_rows:
+        has_remaining_assignment = AslabAssignment.objects.filter(
+            asleb_id=asleb.pk,
+            status=AslabAssignment.STATUS_ACTIVE,
+        ).exclude(pk__in=completing_assignment_ids).exists()
+        if not has_remaining_assignment:
+            asleb.status = 'nonaktif'
+            asleb.save(update_fields=['status', 'diperbarui_pada'])
 
     expired_honor_qs = HonorAsleb.objects.filter(asleb__nim__in=expired_nims).exclude(status='dibayar')
     for honor in expired_honor_qs:
@@ -303,13 +334,13 @@ def sync_expired_asleb_periods(value=None):
         if changed_fields:
             honor.save(update_fields=changed_fields + ['diperbarui_pada'])
 
-    if affected_matkul or affected_matkul_ids:
+    if affected_matkul or cleanup_matkul_ids:
         from apps.jadwal.models import PermintaanPerubahanJadwal
         PesertaPraktikum.objects.filter(
-            matkul_id__in=affected_matkul_ids,
+            matkul_id__in=cleanup_matkul_ids,
         ).update(aktif=False)
         TugasLaporanPraktikum.objects.filter(
-            matkul_id__in=affected_matkul_ids, aktif=True,
+            matkul_id__in=cleanup_matkul_ids, aktif=True,
         ).update(aktif=False)
         PermintaanPerubahanJadwal.objects.filter(
             diajukan_oleh__nim_nik__in=expired_nims,
@@ -322,7 +353,7 @@ def sync_expired_asleb_periods(value=None):
 
     users_by_nim = {
         item.nim_nik: item
-        for item in Pengguna.objects.filter(nim_nik__in=experience_nims)
+        for item in Pengguna.objects.filter(nim_nik__in=affected_nims)
     }
     for assignment in completing_assignments:
         assignment.status = AslabAssignment.STATUS_COMPLETED
@@ -360,7 +391,7 @@ def sync_expired_asleb_periods(value=None):
             pengguna.role = 'mahasiswa'
             pengguna.save(update_fields=['role', 'diperbarui_pada'])
             demoted += 1
-    return len(expired_nims), demoted
+    return len(affected_asleb_ids), demoted
 
 
 @transaction.atomic

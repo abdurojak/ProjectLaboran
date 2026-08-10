@@ -45,6 +45,7 @@ from .models import Fakultas, PengalamanPengguna, Pengguna, Prodi, School
 
 
 OTP_SESSION_KEY = 'pengguna_otp'
+PENDING_REGISTER_USER_KEY = 'pengguna_pending_register_id'
 OTP_EXPIRE_MINUTES = 10
 OTP_MAX_ATTEMPTS = 5
 
@@ -93,6 +94,18 @@ def login_attempt_cache_key(request):
     return f'pengguna-login-attempt:{digest}'
 
 
+def password_reset_request_cache_key(request, identifier):
+    address = request.META.get('REMOTE_ADDR', '')
+    digest = hashlib.sha256(f'{address}:{identifier.strip().lower()}'.encode()).hexdigest()
+    return f'pengguna-password-reset:{digest}'
+
+
+def otp_resend_cache_key(request, pengguna):
+    address = request.META.get('REMOTE_ADDR', '')
+    digest = hashlib.sha256(f'{address}:{pengguna.pk}:register'.encode()).hexdigest()
+    return f'pengguna-otp-resend:{digest}'
+
+
 def build_public_url(route_name, *args):
     base_url = settings.PUBLIC_ACCESS_BASE_URL.rstrip('/') + '/'
     return urljoin(base_url, reverse(route_name, args=args).lstrip('/'))
@@ -106,7 +119,7 @@ def store_otp(request, purpose, pengguna, method, extra=None):
     code = generate_otp_code()
     otp_data = {
         'purpose': purpose,
-        'pengguna_id': pengguna.pk,
+        'pengguna_id': pengguna.pk if pengguna else None,
         'method': method,
         'code': code,
         'attempts': 0,
@@ -136,6 +149,16 @@ def get_pending_otp(request, purpose):
     return otp
 
 
+def get_pending_registration_user(request):
+    pengguna_id = request.session.get(PENDING_REGISTER_USER_KEY)
+    if not pengguna_id:
+        return None
+    pengguna = Pengguna.objects.filter(pk=pengguna_id, is_verified=False).first()
+    if not pengguna:
+        request.session.pop(PENDING_REGISTER_USER_KEY, None)
+    return pengguna
+
+
 def otp_code_matches(request, otp, submitted_code):
     if secrets.compare_digest(str(submitted_code), str(otp['code'])):
         return True
@@ -150,7 +173,14 @@ def otp_code_matches(request, otp, submitted_code):
     return False
 
 
-def send_verification_code(request, pengguna, method, purpose, extra=None):
+def send_verification_code(
+    request,
+    pengguna,
+    method,
+    purpose,
+    extra=None,
+    show_delivery_message=True,
+):
     code = store_otp(request, purpose, pengguna, method, extra=extra)
     if purpose == 'register':
         verification_url = build_public_url_with_query('pengguna:verify_register', {'kode': code})
@@ -166,10 +196,12 @@ def send_verification_code(request, pengguna, method, purpose, extra=None):
             or settings.EMAIL_HOST_PASSWORD == 'change-me'
         )
         if is_simulated_email:
-            messages.info(
-                request,
-                f'Kode verifikasi email untuk simulasi lokal: {code}. Link verifikasi: {verification_url}. SMTP belum aktif sampai EMAIL_HOST_PASSWORD diganti dari change-me.',
-            )
+            if show_delivery_message:
+                messages.info(
+                    request,
+                    f'Kode verifikasi email untuk simulasi lokal: {code}. Link verifikasi: {verification_url}. SMTP belum aktif sampai EMAIL_HOST_PASSWORD diganti dari change-me.',
+                )
+            return True
         else:
             try:
                 text_body = (
@@ -190,14 +222,22 @@ def send_verification_code(request, pengguna, method, purpose, extra=None):
                     note=f'Kode hanya berlaku selama {OTP_EXPIRE_MINUTES} menit. Jangan berikan kode ini kepada siapa pun.',
                     fail_silently=False,
                 )
-                messages.info(request, f'Kode verifikasi dikirim ke email {pengguna.email}. Link verifikasi memakai {verification_url}.')
-            except (OSError, SMTPException) as exc:
-                messages.error(request, f'Email verifikasi gagal dikirim: {exc}. Periksa EMAIL_HOST_PASSWORD/app-password SMTP.')
+                if show_delivery_message:
+                    messages.info(request, f'Kode verifikasi dikirim ke email {pengguna.email}. Link verifikasi memakai {verification_url}.')
+                return True
+            except (OSError, SMTPException):
+                if show_delivery_message:
+                    messages.error(
+                        request,
+                        'Email verifikasi belum dapat dikirim. Silakan coba lagi atau hubungi pengelola LabHub.',
+                    )
+                return False
     else:
         messages.info(
             request,
             f'Kode verifikasi No HP untuk simulasi lokal: {code}. Link verifikasi: {verification_url}. Integrasi SMS/WhatsApp bisa ditambahkan nanti.',
         )
+        return True
 
 
 class PenggunaListView(ListView):
@@ -529,12 +569,14 @@ class SchoolSearchView(View):
         province = request.GET.get('province', '').strip()
         city = request.GET.get('city', '').strip()
 
-        if len(keyword) < 2 or level not in {'SD', 'SMP', 'SMA', 'SMK'}:
+        if len(keyword) < 2:
             return JsonResponse({'results': []})
 
-        queryset = School.objects.filter(aktif=True, jenjang=level).filter(
+        queryset = School.objects.filter(aktif=True).filter(
             Q(nama__icontains=keyword) | Q(npsn__icontains=keyword)
         )
+        if level in {'SD', 'SMP', 'SMA', 'SMK'}:
+            queryset = queryset.filter(jenjang=level)
         if province:
             queryset = queryset.filter(provinsi__icontains=province)
         if city:
@@ -636,6 +678,8 @@ class PenggunaRegisterView(CreateView):
 
     def form_valid(self, form):
         response = super().form_valid(form)
+        self.request.session[PENDING_REGISTER_USER_KEY] = self.object.pk
+        self.request.session.modified = True
         send_verification_code(
             self.request,
             self.object,
@@ -659,10 +703,51 @@ class PenggunaVerifyRegisterView(FormView):
     success_url = reverse_lazy('dashboard:home')
 
     def dispatch(self, request, *args, **kwargs):
-        if not get_pending_otp(request, 'register'):
+        if not get_pending_otp(request, 'register') and not get_pending_registration_user(request):
             messages.warning(request, 'Tidak ada proses verifikasi aktif. Silakan registrasi ulang.')
             return redirect('pengguna:register')
         return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['has_active_otp'] = bool(get_pending_otp(self.request, 'register'))
+        context['pending_user'] = get_pending_registration_user(self.request)
+        return context
+
+    def post(self, request, *args, **kwargs):
+        if request.POST.get('action') == 'resend':
+            return self.resend_code()
+        return super().post(request, *args, **kwargs)
+
+    def resend_code(self):
+        pengguna = get_pending_registration_user(self.request)
+        if not pengguna:
+            messages.warning(self.request, 'Akun pending tidak ditemukan. Silakan registrasi kembali.')
+            return redirect('pengguna:register')
+
+        cache_key = otp_resend_cache_key(self.request, pengguna)
+        request_count = int(cache.get(cache_key, 0))
+        if request_count >= settings.OTP_RESEND_MAX_REQUESTS:
+            messages.error(
+                self.request,
+                'Batas kirim ulang kode tercapai. Silakan tunggu beberapa saat sebelum mencoba kembali.',
+            )
+            return redirect('pengguna:verify_register')
+
+        cache.set(
+            cache_key,
+            request_count + 1,
+            settings.OTP_RESEND_WINDOW_SECONDS,
+        )
+        delivered = send_verification_code(
+            self.request,
+            pengguna,
+            'email',
+            'register',
+        )
+        if delivered:
+            messages.success(self.request, 'Kode verifikasi baru berhasil dikirim.')
+        return redirect('pengguna:verify_register')
 
     def get(self, request, *args, **kwargs):
         kode = request.GET.get('kode', '').strip()
@@ -676,10 +761,13 @@ class PenggunaVerifyRegisterView(FormView):
 
     def form_valid(self, form):
         otp = get_pending_otp(self.request, 'register')
+        if not otp:
+            form.add_error('kode', 'Kode sudah kedaluwarsa. Kirim ulang kode untuk melanjutkan.')
+            return self.form_invalid(form)
         if not otp_code_matches(self.request, otp, form.cleaned_data['kode']):
             if not get_pending_otp(self.request, 'register'):
-                messages.error(self.request, 'Batas percobaan kode tercapai. Silakan registrasi ulang.')
-                return redirect('pengguna:register')
+                messages.error(self.request, 'Batas percobaan kode tercapai. Kirim ulang kode untuk melanjutkan.')
+                return redirect('pengguna:verify_register')
             form.add_error('kode', 'Kode verifikasi tidak sesuai.')
             return self.form_invalid(form)
 
@@ -688,6 +776,8 @@ class PenggunaVerifyRegisterView(FormView):
         pengguna.save(update_fields=['is_verified', 'diperbarui_pada'])
         linked_count = link_peserta_praktikum_to_pengguna(pengguna)
         self.request.session.pop(OTP_SESSION_KEY, None)
+        self.request.session.pop(PENDING_REGISTER_USER_KEY, None)
+        cache.delete(otp_resend_cache_key(self.request, pengguna))
         self.request.session.cycle_key()
         self.request.session['pengguna_id'] = pengguna.pk
         if linked_count:
@@ -706,19 +796,45 @@ class ForgotPasswordRequestView(FormView):
     success_url = reverse_lazy('pengguna:reset_password')
 
     def form_valid(self, form):
-        try:
-            pengguna = Pengguna.objects.get(nim_nik=form.cleaned_data['nim_nik'])
-        except Pengguna.DoesNotExist:
-            form.add_error('nim_nik', 'Pengguna dengan NIM/NIK ini tidak ditemukan.')
-            return self.form_invalid(form)
+        identifier = form.cleaned_data['nim_nik'].strip()
+        cache_key = password_reset_request_cache_key(self.request, identifier)
+        request_count = int(cache.get(cache_key, 0))
+        pengguna = Pengguna.objects.filter(nim_nik=identifier).first()
 
-        send_verification_code(
+        if request_count < settings.PASSWORD_RESET_MAX_REQUESTS:
+            cache.set(
+                cache_key,
+                request_count + 1,
+                settings.PASSWORD_RESET_WINDOW_SECONDS,
+            )
+            if pengguna:
+                send_verification_code(
+                    self.request,
+                    pengguna,
+                    'email',
+                    'reset_password',
+                    show_delivery_message=False,
+                )
+            else:
+                store_otp(self.request, 'reset_password', None, 'email')
+        else:
+            # A decoy flow keeps the response indistinguishable while avoiding
+            # repeated email delivery to a known account.
+            store_otp(self.request, 'reset_password', None, 'email')
+
+        messages.success(
             self.request,
-            pengguna,
-            'email',
-            'reset_password',
+            'Jika NIM/NIK terdaftar, kode reset password telah dikirim ke email akun.',
         )
-        messages.success(self.request, 'Kode reset password berhasil dibuat.')
+        if settings.DEBUG and (
+            settings.EMAIL_BACKEND == 'django.core.mail.backends.console.EmailBackend'
+            or not settings.EMAIL_HOST_PASSWORD
+            or settings.EMAIL_HOST_PASSWORD == 'change-me'
+        ):
+            messages.info(
+                self.request,
+                f"Kode simulasi lokal: {self.request.session[OTP_SESSION_KEY]['code']}.",
+            )
         return redirect(self.success_url)
 
 
@@ -742,7 +858,15 @@ class ResetPasswordView(FormView):
             form.add_error('kode', 'Kode verifikasi tidak sesuai.')
             return self.form_invalid(form)
 
-        pengguna = Pengguna.objects.get(pk=otp['pengguna_id'])
+        pengguna_id = otp.get('pengguna_id')
+        pengguna = Pengguna.objects.filter(pk=pengguna_id).first() if pengguna_id else None
+        if not pengguna:
+            self.request.session.pop(OTP_SESSION_KEY, None)
+            messages.info(
+                self.request,
+                'Jika data akun valid, silakan gunakan kode terbaru yang dikirim ke email.',
+            )
+            return redirect('pengguna:forgot_password')
         if check_password(form.cleaned_data['password'], pengguna.password):
             form.add_error('password', 'Password baru tidak boleh sama dengan password yang sedang digunakan.')
             return self.form_invalid(form)

@@ -13,7 +13,7 @@ from django.core.management.base import CommandError
 from django.db import IntegrityError, connection, transaction
 from django.db.migrations.executor import MigrationExecutor
 from django.db.models.deletion import ProtectedError
-from django.test import SimpleTestCase, TestCase
+from django.test import SimpleTestCase, TestCase, TransactionTestCase
 from django.utils import timezone
 
 from apps.asleb.models import Asleb
@@ -688,7 +688,7 @@ class CheckConstraintCompatibilityGuardTests(SimpleTestCase):
         )
 
 
-class AslabBackfillTests(TestCase):
+class AslabBackfillTests(TransactionTestCase):
     def setUp(self):
         self.migration = import_module(
             'apps.pendaftaran_asleb.migrations.0017_backfill_aslab_assignments'

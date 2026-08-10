@@ -1,5 +1,6 @@
 import csv
 import io
+import zipfile
 from datetime import timedelta
 from pathlib import Path
 
@@ -23,10 +24,49 @@ from .models import (
     SuratHonorAsleb,
     TugasLaporanPraktikum,
 )
+from .services import (
+    get_active_asleb_matkul,
+    get_active_asleb_matkul_ids_for_pengguna,
+    get_active_asleb_period,
+    get_asleb_matkul_for_schedule,
+)
 
 
 ENABLE_CAMERA_LOCATION_CAPTURE = False
 MAX_DAILY_MODULE_ATTENDANCE = 2
+
+
+def validate_document_upload(uploaded, allowed_extensions=None):
+    """Validate the document signature instead of trusting its filename/MIME type."""
+    if not uploaded:
+        return ''
+
+    allowed_extensions = set(allowed_extensions or {'pdf', 'doc', 'docx'})
+    extension = Path(uploaded.name).suffix.lower().lstrip('.')
+    if extension not in allowed_extensions:
+        raise forms.ValidationError('File hanya boleh PDF atau Word.')
+
+    try:
+        uploaded.seek(0)
+        if extension == 'pdf':
+            if b'%PDF-' not in uploaded.read(1024):
+                raise forms.ValidationError('Isi file bukan PDF yang valid.')
+        elif extension == 'doc':
+            if uploaded.read(8) != bytes.fromhex('D0CF11E0A1B11AE1'):
+                raise forms.ValidationError('Isi file bukan dokumen Word .doc yang valid.')
+        else:
+            uploaded.seek(0)
+            try:
+                with zipfile.ZipFile(uploaded) as archive:
+                    names = set(archive.namelist())
+                    if '[Content_Types].xml' not in names or 'word/document.xml' not in names:
+                        raise forms.ValidationError('Isi file bukan dokumen Word .docx yang valid.')
+            except (zipfile.BadZipFile, OSError):
+                raise forms.ValidationError('Isi file bukan dokumen Word .docx yang valid.')
+    finally:
+        uploaded.seek(0)
+
+    return extension
 
 
 class AslebForm(forms.ModelForm):
@@ -205,9 +245,15 @@ class AbsensiAslebForm(forms.ModelForm):
         self.asleb = kwargs.pop('asleb')
         self.jadwal = kwargs.pop('jadwal')
         super().__init__(*args, **kwargs)
-        matkul = get_asleb_matkul(self.asleb)
+        self.periode = get_active_asleb_period(self.asleb)
+        if self.periode is None:
+            from apps.pendaftaran_asleb.models import PeriodeAsleb
+
+            self.periode = PeriodeAsleb.get_for_date(timezone.localdate())
+        matkul = get_asleb_matkul_for_schedule(self.asleb, self.jadwal)
         used_modules = AbsensiAsleb.objects.filter(
             asleb=self.asleb,
+            periode=self.periode,
             modul_praktikum__isnull=False,
         ).values_list('modul_praktikum_id', flat=True)
         queryset = ModulPraktikum.objects.none()
@@ -240,9 +286,13 @@ class AbsensiAslebForm(forms.ModelForm):
 
     def clean_modul_praktikum(self):
         modul = self.cleaned_data['modul_praktikum']
-        if modul.matkul != get_asleb_matkul(self.asleb) or self.jadwal.mata_kuliah != str(modul.matkul):
+        active_matkul = get_asleb_matkul_for_schedule(self.asleb, self.jadwal)
+        if modul.matkul != active_matkul or self.jadwal.mata_kuliah != str(modul.matkul):
             raise forms.ValidationError('Modul tidak sesuai dengan mata kuliah pada jadwal aktif.')
-        duplicate_qs = AbsensiAsleb.objects.filter(asleb=self.asleb)
+        duplicate_qs = AbsensiAsleb.objects.filter(
+            asleb=self.asleb,
+            periode=self.periode,
+        )
         if self.instance and self.instance.pk:
             duplicate_qs = duplicate_qs.exclude(pk=self.instance.pk)
         if duplicate_qs.filter(modul_praktikum=modul).exists():
@@ -310,6 +360,7 @@ class AbsensiAslebForm(forms.ModelForm):
         instance = super().save(commit=False)
         modul = self.cleaned_data['modul_praktikum']
         instance.jadwal = self.jadwal
+        instance.periode = self.periode
         instance.tanggal_praktikum = timezone.localdate()
         instance.modul = modul.nomor
         instance.materi_praktikum = modul.judul
@@ -376,9 +427,7 @@ class ModulPraktikumForm(forms.ModelForm):
         uploaded = self.cleaned_data.get('file')
         if not uploaded:
             return uploaded
-        lower_name = uploaded.name.lower()
-        if not lower_name.endswith(('.pdf', '.doc', '.docx')):
-            raise forms.ValidationError('File modul hanya boleh PDF atau Word.')
+        validate_document_upload(uploaded)
         if uploaded.size > 15 * 1024 * 1024:
             raise forms.ValidationError('Ukuran file modul maksimal 15 MB.')
         return uploaded
@@ -606,12 +655,7 @@ class TugasLaporanPraktikumForm(forms.ModelForm):
 
         matkul_qs = MataKuliahAsleb.objects.filter(aktif=True).order_by('nama', 'kelas')
         if self.pengguna and self.pengguna.role == 'asisten_lab':
-            active_labels = list(
-                Asleb.objects.filter(nim=self.pengguna.nim_nik, status='aktif')
-                .exclude(matkul='')
-                .values_list('matkul', flat=True)
-            )
-            active_ids = [matkul.pk for matkul in matkul_qs if str(matkul) in active_labels]
+            active_ids = get_active_asleb_matkul_ids_for_pengguna(self.pengguna)
             matkul_qs = MataKuliahAsleb.objects.filter(pk__in=active_ids).order_by('nama', 'kelas')
         self.fields['matkul'].queryset = matkul_qs
         self.fields['modul'].queryset = ModulPraktikum.objects.select_related('matkul').order_by('matkul__nama', 'matkul__kelas', 'nomor')
@@ -626,6 +670,17 @@ class TugasLaporanPraktikumForm(forms.ModelForm):
             self.add_error('modul', 'Modul harus berasal dari mata kuliah yang dipilih.')
         if mulai and batas and batas <= mulai:
             self.add_error('batas_pengumpulan', 'Batas pengumpulan harus setelah waktu mulai.')
+        raw_formats = cleaned_data.get('format_file', '')
+        formats = {
+            item.strip().lower().lstrip('.')
+            for item in raw_formats.split(',')
+            if item.strip()
+        }
+        allowed_formats = {'pdf', 'doc', 'docx'}
+        if not formats or not formats.issubset(allowed_formats):
+            self.add_error('format_file', 'Format laporan hanya boleh PDF atau Word (pdf, doc, docx).')
+        else:
+            cleaned_data['format_file'] = ','.join(sorted(formats))
         return cleaned_data
 
 
@@ -649,6 +704,7 @@ class PengumpulanLaporanPraktikumForm(forms.ModelForm):
         extension = uploaded.name.lower().rsplit('.', 1)[-1] if '.' in uploaded.name else ''
         if extension not in self.tugas.allowed_extensions:
             raise forms.ValidationError('File laporan hanya boleh sesuai format yang ditentukan tugas.')
+        validate_document_upload(uploaded, self.tugas.allowed_extensions)
         max_size = self.tugas.ukuran_maksimal_mb * 1024 * 1024
         if uploaded.size > max_size:
             raise forms.ValidationError(f'Ukuran file maksimal {self.tugas.ukuran_maksimal_mb} MB.')
@@ -674,25 +730,4 @@ class ReviewLaporanPraktikumForm(forms.ModelForm):
 
 
 def get_asleb_matkul(asleb):
-    from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb
-
-    if not asleb or asleb.status != 'aktif':
-        return None
-
-    active_match = next(
-        (
-            matkul for matkul in MataKuliahAsleb.objects.filter(aktif=True)
-            if str(matkul) == asleb.matkul
-        ),
-        None,
-    )
-    if active_match:
-        return active_match
-
-    registration = PendaftaranAsleb.objects.filter(
-        nim=asleb.nim,
-        status='digenerate',
-    ).select_related('matkul').order_by('-pk').first()
-    if registration:
-        return registration.matkul
-    return None
+    return get_active_asleb_matkul(asleb)

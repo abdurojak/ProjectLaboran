@@ -42,7 +42,7 @@ from .jwt_service import (
     get_active_session,
     revoke_session,
 )
-from .permissions import IsAsistenLab, IsLaboran
+from .permissions import IsAsistenLab, IsLaboran, IsMobileUser
 from .serializers import (
     AttendanceSerializer,
     CheckInSerializer,
@@ -160,6 +160,8 @@ class RefreshTokenView(APIView):
 
 
 class LogoutView(APIView):
+    permission_classes = [IsMobileUser]
+
     def post(self, request):
         session = get_active_session(request.auth)
         revoke_session(session)
@@ -167,6 +169,8 @@ class LogoutView(APIView):
 
 
 class ProfileView(APIView):
+    permission_classes = [IsMobileUser]
+
     def get(self, request):
         if request.user.role == 'laboran':
             return Response({
@@ -239,6 +243,8 @@ class DashboardView(APIView):
 
 
 class ChatbotView(APIView):
+    permission_classes = [IsMobileUser]
+
     def post(self, request):
         message = str(request.data.get('message') or '').strip()[:1000]
         if not message:

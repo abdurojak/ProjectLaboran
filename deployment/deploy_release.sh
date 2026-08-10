@@ -1354,7 +1354,7 @@ build_candidate() {
         exec "$RUNUSER" --user "$BUILD_USER" -- /usr/bin/env -i \
             HOME=/var/lib/labhub-build PATH=/usr/local/bin:/usr/bin:/bin \
             PYTHONDONTWRITEBYTECODE=1 \
-            SECRET_KEY=collectstatic-non-production-placeholder \
+            SECRET_KEY=cs7Yz6BLj2Vp4uX9Qf8Na3Km5Rw1Hg0Dt6Ec9Ps4Wv2Jx7Lb8Mn5 \
             DEBUG=False \
             LABHUB_LICENSE_ENFORCED=False \
             "$python" manage.py collectstatic --noinput

@@ -1,20 +1,25 @@
 from datetime import date, time, timedelta
+import shutil
+import tempfile
+from smtplib import SMTPException
 from unittest.mock import patch
 
 from django.contrib.auth.hashers import check_password
 from django import forms
 from django.conf import settings
+from django.core import mail
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.http import HttpResponse
 from django.db import IntegrityError
-from django.test import TestCase, override_settings
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.asleb.models import Asleb
-from apps.asleb.models import PesertaPraktikum
+from apps.asleb.models import Asleb, ModulPraktikum, PesertaPraktikum
 from apps.kalender.models import KegiatanKalender
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb
+from .middleware import PenggunaLoginRequiredMiddleware
 from .models import Fakultas, PengalamanPengguna, Pengguna, Prodi
 
 
@@ -737,8 +742,13 @@ class PenggunaViewTests(TestCase):
         self.pengguna.refresh_from_db()
         self.assertFalse(self.pengguna.foto)
 
+    @patch('apps.pengguna.forms.validate_safe_image_upload')
     @patch('apps.pengguna.forms.validate_human_face_photo')
-    def test_admin_boleh_mengunggah_foto_profil_tanpa_deteksi_wajah(self, mock_validate_face):
+    def test_admin_boleh_mengunggah_foto_profil_tanpa_deteksi_wajah(
+        self,
+        mock_validate_face,
+        mock_validate_image,
+    ):
         from .forms import PenggunaProfileForm
 
         form = PenggunaProfileForm(current_pengguna=self.pengguna)
@@ -747,6 +757,7 @@ class PenggunaViewTests(TestCase):
 
         self.assertIs(form.clean_foto(), marker)
         mock_validate_face.assert_not_called()
+        mock_validate_image.assert_called_once_with(marker)
 
     def test_mahasiswa_tidak_bisa_mengubah_role_lewat_update_profile(self):
         self.pengguna.role = 'mahasiswa'
@@ -1174,7 +1185,8 @@ class PenggunaAuthTests(TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertNotContains(response, 'id="dashboard-sidebar"', html=False)
             self.assertContains(response, label)
-            window_tab = response.content.decode().split('data-window-tab', 1)[1].split('</span>', 1)[0]
+            rendered = response.content.decode()
+            window_tab = rendered.rsplit('<span data-window-tab', 1)[1].split('</span>', 1)[0]
             self.assertIn(label, window_tab)
             self.assertNotIn('Dashboard', window_tab)
 
@@ -1289,6 +1301,112 @@ class PenggunaAuthTests(TestCase):
         self.assertTrue(pengguna.is_verified)
         self.assertEqual(self.client.session['pengguna_id'], pengguna.pk)
         self.assertNotIn('pengguna_otp', self.client.session)
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.smtp.EmailBackend',
+        EMAIL_HOST_PASSWORD='configured-for-test',
+    )
+    @patch('apps.pengguna.views.send_branded_email', side_effect=SMTPException('mail unavailable'))
+    @patch('apps.pengguna.forms.validate_human_face_photo')
+    def test_register_gagal_kirim_email_tetap_bisa_meminta_otp_baru(
+        self,
+        _mock_validate_face,
+        _mock_send_email,
+    ):
+        response = self.client.post(
+            reverse('pengguna:register'),
+            {
+                'nama_pengguna': 'OTP Tertunda',
+                'nim_nik': '0642201088',
+                'email': 'otp.tertunda',
+                'password': 'passwordku123',
+                'password_confirmation': 'passwordku123',
+                'no_hp': '081234567888',
+                'alamat': 'Jakarta',
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Informatika',
+                'gender': 'perempuan',
+                'foto': registration_photo('otp-failed.gif'),
+            },
+            follow=True,
+        )
+
+        pengguna = Pengguna.objects.get(nim_nik='0642201088')
+        self.assertFalse(pengguna.is_verified)
+        self.assertEqual(self.client.session['pengguna_pending_register_id'], pengguna.pk)
+        self.assertContains(response, 'Email verifikasi belum dapat dikirim')
+        self.assertContains(response, 'Kirim ulang kode')
+
+        with patch('apps.pengguna.views.send_branded_email') as resend:
+            response = self.client.post(
+                reverse('pengguna:verify_register'),
+                {'action': 'resend'},
+                follow=True,
+            )
+
+        self.assertEqual(resend.call_count, 1)
+        self.assertContains(response, 'Kode verifikasi baru berhasil dikirim')
+        self.assertEqual(self.client.session['pengguna_otp']['pengguna_id'], pengguna.pk)
+
+    @patch('apps.pengguna.forms.validate_human_face_photo')
+    def test_register_otp_kedaluwarsa_tidak_mengunci_akun(self, _mock_validate_face):
+        self.client.post(
+            reverse('pengguna:register'),
+            {
+                'nama_pengguna': 'OTP Kedaluwarsa',
+                'nim_nik': '0642201089',
+                'email': 'otp.kedaluwarsa',
+                'password': 'passwordku123',
+                'password_confirmation': 'passwordku123',
+                'no_hp': '081234567889',
+                'alamat': 'Jakarta',
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Informatika',
+                'gender': 'laki_laki',
+                'foto': registration_photo('otp-expired.gif'),
+            },
+        )
+        session = self.client.session
+        otp = session['pengguna_otp']
+        otp['expires_at'] = (timezone.now() - timedelta(minutes=1)).isoformat()
+        session['pengguna_otp'] = otp
+        session.save()
+
+        response = self.client.get(reverse('pengguna:verify_register'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Kode sebelumnya sudah kedaluwarsa')
+        self.assertContains(response, 'Kirim ulang kode')
+        self.assertTrue(Pengguna.objects.filter(nim_nik='0642201089', is_verified=False).exists())
+
+    @override_settings(OTP_RESEND_MAX_REQUESTS=1, OTP_RESEND_WINDOW_SECONDS=60)
+    @patch('apps.pengguna.forms.validate_human_face_photo')
+    def test_kirim_ulang_otp_register_dibatasi(self, _mock_validate_face):
+        self.client.post(
+            reverse('pengguna:register'),
+            {
+                'nama_pengguna': 'OTP Rate Limit',
+                'nim_nik': '0642201090',
+                'email': 'otp.ratelimit',
+                'password': 'passwordku123',
+                'password_confirmation': 'passwordku123',
+                'no_hp': '081234567890',
+                'alamat': 'Jakarta',
+                'fakultas': 'Teknologi Industri',
+                'prodi': 'Informatika',
+                'gender': 'laki_laki',
+                'foto': registration_photo('otp-rate.gif'),
+            },
+        )
+
+        self.client.post(reverse('pengguna:verify_register'), {'action': 'resend'})
+        response = self.client.post(
+            reverse('pengguna:verify_register'),
+            {'action': 'resend'},
+            follow=True,
+        )
+
+        self.assertContains(response, 'Batas kirim ulang kode tercapai')
 
     def test_register_menolak_email_domain_trisakti_tanpa_std(self):
         response = self.client.post(
@@ -1487,6 +1605,36 @@ class PenggunaAuthTests(TestCase):
         self.assertRedirects(response, reverse('pengguna:login'))
         self.assertTrue(check_password('passwordbaru123', self.pengguna.password))
 
+    def test_forgot_password_tidak_membocorkan_apakah_nim_terdaftar(self):
+        response = self.client.post(
+            reverse('pengguna:forgot_password'),
+            {'nim_nik': '9999999999'},
+        )
+
+        self.assertRedirects(response, reverse('pengguna:reset_password'))
+        self.assertIsNone(self.client.session['pengguna_otp']['pengguna_id'])
+        self.assertEqual(len(mail.outbox), 0)
+
+        kode = self.client.session['pengguna_otp']['code']
+        reset_response = self.client.post(reverse('pengguna:reset_password'), {
+            'kode': kode,
+            'password': 'passwordbaru123',
+            'password_confirmation': 'passwordbaru123',
+        })
+        self.assertRedirects(reset_response, reverse('pengguna:forgot_password'))
+
+    @override_settings(PASSWORD_RESET_MAX_REQUESTS=2, PASSWORD_RESET_WINDOW_SECONDS=900)
+    def test_forgot_password_membatasi_pengiriman_email_berulang(self):
+        for _ in range(3):
+            response = self.client.post(
+                reverse('pengguna:forgot_password'),
+                {'nim_nik': self.pengguna.nim_nik},
+            )
+            self.assertRedirects(response, reverse('pengguna:reset_password'))
+
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertIsNone(self.client.session['pengguna_otp']['pengguna_id'])
+
     def test_reset_password_menolak_password_lama(self):
         response = self.client.post(
             reverse('pengguna:forgot_password'),
@@ -1591,8 +1739,8 @@ class PenggunaAuthTests(TestCase):
         self.assertContains(allowed_response, 'Ruangan')
         self.assertContains(kalender_response, 'Kalender Kegiatan')
         self.assertContains(ruangan_response, 'Daftar Lab')
-        self.assertNotContains(allowed_response, 'Inventaris')
-        self.assertNotContains(allowed_response, 'Pengguna')
+        self.assertNotContains(allowed_response, f'href="{reverse("inventaris:barang_list")}"')
+        self.assertNotContains(allowed_response, f'href="{reverse("pengguna:list")}"')
         self.assertRedirects(blocked_response, reverse('dashboard:home'))
 
     def test_mahasiswa_bisa_membuat_kegiatan_pribadi_tapi_tidak_mengelola_kegiatan_lain(self):
@@ -1624,12 +1772,12 @@ class PenggunaAuthTests(TestCase):
         response = self.client.get(reverse('dashboard:home'))
 
         self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, 'Inventaris')
-        self.assertNotContains(response, 'Barang Tertinggal')
-        self.assertNotContains(response, 'Data Aslab')
-        self.assertNotContains(response, 'Pendaftaran Aslab')
-        self.assertNotContains(response, 'Rekap Honorarium Aslab')
-        self.assertNotContains(response, 'Pengguna')
+        self.assertNotContains(response, f'href="{reverse("inventaris:barang_list")}"')
+        self.assertNotContains(response, f'href="{reverse("barang_tertinggal:list")}"')
+        self.assertNotContains(response, f'href="{reverse("asleb:asleb_list")}"')
+        self.assertNotContains(response, f'href="{reverse("pendaftaran_asleb:pendaftaran_list")}"')
+        self.assertNotContains(response, f'href="{reverse("asleb:honor_list")}"')
+        self.assertNotContains(response, f'href="{reverse("pengguna:list")}"')
 
     def test_asisten_lab_tidak_bisa_membuka_menu_admin_asleb_langsung(self):
         self.pengguna.role = 'asisten_lab'
@@ -1696,6 +1844,19 @@ class PenggunaAuthTests(TestCase):
 
 
 class SensitiveMediaAccessTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._temp_media_root = tempfile.mkdtemp(prefix='pengguna-media-test-')
+        cls._media_override = override_settings(MEDIA_ROOT=cls._temp_media_root)
+        cls._media_override.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._media_override.disable()
+        shutil.rmtree(cls._temp_media_root, ignore_errors=True)
+        super().tearDownClass()
+
     def setUp(self):
         self.owner = Pengguna.objects.create(
             nama_pengguna='Pemilik Transkrip',
@@ -1737,6 +1898,7 @@ class SensitiveMediaAccessTests(TestCase):
             matkul=matkul,
             transkrip='pendaftaran_asleb/transkrip/rahasia.pdf',
         )
+        self.matkul = matkul
         self.url = f'{settings.MEDIA_URL}{self.registration.transkrip.name}'
 
     def login(self, pengguna):
@@ -1763,3 +1925,109 @@ class SensitiveMediaAccessTests(TestCase):
         response = self.client.get(self.url)
 
         self.assertNotEqual(response.status_code, 403)
+
+    def test_arsip_surat_honor_hanya_bisa_diakses_laboran(self):
+        url = f'{settings.MEDIA_URL}surat_honor_asleb/arsip-rahasia.pdf'
+        self.login(self.owner)
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 403)
+
+        self.owner.role = 'laboran'
+        self.owner.save(update_fields=['role'])
+        response = self.client.get(url)
+
+        self.assertNotEqual(response.status_code, 403)
+
+    def test_cv_profile_hanya_bisa_diakses_pemilik_atau_role_berwenang(self):
+        self.owner.cv = 'pengguna/cv/cv-rahasia.pdf'
+        self.owner.save(update_fields=['cv'])
+        url = f'{settings.MEDIA_URL}{self.owner.cv.name}'
+        self.login(self.other_user)
+
+        denied = self.client.get(url)
+
+        self.assertEqual(denied.status_code, 403)
+
+        self.login(self.owner)
+        allowed = self.client.get(url)
+
+        self.assertNotEqual(allowed.status_code, 403)
+
+    def test_sertifikat_hanya_bisa_diakses_pemilik_atau_role_berwenang(self):
+        pengalaman = PengalamanPengguna.objects.create(
+            pengguna=self.owner,
+            kategori='sertifikasi',
+            jabatan='Sertifikasi Keamanan',
+            organisasi='Lembaga Uji',
+            tanggal_mulai=date(2026, 1, 1),
+            tanggal_selesai=date(2026, 1, 2),
+            file_sertifikat='pengguna/sertifikat/sertifikat-rahasia.pdf',
+        )
+        url = f'{settings.MEDIA_URL}{pengalaman.file_sertifikat.name}'
+        self.login(self.other_user)
+
+        denied = self.client.get(url)
+
+        self.assertEqual(denied.status_code, 403)
+
+        self.login(self.owner)
+        allowed = self.client.get(url)
+
+        self.assertNotEqual(allowed.status_code, 403)
+
+    def test_folder_media_tidak_dikenal_ditolak(self):
+        self.login(self.owner)
+
+        response = self.client.get(f'{settings.MEDIA_URL}dokumen_rahasia/arsip.pdf')
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_media_html_diunduh_dan_tidak_dijalankan_inline(self):
+        middleware = PenggunaLoginRequiredMiddleware(
+            lambda request: HttpResponse(
+                '<script>alert(1)</script>',
+                content_type='text/html',
+            )
+        )
+        request = RequestFactory().get(
+            f'{settings.MEDIA_URL}pengguna/sertifikat/sertifikat-aktif.html'
+        )
+        request.session = {'pengguna_id': self.owner.pk}
+
+        with patch.object(middleware, 'can_access_media', return_value=True):
+            response = middleware(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response['Content-Disposition'].startswith('attachment;'))
+        self.assertEqual(response['Content-Security-Policy'], "sandbox; default-src 'none'")
+        self.assertEqual(response['X-Content-Type-Options'], 'nosniff')
+
+    def test_media_modul_hanya_bisa_diakses_peserta_matkul_terkait(self):
+        modul = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=1,
+            judul='Modul Rahasia',
+            file=SimpleUploadedFile(
+                'modul-rahasia.pdf',
+                b'%PDF-1.4\n%%EOF',
+                content_type='application/pdf',
+            ),
+        )
+        url = f'{settings.MEDIA_URL}{modul.file.name}'
+        self.login(self.other_user)
+
+        denied = self.client.get(url)
+
+        self.assertEqual(denied.status_code, 403)
+
+        PesertaPraktikum.objects.create(
+            matkul=self.matkul,
+            pengguna=self.other_user,
+            nim=self.other_user.nim_nik,
+            nama=self.other_user.nama_pengguna,
+        )
+        allowed = self.client.get(url)
+
+        self.assertNotEqual(allowed.status_code, 403)

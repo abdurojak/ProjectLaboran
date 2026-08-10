@@ -8,6 +8,9 @@
         <p class="text-sm font-bold uppercase tracking-[0.2em] text-brand-700">Verifikasi Akun</p>
         <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Masukkan kode verifikasi</h2>
         <p class="mt-2 text-sm text-slate-500">Kode berlaku 10 menit. Setelah benar, akun mahasiswa akan aktif dan langsung masuk dashboard.</p>
+        {% if pending_user %}
+        <p class="mt-2 text-sm font-semibold text-slate-600">Kode dikirim ke {{ pending_user.email }}.</p>
+        {% endif %}
     </div>
 
     <form method="post" class="surface-card space-y-5 p-6 md:p-8">
@@ -21,15 +24,20 @@
             {% endif %}
         </div>
         {% endfor %}
+        {% if not has_active_otp %}
+        <div class="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+            Kode sebelumnya sudah kedaluwarsa atau gagal dikirim. Minta kode baru untuk melanjutkan.
+        </div>
+        {% endif %}
         <div class="flex flex-wrap gap-3">
             <button type="submit" class="btn-primary gap-2">
                 <i data-lucide="badge-check" class="h-4 w-4"></i>
                 <span>Verifikasi</span>
             </button>
-            <a href="{% url 'pengguna:register' %}" class="btn-secondary gap-2">
+            <button type="submit" name="action" value="resend" class="btn-secondary gap-2" formnovalidate>
                 <i data-lucide="rotate-ccw" class="h-4 w-4"></i>
-                <span>Registrasi ulang</span>
-            </a>
+                <span>Kirim ulang kode</span>
+            </button>
         </div>
     </form>
 </section>

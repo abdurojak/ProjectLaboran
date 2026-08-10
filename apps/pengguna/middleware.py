@@ -1,4 +1,5 @@
-from urllib.parse import unquote
+from pathlib import PurePosixPath
+from urllib.parse import quote, unquote
 
 from django.conf import settings
 from django.db.models import Q
@@ -10,6 +11,10 @@ from .models import Pengguna
 
 
 class PenggunaLoginRequiredMiddleware:
+    UNSAFE_INLINE_MEDIA_EXTENSIONS = {
+        '.css', '.htm', '.html', '.js', '.mjs', '.svg', '.xhtml', '.xml',
+    }
+    ADMIN_ALLOWED_NAMESPACES = {'core', 'dashboard', 'kalender', 'pengguna'}
     MAHASISWA_ALLOWED_NAMESPACES = {'core', 'dashboard', 'peminjaman', 'jadwal', 'pengguna', 'ruangan'}
     MAHASISWA_ALLOWED_ASLEB_URLS = {
         'laporan_tugas_list',
@@ -117,6 +122,10 @@ class PenggunaLoginRequiredMiddleware:
                     return self.get_response(request)
                 return redirect(f'{login_url}?next={path}')
 
+            if not pengguna.is_verified:
+                request.session.flush()
+                return redirect(login_url)
+
             from apps.pendaftaran_asleb.services import sync_expired_asleb_periods
             sync_expired_asleb_periods()
             pengguna.refresh_from_db(fields=['role'])
@@ -139,11 +148,32 @@ class PenggunaLoginRequiredMiddleware:
             response = self.get_response(request)
             response['Cache-Control'] = 'private, no-store, no-cache, must-revalidate'
             response['X-Content-Type-Options'] = 'nosniff'
+            media_name = unquote(path[len(settings.MEDIA_URL):]).lstrip('/')
+            suffix = PurePosixPath(media_name).suffix.lower()
+            content_type = response.get('Content-Type', '').split(';', 1)[0].lower()
+            if (
+                suffix in self.UNSAFE_INLINE_MEDIA_EXTENSIONS
+                or content_type.startswith('text/')
+                or content_type in {
+                    'application/javascript',
+                    'application/xhtml+xml',
+                    'application/xml',
+                    'image/svg+xml',
+                }
+            ):
+                filename = PurePosixPath(media_name).name or 'download'
+                response['Content-Disposition'] = (
+                    "attachment; filename*=UTF-8''" + quote(filename)
+                )
+                response['Content-Security-Policy'] = "sandbox; default-src 'none'"
             return response
 
         if pengguna_id and not is_exempt:
             resolved = resolve(path)
             namespace = resolved.namespace
+            if pengguna.role == 'admin' and namespace not in self.ADMIN_ALLOWED_NAMESPACES:
+                return redirect('dashboard:home')
+
             if pengguna.role == 'mahasiswa' and not self.mahasiswa_can_access(namespace, path, resolved, pengguna):
                 return redirect('dashboard:home')
 
@@ -182,6 +212,20 @@ class PenggunaLoginRequiredMiddleware:
         if not media_name:
             return False
 
+        if media_name.startswith('pengguna/cv/'):
+            return pengguna.role in {'admin', 'laboran'} or Pengguna.objects.filter(
+                pk=pengguna.pk,
+                cv=media_name,
+            ).exists()
+
+        if media_name.startswith('pengguna/sertifikat/'):
+            from .models import PengalamanPengguna
+
+            return pengguna.role in {'admin', 'laboran'} or PengalamanPengguna.objects.filter(
+                pengguna=pengguna,
+                file_sertifikat=media_name,
+            ).exists()
+
         if media_name.startswith('pendaftaran_asleb/'):
             from apps.pendaftaran_asleb.models import PendaftaranAsleb
 
@@ -202,6 +246,32 @@ class PenggunaLoginRequiredMiddleware:
                 asleb__nim=pengguna.nim_nik,
                 bukti_transfer=media_name,
             ).exists()
+
+        if media_name.startswith('surat_honor_asleb/'):
+            return pengguna.role == 'laboran'
+
+        if media_name.startswith('modul_praktikum/'):
+            from apps.asleb.models import Asleb, ModulPraktikum, PesertaPraktikum
+            from apps.asleb.services import get_active_asleb_matkul_ids
+
+            modul = ModulPraktikum.objects.filter(file=media_name).only('matkul_id').first()
+            if not modul:
+                return False
+            if pengguna.role == 'laboran':
+                return True
+            if pengguna.role == 'asisten_lab':
+                return any(
+                    modul.matkul_id in get_active_asleb_matkul_ids(asleb)
+                    for asleb in Asleb.objects.filter(nim=pengguna.nim_nik, status='aktif')
+                )
+            if pengguna.role == 'mahasiswa':
+                return PesertaPraktikum.objects.filter(
+                    matkul_id=modul.matkul_id,
+                    aktif=True,
+                ).filter(
+                    Q(pengguna=pengguna) | Q(nim=pengguna.nim_nik)
+                ).exists()
+            return False
 
         if media_name.startswith(('absensi_asleb/', 'laporan_praktikum/')):
             from apps.asleb.models import AbsensiAsleb, AbsensiMasukAsleb, PengumpulanLaporanPraktikum
@@ -229,7 +299,17 @@ class PenggunaLoginRequiredMiddleware:
             from apps.asleb.views import can_access_laporan
             return can_access_laporan(pengguna, laporan)
 
-        return True
+        # These folders only contain display assets, not identity, academic, or
+        # payment documents. New media folders stay private until explicitly
+        # classified above or added to this allowlist.
+        return media_name.startswith((
+            'pengguna/covers/',
+            'pengguna/backgrounds/',
+            'pengguna/',
+            'barang/',
+            'barang_tertinggal/',
+            'ruangan_lab/',
+        ))
 
     def mahasiswa_can_access(self, namespace, path, resolved, pengguna):
         if namespace == 'barang_tertinggal':

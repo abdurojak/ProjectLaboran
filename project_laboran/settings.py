@@ -15,6 +15,7 @@ import os
 from importlib.util import find_spec
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -34,11 +35,25 @@ def env_path(name, default):
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-dev-only-change-me')
-
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG', 'True') == 'True'
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
+
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = os.getenv('SECRET_KEY', '').strip()
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = 'django-insecure-dev-only-change-me'
+    else:
+        raise ImproperlyConfigured('SECRET_KEY wajib diatur saat DEBUG=False.')
+
+if not DEBUG and (
+    len(SECRET_KEY) < 50
+    or SECRET_KEY.startswith(('django-insecure', 'change-me', 'replace-with'))
+):
+    raise ImproperlyConfigured(
+        'SECRET_KEY production harus acak, unik, dan minimal 50 karakter.'
+    )
+
 LABHUB_LICENSE_ENFORCED = os.getenv('LABHUB_LICENSE_ENFORCED', 'False') == 'True'
 
 ALLOWED_HOSTS = [
@@ -64,6 +79,12 @@ CSRF_COOKIE_SAMESITE = 'Lax'
 X_FRAME_OPTIONS = 'DENY'
 LOGIN_MAX_ATTEMPTS = int(os.getenv('LOGIN_MAX_ATTEMPTS', '5'))
 LOGIN_LOCKOUT_SECONDS = int(os.getenv('LOGIN_LOCKOUT_SECONDS', '900'))
+PASSWORD_RESET_MAX_REQUESTS = int(os.getenv('PASSWORD_RESET_MAX_REQUESTS', '3'))
+PASSWORD_RESET_WINDOW_SECONDS = int(os.getenv('PASSWORD_RESET_WINDOW_SECONDS', '900'))
+OTP_RESEND_MAX_REQUESTS = int(os.getenv('OTP_RESEND_MAX_REQUESTS', '3'))
+OTP_RESEND_WINDOW_SECONDS = int(os.getenv('OTP_RESEND_WINDOW_SECONDS', '900'))
+PROFILE_PHOTO_MAX_BYTES = int(os.getenv('PROFILE_PHOTO_MAX_BYTES', str(5 * 1024 * 1024)))
+PROFILE_PHOTO_MAX_PIXELS = int(os.getenv('PROFILE_PHOTO_MAX_PIXELS', '20000000'))
 
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '').strip()
 OPENAI_CHATBOT_MODEL = os.getenv('OPENAI_CHATBOT_MODEL', 'gpt-4o-mini').strip() or 'gpt-4o-mini'

@@ -8,8 +8,9 @@ from apps.jadwal.models import JadwalPraktikum
 from apps.core.emails import send_branded_email
 from apps.pengguna.models import Pengguna
 
-from apps.asleb.forms import get_asleb_matkul
 from apps.asleb.models import AbsensiAsleb, Asleb, PengingatAbsensiAsleb
+from apps.asleb.services import get_active_asleb_matkul_ids
+from apps.pendaftaran_asleb.models import MataKuliahAsleb
 
 
 class Command(BaseCommand):
@@ -36,10 +37,16 @@ class Command(BaseCommand):
         )
         sent_count = 0
         for asleb in Asleb.objects.filter(status='aktif').exclude(email=''):
-            matkul = get_asleb_matkul(asleb)
-            if not matkul:
+            matkul_labels = [
+                str(matkul)
+                for matkul in MataKuliahAsleb.objects.filter(
+                    pk__in=get_active_asleb_matkul_ids(asleb),
+                    aktif=True,
+                )
+            ]
+            if not matkul_labels:
                 continue
-            for schedule in schedules.filter(mata_kuliah=str(matkul)):
+            for schedule in schedules.filter(mata_kuliah__in=matkul_labels):
                 if AbsensiAsleb.objects.filter(asleb=asleb, jadwal=schedule, tanggal_praktikum=today).exists():
                     continue
                 sent_count += self.send_next_due_reminder(asleb, schedule, now)

@@ -49,6 +49,44 @@
         </div>
     </article>
 
+    {% if has_peringatan_peminjaman_saya %}
+    <section class="min-w-0 rounded-[30px] border border-rose-300/70 bg-rose-50/95 p-5 shadow-lg shadow-rose-950/5 md:p-6">
+        <div class="flex items-start gap-4">
+            <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-rose-600 text-white"><i data-lucide="triangle-alert" class="h-6 w-6"></i></span>
+            <div class="min-w-0 flex-1">
+                <p class="text-xs font-black uppercase tracking-[0.2em] text-rose-700">Perlu Ditindaklanjuti</p>
+                <h3 class="mt-1 text-xl font-black text-slate-950">Peringatan Peminjaman</h3>
+                <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                    {% for item in peringatan_peminjaman_saya %}
+                    <a href="{{ item.url }}" class="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-white/80 px-4 py-3 transition hover:border-rose-400">
+                        <span class="min-w-0"><span class="block truncate font-black text-slate-900">{{ item.barang }}</span><span class="mt-1 block text-xs font-bold text-rose-700">{{ item.label }}</span></span>
+                        <i data-lucide="arrow-right" class="h-4 w-4 shrink-0 text-rose-600"></i>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </section>
+    {% endif %}
+
+    <section class="surface-card min-w-0 overflow-hidden p-5 md:p-6">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+            <div><p class="text-xs font-black uppercase tracking-[0.2em] text-violet-700">Honorarium</p><h3 class="mt-2 text-xl font-black text-slate-900">Honor Bulan Ini</h3><p class="mt-1 text-sm font-semibold text-slate-500">Saldo berjalan akan kembali Rp 0 setelah pembayaran dikonfirmasi.</p></div>
+            <span class="rounded-full bg-violet-100 px-4 py-2 text-sm font-black text-violet-700">{{ honor_bulan_ini_total_rupiah }}</span>
+        </div>
+        <div class="mt-5 grid gap-3 md:grid-cols-3">
+            <div class="dashboard-list-item rounded-2xl border border-slate-200 p-4"><p class="text-xs font-bold text-slate-500">Sebelum Potongan</p><p class="mt-2 text-lg font-black text-slate-900">{% if honor_bulan_ini %}{{ honor_bulan_ini.honor_sebelum_potongan_rupiah }}{% else %}Rp 0{% endif %}</p></div>
+            <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4"><p class="text-xs font-bold text-amber-700">Biaya Admin</p><p class="mt-2 text-lg font-black text-amber-900">{% if honor_bulan_ini %}{{ honor_bulan_ini.biaya_admin_rupiah }}{% else %}Rp 0{% endif %}</p></div>
+            <div class="rounded-2xl border border-violet-200 bg-violet-50 p-4"><p class="text-xs font-bold text-violet-700">Total Diterima</p><p class="mt-2 text-lg font-black text-violet-900">{{ honor_bulan_ini_total_rupiah }}</p></div>
+        </div>
+        <div class="mt-4 rounded-2xl border border-slate-200 p-4">
+            <p class="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Bukti Pembayaran / Pendukung</p>
+            {% if honor_bulan_ini and honor_bulan_ini.bukti_transfer %}<a href="{{ honor_bulan_ini.bukti_transfer.url }}" class="mt-3 inline-flex items-center gap-2 font-black text-brand-700"><i data-lucide="file-check-2" class="h-4 w-4"></i>Lihat bukti transfer</a>
+            {% elif honor_bulan_ini and honor_bulan_ini.bukti_pendukung_list %}<p class="mt-2 text-sm font-semibold text-slate-600">{{ honor_bulan_ini.bukti_pendukung_list|length }} bukti absensi tersimpan untuk perhitungan bulan ini.</p>
+            {% else %}<p class="mt-2 text-sm font-semibold text-slate-500">Belum ada bukti pendukung honor bulan ini.</p>{% endif %}
+        </div>
+    </section>
+
     <div class="dashboard-stats-grid grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {% for stat in stats_cards %}
         <article class="dashboard-stat-card surface-card group min-w-0 p-5 transition duration-200 hover:-translate-y-1 hover:border-brand-200">

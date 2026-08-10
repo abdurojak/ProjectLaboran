@@ -50,6 +50,7 @@ from .forms import (
     SuratHonorAslebGenerateForm,
     TugasLaporanPraktikumForm,
     get_asleb_matkul,
+    validate_document_upload,
 )
 from .models import (
     AbsensiAsleb,
@@ -66,6 +67,7 @@ from .models import (
     TugasLaporanPraktikum,
 )
 from .notifications import send_honor_paid_email
+from .services import get_active_asleb_matkul_ids, get_asleb_matkul_for_schedule
 from .surat_honor import generate_surat_honor_pdf, month_year_label
 
 
@@ -390,7 +392,10 @@ class HonorAslebUpdateView(UpdateView):
         queryset = super().get_queryset()
         pengguna = getattr(self.request, 'current_pengguna', None)
         if pengguna and pengguna.role == LABORAN_ROLE:
-            return queryset.filter(assigned_laboran=pengguna)
+            return queryset.filter(
+                assigned_laboran=pengguna,
+                diarsipkan_pada__isnull=True,
+            ).exclude(status='dibayar')
         if pengguna and pengguna.role != LABORAN_ROLE:
             return queryset.none()
         return queryset
@@ -416,6 +421,15 @@ class HonorAslebDeleteView(HonorAdminRequiredMixin, PostOnlyDeleteMixin, DeleteV
     template_name = 'asleb/honor_confirm_delete.html'
     context_object_name = 'honor'
     success_url = reverse_lazy('asleb:honor_list')
+
+    def get_queryset(self):
+        pengguna = getattr(self.request, 'current_pengguna', None)
+        if not pengguna or pengguna.role != LABORAN_ROLE:
+            return HonorAsleb.objects.none()
+        return HonorAsleb.objects.filter(
+            assigned_laboran=pengguna,
+            diarsipkan_pada__isnull=True,
+        ).exclude(status='dibayar')
 
 
 class SuratHonorAccessMixin:
@@ -602,8 +616,8 @@ class AbsensiAslebListView(ListView):
     def get_modul_list(self, pengguna, asleb_profile):
         queryset = ModulPraktikum.objects.select_related('matkul', 'diunggah_oleh')
         if pengguna and pengguna.role == ASISTEN_LAB_ROLE:
-            matkul = get_asleb_matkul(asleb_profile) if asleb_profile else None
-            return queryset.filter(matkul=matkul) if matkul else queryset.none()
+            matkul_ids = get_active_asleb_matkul_ids(asleb_profile)
+            return queryset.filter(matkul_id__in=matkul_ids) if matkul_ids else queryset.none()
         return queryset
 
     def get_asleb_profile(self, pengguna):
@@ -716,8 +730,16 @@ class AbsensiAslebCreateView(CreateView):
 
 def get_active_absensi_schedule(asleb, current_time=None):
     current_time = current_time or timezone.localtime()
-    matkul = get_asleb_matkul(asleb)
-    if not matkul:
+    from apps.pendaftaran_asleb.models import MataKuliahAsleb
+
+    matkul_labels = [
+        str(matkul)
+        for matkul in MataKuliahAsleb.objects.filter(
+            pk__in=get_active_asleb_matkul_ids(asleb),
+            aktif=True,
+        )
+    ]
+    if not matkul_labels:
         return None
     day_keys = [key for key, _ in JadwalPraktikum.HARI_CHOICES]
     weekday = current_time.weekday()
@@ -725,7 +747,7 @@ def get_active_absensi_schedule(asleb, current_time=None):
         return None
     current_clock = current_time.time().replace(tzinfo=None)
     return JadwalPraktikum.objects.filter(
-        mata_kuliah=str(matkul),
+        mata_kuliah__in=matkul_labels,
         hari=day_keys[weekday],
         status=JadwalPraktikum.STATUS_DITERIMA,
         waktu_mulai__lte=current_clock,
@@ -783,6 +805,11 @@ class ModulPraktikumCreateView(ModulManageRequiredMixin, CreateView):
                 errors.append(f'{uploaded.name}: File modul hanya boleh PDF atau Word.')
             if uploaded.size > self.max_bulk_file_size:
                 errors.append(f'{uploaded.name}: ukuran maksimal 15 MB.')
+            if extension in self.allowed_bulk_extensions:
+                try:
+                    validate_document_upload(uploaded)
+                except ValidationError as exc:
+                    errors.extend(f'{uploaded.name}: {message}' for message in exc.messages)
 
         if errors:
             for error in errors:
@@ -867,11 +894,9 @@ def get_praktikum_matkul_queryset(pengguna):
         Asleb.objects.filter(nim=pengguna.nim_nik, status='aktif').order_by('-diperbarui_pada', '-pk')
     )
     if active_asleb_rows:
-        active_matkul_ids = []
+        active_matkul_ids = set()
         for asleb in active_asleb_rows:
-            matkul = get_asleb_matkul(asleb)
-            if matkul and matkul.pk not in active_matkul_ids:
-                active_matkul_ids.append(matkul.pk)
+            active_matkul_ids.update(get_active_asleb_matkul_ids(asleb))
         return queryset.filter(pk__in=active_matkul_ids) if active_matkul_ids else queryset.none()
 
     return queryset.none()
@@ -880,11 +905,13 @@ def get_praktikum_matkul_queryset(pengguna):
 def get_active_asleb_for_matkul(pengguna, matkul):
     if not pengguna or pengguna.role != ASISTEN_LAB_ROLE or not matkul:
         return None
-    return (
-        Asleb.objects.filter(nim=pengguna.nim_nik, status='aktif', matkul=str(matkul))
-        .order_by('-diperbarui_pada', '-pk')
-        .first()
-    )
+    for asleb in Asleb.objects.filter(
+        nim=pengguna.nim_nik,
+        status='aktif',
+    ).order_by('-diperbarui_pada', '-pk'):
+        if matkul.pk in get_active_asleb_matkul_ids(asleb):
+            return asleb
+    return None
 
 
 def can_review_laporan(pengguna, tugas):
@@ -2095,7 +2122,15 @@ def _get_accessible_modul_praktikum(request, pk):
             .order_by('-diperbarui_pada', '-pk')
             .first()
         )
-        allowed = bool(asleb and get_asleb_matkul(asleb) == modul.matkul)
+        allowed = bool(asleb and modul.matkul_id in get_active_asleb_matkul_ids(asleb))
+
+    if pengguna and pengguna.role == MAHASISWA_ROLE:
+        allowed = PesertaPraktikum.objects.filter(
+            matkul=modul.matkul,
+            aktif=True,
+        ).filter(
+            Q(pengguna=pengguna) | Q(nim=pengguna.nim_nik)
+        ).exists()
 
     if not allowed:
         messages.error(request, 'Anda tidak memiliki akses ke modul praktikum ini.')

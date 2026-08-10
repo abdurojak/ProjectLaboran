@@ -11,12 +11,15 @@ from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
 from apps.asleb.models import AbsensiAsleb, Asleb, HonorAsleb, HasilPraktikumMahasiswa, ModulPraktikum, PesertaPraktikum
+from apps.asleb.services import (
+    get_active_asleb_matkul_ids_for_pengguna,
+    get_active_asleb_matkul_labels,
+)
 from apps.barang_tertinggal.models import BarangTertinggal
 from apps.inventaris.models import ACTIVE_PEMINJAMAN_STATUSES, Barang, InventarisBarang
 from apps.jadwal.models import JadwalPraktikum, PermintaanPerubahanJadwal
 from apps.jadwal.notifications import send_jadwal_status_notification
 from apps.kalender.realtime import (
-    send_peminjaman_rejected_update,
     send_peminjaman_status_update,
     send_schedule_update,
 )
@@ -95,17 +98,6 @@ class DashboardView(TemplateView):
                 current = current.replace(month=current.month - 1, day=1)
         return list(reversed(months))
 
-    def get_asisten_lab_matkul_labels(self, pengguna):
-        if not pengguna or pengguna.role != 'asisten_lab':
-            return []
-
-        labels = list(
-            Asleb.objects.filter(nim=pengguna.nim_nik, status='aktif')
-            .exclude(matkul='')
-            .values_list('matkul', flat=True)
-        )
-        return list(dict.fromkeys(labels))
-
     def get_grouped_peminjaman(self, queryset, limit=6):
         grouped = []
         seen_keys = set()
@@ -156,7 +148,7 @@ class DashboardView(TemplateView):
             for peminjaman in peminjaman_bermasalah[:5]:
                 if peminjaman.status == 'dipinjam':
                     terlambat_hari = max((today - peminjaman.tanggal_kembali).days, 1)
-                    label = f'Terlambat {terlambat_hari} hari'
+                    label = f'Lewat masa pengembalian - terlambat {terlambat_hari} hari'
                     tone = 'rose'
                 else:
                     label = peminjaman.get_status_display()
@@ -169,11 +161,21 @@ class DashboardView(TemplateView):
                     'tone': tone,
                 })
             awal_bulan = timezone.localdate().replace(day=1)
-            honor_bulan_ini = HonorAsleb.objects.filter(
+            honor_bulan_ini_qs = HonorAsleb.objects.filter(
                 asleb__nim=pengguna.nim_nik,
                 bulan__year=awal_bulan.year,
                 bulan__month=awal_bulan.month,
-            ).exclude(status='dibayar').aggregate(total=Sum('jumlah'))['total'] or 0
+            ).exclude(status='dibayar').select_related('asleb')
+            honor_bulan_ini = honor_bulan_ini_qs.first()
+            honor_bulan_ini_total = honor_bulan_ini_qs.aggregate(total=Sum('jumlah'))['total'] or 0
+            if honor_bulan_ini:
+                honor_bulan_ini.bukti_pendukung_list = list(
+                    AbsensiAsleb.objects.filter(
+                        asleb=honor_bulan_ini.asleb,
+                        tanggal_praktikum__year=honor_bulan_ini.bulan.year,
+                        tanggal_praktikum__month=honor_bulan_ini.bulan.month,
+                    ).order_by('-tanggal_praktikum')[:3]
+                )
             riwayat_honor_saya = HonorAsleb.objects.filter(
                 asleb__nim=pengguna.nim_nik,
             ).select_related('asleb')[:6]
@@ -194,6 +196,9 @@ class DashboardView(TemplateView):
             context['peminjaman_saya'] = peminjaman_saya_list
             context['peringatan_peminjaman_saya'] = peringatan_peminjaman_saya
             context['has_peringatan_peminjaman_saya'] = bool(peringatan_peminjaman_saya)
+            context['honor_bulan_ini'] = honor_bulan_ini
+            context['honor_bulan_ini_total'] = honor_bulan_ini_total
+            context['honor_bulan_ini_total_rupiah'] = self.format_rupiah(honor_bulan_ini_total)
             context['riwayat_honor_saya'] = riwayat_honor_saya
             peserta_praktikum = (
                 PesertaPraktikum.objects
@@ -205,13 +210,8 @@ class DashboardView(TemplateView):
             asisten_matkul_ids = []
             matkul_labels = []
             if is_asisten_lab:
-                matkul_labels = self.get_asisten_lab_matkul_labels(pengguna)
-                active_label_set = set(matkul_labels)
-                asisten_matkul_ids = [
-                    matkul.pk
-                    for matkul in MataKuliahAsleb.objects.filter(aktif=True)
-                    if str(matkul) in active_label_set
-                ]
+                matkul_labels = get_active_asleb_matkul_labels(pengguna)
+                asisten_matkul_ids = list(get_active_asleb_matkul_ids_for_pengguna(pengguna))
 
             allowed_labels = matkul_labels if is_asisten_lab else mahasiswa_matkul_labels
             allowed_matkul_ids = asisten_matkul_ids if is_asisten_lab else mahasiswa_matkul_ids
@@ -237,7 +237,11 @@ class DashboardView(TemplateView):
 
             context['jadwal_hari_ini'] = jadwal_hari_ini[:6]
             context['pendaftaran_asleb_dibuka'] = is_mahasiswa and is_registration_open()
-            context['kegiatan_kalender_mahasiswa'] = kegiatan_qs.filter(tanggal__gte=context['today'])[:6]
+            context['kegiatan_kalender_mahasiswa'] = [
+                kegiatan
+                for kegiatan in kegiatan_qs.filter(tanggal__gte=context['today']).select_related('dibuat_oleh')
+                if kegiatan.visible_for(pengguna)
+            ][:6]
             context['public_registration_url'] = get_public_registration_url()
             if is_asisten_lab:
                 stats_cards = [
@@ -762,16 +766,15 @@ def reject_peminjaman(request, pk):
             messages.warning(request, 'Pengajuan ini sudah diproses.')
             return redirect('dashboard:home')
 
-        transaksi = peminjaman.transaksi
-        rejected_items = list(group.select_related('barang'))
-        group.delete()
-        if transaksi and not transaksi.detail.exists():
-            transaksi.delete()
+        for item in group.select_related('barang'):
+            item.status = 'ditolak'
+            item.save(update_fields=['status', 'diperbarui_pada'])
+            send_peminjaman_status_notification(item)
+            transaction.on_commit(lambda item_id=item.pk: send_peminjaman_status_update(
+                PeminjamanAlat.objects.select_related('barang').get(pk=item_id)
+            ))
 
-        for item in rejected_items:
-            transaction.on_commit(lambda rejected=item: send_peminjaman_rejected_update(rejected))
-
-    messages.success(request, 'Pengajuan peminjaman ditolak dan dihapus dari daftar.')
+    messages.success(request, 'Pengajuan peminjaman ditolak dan tetap tersimpan dalam riwayat.')
     return redirect('dashboard:home')
 
 
