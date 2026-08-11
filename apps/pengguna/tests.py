@@ -1623,7 +1623,12 @@ class PenggunaAuthTests(TestCase):
         })
         self.assertRedirects(reset_response, reverse('pengguna:forgot_password'))
 
-    @override_settings(PASSWORD_RESET_MAX_REQUESTS=2, PASSWORD_RESET_WINDOW_SECONDS=900)
+    @override_settings(
+        PASSWORD_RESET_MAX_REQUESTS=2,
+        PASSWORD_RESET_WINDOW_SECONDS=900,
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        EMAIL_HOST_PASSWORD='',
+    )
     def test_forgot_password_membatasi_pengiriman_email_berulang(self):
         for _ in range(3):
             response = self.client.post(

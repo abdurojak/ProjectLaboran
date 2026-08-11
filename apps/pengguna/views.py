@@ -106,6 +106,19 @@ def otp_resend_cache_key(request, pengguna):
     return f'pengguna-otp-resend:{digest}'
 
 
+def email_delivery_is_simulated():
+    backend = settings.EMAIL_BACKEND
+    if backend == 'django.core.mail.backends.console.EmailBackend':
+        return True
+    return (
+        backend == 'django.core.mail.backends.smtp.EmailBackend'
+        and (
+            not settings.EMAIL_HOST_PASSWORD
+            or settings.EMAIL_HOST_PASSWORD == 'change-me'
+        )
+    )
+
+
 def build_public_url(route_name, *args):
     base_url = settings.PUBLIC_ACCESS_BASE_URL.rstrip('/') + '/'
     return urljoin(base_url, reverse(route_name, args=args).lstrip('/'))
@@ -190,11 +203,7 @@ def send_verification_code(
         verification_url = build_public_url('pengguna:reset_password')
 
     if method == 'email':
-        is_simulated_email = (
-            settings.EMAIL_BACKEND == 'django.core.mail.backends.console.EmailBackend'
-            or not settings.EMAIL_HOST_PASSWORD
-            or settings.EMAIL_HOST_PASSWORD == 'change-me'
-        )
+        is_simulated_email = email_delivery_is_simulated()
         if is_simulated_email:
             if show_delivery_message:
                 messages.info(
@@ -826,11 +835,7 @@ class ForgotPasswordRequestView(FormView):
             self.request,
             'Jika NIM/NIK terdaftar, kode reset password telah dikirim ke email akun.',
         )
-        if settings.DEBUG and (
-            settings.EMAIL_BACKEND == 'django.core.mail.backends.console.EmailBackend'
-            or not settings.EMAIL_HOST_PASSWORD
-            or settings.EMAIL_HOST_PASSWORD == 'change-me'
-        ):
+        if settings.DEBUG and email_delivery_is_simulated():
             messages.info(
                 self.request,
                 f"Kode simulasi lokal: {self.request.session[OTP_SESSION_KEY]['code']}.",
