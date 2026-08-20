@@ -3,6 +3,7 @@ from django.contrib.auth.hashers import check_password
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from django.contrib.staticfiles import finders
 from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
@@ -16,6 +17,7 @@ import uuid
 from io import BytesIO
 
 import qrcode
+from PIL import Image, ImageDraw
 
 from apps.asleb.models import Asleb, HonorAsleb
 from apps.kalender.realtime import send_data_refresh, send_registration_status_update
@@ -691,10 +693,42 @@ def notify_pendaftaran_dibuka():
 
 
 def registration_qr(request):
-    qr = qrcode.QRCode(version=1, box_size=8, border=3)
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_H,
+        box_size=10,
+        border=4,
+    )
     qr.add_data(get_public_registration_url())
     qr.make(fit=True)
-    image = qr.make_image(fill_color='#006d6f', back_color='white')
+    image = qr.make_image(fill_color='#006d6f', back_color='white').convert('RGBA')
+
+    logo_path = finders.find('core/img/labhub-logo.png')
+    if logo_path:
+        logo = Image.open(logo_path).convert('RGBA')
+        plate_size = max(64, image.width // 5)
+        logo_size = int(plate_size * 0.72)
+        logo.thumbnail((logo_size, logo_size), Image.Resampling.LANCZOS)
+
+        plate = Image.new('RGBA', (plate_size, plate_size), (255, 255, 255, 0))
+        draw = ImageDraw.Draw(plate)
+        draw.rounded_rectangle(
+            (1, 1, plate_size - 2, plate_size - 2),
+            radius=plate_size // 4,
+            fill='white',
+            outline='#d6f3f1',
+            width=max(2, plate_size // 28),
+        )
+        logo_position = (
+            (plate_size - logo.width) // 2,
+            (plate_size - logo.height) // 2,
+        )
+        plate.alpha_composite(logo, logo_position)
+        image.alpha_composite(
+            plate,
+            ((image.width - plate_size) // 2, (image.height - plate_size) // 2),
+        )
+
     output = BytesIO()
     image.save(output, format='PNG')
     response = HttpResponse(output.getvalue(), content_type='image/png')

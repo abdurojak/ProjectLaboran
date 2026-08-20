@@ -2073,6 +2073,52 @@ class AslebViewTests(TestCase):
         self.assertIsNone(hasil.nilai)
         self.assertTrue(Notifikasi.objects.filter(pengguna=mahasiswa, source_key=f'laporan-deleted:{laporan.pk}').exists())
 
+    def test_preview_laporan_pdf_mengirim_header_dan_isi_pdf_utuh(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Mahasiswa Preview',
+            nim_nik='0640020888',
+            email='mahasiswa-preview@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081234567888',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+        )
+        peserta = PesertaPraktikum.objects.create(
+            matkul=self.matkul,
+            pengguna=mahasiswa,
+            nim=mahasiswa.nim_nik,
+            nama=mahasiswa.nama_pengguna,
+        )
+        tugas = TugasLaporanPraktikum.objects.create(
+            judul='Laporan Preview',
+            matkul=self.matkul,
+            batas_pengumpulan=timezone.now() + timedelta(days=1),
+        )
+        pdf_content = b'%PDF-1.4\npreview laporan\n%%EOF'
+        laporan = PengumpulanLaporanPraktikum.objects.create(
+            tugas=tugas,
+            peserta=peserta,
+            file_laporan=SimpleUploadedFile(
+                'laporan-preview.pdf',
+                pdf_content,
+                content_type='application/pdf',
+            ),
+        )
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+
+        response = self.client.get(reverse('asleb:laporan_preview_file', args=[laporan.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertEqual(response['Content-Length'], str(len(pdf_content)))
+        self.assertIn('inline', response['Content-Disposition'])
+        self.assertEqual(response.content, pdf_content)
+
     def create_active_schedule(self):
         return JadwalPraktikum.objects.create(
             mata_kuliah=str(self.matkul),

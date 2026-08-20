@@ -1538,9 +1538,26 @@ def _serve_laporan_file(request, pk, *, inline=False):
         messages.error(request, 'File laporan tidak ditemukan.')
         return redirect('asleb:laporan_tugas_list')
     filename = laporan.nama_file_asli or laporan.file_laporan.name.rsplit('/', 1)[-1] or 'laporan-praktikum'
-    content_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
-    response = FileResponse(laporan.file_laporan.open('rb'), content_type=content_type)
     disposition = 'inline' if inline and laporan.is_pdf else 'attachment'
+
+    if disposition == 'inline':
+        # A concrete response keeps PDF headers and body intact behind
+        # Daphne/reverse proxies, which can otherwise mishandle file streams.
+        with laporan.file_laporan.open('rb') as source:
+            file_content = source.read()
+        if not file_content.startswith(b'%PDF-'):
+            return HttpResponse(
+                'File laporan tidak memiliki struktur PDF yang valid.',
+                status=422,
+                content_type='text/plain; charset=utf-8',
+            )
+        response = HttpResponse(file_content, content_type='application/pdf')
+        response['Content-Length'] = str(len(file_content))
+        response['Cross-Origin-Resource-Policy'] = 'same-origin'
+    else:
+        content_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+        response = FileResponse(laporan.file_laporan.open('rb'), content_type=content_type)
+
     response['Content-Disposition'] = (
         content_disposition_header(disposition == 'attachment', filename)
         or f'{disposition}; filename="laporan-praktikum"'
