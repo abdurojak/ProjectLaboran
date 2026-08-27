@@ -706,8 +706,8 @@ def registration_qr(request):
     logo_path = finders.find('core/img/labhub-logo.png')
     if logo_path:
         logo = Image.open(logo_path).convert('RGBA')
-        plate_size = max(64, image.width // 5)
-        logo_size = int(plate_size * 0.72)
+        plate_size = max(72, image.width // 5)
+        logo_size = int(plate_size * 0.82)
         logo.thumbnail((logo_size, logo_size), Image.Resampling.LANCZOS)
 
         plate = Image.new('RGBA', (plate_size, plate_size), (255, 255, 255, 0))
@@ -715,8 +715,8 @@ def registration_qr(request):
         draw.rounded_rectangle(
             (1, 1, plate_size - 2, plate_size - 2),
             radius=plate_size // 4,
-            fill='white',
-            outline='#d6f3f1',
+            fill='#0f1f38',
+            outline='#5eead4',
             width=max(2, plate_size // 28),
         )
         logo_position = (
@@ -732,7 +732,9 @@ def registration_qr(request):
     output = BytesIO()
     image.save(output, format='PNG')
     response = HttpResponse(output.getvalue(), content_type='image/png')
-    response['Cache-Control'] = 'private, max-age=300'
+    response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response['Pragma'] = 'no-cache'
+    response['Expires'] = '0'
     return response
 
 

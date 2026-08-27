@@ -22,6 +22,62 @@
         text-overflow: ellipsis;
     }
 
+    .registration-duty-card {
+        background:
+            radial-gradient(circle at 96% 8%, rgba(45, 212, 191, 0.16), transparent 12rem),
+            var(--surface-bg) !important;
+        border-color: rgba(13, 148, 136, 0.38) !important;
+        box-shadow: 0 18px 42px rgba(15, 118, 110, 0.10);
+        color: var(--text-main) !important;
+    }
+
+    .registration-duty-icon {
+        background: rgba(13, 148, 136, 0.14) !important;
+        color: #0f766e !important;
+        box-shadow: inset 0 0 0 1px rgba(13, 148, 136, 0.12);
+    }
+
+    .registration-duty-title {
+        color: var(--text-main) !important;
+    }
+
+    .registration-duty-description {
+        color: var(--text-muted) !important;
+    }
+
+    .registration-duty-form label {
+        color: var(--text-soft) !important;
+        font-weight: 800;
+    }
+
+    .registration-duty-card .registration-duty-form {
+        background: transparent !important;
+        border: 0 !important;
+        box-shadow: none !important;
+    }
+
+    .registration-duty-form input {
+        background: var(--field-bg) !important;
+        border-color: var(--border-color) !important;
+        color: var(--field-text) !important;
+        color-scheme: light;
+        box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+    }
+
+    html[data-theme="dark"] .registration-duty-card {
+        border-color: rgba(94, 234, 212, 0.26) !important;
+        box-shadow: 0 20px 48px rgba(2, 6, 23, 0.28);
+    }
+
+    html[data-theme="dark"] .registration-duty-icon {
+        background: rgba(45, 212, 191, 0.16) !important;
+        color: #99f6e4 !important;
+    }
+
+    html[data-theme="dark"] .registration-duty-form input {
+        color-scheme: dark;
+    }
+
     @media (max-width: 1279px), (hover: none) and (pointer: coarse) {
         .registration-admin-header {
             display: grid !important;
@@ -208,7 +264,7 @@
                 <div class="mt-3 overflow-hidden rounded-[24px] border border-teal-100 bg-gradient-to-b from-white to-teal-50/70 p-4 shadow-inner shadow-teal-950/5">
                     <div class="relative mx-auto w-fit rounded-[22px] bg-white p-2.5 shadow-lg shadow-teal-950/10 ring-1 ring-teal-100">
                         <span class="pointer-events-none absolute -right-1 -top-1 h-5 w-5 rounded-full bg-cyan-300/40 blur-md"></span>
-                        <img src="{% url 'pendaftaran_asleb:registration_qr' %}" alt="QR pendaftaran aslab dengan logo LabHub" class="relative h-40 w-40 rounded-xl object-contain">
+                        <img src="{% url 'pendaftaran_asleb:registration_qr' %}?v=3" alt="QR pendaftaran aslab dengan logo LabHub" class="relative h-40 w-40 rounded-xl object-contain">
                     </div>
                     <div class="mt-3 flex items-center justify-center gap-1.5 text-center text-xs font-bold text-teal-800">
                         <i data-lucide="scan-line" class="h-3.5 w-3.5"></i>
@@ -249,15 +305,15 @@
                 <button type="submit" class="btn-secondary gap-2 sm:col-span-2"><i data-lucide="calendar-check" class="h-4 w-4"></i><span>Simpan Jadwal Otomatis</span></button>
             </form>
             {% if is_super_admin %}
-            <div class="mt-5 rounded-3xl border border-cyan-200 bg-cyan-50/70 p-5">
+            <div class="registration-duty-card mt-5 rounded-3xl border p-5">
                 <div class="flex items-start gap-3">
-                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-cyan-100 text-cyan-800"><i data-lucide="calendar-range" class="h-5 w-5"></i></span>
+                    <span class="registration-duty-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl"><i data-lucide="calendar-range" class="h-5 w-5"></i></span>
                     <div>
-                        <div class="font-black text-cyan-950">Atur Masa Tugas Asisten Lab</div>
-                        <p class="mt-1 text-xs leading-5 text-cyan-800">Masukkan tanggal awal dan akhir periode. Setelah tanggal akhir terlewati, role Asisten Lab otomatis kembali menjadi Mahasiswa.</p>
+                        <div class="registration-duty-title font-black">Atur Masa Tugas Asisten Lab</div>
+                        <p class="registration-duty-description mt-1 text-xs leading-5">Masukkan tanggal awal dan akhir periode. Setelah tanggal akhir terlewati, role Asisten Lab otomatis kembali menjadi Mahasiswa.</p>
                     </div>
                 </div>
-                <form method="post" action="{% url 'pendaftaran_asleb:periode_dates_update' periode_aktif.pk %}" class="mt-4 grid gap-3 sm:grid-cols-2">
+                <form method="post" action="{% url 'pendaftaran_asleb:periode_dates_update' periode_aktif.pk %}" class="registration-duty-form mt-4 grid gap-3 sm:grid-cols-2">
                     {% csrf_token %}
                     <div>{{ masa_tugas_form.mulai.label_tag }}{{ masa_tugas_form.mulai }}</div>
                     <div>{{ masa_tugas_form.selesai.label_tag }}{{ masa_tugas_form.selesai }}</div>
