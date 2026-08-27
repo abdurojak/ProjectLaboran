@@ -4,7 +4,7 @@ import subprocess
 import sys
 
 from django.conf import settings
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 from django.test.utils import override_script_prefix
 from django.urls import reverse
 
@@ -23,6 +23,7 @@ class HealthCheckTests(SimpleTestCase):
         self.assertEqual(reverse('health'), '/labhub/health/')
         self.assertEqual(response.status_code, 200)
 
+    @override_settings(URL_PREFIX='/labhub', FORCE_SCRIPT_NAME='/labhub')
     @override_script_prefix('/labhub/')
     def test_prefixed_dashboard_redirects_to_prefixed_login(self):
         response = self.client.get('/', SCRIPT_NAME='/labhub')
