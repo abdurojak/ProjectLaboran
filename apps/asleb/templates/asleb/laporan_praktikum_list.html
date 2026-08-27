@@ -26,12 +26,17 @@
     }
 
     .laporan-class-card {
+        display: flex;
+        width: 100%;
         min-height: 16rem;
+        flex-direction: column;
         overflow: hidden;
         border: 1px solid var(--border-color);
         border-radius: 1.4rem;
         background: var(--surface-bg);
         color: var(--text-main);
+        cursor: pointer;
+        text-align: left;
         box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
         transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
     }
@@ -40,6 +45,12 @@
         transform: translateY(-4px);
         border-color: rgba(20, 184, 166, 0.52);
         box-shadow: 0 20px 42px rgba(15, 118, 110, 0.16);
+    }
+
+    .laporan-class-card.is-active {
+        border-color: rgba(20, 184, 166, 0.8);
+        box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.14), 0 20px 42px rgba(15, 118, 110, 0.18);
+        transform: translateY(-4px);
     }
 
     .laporan-class-cover {
@@ -116,6 +127,7 @@
     }
 
     .laporan-class-body {
+        flex: 1;
         min-height: 5.5rem;
         padding: 1rem 1.2rem;
     }
@@ -169,6 +181,102 @@
     .laporan-class-target:target {
         border-color: rgba(20, 184, 166, 0.7) !important;
         box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.13);
+    }
+
+    .laporan-workspace {
+        overflow: hidden;
+        border: 1px solid var(--border-color);
+        border-radius: 2rem;
+        background: var(--surface-bg);
+        box-shadow: var(--surface-shadow, 0 18px 46px rgba(15, 23, 42, 0.10));
+        animation: laporanWorkspaceIn 220ms ease both;
+    }
+
+    .laporan-workspace[hidden],
+    [data-classroom-panel][hidden] {
+        display: none !important;
+    }
+
+    .laporan-workspace-header {
+        position: relative;
+        overflow: hidden;
+        padding: 1.5rem;
+        color: #fff;
+        background: linear-gradient(135deg, #0f766e, #0891b2 62%, #2563eb);
+    }
+
+    .laporan-workspace-header::after {
+        position: absolute;
+        right: -4rem;
+        top: -5rem;
+        width: 15rem;
+        height: 15rem;
+        border: 2rem solid rgba(255, 255, 255, 0.10);
+        border-radius: 999px;
+        content: "";
+    }
+
+    .laporan-workspace-title,
+    .laporan-workspace-meta,
+    .laporan-workspace-label {
+        position: relative;
+        z-index: 1;
+        color: #fff !important;
+    }
+
+    .laporan-workspace-body {
+        display: grid;
+        gap: 1.25rem;
+        padding: 1.25rem;
+    }
+
+    .laporan-workspace-column {
+        min-width: 0;
+        overflow: hidden;
+        border: 1px solid var(--border-color);
+        border-radius: 1.5rem;
+        background: var(--surface-bg);
+    }
+
+    .laporan-workspace-column-header {
+        border-bottom: 1px solid var(--border-color);
+        padding: 1rem 1.15rem;
+        background: color-mix(in srgb, var(--surface-bg) 88%, var(--field-bg));
+    }
+
+    .laporan-back-button {
+        position: relative;
+        z-index: 2;
+        display: inline-flex;
+        min-height: 2.75rem;
+        align-items: center;
+        justify-content: center;
+        gap: 0.45rem;
+        border: 1px solid rgba(255, 255, 255, 0.32);
+        border-radius: 1rem;
+        background: rgba(15, 23, 42, 0.22);
+        padding: 0.65rem 0.9rem;
+        color: #fff;
+        font-size: 0.78rem;
+        font-weight: 900;
+        backdrop-filter: blur(10px);
+        transition: background 160ms ease, transform 160ms ease;
+    }
+
+    .laporan-back-button:hover {
+        background: rgba(15, 23, 42, 0.38);
+        transform: translateY(-1px);
+    }
+
+    @keyframes laporanWorkspaceIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (min-width: 1180px) {
+        .laporan-workspace-body.has-two-columns {
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 28rem), 1fr));
+        }
     }
 
     .laporan-review-group {
@@ -255,7 +363,7 @@
         </div>
         <div class="laporan-class-grid">
             {% for class_card in classroom_cards %}
-            <a class="laporan-class-card" href="#{{ class_card.anchor }}">
+            <button class="laporan-class-card" type="button" data-classroom-open data-class-id="{{ class_card.matkul.pk }}" data-class-title="{{ class_card.matkul.nama|escape }}" data-class-code="{{ class_card.matkul.kode|escape }}" data-class-section="{{ class_card.matkul.kelas|escape }}" data-class-lecturer="{{ class_card.matkul.dosen|default:'Dosen belum ditentukan'|escape }}">
                 <div class="laporan-class-cover">
                     <span class="laporan-class-role"><i data-lucide="graduation-cap" class="h-3.5 w-3.5"></i>{{ class_card.role_label }}</span>
                     <h4 class="laporan-class-title">{{ class_card.matkul.nama }}</h4>
@@ -273,7 +381,7 @@
                     <span>Buka kelas</span>
                     <i data-lucide="arrow-right" class="h-4 w-4"></i>
                 </div>
-            </a>
+            </button>
             {% empty %}
             <div class="col-span-full rounded-3xl border border-dashed border-slate-200 px-6 py-12 text-center">
                 <span class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-500"><i data-lucide="school" class="h-6 w-6"></i></span>
@@ -284,15 +392,30 @@
         </div>
     </article>
 
-    <div class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-        <article class="surface-card overflow-hidden">
-            <div class="border-b border-slate-200 px-5 py-4">
+    <article id="classroom-workspace" class="laporan-workspace" hidden data-classroom-workspace>
+        <header class="laporan-workspace-header">
+            <div class="flex flex-wrap items-start justify-between gap-4">
+                <div class="min-w-0">
+                    <p class="laporan-workspace-label text-xs font-black uppercase tracking-[0.2em]">Kelas aktif</p>
+                    <h3 class="laporan-workspace-title mt-2 truncate text-2xl font-black" data-active-class-title>Pilih kelas</h3>
+                    <p class="laporan-workspace-meta mt-1 text-sm font-semibold" data-active-class-meta></p>
+                </div>
+                <button class="laporan-back-button" type="button" data-classroom-close>
+                    <i data-lucide="layout-grid" class="h-4 w-4"></i>
+                    Semua kelas
+                </button>
+            </div>
+        </header>
+
+        <div class="laporan-workspace-body has-two-columns" data-classroom-columns>
+        <article class="laporan-workspace-column" data-classroom-column>
+            <div class="laporan-workspace-column-header">
                 <p class="text-xs font-black uppercase tracking-[0.18em] text-cyan-600">Praktikum Saya</p>
-                <h3 class="mt-1 text-xl font-black text-slate-900">Tugas yang perlu dikumpulkan</h3>
+                <h4 class="mt-1 text-xl font-black text-slate-900">Tugas yang perlu dikumpulkan</h4>
             </div>
             <div class="grid gap-3 p-5">
                 {% for group in participant_groups %}
-                <div id="participant-class-{{ group.matkul.pk }}" class="laporan-class-target laporan-review-group overflow-hidden rounded-[1.5rem] border border-slate-200">
+                <div class="laporan-review-group overflow-hidden rounded-[1.5rem] border border-slate-200" data-classroom-panel data-class-id="{{ group.matkul.pk }}" hidden>
                     <div class="laporan-review-group-header border-b border-slate-200 px-4 py-3">
                         <p class="text-xs font-black uppercase tracking-[0.18em] text-cyan-600">{{ group.matkul.kode }}</p>
                         <h4 class="mt-1 text-lg font-black text-slate-900">{{ group.matkul.nama }} - {{ group.matkul.kelas }}</h4>
@@ -340,14 +463,14 @@
             </div>
         </article>
 
-        <article class="surface-card overflow-hidden">
-            <div class="border-b border-slate-200 px-5 py-4">
+        <article class="laporan-workspace-column" data-classroom-column>
+            <div class="laporan-workspace-column-header">
                 <p class="text-xs font-black uppercase tracking-[0.18em] text-violet-600">Penugasan Asisten Lab</p>
-                <h3 class="mt-1 text-xl font-black text-slate-900">Laporan masuk untuk diperiksa</h3>
+                <h4 class="mt-1 text-xl font-black text-slate-900">Laporan masuk untuk diperiksa</h4>
             </div>
             <div class="grid gap-4 p-4">
                 {% for group in review_groups %}
-                <div id="review-task-{{ group.tugas.pk }}" class="laporan-class-target laporan-review-group overflow-hidden rounded-[1.5rem] border border-slate-200">
+                <div class="laporan-review-group overflow-hidden rounded-[1.5rem] border border-slate-200" data-classroom-panel data-class-id="{{ group.tugas.matkul.pk }}" hidden>
                     <div class="laporan-review-group-header flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
                         <div>
                             <p class="text-xs font-black uppercase tracking-[0.18em] text-violet-600">{{ group.modul_label }}</p>
@@ -404,7 +527,73 @@
                 {% endfor %}
             </div>
         </article>
-    </div>
+        </div>
+    </article>
 </section>
 {% include "components/confirmation_modal.html" with title="Konfirmasi Hapus Laporan" confirm_label="Hapus Laporan" confirm_icon="trash-2" %}
+<script>
+(() => {
+    const setActiveClass = (card, shouldScroll = true) => {
+        const workspace = document.querySelector('[data-classroom-workspace]');
+        const cards = Array.from(document.querySelectorAll('[data-classroom-open]'));
+        const panels = Array.from(document.querySelectorAll('[data-classroom-panel]'));
+        const columns = Array.from(document.querySelectorAll('[data-classroom-column]'));
+        const title = document.querySelector('[data-active-class-title]');
+        const meta = document.querySelector('[data-active-class-meta]');
+        if (!workspace || !card || !title || !meta) return;
+
+        const classId = card.dataset.classId;
+        cards.forEach((item) => item.classList.toggle('is-active', item === card));
+        panels.forEach((panel) => {
+            panel.hidden = panel.dataset.classId !== classId;
+        });
+        columns.forEach((column) => {
+            column.hidden = !column.querySelector(`[data-classroom-panel][data-class-id="${classId}"]`);
+        });
+
+        title.textContent = card.dataset.classTitle || 'Kelas praktikum';
+        meta.textContent = [card.dataset.classCode, card.dataset.classSection, card.dataset.classLecturer]
+            .filter(Boolean)
+            .join(' · ');
+        workspace.hidden = false;
+
+        const url = new URL(window.location.href);
+        url.searchParams.set('kelas', classId);
+        window.history.replaceState({}, '', url);
+        if (window.lucide) window.lucide.createIcons();
+        if (shouldScroll) workspace.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
+    const closeWorkspace = () => {
+        const workspace = document.querySelector('[data-classroom-workspace]');
+        const cards = Array.from(document.querySelectorAll('[data-classroom-open]'));
+        if (!workspace) return;
+        workspace.hidden = true;
+        cards.forEach((card) => card.classList.remove('is-active'));
+        const url = new URL(window.location.href);
+        url.searchParams.delete('kelas');
+        window.history.replaceState({}, '', url);
+        document.querySelector('.laporan-classroom-board')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
+    const restoreRequestedClass = () => {
+        const requestedClass = new URL(window.location.href).searchParams.get('kelas');
+        if (!requestedClass) return;
+        const requestedCard = Array.from(document.querySelectorAll('[data-classroom-open]'))
+            .find((card) => card.dataset.classId === requestedClass);
+        if (requestedCard) setActiveClass(requestedCard, false);
+    };
+
+    document.addEventListener('click', (event) => {
+        const openCard = event.target.closest('[data-classroom-open]');
+        if (openCard) {
+            setActiveClass(openCard);
+            return;
+        }
+        if (event.target.closest('[data-classroom-close]')) closeWorkspace();
+    });
+    document.addEventListener('labhub:regions-refreshed', restoreRequestedClass);
+    restoreRequestedClass();
+})();
+</script>
 {% endblock %}

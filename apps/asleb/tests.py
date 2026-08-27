@@ -1682,7 +1682,9 @@ class AslebViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Kelas Praktikum')
         self.assertContains(response, self.matkul.nama)
-        self.assertContains(response, f'href="#participant-class-{self.matkul.pk}"')
+        self.assertContains(response, 'data-classroom-open')
+        self.assertContains(response, f'data-class-id="{self.matkul.pk}"')
+        self.assertContains(response, 'data-classroom-workspace')
         self.assertEqual(response.context['classroom_cards'][0]['task_count'], 1)
 
     def test_format_tugas_laporan_menolak_tipe_file_aktif(self):

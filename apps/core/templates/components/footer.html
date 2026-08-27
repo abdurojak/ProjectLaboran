@@ -10,18 +10,32 @@
     }
 
     [data-app-footer] .app-footer-panel {
+        position: relative;
         display: grid;
-        grid-template-columns: minmax(15rem, 1.05fr) minmax(20rem, 1.4fr) auto;
+        grid-template-columns: minmax(15rem, 1fr) minmax(20rem, 1.35fr) minmax(9.2rem, auto);
         align-items: center;
         gap: clamp(1.25rem, 2.5vw, 3rem);
+        overflow: hidden;
         border: 1px solid var(--footer-border);
         border-block: 3px solid var(--footer-text);
         border-radius: 1.4rem;
         background: var(--footer-panel);
-        padding: clamp(1rem, 1.6vw, 1.5rem);
+        padding: clamp(1.15rem, 1.8vw, 1.65rem) clamp(6.2rem, 7vw, 7.2rem) clamp(1.15rem, 1.8vw, 1.65rem) clamp(1.15rem, 1.8vw, 1.65rem);
         box-shadow: var(--dashboard-surface-shadow);
         backdrop-filter: blur(18px);
         -webkit-backdrop-filter: blur(18px);
+    }
+
+    [data-app-footer] .app-footer-panel::after {
+        position: absolute;
+        right: -3.5rem;
+        bottom: -4.8rem;
+        width: 10rem;
+        height: 10rem;
+        border: 1.4rem solid color-mix(in srgb, var(--footer-accent) 12%, transparent);
+        border-radius: 999px;
+        content: "";
+        pointer-events: none;
     }
 
     [data-app-footer] .app-footer-brand {
@@ -74,6 +88,10 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 0.55rem 1.25rem;
         min-width: 0;
+        border: 1px solid var(--footer-border);
+        border-radius: 1.1rem;
+        background: color-mix(in srgb, var(--dashboard-surface-bg) 74%, transparent);
+        padding: 0.85rem 1rem;
         font-size: 0.78rem;
         line-height: 1.35;
     }
@@ -99,7 +117,10 @@
     }
 
     [data-app-footer] .app-footer-links {
-        display: flex;
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: repeat(3, 2.65rem);
         align-items: center;
         justify-content: flex-end;
         gap: 0.45rem;
@@ -138,11 +159,13 @@
     @media (max-width: 1023px) {
         [data-app-footer] .app-footer-panel {
             grid-template-columns: minmax(14rem, 0.9fr) minmax(18rem, 1.2fr);
+            padding-right: 5.5rem;
         }
 
         [data-app-footer] .app-footer-links {
             grid-column: 1 / -1;
-            justify-content: center;
+            grid-template-columns: repeat(6, 2.65rem);
+            justify-content: flex-start;
         }
     }
 
@@ -155,7 +178,7 @@
             grid-template-columns: minmax(0, 1fr);
             gap: 1rem;
             border-radius: 1.15rem;
-            padding: 1rem;
+            padding: 1rem 4.7rem 1rem 1rem;
         }
 
         [data-app-footer] .app-footer-brand {
@@ -178,7 +201,18 @@
 
         [data-app-footer] .app-footer-links {
             grid-column: auto;
+            grid-template-columns: repeat(3, 2.65rem);
             justify-content: flex-start;
+        }
+    }
+
+    @media (max-width: 420px) {
+        [data-app-footer] .app-footer-panel {
+            padding-right: 1rem;
+        }
+
+        [data-app-footer] .app-footer-panel::after {
+            display: none;
         }
     }
 </style>
