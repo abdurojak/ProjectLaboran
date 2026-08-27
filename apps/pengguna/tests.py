@@ -13,6 +13,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.http import HttpResponse
 from django.db import IntegrityError
 from django.test import RequestFactory, TestCase, override_settings
+from django.test.utils import override_script_prefix
 from django.urls import reverse
 from django.utils import timezone
 
@@ -886,6 +887,22 @@ class PenggunaAuthTests(TestCase):
         )
 
         self.assertRedirects(response, reverse('dashboard:home'))
+        self.assertEqual(self.client.session['pengguna_id'], self.pengguna.pk)
+
+    @override_settings(URL_PREFIX='/labhub', FORCE_SCRIPT_NAME='/labhub')
+    @override_script_prefix('/labhub/')
+    def test_login_dari_proxy_yang_menghapus_prefix_masuk_ke_dashboard_public(self):
+        response = self.client.post(
+            '/pengguna/login/?next=/labhub/',
+            {
+                'jenis_login': 'mahasiswa',
+                'nim_nik': '2201001',
+                'password': 'rahasia123',
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers['Location'], '/labhub/')
         self.assertEqual(self.client.session['pengguna_id'], self.pengguna.pk)
 
     def test_login_admin_dari_browser_mobile_berakhir_di_dashboard(self):

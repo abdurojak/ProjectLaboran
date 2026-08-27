@@ -99,6 +99,20 @@ class PenggunaLoginRequiredMiddleware:
         response['Expires'] = '0'
         return response
 
+    @staticmethod
+    def internal_path(path):
+        prefix = settings.URL_PREFIX
+        if prefix and (path == prefix or path.startswith(f'{prefix}/')):
+            return path[len(prefix):] or '/'
+        return path
+
+    @staticmethod
+    def public_path(path):
+        prefix = settings.URL_PREFIX
+        if not prefix or path == prefix or path.startswith(f'{prefix}/'):
+            return path
+        return f'{prefix}{path if path.startswith("/") else f"/{path}"}'
+
     def __call__(self, request):
         forgot_password_url = reverse('pengguna:forgot_password')
         health_url = reverse('health')
@@ -106,10 +120,23 @@ class PenggunaLoginRequiredMiddleware:
         register_url = reverse('pengguna:register')
         reset_password_url = reverse('pengguna:reset_password')
         verify_register_url = reverse('pengguna:verify_register')
-        path = request.path
+        path = request.path_info
+        public_path = self.public_path(path)
+        internal_urls = {
+            self.internal_path(url)
+            for url in (
+                forgot_password_url,
+                health_url,
+                login_url,
+                register_url,
+                reset_password_url,
+                verify_register_url,
+            )
+        }
+        media_url = self.internal_path(settings.MEDIA_URL)
 
         is_exempt = (
-            path in [forgot_password_url, health_url, login_url, register_url, reset_password_url, verify_register_url]
+            path in internal_urls
             or any(path.startswith(prefix) for prefix in self.EXEMPT_PREFIXES)
         )
 
@@ -122,7 +149,7 @@ class PenggunaLoginRequiredMiddleware:
                 request.session.pop('pengguna_id', None)
                 if is_exempt:
                     return self.get_response(request)
-                return redirect(f'{login_url}?next={path}')
+                return redirect(f'{login_url}?next={public_path}')
 
             if not pengguna.is_verified:
                 request.session.flush()
@@ -138,19 +165,22 @@ class PenggunaLoginRequiredMiddleware:
             link_peserta_praktikum_to_pengguna(pengguna)
             link_barang_tertinggal_to_pengguna(pengguna)
 
-            if path in {login_url, register_url}:
+            if path in {
+                self.internal_path(login_url),
+                self.internal_path(register_url),
+            }:
                 return self.disable_client_cache(redirect('dashboard:home'))
 
         if not pengguna_id and not is_exempt:
-            return redirect(f'{login_url}?next={path}')
+            return redirect(f'{login_url}?next={public_path}')
 
-        if pengguna_id and path.startswith(settings.MEDIA_URL):
-            if not self.can_access_media(pengguna, path):
+        if pengguna_id and path.startswith(media_url):
+            if not self.can_access_media(pengguna, path, media_url):
                 return HttpResponseForbidden('Anda tidak memiliki akses ke berkas ini.')
             response = self.get_response(request)
             response['Cache-Control'] = 'private, no-store, no-cache, must-revalidate'
             response['X-Content-Type-Options'] = 'nosniff'
-            media_name = unquote(path[len(settings.MEDIA_URL):]).lstrip('/')
+            media_name = unquote(path[len(media_url):]).lstrip('/')
             suffix = PurePosixPath(media_name).suffix.lower()
             content_type = response.get('Content-Type', '').split(';', 1)[0].lower()
             if (
@@ -199,18 +229,15 @@ class PenggunaLoginRequiredMiddleware:
                     return redirect('dashboard:home')
 
         response = self.get_response(request)
-        if path in {
-            forgot_password_url,
-            login_url,
-            register_url,
-            reset_password_url,
-            verify_register_url,
-        } or (pengguna_id and not is_exempt):
+        if path in internal_urls - {self.internal_path(health_url)} or (
+            pengguna_id and not is_exempt
+        ):
             self.disable_client_cache(response)
         return response
 
-    def can_access_media(self, pengguna, path):
-        media_name = unquote(path[len(settings.MEDIA_URL):]).lstrip('/')
+    def can_access_media(self, pengguna, path, media_url=None):
+        media_url = media_url or self.internal_path(settings.MEDIA_URL)
+        media_name = unquote(path[len(media_url):]).lstrip('/')
         if not media_name:
             return False
 
