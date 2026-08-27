@@ -6,6 +6,7 @@ from django.conf import settings
 from django.contrib.sessions.backends.db import SessionStore
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, TransactionTestCase, override_settings
+from django.test.utils import override_script_prefix
 from django.urls import reverse
 
 from apps.core.upload_validators import validate_safe_image_upload
@@ -1038,6 +1039,39 @@ class BantuanWebSocketTests(TransactionTestCase):
         session['pengguna_id'] = pengguna.pk
         session.save()
         return [(b'cookie', f'{settings.SESSION_COOKIE_NAME}={session.session_key}'.encode())]
+
+    def login_client_as(self, pengguna):
+        session = self.client.session
+        session['pengguna_id'] = pengguna.pk
+        session.save()
+
+    @override_script_prefix('/labhub/')
+    def test_user_help_websocket_url_follows_script_prefix(self):
+        self.login_client_as(self.mahasiswa)
+
+        response = self.client.get('/pengaturan/bantuan/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            'const helpAppPath = "/labhub/".replace(/\\/$/, \'\');',
+        )
+        self.assertContains(response, "helpAppPath + '/ws/bantuan/")
+
+    @override_script_prefix('/labhub/')
+    def test_admin_help_websocket_url_follows_script_prefix(self):
+        self.login_client_as(self.admin)
+
+        response = self.client.get(
+            f'/pengaturan/bantuan/admin/?percakapan={self.conversation.pk}',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            'const helpAppPath = "/labhub/".replace(/\\/$/, \'\');',
+        )
+        self.assertContains(response, "helpAppPath + '/ws/bantuan/")
 
     def test_pengguna_menerima_pesan_admin_via_websocket(self):
         user_headers = self.session_headers(self.mahasiswa)

@@ -240,7 +240,8 @@
 
         {% if percakapan %}
         const socketProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-        const chatSocket = new WebSocket(socketProtocol + window.location.host + '/ws/bantuan/{{ percakapan.pk }}/');
+        const helpAppPath = "{% url 'dashboard:home' %}".replace(/\/$/, '');
+        const chatSocket = new WebSocket(socketProtocol + window.location.host + helpAppPath + '/ws/bantuan/{{ percakapan.pk }}/');
 
         chatSocket.addEventListener('message', function (event) {
             const payload = JSON.parse(event.data);
