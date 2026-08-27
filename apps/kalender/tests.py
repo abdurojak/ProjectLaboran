@@ -6,6 +6,7 @@ from channels.testing import WebsocketCommunicator
 from django.conf import settings
 from django.contrib.sessions.backends.db import SessionStore
 from django.test import TestCase, TransactionTestCase
+from django.test.utils import override_script_prefix
 from django.utils import timezone
 from django.urls import reverse
 
@@ -680,6 +681,24 @@ class KalenderViewsTests(TestCase):
         self.assertContains(response, 'window.AudioContext || window.webkitAudioContext')
         self.assertContains(response, 'playNotificationSound();')
         self.assertContains(response, "document.addEventListener('pointerdown', unlockNotificationSound, {once: true});")
+
+    @override_script_prefix('/labhub/')
+    def test_realtime_urls_follow_script_prefix(self):
+        response = self.client.get('/kalender/notifikasi/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            'const appPath = "/labhub/".replace(/\\/$/, \'\');',
+        )
+        self.assertContains(
+            response,
+            "appPath + '/ws/notifikasi/'",
+        )
+        self.assertContains(
+            response,
+            'window.location.pathname.slice(appPath.length)',
+        )
 
     def test_notifikasi_mahasiswa_menampilkan_perubahan_status_peminjaman_saya(self):
         mahasiswa = Pengguna.objects.create(

@@ -42,7 +42,8 @@
 <script>
     (function () {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const socketUrl = protocol + '//' + window.location.host + '/ws/notifikasi/';
+        const appPath = "{% url 'dashboard:home' %}".replace(/\/$/, '');
+        const socketUrl = protocol + '//' + window.location.host + appPath + '/ws/notifikasi/';
         const summaryUrl = "{% url 'kalender:notifikasi_summary' %}";
         const toastRoot = document.getElementById('labhub-realtime-toasts');
         let socket = null;
@@ -184,8 +185,11 @@
         function scheduleRefresh(payload) {
             if (!payload.auto_refresh) return;
             const paths = Array.isArray(payload.refresh_paths) ? payload.refresh_paths : [];
+            const currentPath = appPath && window.location.pathname.startsWith(appPath)
+                ? window.location.pathname.slice(appPath.length) || '/'
+                : window.location.pathname;
             const shouldRefresh = paths.some(function (path) {
-                return path === '/' ? window.location.pathname === '/' : window.location.pathname.startsWith(path);
+                return path === '/' ? currentPath === '/' : currentPath.startsWith(path);
             });
             if (!shouldRefresh || document.visibilityState !== 'visible') return;
             window.clearTimeout(refreshTimer);
