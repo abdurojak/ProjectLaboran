@@ -1226,12 +1226,45 @@ class LaporanPraktikumListView(TemplateView):
             if group_key in group_index:
                 review_groups[group_index[group_key]]['laporan_list'].append(laporan)
 
+        classroom_card_map = {}
+        for group in participant_groups:
+            matkul = group['matkul']
+            classroom_card_map[matkul.pk] = {
+                'matkul': matkul,
+                'anchor': f'participant-class-{matkul.pk}',
+                'roles': {'Mahasiswa'},
+                'task_ids': {item['tugas'].pk for item in group['items']},
+                'pending_count': sum(1 for item in group['items'] if not item['laporan']),
+                'report_count': 0,
+            }
+        for group in review_groups:
+            matkul = group['tugas'].matkul
+            card = classroom_card_map.setdefault(matkul.pk, {
+                'matkul': matkul,
+                'anchor': f'review-task-{group["tugas"].pk}',
+                'roles': set(),
+                'task_ids': set(),
+                'pending_count': 0,
+                'report_count': 0,
+            })
+            card['roles'].add('Asisten Lab')
+            card['task_ids'].add(group['tugas'].pk)
+            card['report_count'] += len(group['laporan_list'])
+
+        classroom_cards = []
+        for card in classroom_card_map.values():
+            card['role_label'] = ' & '.join(sorted(card.pop('roles')))
+            card['task_count'] = len(card.pop('task_ids'))
+            classroom_cards.append(card)
+        classroom_cards.sort(key=lambda card: (card['matkul'].nama, card['matkul'].kelas))
+
         context.update({
             'participant_cards': participant_cards,
             'participant_groups': participant_groups,
             'review_tasks': review_tasks,
             'submissions_for_review': submissions_for_review,
             'review_groups': review_groups,
+            'classroom_cards': classroom_cards,
             'can_create_task': pengguna.role == ASISTEN_LAB_ROLE,
             'is_participant': peserta_qs.exists(),
         })

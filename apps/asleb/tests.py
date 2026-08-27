@@ -1649,6 +1649,42 @@ class AslebViewTests(TestCase):
         attendance.save()
         self.assertEqual(attendance.periode, current_period)
 
+    def test_laporan_praktikum_menampilkan_kartu_kelas_mahasiswa(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Mahasiswa Kelas Laporan',
+            nim_nik='0640020777',
+            email='kelas-laporan@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081234567877',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+        )
+        PesertaPraktikum.objects.create(
+            matkul=self.matkul,
+            pengguna=mahasiswa,
+            nim=mahasiswa.nim_nik,
+            nama=mahasiswa.nama_pengguna,
+        )
+        TugasLaporanPraktikum.objects.create(
+            judul='Laporan Struktur Data',
+            matkul=self.matkul,
+            batas_pengumpulan=timezone.now() + timedelta(days=2),
+        )
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+
+        response = self.client.get(reverse('asleb:laporan_tugas_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Kelas Praktikum')
+        self.assertContains(response, self.matkul.nama)
+        self.assertContains(response, f'href="#participant-class-{self.matkul.pk}"')
+        self.assertEqual(response.context['classroom_cards'][0]['task_count'], 1)
+
     def test_format_tugas_laporan_menolak_tipe_file_aktif(self):
         form = TugasLaporanPraktikumForm(
             data={
