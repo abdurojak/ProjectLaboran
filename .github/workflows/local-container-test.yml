@@ -55,6 +55,28 @@ jobs:
             }
           done
 
+      - name: Reclaim unused Podman storage
+        shell: bash
+        run: |
+          set -euo pipefail
+          graph_root="$(podman info --format '{{.Store.GraphRoot}}')"
+          echo "Podman storage before cleanup:"
+          podman system df || true
+          df -h "$graph_root"
+
+          # Running containers and their images are retained. Volumes are never pruned.
+          podman system prune --all --force
+
+          echo "Podman storage after cleanup:"
+          podman system df || true
+          df -h "$graph_root"
+
+          available_mb="$(df -Pm "$graph_root" | awk 'NR == 2 {print $4}')"
+          if (( available_mb < 2048 )); then
+            echo "At least 2 GiB of free Podman storage is required; only ${available_mb} MiB is available." >&2
+            exit 1
+          fi
+
       - name: Pull protected image
         shell: bash
         env:
