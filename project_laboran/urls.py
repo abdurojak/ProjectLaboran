@@ -46,6 +46,9 @@ urlpatterns = [
 # MEDIA_ROOT directly from the reverse proxy would bypass document ownership
 # checks for transcripts, attendance evidence, reports, and payment receipts.
 media_prefix = settings.MEDIA_URL.strip('/')
+script_prefix = (settings.URL_PREFIX or '').strip('/')
+if script_prefix and media_prefix.startswith(f'{script_prefix}/'):
+    media_prefix = media_prefix[len(script_prefix):].lstrip('/')
 if media_prefix:
     urlpatterns.append(
         re_path(

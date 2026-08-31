@@ -42,11 +42,14 @@ class HealthCheckTests(SimpleTestCase):
         })
         environment.pop('MEDIA_URL', None)
         command = (
-            'import json; '
+            'import django, json; '
+            'django.setup(); '
             'from django.conf import settings; '
+            'from project_laboran.urls import media_prefix; '
             'print(json.dumps({'
             '"static": settings.STATIC_URL, '
             '"media": settings.MEDIA_URL, '
+            '"media_route": media_prefix, '
             '"session_cookie": settings.SESSION_COOKIE_PATH, '
             '"csrf_cookie": settings.CSRF_COOKIE_PATH'
             '}))'
@@ -62,6 +65,7 @@ class HealthCheckTests(SimpleTestCase):
         self.assertEqual(json.loads(output), {
             'static': '/labhub/static/',
             'media': '/labhub/media/',
+            'media_route': 'media',
             'session_cookie': '/labhub/',
             'csrf_cookie': '/labhub/',
         })
