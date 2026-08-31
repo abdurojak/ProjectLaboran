@@ -359,13 +359,13 @@
                     <div>
                         <div class="text-sm font-semibold text-emerald-700">Status Aslab</div>
                         {% if asleb_profile %}
-                        <div class="mt-2 text-xl font-black text-emerald-950">{{ asleb_profile.level_otomatis_display }}</div>
+                        <div class="mt-2 text-xl font-black text-emerald-950">{{ asleb_profile.level_efektif_display }}</div>
                         {% else %}
                         <div class="mt-2 text-xl font-black text-emerald-950">Belum terdata</div>
                         {% endif %}
                     </div>
                     <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-emerald-700 shadow-sm">
-                        <i data-lucide="{% if asleb_profile.level_otomatis == 'senior' %}badge-check{% else %}badge{% endif %}" class="h-6 w-6"></i>
+                        <i data-lucide="{% if asleb_profile.level_efektif == 'senior' %}badge-check{% else %}badge{% endif %}" class="h-6 w-6"></i>
                     </span>
                 </div>
                 {% if asleb_profile %}

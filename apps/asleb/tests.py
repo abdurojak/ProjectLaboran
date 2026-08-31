@@ -24,7 +24,7 @@ from apps.pendaftaran_asleb.models import (
     PendaftaranAsleb,
     PeriodeAsleb,
 )
-from apps.pendaftaran_asleb.services import deactivate_asleb_membership, sync_expired_asleb_periods
+from apps.pendaftaran_asleb.services import deactivate_asleb_membership, get_asleb_experience, sync_expired_asleb_periods
 from apps.kalender.models import Notifikasi
 from apps.pengguna.models import PengalamanPengguna, Pengguna
 from apps.jadwal.models import JadwalPraktikum, PermintaanPerubahanJadwal
@@ -121,6 +121,60 @@ class AslebViewTests(TestCase):
         self.assertEqual(active_links, ['Asisten Laboratorium'])
         asleb_group = next(link for link in response.context['sidebar_links'] if link['title'] == 'Asisten Laboratorium')
         self.assertEqual([child['title'] for child in asleb_group['children'] if child['active']], ['Data Aslab'])
+
+    def test_laboran_can_set_manual_aslab_level_and_honor_uses_it(self):
+        response = self.client.post(
+            reverse('asleb:asleb_update_level', args=[self.asleb.pk]),
+            {'level_mode': 'manual', 'level_manual': 'senior'},
+        )
+
+        self.assertRedirects(response, reverse('asleb:asleb_detail', args=[self.asleb.pk]))
+        self.asleb.refresh_from_db()
+        self.assertEqual(self.asleb.level_mode, 'manual')
+        self.assertEqual(self.asleb.level_manual, 'senior')
+        self.assertEqual(self.asleb.level_efektif, 'senior')
+        self.assertEqual(self.asleb.level_diatur_oleh, self.pengguna)
+        self.assertIsNotNone(self.asleb.level_diatur_pada)
+        self.assertEqual(get_asleb_experience(self.asleb.nim), ('senior', 2))
+
+        honor = HonorAsleb.objects.create(
+            asleb=self.asleb,
+            bulan=date(2026, 7, 1),
+            jumlah=Decimal('0'),
+            total_pertemuan=1,
+        )
+        self.assertEqual(honor.level, 'senior')
+        self.assertEqual(honor.honor_per_jam, 8000)
+
+    def test_switching_back_to_automatic_ignores_manual_value(self):
+        self.asleb.level_mode = 'manual'
+        self.asleb.level_manual = 'senior'
+        self.asleb.save(update_fields=['level_mode', 'level_manual'])
+
+        response = self.client.post(
+            reverse('asleb:asleb_update_level', args=[self.asleb.pk]),
+            {'level_mode': 'otomatis', 'level_manual': 'senior'},
+        )
+
+        self.assertRedirects(response, reverse('asleb:asleb_detail', args=[self.asleb.pk]))
+        self.asleb.refresh_from_db()
+        self.assertEqual(self.asleb.level_mode, 'otomatis')
+        self.assertEqual(self.asleb.level_manual, '')
+        self.assertEqual(self.asleb.level_efektif, self.asleb.level_otomatis)
+
+    def test_non_laboran_cannot_change_manual_aslab_level(self):
+        self.pengguna.role = 'admin'
+        self.pengguna.save(update_fields=['role'])
+
+        response = self.client.post(
+            reverse('asleb:asleb_update_level', args=[self.asleb.pk]),
+            {'level_mode': 'manual', 'level_manual': 'senior'},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.asleb.refresh_from_db()
+        self.assertEqual(self.asleb.level_mode, 'otomatis')
+        self.assertEqual(self.asleb.level_manual, '')
 
     def test_aslab_with_operational_history_cannot_be_deleted(self):
         period = PeriodeAsleb.objects.create(
@@ -1682,10 +1736,95 @@ class AslebViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Kelas Praktikum')
         self.assertContains(response, self.matkul.nama)
-        self.assertContains(response, 'data-classroom-open')
-        self.assertContains(response, f'data-class-id="{self.matkul.pk}"')
-        self.assertContains(response, 'data-classroom-workspace')
+        self.assertContains(response, reverse('asleb:laporan_kelas_detail', args=[self.matkul.pk]))
+        self.assertNotContains(response, 'data-classroom-workspace')
         self.assertEqual(response.context['classroom_cards'][0]['task_count'], 1)
+
+        detail_response = self.client.get(reverse('asleb:laporan_kelas_detail', args=[self.matkul.pk]))
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertContains(detail_response, 'Kelas aktif')
+        self.assertContains(detail_response, 'Laporan Struktur Data')
+        self.assertNotContains(detail_response, 'Kelas Praktikum')
+
+    def test_laporan_praktikum_mahasiswa_tidak_bisa_membuka_kelas_lain(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Mahasiswa Terbatas',
+            nim_nik='0640020888',
+            email='kelas-terbatas@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081234567888',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+        )
+        PesertaPraktikum.objects.create(
+            matkul=self.matkul,
+            pengguna=mahasiswa,
+            nim=mahasiswa.nim_nik,
+            nama=mahasiswa.nama_pengguna,
+        )
+        matkul_lain = MataKuliahAsleb.objects.create(
+            kode='KELAS-LAIN-01',
+            nama='Mata Kuliah Tidak Diikuti',
+            dosen='Dosen Lain',
+            kelas='TIF-09',
+        )
+        TugasLaporanPraktikum.objects.create(
+            judul='Laporan Kelas Lain',
+            matkul=matkul_lain,
+            batas_pengumpulan=timezone.now() + timedelta(days=2),
+        )
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+
+        response = self.client.get(reverse('asleb:laporan_kelas_detail', args=[matkul_lain.pk]))
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_laporan_praktikum_asisten_hanya_menampilkan_matkul_penugasan_aktif(self):
+        pengguna_aslab = Pengguna.objects.create(
+            nama_pengguna='Aslab Kelas Aktif',
+            nim_nik=self.asleb.nim,
+            email='aslab-kelas-aktif@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp='081234567899',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='asisten_lab',
+        )
+        self.create_active_assignment()
+        TugasLaporanPraktikum.objects.create(
+            judul='Laporan Matkul Diampu',
+            matkul=self.matkul,
+            batas_pengumpulan=timezone.now() + timedelta(days=2),
+        )
+        matkul_lain = MataKuliahAsleb.objects.create(
+            kode='ASLAB-KELAS-LAIN',
+            nama='Mata Kuliah Aslab Lain',
+            dosen='Dosen Lain',
+            kelas='TIF-08',
+        )
+        TugasLaporanPraktikum.objects.create(
+            judul='Laporan Bukan Penugasan',
+            matkul=matkul_lain,
+            batas_pengumpulan=timezone.now() + timedelta(days=2),
+        )
+        session = self.client.session
+        session['pengguna_id'] = pengguna_aslab.pk
+        session.save()
+
+        response = self.client.get(reverse('asleb:laporan_tugas_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.matkul.nama)
+        self.assertNotContains(response, matkul_lain.nama)
+        denied = self.client.get(reverse('asleb:laporan_kelas_detail', args=[matkul_lain.pk]))
+        self.assertEqual(denied.status_code, 404)
 
     def test_format_tugas_laporan_menolak_tipe_file_aktif(self):
         form = TugasLaporanPraktikumForm(
@@ -2104,7 +2243,7 @@ class AslebViewTests(TestCase):
 
         response = self.client.post(reverse('asleb:laporan_delete', args=[laporan.pk]))
 
-        self.assertRedirects(response, reverse('asleb:laporan_tugas_list'))
+        self.assertRedirects(response, reverse('asleb:laporan_kelas_detail', args=[self.matkul.pk]))
         self.assertFalse(PengumpulanLaporanPraktikum.objects.filter(pk=laporan.pk).exists())
         hasil.refresh_from_db()
         self.assertIsNone(hasil.nilai_laporan)

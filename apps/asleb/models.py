@@ -7,6 +7,14 @@ from django.utils import timezone
 
 
 class Asleb(models.Model):
+    LEVEL_CHOICES = [
+        ('junior', 'Junior'),
+        ('senior', 'Senior'),
+    ]
+    LEVEL_MODE_CHOICES = [
+        ('otomatis', 'Otomatis'),
+        ('manual', 'Manual oleh Laboran'),
+    ]
     STATUS_CHOICES = [
         ('aktif', 'Aktif'),
         ('nonaktif', 'Nonaktif'),
@@ -29,6 +37,27 @@ class Asleb(models.Model):
     )
     tanggal_bergabung = models.DateField()
     catatan = models.TextField(blank=True)
+    level_mode = models.CharField(
+        'Mode level',
+        max_length=20,
+        choices=LEVEL_MODE_CHOICES,
+        default='otomatis',
+    )
+    level_manual = models.CharField(
+        'Level manual',
+        max_length=20,
+        choices=LEVEL_CHOICES,
+        blank=True,
+    )
+    level_diatur_oleh = models.ForeignKey(
+        'pengguna.Pengguna',
+        on_delete=models.SET_NULL,
+        related_name='pengaturan_level_asleb',
+        blank=True,
+        null=True,
+        editable=False,
+    )
+    level_diatur_pada = models.DateTimeField(blank=True, null=True, editable=False)
     dibuat_pada = models.DateTimeField(auto_now_add=True)
     diperbarui_pada = models.DateTimeField(auto_now=True)
 
@@ -65,6 +94,16 @@ class Asleb(models.Model):
     @property
     def level_otomatis_display(self):
         return 'Senior' if self.level_otomatis == 'senior' else 'Junior'
+
+    @property
+    def level_efektif(self):
+        if self.level_mode == 'manual' and self.level_manual in dict(self.LEVEL_CHOICES):
+            return self.level_manual
+        return self.level_otomatis
+
+    @property
+    def level_efektif_display(self):
+        return 'Senior' if self.level_efektif == 'senior' else 'Junior'
 
 
 class HonorAsleb(models.Model):
@@ -199,7 +238,7 @@ class HonorAsleb(models.Model):
 
     def save(self, *args, **kwargs):
         self.bulan = self.bulan.replace(day=1)
-        self.level = self.asleb.level_otomatis
+        self.level = self.asleb.level_efektif
         self.fill_transfer_from_registration()
         if not self.assigned_laboran_id:
             self.assigned_laboran = self.get_next_laboran_for_transfer()

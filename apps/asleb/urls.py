@@ -43,6 +43,7 @@ from .views import (
     delete_peserta_praktikum,
     toggle_absensi_status,
     update_transfer_fees,
+    update_asleb_level,
     viewer_modul_praktikum,
 )
 
@@ -70,6 +71,11 @@ urlpatterns = [
     path('praktikum-mahasiswa/peserta/<int:pk>/hapus/', delete_peserta_praktikum, name='praktikum_peserta_delete'),
     path('praktikum-mahasiswa/<int:matkul_pk>/modul/<int:modul_pk>/', NilaiAbsensiMahasiswaView.as_view(), name='praktikum_nilai'),
     path('laporan-praktikum/', LaporanPraktikumListView.as_view(), name='laporan_tugas_list'),
+    path(
+        'laporan-praktikum/kelas/<int:matkul_pk>/',
+        LaporanPraktikumListView.as_view(),
+        name='laporan_kelas_detail',
+    ),
     path('laporan-praktikum/tugas/tambah/', TugasLaporanPraktikumCreateView.as_view(), name='laporan_tugas_create'),
     path('laporan-praktikum/tugas/<int:pk>/submit/', PengumpulanLaporanPraktikumCreateView.as_view(), name='laporan_submit'),
     path('laporan-praktikum/pengumpulan/<int:pk>/review/', ReviewLaporanPraktikumUpdateView.as_view(), name='laporan_review'),
@@ -80,6 +86,7 @@ urlpatterns = [
     path('laporan-praktikum/pengumpulan/<int:pk>/download/', download_laporan_praktikum, name='laporan_download'),
     path('<int:pk>/', AslebDetailView.as_view(), name='asleb_detail'),
     path('<int:pk>/edit/', AslebUpdateView.as_view(), name='asleb_update'),
+    path('<int:pk>/level/', update_asleb_level, name='asleb_update_level'),
     path('<int:pk>/akhiri-masa-tugas/', end_asleb_membership, name='asleb_end_membership'),
     path('<int:pk>/hapus/', AslebDeleteView.as_view(), name='asleb_delete'),
     path('honorarium/', HonorAslebListView.as_view(), name='honor_list'),

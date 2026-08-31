@@ -13,7 +13,7 @@ from django.db.models import Avg, Count, Prefetch, Q, Sum
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.response import TemplateResponse
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.utils.http import content_disposition_header
 from django.utils.text import slugify
 from django.utils import timezone
@@ -221,6 +221,43 @@ class AslebDetailView(LabOperationsRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         context['has_operational_history'] = asleb_has_operational_history(self.object)
         return context
+
+
+@require_POST
+@transaction.atomic
+def update_asleb_level(request, pk):
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not pengguna or pengguna.role != LABORAN_ROLE:
+        messages.error(request, 'Hanya Laboran yang dapat mengatur level Aslab.')
+        return redirect('dashboard:home')
+
+    asleb = get_object_or_404(Asleb.objects.select_for_update(), pk=pk)
+    level_mode = request.POST.get('level_mode', '').strip().lower()
+    level_manual = request.POST.get('level_manual', '').strip().lower()
+
+    valid_modes = {value for value, _label in Asleb.LEVEL_MODE_CHOICES}
+    valid_levels = {value for value, _label in Asleb.LEVEL_CHOICES}
+    if level_mode not in valid_modes:
+        messages.error(request, 'Mode level tidak valid.')
+        return redirect('asleb:asleb_detail', pk=asleb.pk)
+    if level_mode == 'manual' and level_manual not in valid_levels:
+        messages.error(request, 'Pilih level Junior atau Senior untuk mode manual.')
+        return redirect('asleb:asleb_detail', pk=asleb.pk)
+
+    asleb.level_mode = level_mode
+    asleb.level_manual = level_manual if level_mode == 'manual' else ''
+    asleb.level_diatur_oleh = pengguna
+    asleb.level_diatur_pada = timezone.now()
+    asleb.save(update_fields=[
+        'level_mode', 'level_manual', 'level_diatur_oleh',
+        'level_diatur_pada', 'diperbarui_pada',
+    ])
+    messages.success(
+        request,
+        f'Level {asleb.nama} sekarang {asleb.level_efektif_display} '
+        f'({asleb.get_level_mode_display().lower()}).',
+    )
+    return redirect('asleb:asleb_detail', pk=asleb.pk)
 
 
 class AslebCreateView(LabOperationsRequiredMixin, CreateView):
@@ -1194,15 +1231,10 @@ class LaporanPraktikumListView(TemplateView):
 
         review_tasks = TugasLaporanPraktikum.objects.none()
         if pengguna.role == ASISTEN_LAB_ROLE:
-            active_labels = list(
-                Asleb.objects.filter(nim=pengguna.nim_nik, status='aktif').exclude(matkul='').values_list('matkul', flat=True)
-            )
+            assigned_matkul_ids = get_praktikum_matkul_queryset(pengguna).values_list('pk', flat=True)
             review_tasks = TugasLaporanPraktikum.objects.select_related('matkul', 'modul', 'asisten_pemeriksa').filter(
                 aktif=True,
-                matkul__in=[
-                    matkul.pk for matkul in get_praktikum_matkul_queryset(pengguna)
-                    if str(matkul) in active_labels
-                ],
+                matkul_id__in=assigned_matkul_ids,
             )
         submissions_for_review = (
             PengumpulanLaporanPraktikum.objects
@@ -1258,6 +1290,22 @@ class LaporanPraktikumListView(TemplateView):
             classroom_cards.append(card)
         classroom_cards.sort(key=lambda card: (card['matkul'].nama, card['matkul'].kelas))
 
+        selected_classroom = None
+        selected_matkul_pk = self.kwargs.get('matkul_pk')
+        if selected_matkul_pk is not None:
+            selected_classroom = next(
+                (card for card in classroom_cards if card['matkul'].pk == selected_matkul_pk),
+                None,
+            )
+            if selected_classroom is None:
+                raise Http404('Kelas laporan tidak ditemukan atau tidak dapat Anda akses.')
+            participant_groups = [
+                group for group in participant_groups if group['matkul'].pk == selected_matkul_pk
+            ]
+            review_groups = [
+                group for group in review_groups if group['tugas'].matkul_id == selected_matkul_pk
+            ]
+
         context.update({
             'participant_cards': participant_cards,
             'participant_groups': participant_groups,
@@ -1265,6 +1313,7 @@ class LaporanPraktikumListView(TemplateView):
             'submissions_for_review': submissions_for_review,
             'review_groups': review_groups,
             'classroom_cards': classroom_cards,
+            'selected_classroom': selected_classroom,
             'can_create_task': pengguna.role == ASISTEN_LAB_ROLE,
             'is_participant': peserta_qs.exists(),
         })
@@ -1276,6 +1325,9 @@ class TugasLaporanPraktikumCreateView(PraktikumMahasiswaAccessMixin, CreateView)
     form_class = TugasLaporanPraktikumForm
     template_name = 'asleb/laporan_tugas_form.html'
     success_url = reverse_lazy('asleb:laporan_tugas_list')
+
+    def get_success_url(self):
+        return reverse('asleb:laporan_kelas_detail', args=[self.object.matkul_id])
 
     def dispatch(self, request, *args, **kwargs):
         pengguna = getattr(request, 'current_pengguna', None)
@@ -1309,6 +1361,9 @@ class PengumpulanLaporanPraktikumCreateView(FormView):
     form_class = PengumpulanLaporanPraktikumForm
     template_name = 'asleb/laporan_submit_form.html'
     success_url = reverse_lazy('asleb:laporan_tugas_list')
+
+    def get_success_url(self):
+        return reverse('asleb:laporan_kelas_detail', args=[self.tugas.matkul_id])
 
     def dispatch(self, request, *args, **kwargs):
         self.tugas = get_object_or_404(TugasLaporanPraktikum.objects.select_related('matkul'), pk=kwargs['pk'], aktif=True)
@@ -1353,7 +1408,7 @@ class PengumpulanLaporanPraktikumCreateView(FormView):
             ['/asleb/laporan-praktikum/'], related_object_id=laporan.pk,
             title='Laporan praktikum dikumpulkan',
         ))
-        return redirect(self.success_url)
+        return redirect(self.get_success_url())
 
 
 @require_POST
@@ -1370,7 +1425,7 @@ def cancel_laporan_praktikum(request, pk):
         return redirect('asleb:laporan_tugas_list')
     if laporan.status == PengumpulanLaporanPraktikum.STATUS_DIBATALKAN:
         messages.info(request, 'Kiriman laporan ini sudah dibatalkan.')
-        return redirect('asleb:laporan_tugas_list')
+        return redirect('asleb:laporan_kelas_detail', matkul_pk=laporan.tugas.matkul_id)
 
     with transaction.atomic():
         PengumpulanLaporanPraktikum.objects.filter(
@@ -1422,7 +1477,7 @@ def cancel_laporan_praktikum(request, pk):
         ['/asleb/laporan-praktikum/'], related_object_id=laporan.pk,
         title='Kiriman laporan dibatalkan',
     ))
-    return redirect('asleb:laporan_tugas_list')
+    return redirect('asleb:laporan_kelas_detail', matkul_pk=laporan.tugas.matkul_id)
 
 
 class ReviewLaporanPraktikumUpdateView(UpdateView):
@@ -1430,6 +1485,9 @@ class ReviewLaporanPraktikumUpdateView(UpdateView):
     form_class = ReviewLaporanPraktikumForm
     template_name = 'asleb/laporan_review_form.html'
     success_url = reverse_lazy('asleb:laporan_tugas_list')
+
+    def get_success_url(self):
+        return reverse('asleb:laporan_kelas_detail', args=[self.object.tugas.matkul_id])
 
     def dispatch(self, request, *args, **kwargs):
         self.object = self.get_object()
@@ -1556,7 +1614,7 @@ def delete_laporan_praktikum(request, pk):
         ['/asleb/laporan-praktikum/', '/asleb/praktikum-mahasiswa/'],
         related_object_id=pk, title='Laporan praktikum dihapus',
     ))
-    return redirect('asleb:laporan_tugas_list')
+    return redirect('asleb:laporan_kelas_detail', matkul_pk=tugas.matkul_id)
 
 
 def _serve_laporan_file(request, pk, *, inline=False):

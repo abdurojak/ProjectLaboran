@@ -183,7 +183,7 @@ class ProfileView(APIView):
             'asleb': {
                 'id': asleb.pk,
                 'status': asleb.status,
-                'level': asleb.level_otomatis,
+                'level': asleb.level_efektif,
                 'mata_kuliah': get_asleb_course_labels(asleb),
                 'periode': asleb.periode_aktif.nama if asleb.periode_aktif else None,
             },

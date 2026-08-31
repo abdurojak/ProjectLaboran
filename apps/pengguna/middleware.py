@@ -18,6 +18,7 @@ class PenggunaLoginRequiredMiddleware:
     MAHASISWA_ALLOWED_NAMESPACES = {'core', 'dashboard', 'peminjaman', 'jadwal', 'pengguna', 'ruangan'}
     MAHASISWA_ALLOWED_ASLEB_URLS = {
         'laporan_tugas_list',
+        'laporan_kelas_detail',
         'laporan_submit',
         'laporan_cancel',
         'laporan_preview',
@@ -53,6 +54,7 @@ class PenggunaLoginRequiredMiddleware:
         'praktikum_nilai',
         'praktikum_nilai_export',
         'laporan_tugas_list',
+        'laporan_kelas_detail',
         'laporan_tugas_create',
         'laporan_submit',
         'laporan_cancel',

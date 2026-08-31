@@ -415,6 +415,11 @@ def end_asleb_period(period, ended_by, value=None):
 
 
 def get_asleb_experience(nim):
+    active_asleb = Asleb.objects.filter(nim=nim, status='aktif').first()
+    if active_asleb and active_asleb.level_mode == 'manual':
+        level = active_asleb.level_efektif
+        return level, 2 if level == 'senior' else 1
+
     period_ids = set(PendaftaranAsleb.objects.filter(
         nim=nim,
         status__in=['diterima', 'digenerate'],

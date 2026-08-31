@@ -80,7 +80,7 @@ SIDEBAR_LINKS = [
         'url': 'asleb:laporan_tugas_list',
         'namespace': 'asleb',
         'url_names': {
-            'laporan_tugas_list', 'laporan_submit', 'laporan_cancel',
+            'laporan_tugas_list', 'laporan_kelas_detail', 'laporan_submit', 'laporan_cancel',
             'laporan_preview', 'laporan_preview_file', 'laporan_download',
         },
         'roles': {MAHASISWA_ROLE},
@@ -112,7 +112,7 @@ SIDEBAR_LINKS = [
                 'url': 'asleb:laporan_tugas_list',
                 'namespace': 'asleb',
                 'url_names': {
-                    'laporan_tugas_list', 'laporan_tugas_create', 'laporan_submit',
+                    'laporan_tugas_list', 'laporan_kelas_detail', 'laporan_tugas_create', 'laporan_submit',
                     'laporan_review', 'laporan_preview', 'laporan_download',
                 },
                 'roles': {ASISTEN_LAB_ROLE},
