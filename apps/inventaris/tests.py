@@ -279,20 +279,15 @@ class BarangListViewTests(TestCase):
         self.assertContains(response, 'Kelola Lokasi')
         self.assertContains(response, reverse('inventaris:lokasi_list'))
 
-    def test_daftar_barang_memiliki_layout_kartu_responsif_tanpa_scroll_horizontal_mobile(self):
+    def test_daftar_barang_memisahkan_tabel_desktop_dan_kartu_mobile(self):
         response = self.client.get(reverse('inventaris:barang_list'))
 
         self.assertContains(response, 'data-inventory-table')
-        self.assertContains(response, 'data-label="Kode Inventaris"')
-        self.assertContains(response, 'data-label="Stok Total"')
-        self.assertContains(response, 'data-label="Aksi"')
-        self.assertContains(response, '@media (max-width: 767px)')
-        self.assertContains(response, 'overflow-x: visible')
-        self.assertContains(
-            response,
-            '[data-inventory-table] {\n            min-width: 0 !important;',
-            html=False,
-        )
+        self.assertContains(response, 'data-inventory-desktop-list')
+        self.assertContains(response, 'data-inventory-mobile-list')
+        self.assertContains(response, 'data-inventory-mobile-card')
+        self.assertContains(response, 'hidden md:block')
+        self.assertContains(response, 'md:hidden')
 
     def test_daftar_barang_menyembunyikan_tombol_kelola_paket(self):
         response = self.client.get(reverse('inventaris:barang_list'))

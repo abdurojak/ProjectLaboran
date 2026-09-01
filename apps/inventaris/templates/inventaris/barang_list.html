@@ -29,7 +29,7 @@
         </div>
     </form>
 
-    <div class="inventory-table-card surface-card overflow-hidden">
+    <div class="inventory-table-card hidden overflow-hidden md:block surface-card" data-inventory-desktop-list>
         <div class="inventory-table-scroll overflow-x-auto">
             <table data-inventory-table>
                 <thead class="bg-slate-50">
@@ -92,6 +92,64 @@
                 </tbody>
             </table>
         </div>
+    </div>
+
+    <div class="grid gap-3 md:hidden" data-inventory-mobile-list>
+        {% for barang in barang_list %}
+        <article class="surface-card overflow-hidden p-4" data-inventory-mobile-card>
+            <div class="flex min-w-0 items-center gap-3">
+                {% if barang.foto %}
+                <img src="{{ barang.foto.url }}" alt="{{ barang.nama }}" class="h-16 w-16 shrink-0 rounded-lg object-cover ring-1 ring-slate-200">
+                {% else %}
+                <div class="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-400">
+                    <i data-lucide="image" class="h-5 w-5"></i>
+                </div>
+                {% endif %}
+                <div class="min-w-0 flex-1">
+                    <h3 class="break-words text-base font-black leading-6 text-slate-900">{{ barang.nama }}</h3>
+                    <p class="mt-1 break-all text-xs font-bold text-slate-500">{{ barang.kode_inventaris }}</p>
+                </div>
+                <span class="{% if barang.stok_tersedia %}bg-emerald-100 text-emerald-700{% else %}bg-rose-100 text-rose-700{% endif %} inline-flex shrink-0 rounded-full px-2.5 py-1 text-xs font-black">
+                    {{ barang.stok_tersedia }} tersedia
+                </span>
+            </div>
+
+            <dl class="mt-4 grid grid-cols-3 divide-x divide-slate-200 rounded-lg border border-slate-200 bg-slate-50/70 py-3 text-center">
+                <div class="min-w-0 px-2">
+                    <dt class="text-[10px] font-black uppercase text-slate-500">Total</dt>
+                    <dd class="mt-1 text-base font-black text-slate-900">{{ barang.jumlah }}</dd>
+                </div>
+                <div class="min-w-0 px-2">
+                    <dt class="text-[10px] font-black uppercase text-slate-500">Dipinjam</dt>
+                    <dd class="mt-1 text-base font-black text-slate-900">{{ barang.jumlah_dipinjam }}</dd>
+                </div>
+                <div class="min-w-0 px-2">
+                    <dt class="text-[10px] font-black uppercase text-slate-500">Tersedia</dt>
+                    <dd class="mt-1 text-base font-black text-slate-900">{{ barang.stok_tersedia }}</dd>
+                </div>
+            </dl>
+
+            <div class="mt-4 grid grid-cols-3 gap-2 text-xs font-bold">
+                <a class="inline-flex min-h-10 min-w-0 items-center justify-center gap-1 rounded-lg border border-brand-500 px-2 text-brand-700" href="{% url 'inventaris:inventaris_detail' barang.pk %}">
+                    <i data-lucide="eye" class="h-4 w-4 shrink-0"></i>
+                    <span>Detail</span>
+                </a>
+                <a class="inline-flex min-h-10 min-w-0 items-center justify-center gap-1 rounded-lg border border-amber-500 px-2 text-amber-600" href="{% url 'inventaris:barang_update' barang.pk %}">
+                    <i data-lucide="pencil" class="h-4 w-4 shrink-0"></i>
+                    <span>Edit</span>
+                </a>
+                <form method="post" action="{% url 'inventaris:barang_delete' barang.pk %}" data-confirm-message="Yakin ingin menghapus barang {{ barang.nama }}?">
+                    {% csrf_token %}
+                    <button type="submit" class="inline-flex min-h-10 w-full min-w-0 items-center justify-center gap-1 rounded-lg border border-rose-500 px-2 text-rose-600">
+                        <i data-lucide="trash-2" class="h-4 w-4 shrink-0"></i>
+                        <span>Hapus</span>
+                    </button>
+                </form>
+            </div>
+        </article>
+        {% empty %}
+        <div class="surface-card px-4 py-10 text-center text-sm text-slate-500">Tidak ada barang yang cocok dengan pencarian saat ini.</div>
+        {% endfor %}
     </div>
 </section>
 {% endblock %}
