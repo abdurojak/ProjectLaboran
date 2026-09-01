@@ -286,8 +286,8 @@ class BarangListViewTests(TestCase):
         self.assertContains(response, 'data-inventory-desktop-list')
         self.assertContains(response, 'data-inventory-mobile-list')
         self.assertContains(response, 'data-inventory-mobile-card')
-        self.assertContains(response, 'hidden md:block')
-        self.assertContains(response, 'md:hidden')
+        self.assertNotContains(response, 'inventory-table-card hidden')
+        self.assertNotContains(response, 'gap-3 md:hidden')
         self.assertContains(response, '[data-inventory-desktop-list] {\n        display: block !important;', html=False)
         self.assertContains(response, '[data-inventory-mobile-list] {\n        display: none !important;', html=False)
 

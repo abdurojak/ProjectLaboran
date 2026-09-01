@@ -29,7 +29,7 @@
         </div>
     </form>
 
-    <div class="inventory-table-card hidden overflow-hidden md:block surface-card" data-inventory-desktop-list>
+    <div class="inventory-table-card overflow-hidden surface-card" data-inventory-desktop-list>
         <div class="inventory-table-scroll overflow-x-auto">
             <table data-inventory-table>
                 <thead class="bg-slate-50">
@@ -94,7 +94,7 @@
         </div>
     </div>
 
-    <div class="grid gap-3 md:hidden" data-inventory-mobile-list>
+    <div class="grid gap-3" data-inventory-mobile-list>
         {% for barang in barang_list %}
         <article class="surface-card overflow-hidden p-4" data-inventory-mobile-card>
             <div class="flex min-w-0 items-center gap-3">
