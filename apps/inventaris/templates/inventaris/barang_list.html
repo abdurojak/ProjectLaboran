@@ -3,7 +3,7 @@
 {% block title %}Daftar Barang{% endblock %}
 
 {% block content %}
-<section class="space-y-6" data-realtime-region="inventaris-list">
+<section class="inventory-page min-w-0 space-y-6" data-realtime-region="inventaris-list">
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
             <p class="text-sm font-bold uppercase tracking-[0.2em] text-brand-700">Inventaris</p>
@@ -99,6 +99,12 @@
 {% block extra_head %}
 <style>
     @media (max-width: 767px) {
+        .inventory-page {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: clip;
+        }
+
         .inventory-header-actions {
             width: 100%;
         }
@@ -119,7 +125,13 @@
             overflow-x: visible;
         }
 
-        [data-inventory-table],
+        [data-inventory-table] {
+            min-width: 0 !important;
+            width: 100% !important;
+            max-width: 100%;
+            table-layout: fixed;
+        }
+
         [data-inventory-table] tbody {
             display: block;
             width: 100%;

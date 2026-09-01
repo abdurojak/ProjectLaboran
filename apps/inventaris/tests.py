@@ -288,6 +288,11 @@ class BarangListViewTests(TestCase):
         self.assertContains(response, 'data-label="Aksi"')
         self.assertContains(response, '@media (max-width: 767px)')
         self.assertContains(response, 'overflow-x: visible')
+        self.assertContains(
+            response,
+            '[data-inventory-table] {\n            min-width: 0 !important;',
+            html=False,
+        )
 
     def test_daftar_barang_menyembunyikan_tombol_kelola_paket(self):
         response = self.client.get(reverse('inventaris:barang_list'))
