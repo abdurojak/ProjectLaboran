@@ -49,30 +49,65 @@
             </div>
         </div>
         {% endif %}
-        <div class="register-grid">
-            {% for field in form %}
-            <div class="{% if field.name == 'nama_pengguna' %}span-2{% elif field.name == 'alamat' %}span-3{% endif %}">
-                {% if field.name == 'foto' %}
-                    {{ field.label_tag }}
-                    {% include "components/file_upload.html" with field=field current_file=None button_label="Pilih Foto Wajah" title="Foto wajah (wajib)" empty_label="Belum ada foto wajah dipilih" preview_label="Preview foto" preview_alt="Preview foto pengguna" show_preview=False %}
-                    <p class="mt-2 text-xs font-semibold text-slate-500">Wajib foto wajah asli. Foto pemandangan, karakter, atau gambar tanpa wajah akan ditolak.</p>
-                {% elif field.name == 'email' %}
-                    {{ field.label_tag }}
-                    <div class="register-email-field">
-                        {{ field }}
-                        <span>@std.trisakti.ac.id</span>
+        <div class="register-sections">
+            <section class="register-section" aria-labelledby="register-account-title">
+                <div class="register-section-heading">
+                    <i data-lucide="user-round" class="h-5 w-5"></i>
+                    <h3 id="register-account-title">Data akun</h3>
+                </div>
+                <div class="register-grid">
+                    {% for field in form %}
+                        {% if field.name == 'nama_pengguna' or field.name == 'nim_nik' or field.name == 'no_hp' or field.name == 'password' or field.name == 'password_confirmation' %}
+                        <div>
+                            {{ field.label_tag }}
+                            {{ field }}
+                            {% if field.name == 'nim_nik' %}
+                            <p class="mt-2 text-xs font-semibold text-slate-500">Email mahasiswa: <strong data-derived-email>&lt;NIM&gt;@std.trisakti.ac.id</strong></p>
+                            {% endif %}
+                            {% if field.errors %}<div class="mt-2 text-sm font-semibold text-rose-600">{{ field.errors|striptags }}</div>{% endif %}
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </section>
+
+            <section class="register-section" aria-labelledby="register-academic-title">
+                <div class="register-section-heading">
+                    <i data-lucide="graduation-cap" class="h-5 w-5"></i>
+                    <h3 id="register-academic-title">Data akademik</h3>
+                </div>
+                <div class="register-grid">
+                    {% for field in form %}
+                        {% if field.name == 'fakultas' or field.name == 'prodi' or field.name == 'gender' %}
+                        <div>
+                            {{ field.label_tag }}
+                            {{ field }}
+                            {% if field.errors %}<div class="mt-2 text-sm font-semibold text-rose-600">{{ field.errors|striptags }}</div>{% endif %}
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </section>
+
+            <section class="register-section" aria-labelledby="register-profile-title">
+                <div class="register-section-heading">
+                    <i data-lucide="contact-round" class="h-5 w-5"></i>
+                    <h3 id="register-profile-title">Profil</h3>
+                </div>
+                <div class="register-profile-grid">
+                    <div>
+                        {{ form.alamat.label_tag }}
+                        {{ form.alamat }}
+                        {% if form.alamat.errors %}<div class="mt-2 text-sm font-semibold text-rose-600">{{ form.alamat.errors|striptags }}</div>{% endif %}
                     </div>
-                    <p class="mt-2 text-xs font-semibold text-slate-500">Cukup isi nama email. Domain akan ditambahkan otomatis.</p>
-                    <div id="email-domain-error" class="mt-2 hidden text-sm font-semibold text-rose-600">Jika menulis domain, hanya boleh @std.trisakti.ac.id.</div>
-                {% else %}
-                    {{ field.label_tag }}
-                    {{ field }}
-                {% endif %}
-                {% if field.errors %}
-                <div class="mt-2 text-sm font-semibold text-rose-600">{{ field.errors|striptags }}</div>
-                {% endif %}
-            </div>
-            {% endfor %}
+                    <div>
+                        {{ form.foto.label_tag }}
+                        {% include "components/file_upload.html" with field=form.foto current_file=None button_label="Pilih Foto Wajah" title="Foto wajah (wajib)" empty_label="Belum ada foto wajah dipilih" preview_label="Preview foto" preview_alt="Preview foto pengguna" show_preview=False %}
+                        <p class="mt-2 text-xs font-semibold text-slate-500">Wajib foto wajah asli. Foto pemandangan, karakter, atau gambar tanpa wajah akan ditolak.</p>
+                        {% if form.foto.errors %}<div class="mt-2 text-sm font-semibold text-rose-600">{{ form.foto.errors|striptags }}</div>{% endif %}
+                    </div>
+                </div>
+            </section>
         </div>
         <div class="mt-5 flex flex-wrap gap-3 border-t border-slate-100 pt-5">
             <button type="submit" class="btn-primary gap-2" data-register-submit>
@@ -151,6 +186,36 @@
         gap: 1rem;
     }
 
+    .register-sections {
+        display: grid;
+        gap: 1.25rem;
+    }
+
+    .register-section + .register-section {
+        border-top: 1px solid rgba(148, 163, 184, 0.2);
+        padding-top: 1.25rem;
+    }
+
+    .register-section-heading {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        margin-bottom: 1rem;
+        color: #0f766e;
+    }
+
+    .register-section-heading h3 {
+        color: inherit;
+        font-size: 1rem;
+        font-weight: 900;
+    }
+
+    .register-profile-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 2fr) minmax(16rem, 1fr);
+        gap: 1rem;
+    }
+
     .register-form {
         border-color: rgba(32, 164, 171, 0.24) !important;
     }
@@ -167,51 +232,8 @@
         min-height: 4rem;
     }
 
-    .register-email-field {
-        display: flex;
-        align-items: stretch;
-        overflow: hidden;
-        border: 1px solid rgba(203, 213, 225, 0.9);
-        border-radius: 1rem;
-        background: rgba(255, 255, 255, 0.92);
-        transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .register-email-field:focus-within {
-        border-color: rgba(13, 148, 136, 0.55);
-        box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.12);
-    }
-
-    .register-email-field input {
-        min-width: 0;
-        flex: 1;
-        border: 0 !important;
-        border-radius: 0 !important;
-        background: transparent !important;
-        box-shadow: none !important;
-    }
-
-    .register-email-field span {
-        display: inline-flex;
-        align-items: center;
-        border-left: 1px solid rgba(203, 213, 225, 0.75);
-        background: rgba(20, 184, 166, 0.1);
-        padding: 0 1rem;
-        color: #0f766e;
-        font-size: 0.875rem;
-        font-weight: 800;
-        white-space: nowrap;
-    }
-
-    html[data-theme="dark"] .register-email-field {
-        border-color: rgba(71, 85, 105, 0.75);
-        background: rgba(15, 23, 42, 0.78);
-    }
-
-    html[data-theme="dark"] .register-email-field span {
-        border-left-color: rgba(71, 85, 105, 0.75);
-        background: rgba(45, 212, 191, 0.12);
-        color: #99f6e4;
+    html[data-theme="dark"] .register-section-heading {
+        color: #5eead4;
     }
 
     html[data-theme="dark"] [data-register-error-summary] {
@@ -231,13 +253,23 @@
         border-radius: 1rem;
     }
 
-    @media (max-width: 900px) {
+    @media (max-width: 1024px) {
+        .register-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 700px) {
         .register-hero > div {
             align-items: flex-start;
             flex-direction: column;
         }
 
         .register-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .register-profile-grid {
             grid-template-columns: 1fr;
         }
 
@@ -258,17 +290,14 @@
             });
         });
 
-        const emailInput = document.getElementById('id_email');
-        const emailError = document.getElementById('email-domain-error');
-        if (emailInput && emailError) {
-            emailInput.addEventListener('input', function () {
-                const value = emailInput.value.trim().toLowerCase();
-                const isValid = !value || !value.includes('@') || value.endsWith('@std.trisakti.ac.id');
-                emailError.classList.toggle('hidden', isValid);
-                emailInput.classList.toggle('border-rose-300', !isValid);
-                emailInput.classList.toggle('ring-2', !isValid);
-                emailInput.classList.toggle('ring-rose-100', !isValid);
-            });
+        const nimInput = document.getElementById('id_nim_nik');
+        const derivedEmail = document.querySelector('[data-derived-email]');
+        if (nimInput && derivedEmail) {
+            const updateDerivedEmail = function () {
+                derivedEmail.textContent = (nimInput.value || '<NIM>') + '@std.trisakti.ac.id';
+            };
+            nimInput.addEventListener('input', updateDerivedEmail);
+            updateDerivedEmail();
         }
 
         document.querySelectorAll('[data-file-upload]').forEach(function (component) {

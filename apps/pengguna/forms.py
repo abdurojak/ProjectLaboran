@@ -509,16 +509,6 @@ class LoginPenggunaForm(forms.Form):
 
 
 class RegisterPenggunaForm(forms.ModelForm):
-    # Registrasi menerima local-part saja; domain kampus ditambahkan di clean_email().
-    email = forms.CharField(
-        label='Email',
-        widget=forms.TextInput(attrs={
-            'autocomplete': 'email',
-            'placeholder': 'nama.email',
-            'pattern': '[A-Za-z0-9._%+-]+(@std\\.trisakti\\.ac\\.id)?',
-            'title': 'Cukup isi nama email. Domain @std.trisakti.ac.id akan ditambahkan otomatis.',
-        }),
-    )
     password_confirmation = forms.CharField(label='Konfirmasi password', widget=forms.PasswordInput)
 
     class Meta:
@@ -526,10 +516,9 @@ class RegisterPenggunaForm(forms.ModelForm):
         fields = [
             'nama_pengguna',
             'nim_nik',
-            'email',
+            'no_hp',
             'password',
             'password_confirmation',
-            'no_hp',
             'gender',
             'foto',
             'alamat',
@@ -542,12 +531,6 @@ class RegisterPenggunaForm(forms.ModelForm):
         widgets = {
             'foto': forms.FileInput(attrs={'class': 'hidden', 'accept': 'image/*'}),
             'password': forms.PasswordInput(attrs={'autocomplete': 'new-password'}, render_value=False),
-            'email': forms.TextInput(attrs={
-                'autocomplete': 'email',
-                'placeholder': 'nama.email',
-                'pattern': '[A-Za-z0-9._%+-]+(@std\\.trisakti\\.ac\\.id)?',
-                'title': 'Cukup isi nama email. Domain @std.trisakti.ac.id akan ditambahkan otomatis.',
-            }),
             'nim_nik': forms.TextInput(attrs={
                 'autocomplete': 'username',
                 'inputmode': 'numeric',
@@ -582,20 +565,6 @@ class RegisterPenggunaForm(forms.ModelForm):
             raise forms.ValidationError('NIM harus terdiri dari minimal 10 digit.')
         return nim_nik
 
-    def clean_email(self):
-        raw_email = self.cleaned_data['email'].strip().lower()
-        if '@' in raw_email and not raw_email.endswith('@std.trisakti.ac.id'):
-            raise forms.ValidationError('Email registrasi hanya boleh memakai domain @std.trisakti.ac.id.')
-        local_part = raw_email.removesuffix('@std.trisakti.ac.id').strip()
-        if not local_part:
-            raise forms.ValidationError('Nama email wajib diisi.')
-        if '@' in local_part:
-            raise forms.ValidationError('Cukup isi nama email tanpa domain.')
-        email = f'{local_part}@std.trisakti.ac.id'
-        if Pengguna.objects.filter(email__iexact=email).exists():
-            raise forms.ValidationError('Email sudah terdaftar. Gunakan email Trisakti lain atau login.')
-        return email
-
     def clean_no_hp(self):
         no_hp = self.cleaned_data.get('no_hp', '').strip()
         if no_hp and not no_hp.isdigit():
@@ -613,6 +582,15 @@ class RegisterPenggunaForm(forms.ModelForm):
         cleaned_data = super().clean()
         password = cleaned_data.get('password')
         password_confirmation = cleaned_data.get('password_confirmation')
+        nim_nik = cleaned_data.get('nim_nik')
+
+        if nim_nik:
+            email = f'{nim_nik}@std.trisakti.ac.id'
+            if Pengguna.objects.filter(email__iexact=email).exists():
+                self.add_error(
+                    'nim_nik',
+                    'NIM ini sudah memiliki akun. Silakan login atau periksa kembali NIM.',
+                )
 
         if password and password_confirmation and password != password_confirmation:
             self.add_error('password_confirmation', 'Konfirmasi password tidak sama.')
@@ -622,6 +600,7 @@ class RegisterPenggunaForm(forms.ModelForm):
 
     def save(self, commit=True):
         instance = super().save(commit=False)
+        instance.email = f'{self.cleaned_data["nim_nik"]}@std.trisakti.ac.id'
         instance.role = 'mahasiswa'
         instance.is_verified = False
 
