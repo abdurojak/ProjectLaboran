@@ -156,7 +156,23 @@
 
 {% block extra_head %}
 <style>
+    [data-inventory-desktop-list] {
+        display: block !important;
+    }
+
+    [data-inventory-mobile-list] {
+        display: none !important;
+    }
+
     @media (max-width: 767px) {
+        [data-inventory-desktop-list] {
+            display: none !important;
+        }
+
+        [data-inventory-mobile-list] {
+            display: grid !important;
+        }
+
         .inventory-page {
             width: 100%;
             max-width: 100%;

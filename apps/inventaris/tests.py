@@ -288,6 +288,8 @@ class BarangListViewTests(TestCase):
         self.assertContains(response, 'data-inventory-mobile-card')
         self.assertContains(response, 'hidden md:block')
         self.assertContains(response, 'md:hidden')
+        self.assertContains(response, '[data-inventory-desktop-list] {\n        display: block !important;', html=False)
+        self.assertContains(response, '[data-inventory-mobile-list] {\n        display: none !important;', html=False)
 
     def test_daftar_barang_menyembunyikan_tombol_kelola_paket(self):
         response = self.client.get(reverse('inventaris:barang_list'))
