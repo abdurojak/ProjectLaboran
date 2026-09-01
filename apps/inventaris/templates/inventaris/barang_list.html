@@ -10,7 +10,7 @@
             <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Daftar Barang</h2>
             <p class="mt-2 text-sm text-slate-500">Kelola data inventaris laboratorium dari satu tabel yang rapi dan mudah dibaca.</p>
         </div>
-        <div class="flex flex-wrap gap-3">
+        <div class="inventory-header-actions flex flex-wrap gap-3">
             <a class="btn-secondary gap-2" href="{% url 'inventaris:lokasi_list' %}">
                 <i data-lucide="map-pin" class="h-4 w-4"></i>
                 <span>Kelola Lokasi</span>
@@ -29,9 +29,9 @@
         </div>
     </form>
 
-    <div class="surface-card overflow-hidden">
-        <div class="overflow-x-auto">
-            <table>
+    <div class="inventory-table-card surface-card overflow-hidden">
+        <div class="inventory-table-scroll overflow-x-auto">
+            <table data-inventory-table>
                 <thead class="bg-slate-50">
                     <tr>
                         <th>Foto</th>
@@ -45,8 +45,8 @@
                 </thead>
                 <tbody>
                     {% for barang in barang_list %}
-                    <tr class="hover:bg-slate-50/70">
-                        <td>
+                    <tr class="inventory-row hover:bg-slate-50/70">
+                        <td class="inventory-photo-cell" data-label="Foto">
                             {% if barang.foto %}
                             <img src="{{ barang.foto.url }}" alt="{{ barang.nama }}" class="h-14 w-14 rounded-2xl object-cover ring-1 ring-slate-200">
                             {% else %}
@@ -55,17 +55,17 @@
                             </div>
                             {% endif %}
                         </td>
-                        <td class="font-semibold text-slate-600">{{ barang.kode_inventaris }}</td>
-                        <td class="font-semibold text-slate-900">{{ barang.nama }}</td>
-                        <td>{{ barang.jumlah }}</td>
-                        <td>{{ barang.jumlah_dipinjam }}</td>
-                        <td>
+                        <td class="font-semibold text-slate-600" data-label="Kode Inventaris">{{ barang.kode_inventaris }}</td>
+                        <td class="inventory-name-cell font-semibold text-slate-900" data-label="Nama">{{ barang.nama }}</td>
+                        <td data-label="Stok Total">{{ barang.jumlah }}</td>
+                        <td data-label="Dipinjam">{{ barang.jumlah_dipinjam }}</td>
+                        <td data-label="Tersedia">
                             <span class="{% if barang.stok_tersedia %}bg-emerald-100 text-emerald-700{% else %}bg-rose-100 text-rose-700{% endif %} inline-flex rounded-full px-3 py-1 text-xs font-bold">
                                 {{ barang.stok_tersedia }}
                             </span>
                         </td>
-                        <td>
-                            <div class="flex flex-wrap gap-3 text-sm font-semibold">
+                        <td class="inventory-action-cell" data-label="Aksi">
+                            <div class="inventory-actions flex flex-wrap gap-3 text-sm font-semibold">
                                 <a class="inline-flex items-center gap-1 text-brand-700 hover:text-brand-800" href="{% url 'inventaris:inventaris_detail' barang.pk %}">
                                     <i data-lucide="eye" class="h-4 w-4"></i>
                                     <span>Detail</span>
@@ -94,6 +94,145 @@
         </div>
     </div>
 </section>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    @media (max-width: 767px) {
+        .inventory-header-actions {
+            width: 100%;
+        }
+
+        .inventory-header-actions > a {
+            flex: 1 1 0;
+            min-width: 0;
+        }
+
+        .inventory-table-card {
+            overflow: visible;
+            border: 0;
+            background: transparent;
+            box-shadow: none;
+        }
+
+        .inventory-table-scroll {
+            overflow-x: visible;
+        }
+
+        [data-inventory-table],
+        [data-inventory-table] tbody {
+            display: block;
+            width: 100%;
+        }
+
+        [data-inventory-table] thead {
+            display: none;
+        }
+
+        [data-inventory-table] .inventory-row {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0;
+            margin-bottom: 1rem;
+            overflow: hidden;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            border-radius: 0.5rem;
+            background: var(--surface-card, #fff);
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+        }
+
+        [data-inventory-table] .inventory-row > td {
+            display: flex;
+            min-width: 0;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+            padding: 0.75rem;
+            text-align: right;
+            overflow-wrap: anywhere;
+        }
+
+        [data-inventory-table] .inventory-row > td::before {
+            content: attr(data-label);
+            flex: 0 0 auto;
+            color: #64748b;
+            font-size: 0.7rem;
+            font-weight: 800;
+            text-align: left;
+            text-transform: uppercase;
+        }
+
+        [data-inventory-table] .inventory-photo-cell,
+        [data-inventory-table] .inventory-name-cell,
+        [data-inventory-table] .inventory-action-cell {
+            grid-column: 1 / -1;
+        }
+
+        [data-inventory-table] .inventory-photo-cell {
+            justify-content: flex-start;
+        }
+
+        [data-inventory-table] .inventory-photo-cell::before {
+            display: none;
+        }
+
+        [data-inventory-table] .inventory-name-cell {
+            align-items: flex-start;
+            font-size: 1rem;
+        }
+
+        [data-inventory-table] .inventory-action-cell {
+            display: block;
+            border-bottom: 0;
+            text-align: left;
+        }
+
+        [data-inventory-table] .inventory-action-cell::before {
+            display: block;
+            margin-bottom: 0.65rem;
+        }
+
+        .inventory-actions {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.5rem;
+        }
+
+        .inventory-actions > a,
+        .inventory-actions > form,
+        .inventory-actions button {
+            width: 100%;
+        }
+
+        .inventory-actions > a,
+        .inventory-actions button {
+            justify-content: center;
+            min-height: 2.5rem;
+            border: 1px solid currentColor;
+            border-radius: 0.5rem;
+            padding: 0.5rem;
+        }
+
+        [data-inventory-table] tbody > tr:not(.inventory-row) {
+            display: block;
+        }
+
+        [data-inventory-table] tbody > tr:not(.inventory-row) td {
+            display: block;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            border-radius: 0.5rem;
+            background: var(--surface-card, #fff);
+        }
+
+        html[data-theme="dark"] [data-inventory-table] .inventory-row,
+        html[data-theme="dark"] [data-inventory-table] tbody > tr:not(.inventory-row) td {
+            border-color: rgba(71, 85, 105, 0.6);
+            background: rgba(15, 23, 42, 0.92);
+            box-shadow: none;
+        }
+    }
+</style>
 {% endblock %}
 
 {% block extra_script %}
