@@ -18,21 +18,15 @@
     }
 
     .matkul-nav {
-        position: sticky;
-        top: 1.25rem;
         display: flex;
         flex-direction: column;
         align-self: stretch;
-        height: calc(100vh - 3.25rem);
-        min-height: 720px;
-        max-height: calc(100vh - 3.25rem);
         overflow: hidden;
     }
 
     .matkul-nav-list {
         flex: 1 1 auto;
-        min-height: 320px;
-        overflow-y: auto;
+        min-height: 0;
         padding-right: 0.35rem;
     }
 
@@ -386,12 +380,12 @@
                 <div>
                     <p class="text-xs font-black uppercase tracking-[0.18em] text-brand-700">Navigasi Matkul</p>
                     <h3 class="mt-2 text-xl font-black text-slate-900">Pilih kelas yang ingin dicek</h3>
-                    <p class="mt-1 text-sm text-slate-500">Daftar dibuat ringkas supaya laboran tidak perlu scroll panjang ke bawah.</p>
+                    <p class="mt-1 text-sm text-slate-500">Pilih mata kuliah untuk menampilkan detail dan rekap gabungan di sebelah kanan.</p>
                 </div>
                 <span class="matkul-stat-chip bg-brand-50 text-brand-800">{{ matkul_list|length }} aktif</span>
             </div>
 
-            <form method="get" class="mt-4 grid gap-3">
+            <form method="get" class="mt-4 grid gap-3" data-matkul-nav-filter-form>
                 <div>
                     <label for="id_q_sidebar">Cari mata kuliah</label>
                     <div class="relative">
@@ -401,29 +395,24 @@
                 </div>
                 <div>
                     <label for="id_kelas_sidebar">Filter kelas</label>
-                    <select id="id_kelas_sidebar" name="kelas">
+                    <select id="id_kelas_sidebar" name="kelas" data-matkul-nav-class-filter>
                         <option value="">Semua kelas</option>
                         {% for kelas in class_options %}
                         <option value="{{ kelas }}" {% if selected_kelas == kelas %}selected{% endif %}>{{ kelas }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                {% if selected_matkul_id %}
-                <input type="hidden" name="matkul" value="{{ selected_matkul_id }}">
-                {% endif %}
-                <button class="btn-secondary gap-2 w-full justify-center" type="submit">
-                    <i data-lucide="filter" class="h-4 w-4"></i>Terapkan Filter
-                </button>
-                {% if search_query or selected_kelas %}
-                <a class="btn-secondary gap-2 w-full justify-center" href="{% url 'asleb:praktikum_mahasiswa_list' %}">
+                <p class="text-xs leading-5 text-slate-500" data-matkul-nav-filter-hint>
+                    Hasil diperbarui langsung tanpa memuat ulang halaman.
+                </p>
+                <button class="btn-secondary gap-2 w-full justify-center {% if not search_query and not selected_kelas %}hidden{% endif %}" type="button" data-matkul-nav-reset>
                     <i data-lucide="x" class="h-4 w-4"></i>Reset
-                </a>
-                {% endif %}
+                </button>
             </form>
 
             <div class="matkul-nav-list mt-4 space-y-3">
                 {% for item in matkul_list %}
-                <a href="?{% if search_query %}q={{ search_query|urlencode }}&{% endif %}{% if selected_kelas %}kelas={{ selected_kelas|urlencode }}&{% endif %}matkul={{ item.pk }}" class="matkul-nav-item {% if rekap_matkul and item.pk == rekap_matkul.pk %}is-active{% endif %}" data-matkul-nav-item data-matkul-switch data-matkul-id="{{ item.pk }}">
+                <a href="?{% if search_query %}q={{ search_query|urlencode }}&{% endif %}{% if selected_kelas %}kelas={{ selected_kelas|urlencode }}&{% endif %}matkul={{ item.pk }}" class="matkul-nav-item {% if rekap_matkul and item.pk == rekap_matkul.pk %}is-active{% endif %}" data-matkul-nav-item data-matkul-switch data-matkul-id="{{ item.pk }}" data-matkul-class="{{ item.kelas|lower }}">
                     <div class="matkul-nav-item-content">
                         <p class="matkul-nav-meta text-xs font-black uppercase tracking-[0.16em] text-brand-700">{{ item.kode_mk|default:item.kode }}</p>
                         <h4 class="matkul-nav-title mt-2 text-base font-black text-slate-900">{{ item.nama }}</h4>
@@ -994,6 +983,9 @@
         }
 
         const matkulSearch = document.querySelector('[data-matkul-nav-search]');
+        const matkulFilterForm = document.querySelector('[data-matkul-nav-filter-form]');
+        const matkulClassFilter = document.querySelector('[data-matkul-nav-class-filter]');
+        const matkulReset = document.querySelector('[data-matkul-nav-reset]');
         const matkulItems = Array.from(document.querySelectorAll('[data-matkul-nav-item]'));
         const matkulNoResult = document.querySelector('[data-matkul-nav-no-result]');
         const focusPanel = document.querySelector('[data-matkul-focus]');
@@ -1035,20 +1027,41 @@
             });
         });
 
-        if (matkulSearch && matkulItems.length) {
+        if (matkulSearch) {
             const filterMatkulItems = function () {
                 const keyword = matkulSearch.value.trim().toLowerCase();
+                const selectedClass = (matkulClassFilter?.value || '').trim().toLowerCase();
                 let visibleCount = 0;
                 matkulItems.forEach(function (item) {
-                    const visible = !keyword || item.textContent.toLowerCase().includes(keyword);
+                    const matchesKeyword = !keyword || item.textContent.toLowerCase().includes(keyword);
+                    const matchesClass = !selectedClass || item.dataset.matkulClass === selectedClass;
+                    const visible = matchesKeyword && matchesClass;
                     item.classList.toggle('hidden', !visible);
                     if (visible) visibleCount += 1;
                 });
                 if (matkulNoResult) {
                     matkulNoResult.classList.toggle('hidden', visibleCount > 0);
                 }
+                if (matkulReset) {
+                    matkulReset.classList.toggle('hidden', !keyword && !selectedClass);
+                }
             };
             matkulSearch.addEventListener('input', filterMatkulItems);
+            matkulClassFilter?.addEventListener('change', filterMatkulItems);
+            matkulFilterForm?.addEventListener('submit', function (event) {
+                event.preventDefault();
+                filterMatkulItems();
+            });
+            matkulReset?.addEventListener('click', function () {
+                matkulSearch.value = '';
+                if (matkulClassFilter) matkulClassFilter.value = '';
+                filterMatkulItems();
+                matkulSearch.focus();
+                const url = new URL(window.location.href);
+                url.searchParams.delete('q');
+                url.searchParams.delete('kelas');
+                window.history.replaceState({}, '', url);
+            });
             filterMatkulItems();
         }
 

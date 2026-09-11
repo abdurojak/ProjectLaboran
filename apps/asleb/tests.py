@@ -848,6 +848,17 @@ class AslebViewTests(TestCase):
         self.assertContains(response, 'participant-table-action')
         self.assertContains(response, reverse('asleb:praktikum_peserta_update', args=[peserta.pk]))
 
+    def test_navigasi_matkul_memfilter_langsung_tanpa_submit_halaman(self):
+        response = self.client.get(reverse('asleb:praktikum_mahasiswa_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-matkul-nav-filter-form')
+        self.assertContains(response, 'data-matkul-nav-class-filter')
+        self.assertContains(response, 'data-matkul-nav-reset')
+        self.assertContains(response, "matkulFilterForm?.addEventListener('submit'")
+        self.assertContains(response, 'event.preventDefault()')
+        self.assertNotContains(response, 'Terapkan Filter')
+
     def test_laboran_dapat_menghapus_banyak_peserta_praktikum(self):
         peserta_pertama = PesertaPraktikum.objects.create(matkul=self.matkul, nim='0640020099', nama='Mahasiswa Satu')
         peserta_kedua = PesertaPraktikum.objects.create(matkul=self.matkul, nim='0640020088', nama='Mahasiswa Dua')
