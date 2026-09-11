@@ -1,13 +1,20 @@
 import re
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from django.conf import settings
 from django.urls import reverse
 
 
 def get_public_registration_url():
-    base_url = settings.PUBLIC_ACCESS_BASE_URL.rstrip('/') + '/'
-    return urljoin(base_url, reverse('pendaftaran_asleb:pendaftaran_public').lstrip('/'))
+    base_url = settings.PUBLIC_ACCESS_BASE_URL.rstrip('/')
+    route_path = reverse('pendaftaran_asleb:pendaftaran_public')
+    base_parts = urlsplit(base_url)
+    base_path = base_parts.path.rstrip('/')
+
+    if base_path and (route_path == base_path or route_path.startswith(f'{base_path}/')):
+        return urlunsplit((base_parts.scheme, base_parts.netloc, route_path, '', ''))
+
+    return urljoin(f'{base_url}/', route_path.lstrip('/'))
 
 
 GRADE_PATTERN = re.compile(

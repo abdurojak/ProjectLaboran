@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from django.test import TestCase, override_settings
+from django.test.utils import override_script_prefix
 from django.urls import reverse
 from django.utils import timezone
 from django.core import mail
@@ -118,6 +119,18 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertContains(response, '@media (min-width: 641px) and (max-width: 1279px)')
         self.assertContains(response, 'border-top: 1px solid rgba(148, 163, 184, 0.16)')
         self.assertContains(response, 'Terima')
+
+    @override_settings(
+        PUBLIC_ACCESS_BASE_URL='https://lab1.trisakti.ac.id/labhub',
+        URL_PREFIX='/labhub',
+        FORCE_SCRIPT_NAME='/labhub',
+    )
+    @override_script_prefix('/labhub/')
+    def test_link_pendaftaran_public_tidak_menggandakan_prefix_production(self):
+        self.assertEqual(
+            get_public_registration_url(),
+            'https://lab1.trisakti.ac.id/labhub/pendaftaran-asleb/daftar/',
+        )
 
     def test_pendaftaran_success_hanya_mengarahkan_ke_dashboard(self):
         response = self.client.get(reverse('pendaftaran_asleb:pendaftaran_success'))
