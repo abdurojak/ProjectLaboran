@@ -187,6 +187,7 @@ class KegiatanKalenderCreateView(CreateView):
         form.instance.dibuat_oleh = pengguna
         if not pengguna or pengguna.role not in {'admin', 'laboran'}:
             form.instance.target_role = ''
+            form.instance.hari_libur = False
         return super().form_valid(form)
 
 
@@ -209,6 +210,7 @@ class KegiatanKalenderUpdateView(UpdateView):
         pengguna = getattr(self.request, 'current_pengguna', None)
         if not pengguna or pengguna.role not in {'admin', 'laboran'}:
             form.instance.target_role = ''
+            form.instance.hari_libur = False
         return super().form_valid(form)
 
 

@@ -19,3 +19,19 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+  reminders:
+    image: ghcr.io/abdurojak/projectlaboran:production
+    restart: unless-stopped
+    env_file:
+      - .env.container
+    environment:
+      FORCE_SCRIPT_NAME: /labhub
+      LABHUB_LICENSE_ENFORCED: "True"
+      LABHUB_LICENSE_FINGERPRINT: 39b5f1bf350c4355a0d52ff36a10a482
+      MEDIA_ROOT: /app/media
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["sleep 60; while true; do python manage.py send_peminjaman_reminders; sleep 3600; done"]
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

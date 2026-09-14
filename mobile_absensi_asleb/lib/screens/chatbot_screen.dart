@@ -173,7 +173,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
     }
 
     if (normalized.contains('absen') || normalized.contains('absensi')) {
-      return 'Untuk absensi, buka menu Jadwal, pilih jadwal praktikum yang sedang berlangsung, lalu tekan Absensi Masuk dan ambil foto bukti dari kamera.';
+      return 'Untuk absensi, buka menu Jadwal pada hari praktikum, lalu tekan Absensi Masuk dan ambil foto bukti dari kamera. Absensi tersedia sepanjang hari hingga pukul 00.00.';
     }
 
     return 'Maaf, koneksi bot server sedang bermasalah. Saya masih bisa bantu pertanyaan dasar seperti jadwal praktikum, absensi, honor/gaji, dan riwayat absensi.';

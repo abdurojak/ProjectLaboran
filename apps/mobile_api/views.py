@@ -89,8 +89,8 @@ def attendance_context(asleb, schedules, date_value=None):
         if schedule.pk in attendance_by_schedule:
             continue
         if schedule.hari == today_key:
-            _, _, ends_at = get_checkin_window(schedule, date_value)
-            if local_now > ends_at:
+            _, _, closes_at = get_checkin_window(schedule, date_value)
+            if local_now >= closes_at:
                 status_by_schedule[schedule.pk] = 'tidak_hadir'
     return {
         'attendance_by_schedule': attendance_by_schedule,
@@ -353,7 +353,9 @@ class LocationConfigView(APIView):
             'center_longitude': settings.ABSENSI_CENTER_LONGITUDE,
             'radius_meters': settings.ABSENSI_RADIUS_METERS,
             'max_gps_accuracy_meters': settings.ABSENSI_MAX_GPS_ACCURACY_METERS,
-            'early_checkin_minutes': settings.ABSENSI_EARLY_CHECKIN_MINUTES,
+            'early_checkin_minutes': 0,
+            'attendance_window': 'schedule_day',
+            'attendance_closes_at': '00:00',
             'max_photo_size_mb': settings.ABSENSI_MAX_PHOTO_SIZE_MB,
             'max_video_size_mb': settings.ABSENSI_MAX_VIDEO_SIZE_MB,
             'max_video_duration_seconds': settings.ABSENSI_MAX_VIDEO_DURATION_SECONDS,

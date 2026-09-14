@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from decimal import Decimal
 from math import asin, cos, radians, sin, sqrt
 
@@ -54,10 +54,10 @@ def aware_schedule_datetime(date_value, time_value):
 
 
 def get_checkin_window(schedule, date_value):
+    opens_at = aware_schedule_datetime(date_value, time.min)
     starts_at = aware_schedule_datetime(date_value, schedule.waktu_mulai)
-    ends_at = aware_schedule_datetime(date_value, schedule.get_waktu_selesai_efektif())
-    opens_at = starts_at - timedelta(minutes=settings.ABSENSI_EARLY_CHECKIN_MINUTES)
-    return opens_at, starts_at, ends_at
+    closes_at = opens_at + timedelta(days=1)
+    return opens_at, starts_at, closes_at
 
 
 def validate_schedule_time(schedule, now=None):
@@ -66,11 +66,11 @@ def validate_schedule_time(schedule, now=None):
     today = local_now.date()
     if schedule.hari != WEEKDAY_KEYS[today.weekday()]:
         return False, 'Jadwal praktikum bukan untuk hari ini.', None
-    opens_at, starts_at, ends_at = get_checkin_window(schedule, today)
+    opens_at, _, closes_at = get_checkin_window(schedule, today)
     if local_now < opens_at:
-        return False, f'Absensi belum dibuka. Absensi dapat dilakukan mulai {opens_at:%H:%M}.', None
-    if local_now > ends_at:
-        return False, 'Jadwal praktikum sudah lewat.', None
+        return False, 'Absensi untuk jadwal hari ini belum dibuka.', None
+    if local_now >= closes_at:
+        return False, 'Batas absensi hari ini sudah berakhir.', None
     status = AbsensiMasukAsleb.STATUS_SUDAH_ABSEN
     return True, '', status
 

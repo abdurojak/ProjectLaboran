@@ -8,6 +8,8 @@ from .views import (
     PeminjamanAlatUpdateView,
     barang_options,
     bulk_update_status,
+    request_extension,
+    review_extension,
     update_detail_status,
 )
 
@@ -18,6 +20,8 @@ urlpatterns = [
     path('tambah/', PeminjamanAlatCreateView.as_view(), name='peminjaman_create'),
     path('bulk-update-status/', bulk_update_status, name='peminjaman_bulk_update'),
     path('barang-options/', barang_options, name='barang_options'),
+    path('<int:pk>/perpanjangan/', request_extension, name='peminjaman_extension_request'),
+    path('perpanjangan/<int:pk>/tinjau/', review_extension, name='peminjaman_extension_review'),
     path('<int:pk>/', PeminjamanAlatDetailView.as_view(), name='peminjaman_detail'),
     path('<int:pk>/status/', update_detail_status, name='peminjaman_detail_status_update'),
     path('<int:pk>/edit/', PeminjamanAlatUpdateView.as_view(), name='peminjaman_update'),

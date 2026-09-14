@@ -44,6 +44,10 @@
             <div class="mt-2 text-xl font-bold text-slate-900">{% if kegiatan.tampilkan_notifikasi %}Aktif{% else %}Nonaktif{% endif %}</div>
         </div>
         <div class="rounded-3xl bg-slate-50 p-5">
+            <div class="text-sm font-semibold text-slate-500">Operasional Lab</div>
+            <div class="mt-2 text-xl font-bold text-slate-900">{% if kegiatan.hari_libur %}Hari libur{% else %}Tetap buka{% endif %}</div>
+        </div>
+        <div class="rounded-3xl bg-slate-50 p-5">
             <div class="text-sm font-semibold text-slate-500">Dibuat Oleh</div>
             <div class="mt-2 text-xl font-bold text-slate-900">{{ kegiatan.dibuat_oleh.nama_pengguna|default:"-" }}</div>
         </div>

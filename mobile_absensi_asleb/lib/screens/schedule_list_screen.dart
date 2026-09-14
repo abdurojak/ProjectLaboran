@@ -75,7 +75,7 @@ class _ScheduleListScreenState extends State<ScheduleListScreen> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'Absensi hanya aktif pada hari dan rentang waktu jadwal.',
+                              'Absensi aktif sepanjang hari jadwal hingga pukul 00.00.',
                               style: TextStyle(
                                 fontWeight: FontWeight.w700,
                                 color: scheme.onSurface,

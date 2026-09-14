@@ -696,7 +696,7 @@ class AbsensiAslebCreateView(CreateView):
 
         self.jadwal = get_active_absensi_schedule(self.asleb)
         if not self.jadwal:
-            messages.warning(request, 'Absensi hanya dapat diisi saat jadwal praktikum sedang berlangsung.')
+            messages.warning(request, 'Absensi hanya dapat diisi pada hari jadwal praktikum.')
             return redirect('asleb:absensi_list')
 
         return super().dispatch(request, *args, **kwargs)
@@ -782,13 +782,10 @@ def get_active_absensi_schedule(asleb, current_time=None):
     weekday = current_time.weekday()
     if weekday >= len(day_keys):
         return None
-    current_clock = current_time.time().replace(tzinfo=None)
     return JadwalPraktikum.objects.filter(
         mata_kuliah__in=matkul_labels,
         hari=day_keys[weekday],
         status=JadwalPraktikum.STATUS_DITERIMA,
-        waktu_mulai__lte=current_clock,
-        waktu_selesai__gte=current_clock,
     ).order_by('waktu_mulai').first()
 
 
@@ -1069,10 +1066,22 @@ class PraktikumMahasiswaAccessMixin:
 class PesertaPraktikumManageMixin:
     def dispatch(self, request, *args, **kwargs):
         pengguna = getattr(request, 'current_pengguna', None)
-        if not can_manage_lab_operations(pengguna):
-            messages.error(request, 'Hanya laboran yang dapat mengelola peserta praktikum.')
+        if not pengguna or pengguna.role != ASISTEN_LAB_ROLE:
+            messages.error(request, 'Hanya Asisten Lab yang dapat mengelola peserta praktikum.')
             return redirect('asleb:praktikum_mahasiswa_list')
         return super().dispatch(request, *args, **kwargs)
+
+    def get_manageable_matkul_queryset(self):
+        return get_praktikum_matkul_queryset(self.request.current_pengguna)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['matkul_queryset'] = self.get_manageable_matkul_queryset()
+        return kwargs
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        return queryset.filter(matkul__in=self.get_manageable_matkul_queryset())
 
 
 class PraktikumMahasiswaListView(PraktikumMahasiswaAccessMixin, TemplateView):
@@ -1167,7 +1176,7 @@ class PraktikumMahasiswaListView(PraktikumMahasiswaAccessMixin, TemplateView):
             'search_query': search_query,
             'peserta_list': peserta_list,
             'selected_matkul_id': effective_selected_id,
-            'can_manage_peserta': pengguna.role == LABORAN_ROLE,
+            'can_manage_peserta': pengguna.role == ASISTEN_LAB_ROLE,
             'is_asisten_lab': pengguna.role == ASISTEN_LAB_ROLE,
             'show_peserta_modal': self.request.GET.get('show_peserta') == '1',
         })
@@ -1753,10 +1762,15 @@ def wants_json_response(request):
 @require_POST
 def delete_peserta_praktikum(request, pk):
     pengguna = getattr(request, 'current_pengguna', None)
-    if not can_manage_lab_operations(pengguna):
-        messages.error(request, 'Hanya laboran yang dapat menghapus peserta praktikum.')
+    if not pengguna or pengguna.role != ASISTEN_LAB_ROLE:
+        messages.error(request, 'Hanya Asisten Lab yang dapat menghapus peserta praktikum.')
         return redirect('asleb:praktikum_mahasiswa_list')
-    peserta = get_object_or_404(PesertaPraktikum.objects.select_related('matkul'), pk=pk)
+    peserta = get_object_or_404(
+        PesertaPraktikum.objects.select_related('matkul').filter(
+            matkul__in=get_praktikum_matkul_queryset(pengguna),
+        ),
+        pk=pk,
+    )
     matkul_id = peserta.matkul_id
     result = delete_participant(peserta)
     transaction.on_commit(lambda: send_data_refresh(
@@ -1782,14 +1796,19 @@ def delete_peserta_praktikum(request, pk):
 @require_POST
 def bulk_delete_peserta_praktikum(request):
     pengguna = getattr(request, 'current_pengguna', None)
-    if not can_manage_lab_operations(pengguna):
-        messages.error(request, 'Hanya laboran yang dapat menghapus peserta praktikum.')
+    if not pengguna or pengguna.role != ASISTEN_LAB_ROLE:
+        messages.error(request, 'Hanya Asisten Lab yang dapat menghapus peserta praktikum.')
         return redirect('asleb:praktikum_mahasiswa_list')
     participant_ids = request.POST.getlist('peserta_ids')
     matkul_id = request.POST.get('matkul_id', '').strip()
-    peserta_queryset = PesertaPraktikum.objects.filter(pk__in=participant_ids)
+    manageable_matkul = get_praktikum_matkul_queryset(pengguna)
+    peserta_queryset = PesertaPraktikum.objects.filter(
+        pk__in=participant_ids,
+        matkul__in=manageable_matkul,
+    )
     if matkul_id:
-        peserta_queryset = peserta_queryset.filter(matkul_id=matkul_id)
+        matkul = get_object_or_404(manageable_matkul, pk=matkul_id)
+        peserta_queryset = peserta_queryset.filter(matkul=matkul)
     deleted = 0
     deactivated = 0
     affected_ids = []
@@ -1824,8 +1843,8 @@ def bulk_delete_peserta_praktikum(request):
 @require_POST
 def delete_all_peserta_praktikum(request, matkul_pk):
     pengguna = getattr(request, 'current_pengguna', None)
-    if not can_manage_lab_operations(pengguna):
-        messages.error(request, 'Hanya laboran yang dapat menghapus peserta praktikum.')
+    if not pengguna or pengguna.role != ASISTEN_LAB_ROLE:
+        messages.error(request, 'Hanya Asisten Lab yang dapat menghapus peserta praktikum.')
         return redirect('asleb:praktikum_mahasiswa_list')
     matkul = get_object_or_404(get_praktikum_matkul_queryset(pengguna), pk=matkul_pk)
     peserta_qs = matkul.peserta_praktikum.all()

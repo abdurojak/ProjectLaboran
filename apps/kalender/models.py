@@ -19,6 +19,10 @@ class KegiatanKalender(models.Model):
     lokasi = models.CharField(max_length=150, blank=True)
     deskripsi = models.TextField(blank=True)
     tampilkan_notifikasi = models.BooleanField(default=True)
+    hari_libur = models.BooleanField(
+        default=False,
+        help_text='Tandai jika laboratorium tutup dan pengembalian barang perlu diundur.',
+    )
     dibuat_oleh = models.ForeignKey(
         Pengguna,
         on_delete=models.SET_NULL,

@@ -16,10 +16,15 @@ from apps.core.permissions import BORROWER_ROLES, LABORAN_ROLE
 from apps.inventaris.models import ACTIVE_PEMINJAMAN_STATUSES, Barang, PaketBarang
 from apps.kalender.realtime import send_peminjaman_request_update, send_peminjaman_status_update
 from apps.pengguna.models import Pengguna
-from .forms import PeminjamanAlatForm
-from .models import PeminjamanAlat, PeminjamanTransaksi
-from .notifications import send_peminjaman_request_notifications, send_peminjaman_status_notification
-from .services import update_peminjaman_status
+from .forms import PengajuanPerpanjanganForm, PeminjamanAlatForm
+from .models import PengajuanPerpanjangan, PeminjamanAlat, PeminjamanTransaksi
+from .notifications import (
+    send_extension_request_notifications,
+    send_extension_status_notification,
+    send_peminjaman_request_notifications,
+    send_peminjaman_status_notification,
+)
+from .services import adjust_return_date, get_credit_profile, update_peminjaman_status
 
 
 MANAGER_ROLES = {LABORAN_ROLE}
@@ -259,6 +264,119 @@ def update_detail_status(request, pk):
     return redirect('peminjaman:peminjaman_detail', pk=pk)
 
 
+@require_POST
+def request_extension(request, pk):
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not pengguna or pengguna.role not in BORROWER_ROLES:
+        messages.warning(request, 'Anda tidak memiliki akses untuk mengajukan perpanjangan.')
+        return redirect('peminjaman:peminjaman_list')
+
+    with transaction.atomic():
+        anchor = get_object_or_404(
+            PeminjamanAlat.objects.select_for_update().select_related('transaksi'),
+            pk=pk,
+            nim=pengguna.nim_nik,
+        )
+        transaksi = get_object_or_404(
+            PeminjamanTransaksi.objects.select_for_update(),
+            pk=anchor.transaksi_id,
+        )
+        if not transaksi.detail.filter(status='dipinjam').exists():
+            messages.error(request, 'Perpanjangan hanya dapat diajukan untuk barang yang sedang dipinjam.')
+            return redirect('peminjaman:peminjaman_detail', pk=anchor.pk)
+        if transaksi.pengajuan_perpanjangan.filter(status='diajukan').exists():
+            messages.info(request, 'Pengajuan perpanjangan sebelumnya masih menunggu persetujuan.')
+            return redirect('peminjaman:peminjaman_detail', pk=anchor.pk)
+
+        credit_profile = get_credit_profile(pengguna.nim_nik)
+        form = PengajuanPerpanjanganForm(
+            request.POST,
+            transaksi=transaksi,
+            credit_profile=credit_profile,
+        )
+        if not form.is_valid():
+            error = next(iter(form.errors.values()))[0]
+            messages.error(request, str(error))
+            return redirect('peminjaman:peminjaman_detail', pk=anchor.pk)
+
+        extension = form.save(commit=False)
+        extension.transaksi = transaksi
+        extension.diajukan_oleh = pengguna
+        extension.tanggal_kembali_sebelumnya = transaksi.tanggal_kembali
+        extension.save()
+
+    send_extension_request_notifications(extension)
+    messages.success(request, 'Pengajuan perpanjangan dikirim kepada Asisten Lab.')
+    return redirect('peminjaman:peminjaman_detail', pk=anchor.pk)
+
+
+@require_POST
+def review_extension(request, pk):
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not pengguna or pengguna.role != 'asisten_lab':
+        messages.warning(request, 'Hanya Asisten Lab yang dapat meninjau perpanjangan.')
+        return redirect('peminjaman:peminjaman_list')
+
+    action = request.POST.get('action', '').strip()
+    if action not in {'approve', 'reject'}:
+        messages.error(request, 'Keputusan perpanjangan tidak valid.')
+        return redirect('peminjaman:peminjaman_list')
+
+    with transaction.atomic():
+        extension = get_object_or_404(
+            PengajuanPerpanjangan.objects.select_for_update().select_related(
+                'transaksi', 'diajukan_oleh'
+            ),
+            pk=pk,
+        )
+        transaksi = PeminjamanTransaksi.objects.select_for_update().get(pk=extension.transaksi_id)
+        anchor = transaksi.detail.order_by('pk').first()
+        if extension.diajukan_oleh_id == pengguna.pk or transaksi.nim == pengguna.nim_nik:
+            messages.error(request, 'Asisten Lab tidak boleh menyetujui perpanjangan miliknya sendiri.')
+            return redirect('peminjaman:peminjaman_detail', pk=anchor.pk)
+        if extension.status != 'diajukan':
+            messages.info(request, 'Pengajuan perpanjangan ini sudah diproses.')
+            return redirect('peminjaman:peminjaman_detail', pk=anchor.pk)
+        if transaksi.tanggal_kembali != extension.tanggal_kembali_sebelumnya:
+            messages.error(request, 'Tanggal peminjaman telah berubah. Pengajuan lama tidak dapat diproses.')
+            return redirect('peminjaman:peminjaman_detail', pk=anchor.pk)
+
+        extension.ditinjau_oleh = pengguna
+        extension.ditinjau_pada = timezone.now()
+        extension.catatan_peninjau = request.POST.get('catatan_peninjau', '').strip()
+        if action == 'approve':
+            approved_date = adjust_return_date(extension.tanggal_kembali_diminta)
+            extension.status = 'disetujui'
+            extension.tanggal_kembali_disetujui = approved_date
+            transaksi.tanggal_kembali = approved_date
+            transaksi.save(update_fields=['tanggal_kembali', 'diperbarui_pada'])
+            transaksi.detail.filter(status='dipinjam').update(
+                tanggal_kembali=approved_date,
+                diperbarui_pada=timezone.now(),
+            )
+        else:
+            if len(extension.catatan_peninjau) < 5:
+                messages.error(request, 'Alasan penolakan minimal 5 karakter.')
+                return redirect('peminjaman:peminjaman_detail', pk=anchor.pk)
+            extension.status = 'ditolak'
+        extension.save(update_fields=[
+            'status',
+            'tanggal_kembali_disetujui',
+            'ditinjau_oleh',
+            'ditinjau_pada',
+            'catatan_peninjau',
+            'diperbarui_pada',
+        ])
+
+    send_extension_status_notification(extension)
+    messages.success(
+        request,
+        'Perpanjangan disetujui dan tanggal kembali diperbarui.'
+        if action == 'approve' else 'Pengajuan perpanjangan ditolak.',
+    )
+    return redirect('peminjaman:peminjaman_list')
+
+
 class PeminjamanAlatListView(ListView):
     model = PeminjamanAlat
     template_name = 'peminjaman/peminjaman_list.html'
@@ -381,6 +499,18 @@ class PeminjamanAlatListView(ListView):
         if context['is_borrower']:
             context['catalog_products'] = self.get_catalog_products()
             context['today'] = timezone.localdate()
+            context['credit_profile'] = get_credit_profile(current_pengguna.nim_nik)
+        if current_pengguna and current_pengguna.role == 'asisten_lab':
+            pending_extensions = list(
+                PengajuanPerpanjangan.objects.filter(status='diajukan')
+                .exclude(diajukan_oleh=current_pengguna)
+                .select_related('transaksi', 'diajukan_oleh')
+                .prefetch_related('transaksi__detail')[:10]
+            )
+            for extension in pending_extensions:
+                anchor = extension.transaksi.detail.order_by('pk').first()
+                extension.anchor_pk = anchor.pk if anchor else None
+            context['pending_extensions'] = pending_extensions
         return context
 
     def get_catalog_products(self):
@@ -467,10 +597,13 @@ class PeminjamanAlatDetailView(DetailView):
         queryset = super().get_queryset().select_related(
             'barang', 'barang__inventaris', 'barang__lokasi', 'paket'
         ).prefetch_related('barang__inventaris__galeri_foto')
-        return scope_peminjaman_for_pengguna(
-            queryset,
-            getattr(self.request, 'current_pengguna', None),
-        )
+        pengguna = getattr(self.request, 'current_pengguna', None)
+        if pengguna and pengguna.role == 'asisten_lab':
+            return queryset.filter(
+                Q(nim=pengguna.nim_nik)
+                | Q(transaksi__pengajuan_perpanjangan__status='diajukan')
+            ).distinct()
+        return scope_peminjaman_for_pengguna(queryset, pengguna)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -518,6 +651,38 @@ class PeminjamanAlatDetailView(DetailView):
             [(today - detail.tanggal_kembali).days for detail in overdue_details] or [0]
         )
         context['detail_status_choices'] = BULK_STATUS_UI_CHOICES
+        credit_profile = get_credit_profile(self.object.nim)
+        context['credit_profile'] = credit_profile
+        extension_list = list(
+            self.object.transaksi.pengajuan_perpanjangan.select_related(
+                'diajukan_oleh', 'ditinjau_oleh'
+            )
+        ) if self.object.transaksi_id else []
+        context['extension_list'] = extension_list
+        pending_extension = next(
+            (item for item in extension_list if item.status == 'diajukan'),
+            None,
+        )
+        context['pending_extension'] = pending_extension
+        context['can_request_extension'] = bool(
+            pengguna
+            and pengguna.role in BORROWER_ROLES
+            and self.object.nim == pengguna.nim_nik
+            and any(detail.status == 'dipinjam' for detail in context['detail_transaksi'])
+            and not pending_extension
+        )
+        context['can_review_extension'] = bool(
+            pengguna
+            and pengguna.role == 'asisten_lab'
+            and pending_extension
+            and pending_extension.diajukan_oleh_id != pengguna.pk
+            and self.object.nim != pengguna.nim_nik
+        )
+        if context['can_request_extension']:
+            context['extension_form'] = PengajuanPerpanjanganForm(
+                transaksi=self.object.transaksi,
+                credit_profile=credit_profile,
+            )
         return context
 
 
@@ -529,7 +694,10 @@ class PeminjamanAlatCreateView(CreateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['current_pengguna'] = getattr(self.request, 'current_pengguna', None)
+        pengguna = getattr(self.request, 'current_pengguna', None)
+        context['current_pengguna'] = pengguna
+        if pengguna and pengguna.role in BORROWER_ROLES:
+            context['credit_profile'] = get_credit_profile(pengguna.nim_nik)
         return context
 
     def get_form_kwargs(self):
@@ -605,6 +773,14 @@ class PeminjamanAlatCreateView(CreateView):
                 transaction.on_commit(lambda item_id=peminjaman.pk: send_peminjaman_request_update(
                     PeminjamanAlat.objects.select_related('barang').get(pk=item_id)
                 ))
+
+        adjusted_from = getattr(form, 'return_date_adjusted_from', None)
+        if adjusted_from:
+            messages.info(
+                self.request,
+                f'Tanggal kembali {adjusted_from:%d-%m-%Y} merupakan hari libur. '
+                f'Diundur otomatis menjadi {form.cleaned_data["tanggal_kembali"]:%d-%m-%Y}.',
+            )
 
         if self.request.headers.get('HX-Request') == 'true':
             response = HttpResponse(status=204)
@@ -787,7 +963,10 @@ class PeminjamanAlatUpdateView(UpdateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['current_pengguna'] = getattr(self.request, 'current_pengguna', None)
+        pengguna = getattr(self.request, 'current_pengguna', None)
+        context['current_pengguna'] = pengguna
+        if pengguna and pengguna.role in BORROWER_ROLES:
+            context['credit_profile'] = get_credit_profile(pengguna.nim_nik)
         context['selected_barang_list'] = [
             peminjaman.barang
             for peminjaman in _get_peminjaman_group(self.object).select_related('barang').order_by('barang__kode_barang')

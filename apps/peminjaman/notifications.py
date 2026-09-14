@@ -119,3 +119,134 @@ def send_peminjaman_status_notification(peminjaman):
 
 def send_peminjaman_approved_notification(peminjaman):
     return send_peminjaman_status_notification(peminjaman)
+
+
+def send_extension_request_notifications(extension):
+    recipients = list(
+        Pengguna.objects.filter(role='asisten_lab')
+        .exclude(pk=extension.diajukan_oleh_id)
+        .exclude(email='')
+        .values_list('email', flat=True)
+        .distinct()
+    )
+    if not recipients:
+        return 0
+
+    anchor = extension.transaksi.detail.select_related('barang').first()
+    if not anchor:
+        return 0
+    action_url = build_public_url('peminjaman:peminjaman_detail', pk=anchor.pk)
+    return send_branded_email(
+        subject='Pengajuan Perpanjangan Peminjaman Alat',
+        recipients=recipients,
+        text_body=(
+            f'{extension.transaksi.nama_peminjam} mengajukan perpanjangan peminjaman '
+            f'{extension.transaksi.kode_pinjam}.\n'
+            f'Dari {extension.tanggal_kembali_sebelumnya:%d-%m-%Y} sampai '
+            f'{extension.tanggal_kembali_diminta:%d-%m-%Y}.\n'
+            f'Alasan: {extension.alasan}\n'
+            f'Kondisi barang: {extension.get_kondisi_barang_display()}\n'
+            f'Keterangan kondisi: {extension.keterangan_kondisi or "-"}\n'
+            f'Pernyataan kejujuran: {"Disetujui" if extension.pernyataan_jujur else "Belum tercatat"}'
+            f'\n\nTinjau pengajuan: {action_url}'
+        ),
+        title='Perpanjangan perlu ditinjau',
+        greeting='Halo Asisten Lab,',
+        intro='Ada pengajuan perpanjangan peminjaman alat yang memerlukan persetujuan.',
+        details=[
+            {'label': 'Kode', 'value': extension.transaksi.kode_pinjam},
+            {'label': 'Peminjam', 'value': extension.transaksi.nama_peminjam},
+            {'label': 'Tanggal lama', 'value': f'{extension.tanggal_kembali_sebelumnya:%d %b %Y}'},
+            {'label': 'Tanggal diminta', 'value': f'{extension.tanggal_kembali_diminta:%d %b %Y}'},
+            {'label': 'Alasan', 'value': extension.alasan},
+            {'label': 'Kondisi barang', 'value': extension.get_kondisi_barang_display()},
+            {'label': 'Keterangan kondisi', 'value': extension.keterangan_kondisi or '-'},
+            {
+                'label': 'Pernyataan kejujuran',
+                'value': 'Disetujui' if extension.pernyataan_jujur else 'Belum tercatat',
+            },
+        ],
+        action_url=action_url,
+        action_label='Tinjau Perpanjangan',
+        note='Pengajuan tidak mengubah tanggal kembali sebelum disetujui.',
+        fail_silently=True,
+    )
+
+
+def send_extension_status_notification(extension):
+    recipient = extension.diajukan_oleh.email
+    if not recipient:
+        return 0
+    anchor = extension.transaksi.detail.first()
+    if not anchor:
+        return 0
+    approved = extension.status == 'disetujui'
+    action_url = build_public_url('peminjaman:peminjaman_detail', pk=anchor.pk)
+    status_label = extension.get_status_display()
+    return send_branded_email(
+        subject=f'Perpanjangan Peminjaman {status_label}',
+        recipients=[recipient],
+        text_body=(
+            f'Pengajuan perpanjangan {extension.transaksi.kode_pinjam} {status_label.lower()}.\n'
+            f'Tanggal kembali: {(extension.tanggal_kembali_disetujui or extension.tanggal_kembali_sebelumnya):%d-%m-%Y}.\n'
+            f'Catatan: {extension.catatan_peninjau or "-"}\n\nBuka sistem: {action_url}'
+        ),
+        title=f'Perpanjangan {status_label.lower()}',
+        greeting=f'Halo {extension.transaksi.nama_peminjam},',
+        intro=(
+            'Tanggal kembali peminjaman Anda telah diperbarui.'
+            if approved else 'Pengajuan perpanjangan Anda belum dapat disetujui.'
+        ),
+        details=[
+            {'label': 'Kode', 'value': extension.transaksi.kode_pinjam},
+            {'label': 'Status', 'value': status_label},
+            {
+                'label': 'Tanggal kembali',
+                'value': f'{(extension.tanggal_kembali_disetujui or extension.tanggal_kembali_sebelumnya):%d %b %Y}',
+            },
+            {'label': 'Catatan peninjau', 'value': extension.catatan_peninjau or '-'},
+        ],
+        action_url=action_url,
+        action_label='Lihat Peminjaman',
+        fail_silently=True,
+    )
+
+
+def send_due_reminder_notification(transaksi, *, overdue=False):
+    recipient = (
+        Pengguna.objects.filter(nim_nik=transaksi.nim)
+        .exclude(email='')
+        .values_list('email', flat=True)
+        .first()
+    )
+    anchor = transaksi.detail.first()
+    if not recipient or not anchor:
+        return 0
+    action_url = build_public_url('peminjaman:peminjaman_detail', pk=anchor.pk)
+    title = 'Peminjaman terlambat' if overdue else 'Pengingat pengembalian alat'
+    intro = (
+        'Peminjaman Anda telah melewati tanggal kembali. Skor kredit akan berkurang sampai barang dikembalikan.'
+        if overdue
+        else 'Masa peminjaman Anda segera berakhir. Kembalikan tepat waktu untuk menjaga skor kredit.'
+    )
+    return send_branded_email(
+        subject=title,
+        recipients=[recipient],
+        text_body=(
+            f'{intro}\nKode: {transaksi.kode_pinjam}\n'
+            f'Tanggal kembali: {transaksi.tanggal_kembali:%d-%m-%Y}\n\n'
+            f'Jika memerlukan tambahan waktu, ajukan perpanjangan: {action_url}'
+        ),
+        title=title,
+        greeting=f'Halo {transaksi.nama_peminjam},',
+        intro=intro,
+        details=[
+            {'label': 'Kode', 'value': transaksi.kode_pinjam},
+            {'label': 'Tanggal kembali', 'value': f'{transaksi.tanggal_kembali:%d %b %Y}'},
+            {'label': 'Status', 'value': 'Terlambat' if overdue else 'Segera jatuh tempo'},
+        ],
+        action_url=action_url,
+        action_label='Ajukan Perpanjangan',
+        note='Perpanjangan hanya berlaku setelah disetujui oleh Asisten Lab.',
+        fail_silently=True,
+    )

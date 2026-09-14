@@ -1,6 +1,6 @@
 import shutil
 import tempfile
-from datetime import date, time
+from datetime import date, datetime, time
 from io import BytesIO
 from unittest.mock import patch
 
@@ -21,6 +21,7 @@ from apps.asleb.models import (
 )
 from apps.asleb.views import sync_honor_from_absensi
 from apps.mobile_api.models import MobileSession
+from apps.mobile_api.services import validate_schedule_time
 from apps.inventaris.models import Barang, FotoInventarisBarang, InventarisBarang, Lokasi
 from apps.core.models import PercakapanBantuan, PesanBantuan
 from apps.jadwal.models import JadwalPraktikum
@@ -587,3 +588,19 @@ class MobileAbsensiApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 403)
         self.assertFalse(AbsensiMasukAsleb.objects.exists())
+
+    def test_absensi_mobile_aktif_hingga_akhir_hari_jadwal(self):
+        late_same_day = timezone.make_aware(datetime(2030, 1, 7, 23, 59, 59))
+        valid, reason, attendance_status = validate_schedule_time(self.schedule, late_same_day)
+
+        self.assertTrue(valid)
+        self.assertEqual(reason, '')
+        self.assertEqual(attendance_status, AbsensiMasukAsleb.STATUS_SUDAH_ABSEN)
+
+    def test_absensi_mobile_ditolak_setelah_hari_berganti(self):
+        next_day = timezone.make_aware(datetime(2030, 1, 8, 0, 0))
+        valid, reason, attendance_status = validate_schedule_time(self.schedule, next_day)
+
+        self.assertFalse(valid)
+        self.assertEqual(reason, 'Jadwal praktikum bukan untuk hari ini.')
+        self.assertIsNone(attendance_status)

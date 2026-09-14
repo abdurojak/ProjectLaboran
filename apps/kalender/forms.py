@@ -21,6 +21,7 @@ class KegiatanKalenderForm(forms.ModelForm):
 
         if not self.can_share_to_roles:
             self.fields.pop('target_role', None)
+            self.fields.pop('hari_libur', None)
 
     @property
     def can_share_to_roles(self):
@@ -36,6 +37,7 @@ class KegiatanKalenderForm(forms.ModelForm):
             'lokasi',
             'deskripsi',
             'tampilkan_notifikasi',
+            'hari_libur',
             'target_role',
         ]
         widgets = {

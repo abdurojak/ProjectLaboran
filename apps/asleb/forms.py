@@ -464,9 +464,14 @@ class PesertaPraktikumBulkForm(forms.Form):
     )
 
     def __init__(self, *args, **kwargs):
+        matkul_queryset = kwargs.pop('matkul_queryset', None)
         super().__init__(*args, **kwargs)
         from apps.pendaftaran_asleb.models import MataKuliahAsleb
-        self.fields['matkul'].queryset = MataKuliahAsleb.objects.filter(aktif=True)
+        self.fields['matkul'].queryset = (
+            matkul_queryset
+            if matkul_queryset is not None
+            else MataKuliahAsleb.objects.none()
+        )
 
     def clean_file_csv(self):
         uploaded = self.cleaned_data.get('file_csv')
@@ -587,9 +592,14 @@ class PesertaPraktikumForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        matkul_queryset = kwargs.pop('matkul_queryset', None)
         super().__init__(*args, **kwargs)
         from apps.pendaftaran_asleb.models import MataKuliahAsleb
-        self.fields['matkul'].queryset = MataKuliahAsleb.objects.filter(aktif=True).order_by('nama', 'kelas')
+        self.fields['matkul'].queryset = (
+            matkul_queryset
+            if matkul_queryset is not None
+            else MataKuliahAsleb.objects.none()
+        )
 
     def clean_nim(self):
         nim = self.cleaned_data['nim'].strip()

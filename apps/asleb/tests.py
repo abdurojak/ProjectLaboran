@@ -51,7 +51,7 @@ from .models import (
     SuratHonorAsleb,
     TugasLaporanPraktikum,
 )
-from .views import get_praktikum_matkul_queryset
+from .views import get_active_absensi_schedule, get_praktikum_matkul_queryset
 from .surat_honor import LAB_SIGNATURES, build_lab_signature, build_lampiran_page, build_styles
 
 
@@ -255,6 +255,26 @@ class AslebViewTests(TestCase):
             slot=slot, asleb=self.asleb, mulai_pada=date(2026, 7, 1),
             status=AslabAssignment.STATUS_ACTIVE,
         )
+
+    def login_asisten_for_matkul(self):
+        pengguna = Pengguna.objects.create(
+            nama_pengguna=self.asleb.nama,
+            nim_nik=self.asleb.nim,
+            email='asisten-peserta@std.trisakti.ac.id',
+            password='rahasia123',
+            no_hp=self.asleb.no_hp,
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='perempuan',
+            role='asisten_lab',
+            is_verified=True,
+        )
+        self.create_active_assignment()
+        session = self.client.session
+        session['pengguna_id'] = pengguna.pk
+        session.save()
+        return pengguna
 
     def test_form_absensi_menyediakan_upload_bukti_foto_dan_video_manual(self):
         PendaftaranAsleb.objects.create(
@@ -462,6 +482,15 @@ class AslebViewTests(TestCase):
         self.assertEqual(second_response.status_code, 200)
         self.assertIn(second_modul, form.fields['modul_praktikum'].queryset)
         self.assertNotIn(first_modul, form.fields['modul_praktikum'].queryset)
+
+    def test_absensi_web_aktif_sepanjang_hari_jadwal(self):
+        self.create_active_assignment()
+        schedule = self.create_active_schedule()
+        late_same_day = timezone.make_aware(datetime(2026, 6, 29, 23, 59))
+        next_day = timezone.make_aware(datetime(2026, 6, 30, 0, 0))
+
+        self.assertEqual(get_active_absensi_schedule(self.asleb, late_same_day), schedule)
+        self.assertIsNone(get_active_absensi_schedule(self.asleb, next_day))
 
     def test_asisten_lab_tidak_dapat_menambah_modul(self):
         aslab_user = Pengguna.objects.create(
@@ -793,6 +822,7 @@ class AslebViewTests(TestCase):
         self.assertNotContains(response, '<span>Edit</span>', html=False)
 
     def test_input_peserta_otomatis_mencocokkan_nim_dengan_akun(self):
+        self.login_asisten_for_matkul()
         mahasiswa = Pengguna.objects.create(
             nama_pengguna='Mahasiswa Terhubung', nim_nik='0640020099',
             email='0640020099@std.trisakti.ac.id', password='rahasia123',
@@ -813,6 +843,7 @@ class AslebViewTests(TestCase):
         self.assertIsNone(unlinked.pengguna)
 
     def test_import_peserta_praktikum_dari_csv(self):
+        self.login_asisten_for_matkul()
         csv_file = SimpleUploadedFile(
             'peserta.csv',
             b'No,Student Name,Student ID\n1,NAUFAL FAHREZI MAULANA,64102500001\n2,RAJA PANGLIMA ISLAM,64102500004\n',
@@ -833,6 +864,7 @@ class AslebViewTests(TestCase):
         self.assertTrue(PesertaPraktikum.objects.filter(matkul=self.matkul, nim='64102500004', nama='RAJA PANGLIMA ISLAM').exists())
 
     def test_daftar_peserta_praktikum_muncul_dalam_modal(self):
+        self.login_asisten_for_matkul()
         peserta = PesertaPraktikum.objects.create(matkul=self.matkul, nim='0640020099', nama='Mahasiswa Modal')
 
         response = self.client.get(reverse('asleb:praktikum_mahasiswa_list'))
@@ -855,11 +887,14 @@ class AslebViewTests(TestCase):
         self.assertContains(response, 'data-matkul-nav-filter-form')
         self.assertContains(response, 'data-matkul-nav-class-filter')
         self.assertContains(response, 'data-matkul-nav-reset')
+        self.assertContains(response, 'data-praktikum-main-column')
+        self.assertContains(response, 'new ResizeObserver(syncMatkulNavHeight)')
         self.assertContains(response, "matkulFilterForm?.addEventListener('submit'")
         self.assertContains(response, 'event.preventDefault()')
         self.assertNotContains(response, 'Terapkan Filter')
 
-    def test_laboran_dapat_menghapus_banyak_peserta_praktikum(self):
+    def test_asisten_dapat_menghapus_banyak_peserta_praktikum(self):
+        self.login_asisten_for_matkul()
         peserta_pertama = PesertaPraktikum.objects.create(matkul=self.matkul, nim='0640020099', nama='Mahasiswa Satu')
         peserta_kedua = PesertaPraktikum.objects.create(matkul=self.matkul, nim='0640020088', nama='Mahasiswa Dua')
 
@@ -871,7 +906,8 @@ class AslebViewTests(TestCase):
         self.assertRedirects(response, f'{reverse("asleb:praktikum_mahasiswa_list")}?matkul={self.matkul.pk}')
         self.assertFalse(PesertaPraktikum.objects.filter(pk__in=[peserta_pertama.pk, peserta_kedua.pk]).exists())
 
-    def test_laboran_dapat_mengedit_peserta_praktikum(self):
+    def test_asisten_dapat_mengedit_peserta_praktikum(self):
+        self.login_asisten_for_matkul()
         peserta = PesertaPraktikum.objects.create(matkul=self.matkul, nim='0640020099', nama='Mahasiswa Lama')
 
         response = self.client.post(reverse('asleb:praktikum_peserta_update', args=[peserta.pk]), {
@@ -885,6 +921,54 @@ class AslebViewTests(TestCase):
         peserta.refresh_from_db()
         self.assertEqual(peserta.nim, '0640020098')
         self.assertEqual(peserta.nama, 'Mahasiswa Baru')
+
+    def test_laboran_tidak_dapat_mengelola_peserta_praktikum(self):
+        peserta = PesertaPraktikum.objects.create(
+            matkul=self.matkul, nim='0640020199', nama='Peserta Dilindungi',
+        )
+        create_response = self.client.get(reverse('asleb:praktikum_peserta_create'))
+        delete_response = self.client.post(
+            reverse('asleb:praktikum_peserta_delete', args=[peserta.pk]),
+        )
+        list_response = self.client.get(reverse('asleb:praktikum_mahasiswa_list'))
+
+        self.assertRedirects(create_response, reverse('asleb:praktikum_mahasiswa_list'))
+        self.assertRedirects(delete_response, reverse('asleb:praktikum_mahasiswa_list'))
+        self.assertTrue(PesertaPraktikum.objects.filter(pk=peserta.pk).exists())
+        self.assertNotContains(list_response, reverse('asleb:praktikum_peserta_create'))
+        self.assertFalse(list_response.context['can_manage_peserta'])
+        self.assertNotContains(list_response, 'class="participant-modal fixed')
+
+    def test_asisten_tidak_dapat_mengelola_peserta_matkul_lain(self):
+        self.login_asisten_for_matkul()
+        matkul_lain = MataKuliahAsleb.objects.create(
+            kode='PESERTA-LAIN',
+            nama='Mata Kuliah Asisten Lain',
+            dosen='Dosen Lain',
+            kelas='TIF-99',
+        )
+        peserta_sendiri = PesertaPraktikum.objects.create(
+            matkul=self.matkul, nim='0640020101', nama='Peserta Sendiri',
+        )
+        peserta_lain = PesertaPraktikum.objects.create(
+            matkul=matkul_lain, nim='0640020102', nama='Peserta Asisten Lain',
+        )
+
+        edit_response = self.client.get(
+            reverse('asleb:praktikum_peserta_update', args=[peserta_lain.pk]),
+        )
+        delete_response = self.client.post(reverse('asleb:praktikum_peserta_bulk_delete'), {
+            'matkul_id': self.matkul.pk,
+            'peserta_ids': [peserta_sendiri.pk, peserta_lain.pk],
+        })
+
+        self.assertEqual(edit_response.status_code, 404)
+        self.assertRedirects(
+            delete_response,
+            f'{reverse("asleb:praktikum_mahasiswa_list")}?matkul={self.matkul.pk}',
+        )
+        self.assertFalse(PesertaPraktikum.objects.filter(pk=peserta_sendiri.pk).exists())
+        self.assertTrue(PesertaPraktikum.objects.filter(pk=peserta_lain.pk).exists())
 
     def test_export_nilai_praktikum_excel(self):
         peserta = PesertaPraktikum.objects.create(matkul=self.matkul, nim='0640020099', nama='Mahasiswa Nilai')
@@ -975,6 +1059,7 @@ class AslebViewTests(TestCase):
         self.assertTrue(all(name.endswith('.xlsx') for name in names))
 
     def test_hapus_semua_peserta_mengosongkan_daftar_dan_menyimpan_riwayat_nilai(self):
+        self.login_asisten_for_matkul()
         peserta_dengan_nilai = PesertaPraktikum.objects.create(matkul=self.matkul, nim='0640020099', nama='Mahasiswa Nilai')
         peserta_tanpa_nilai = PesertaPraktikum.objects.create(matkul=self.matkul, nim='0640020100', nama='Mahasiswa Kosong')
         modul = ModulPraktikum.objects.create(

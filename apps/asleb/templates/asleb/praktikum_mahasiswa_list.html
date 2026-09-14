@@ -30,6 +30,18 @@
         padding-right: 0.35rem;
     }
 
+    @media (min-width: 1180px) {
+        .praktikum-main-column {
+            align-self: start;
+        }
+
+        .matkul-nav-list {
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            scrollbar-gutter: stable;
+        }
+    }
+
     .matkul-nav-item {
         display: block;
         position: relative;
@@ -375,7 +387,7 @@
     </div>
 
     <div class="praktikum-shell">
-        <aside class="surface-card matkul-nav p-4 md:p-5">
+        <aside class="surface-card matkul-nav p-4 md:p-5" data-matkul-nav>
             <div class="flex items-start justify-between gap-3">
                 <div>
                     <p class="text-xs font-black uppercase tracking-[0.18em] text-brand-700">Navigasi Matkul</p>
@@ -437,7 +449,7 @@
             </div>
         </aside>
 
-        <div class="min-w-0 space-y-6">
+        <div class="praktikum-main-column min-w-0 space-y-6" data-praktikum-main-column>
             <section class="surface-card praktikum-hero p-5 md:p-6" data-matkul-focus>
                 <div class="flex flex-wrap items-start justify-between gap-4">
                     <div class="max-w-3xl">
@@ -988,7 +1000,25 @@
         const matkulReset = document.querySelector('[data-matkul-nav-reset]');
         const matkulItems = Array.from(document.querySelectorAll('[data-matkul-nav-item]'));
         const matkulNoResult = document.querySelector('[data-matkul-nav-no-result]');
+        const matkulNav = document.querySelector('[data-matkul-nav]');
+        const praktikumMainColumn = document.querySelector('[data-praktikum-main-column]');
         const focusPanel = document.querySelector('[data-matkul-focus]');
+        const desktopLayout = window.matchMedia('(min-width: 1180px)');
+        const syncMatkulNavHeight = function () {
+            if (!matkulNav || !praktikumMainColumn) return;
+            if (!desktopLayout.matches) {
+                matkulNav.style.removeProperty('height');
+                return;
+            }
+            matkulNav.style.height = `${Math.ceil(praktikumMainColumn.scrollHeight)}px`;
+        };
+
+        syncMatkulNavHeight();
+        window.addEventListener('resize', syncMatkulNavHeight);
+        if (window.ResizeObserver && praktikumMainColumn) {
+            const mainColumnObserver = new ResizeObserver(syncMatkulNavHeight);
+            mainColumnObserver.observe(praktikumMainColumn);
+        }
         const setActiveMatkul = function (item, shouldPushState = true) {
             if (!item || !focusPanel) return;
             const matkulId = item.dataset.matkulId;

@@ -230,7 +230,47 @@
     </div>
 
     {% if is_borrower %}
-    <section class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]" data-loan-shop>
+    <section class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
+        <div class="surface-card flex flex-wrap items-center gap-4 p-5">
+            <span class="flex h-14 w-14 items-center justify-center rounded-2xl {% if credit_profile.label == 'Baik' %}bg-emerald-50 text-emerald-700{% elif credit_profile.label == 'Waspada' %}bg-amber-50 text-amber-700{% else %}bg-rose-50 text-rose-700{% endif %}">
+                <i data-lucide="shield-check" class="h-6 w-6"></i>
+            </span>
+            <div class="min-w-0 flex-1">
+                <p class="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Skor Kredit Peminjaman</p>
+                <div class="mt-1 flex flex-wrap items-baseline gap-2">
+                    <strong class="text-3xl font-black text-slate-900">{{ credit_profile.score }}</strong>
+                    <span class="font-black {% if credit_profile.label == 'Baik' %}text-emerald-700{% elif credit_profile.label == 'Waspada' %}text-amber-700{% else %}text-rose-700{% endif %}">{{ credit_profile.label }}</span>
+                </div>
+                <p class="mt-1 text-sm font-semibold text-slate-500">Batas pengajuan Anda saat ini maksimal {{ credit_profile.max_loan_days }} hari.</p>
+                {% if credit_profile.has_active_overdue %}<p class="mt-2 text-sm font-bold text-rose-700">Selesaikan peminjaman yang terlambat sebelum mengajukan kembali.</p>{% endif %}
+            </div>
+        </div>
+        <div class="surface-card flex items-center px-5 py-4 text-sm font-semibold text-slate-600 md:max-w-sm">
+            Masa normal maksimal 7 hari. Tanggal kembali yang jatuh pada hari libur diundur otomatis ke hari operasional berikutnya.
+        </div>
+    </section>
+
+    {% if pending_extensions %}
+    <section class="surface-card overflow-hidden">
+        <div class="border-b border-slate-100 px-5 py-4">
+            <p class="text-xs font-black uppercase tracking-[0.18em] text-cyan-700">Tugas Asisten Lab</p>
+            <h3 class="mt-1 text-xl font-black text-slate-900">Pengajuan Perpanjangan</h3>
+        </div>
+        <div class="divide-y divide-slate-100">
+            {% for extension in pending_extensions %}
+            <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+                <div>
+                    <p class="font-black text-slate-900">{{ extension.transaksi.kode_pinjam }} · {{ extension.transaksi.nama_peminjam }}</p>
+                    <p class="mt-1 text-sm text-slate-500">{{ extension.tanggal_kembali_sebelumnya|date:"d M Y" }} menjadi {{ extension.tanggal_kembali_diminta|date:"d M Y" }}</p>
+                </div>
+                {% if extension.anchor_pk %}<a href="{% url 'peminjaman:peminjaman_detail' extension.anchor_pk %}" class="btn-secondary">Tinjau</a>{% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <section class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]" data-loan-shop data-credit-can-submit="{{ credit_profile.can_submit|yesno:'true,false' }}" data-max-loan-days="{{ credit_profile.max_loan_days }}">
         <div class="surface-card min-w-0 p-5 md:p-6">
             <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -305,7 +345,7 @@
                         {% if product.is_available %}
                         <button type="button" class="loan-product-action w-full" data-add-cart>
                             <i data-lucide="shopping-cart" class="mr-1 inline h-4 w-4"></i>
-                            Tambah ke Keranjang
+                            Tambah 1 Unit
                         </button>
                         {% else %}
                         <div class="rounded-2xl bg-slate-100 px-3 py-2 text-center text-xs font-black text-slate-500">Stok habis / sedang dipinjam</div>
@@ -777,6 +817,33 @@
         const catalogCount = shop.querySelector('[data-catalog-count]');
         const productCards = Array.from(shop.querySelectorAll('[data-product-card]'));
         const selected = new Map();
+        const creditCanSubmit = shop.dataset.creditCanSubmit !== 'false';
+        const maxLoanDays = Number(shop.dataset.maxLoanDays || 7);
+        const startDateInput = shop.querySelector('[name="tanggal_pinjam"]');
+        const returnDateInput = shop.querySelector('[name="tanggal_kembali"]');
+
+        function syncReturnDateLimit() {
+            if (!startDateInput || !returnDateInput || !startDateInput.value) {
+                return;
+            }
+            const startDate = new Date(startDateInput.value + 'T00:00:00');
+            const maxDate = new Date(startDate);
+            maxDate.setDate(maxDate.getDate() + maxLoanDays);
+            returnDateInput.min = startDateInput.value;
+            returnDateInput.max = [
+                maxDate.getFullYear(),
+                String(maxDate.getMonth() + 1).padStart(2, '0'),
+                String(maxDate.getDate()).padStart(2, '0'),
+            ].join('-');
+            if (returnDateInput.value && returnDateInput.value > returnDateInput.max) {
+                returnDateInput.value = '';
+            }
+        }
+
+        if (startDateInput) {
+            startDateInput.addEventListener('change', syncReturnDateLimit);
+            syncReturnDateLimit();
+        }
 
         function normalizeSearchValue(value) {
             return (value || '')
@@ -848,15 +915,17 @@
                 const remaining = availableIds.filter(function (id) {
                     return !selected.has(id);
                 }).length;
+                const selectedCount = availableIds.length - remaining;
                 const button = card.querySelector('[data-add-cart]');
                 if (!button) {
                     return;
                 }
-                button.disabled = remaining <= 0;
+                const isLocked = button.dataset.cartAddLocked === 'true';
+                button.disabled = remaining <= 0 || isLocked || !creditCanSubmit;
                 button.classList.toggle('opacity-50', remaining <= 0);
                 button.classList.toggle('cursor-not-allowed', remaining <= 0);
                 button.innerHTML = remaining > 0
-                    ? '<i data-lucide="shopping-cart" class="mr-1 inline h-4 w-4"></i>Tambah ke Keranjang'
+                    ? '<i data-lucide="shopping-cart" class="mr-1 inline h-4 w-4"></i>Tambah 1 Unit' + (selectedCount > 0 ? ' (' + selectedCount + ' dipilih)' : '')
                     : '<i data-lucide="check" class="mr-1 inline h-4 w-4"></i>Semua stok dipilih';
             });
             if (window.lucide) {
@@ -899,24 +968,42 @@
                 row.appendChild(removeButton);
                 cartItems.appendChild(row);
             });
-            cartSubmit.disabled = selected.size === 0;
+            cartSubmit.disabled = selected.size === 0 || !creditCanSubmit;
+        }
+
+        function addSingleAvailableItem(card) {
+            const availableIds = splitValues(card.dataset.availableIds, ',');
+            const labels = splitValues(card.dataset.availableLabels, '||');
+            const nextId = availableIds.find(function (id) {
+                return !selected.has(id);
+            });
+            if (!nextId) {
+                return false;
+            }
+            const labelIndex = availableIds.indexOf(nextId);
+            selected.set(nextId, labels[labelIndex] || card.dataset.productName || 'Barang dipilih');
+            return true;
         }
 
         shop.querySelectorAll('[data-add-cart]').forEach(function (button) {
-            button.addEventListener('click', function () {
-                const card = button.closest('[data-product-card]');
-                const availableIds = splitValues(card.dataset.availableIds, ',');
-                const labels = splitValues(card.dataset.availableLabels, '||');
-                const nextId = availableIds.find(function (id) {
-                    return !selected.has(id);
-                });
-                if (!nextId) {
+            button.addEventListener('click', function (event) {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                if (button.dataset.cartAddLocked === 'true') {
                     return;
                 }
-                const labelIndex = availableIds.indexOf(nextId);
-                selected.set(nextId, labels[labelIndex] || card.dataset.productName || 'Barang dipilih');
-                renderCart();
-                syncProductButtons();
+
+                button.dataset.cartAddLocked = 'true';
+                const card = button.closest('[data-product-card]');
+                if (card && addSingleAvailableItem(card)) {
+                    renderCart();
+                    syncProductButtons();
+                }
+
+                window.setTimeout(function () {
+                    delete button.dataset.cartAddLocked;
+                    syncProductButtons();
+                }, 500);
             });
         });
 
