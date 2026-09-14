@@ -80,7 +80,11 @@ class Command(BaseCommand):
                     slot__matkul=registration.matkul,
                     status='active',
                 ).values('slot__nomor').distinct().count()
-                category = 'OVER_CAPACITY' if occupied >= 2 else 'MISSING_ASSIGNMENT'
+                category = (
+                    'OVER_CAPACITY'
+                    if occupied >= registration.matkul.maksimal_aslab
+                    else 'MISSING_ASSIGNMENT'
+                )
                 categories[category].append(asleb.nim)
                 continue
 

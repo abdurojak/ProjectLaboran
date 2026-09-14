@@ -6,6 +6,7 @@ from .models import (
     AslabReplacement,
     AslabReplacementAudit,
     AslabSlot,
+    KoreksiPengalamanAsleb,
     LimitedReplacementOpening,
     MataKuliahAsleb,
     PendaftaranAsleb,
@@ -128,7 +129,7 @@ class AslabAssignmentAdmin(admin.ModelAdmin):
 
 @admin.register(MataKuliahAsleb)
 class MataKuliahAslebAdmin(admin.ModelAdmin):
-    list_display = ('kode', 'kode_mk', 'nama', 'sks', 'dosen', 'kelas', 'aktif')
+    list_display = ('kode', 'kode_mk', 'nama', 'sks', 'dosen', 'kelas', 'maksimal_aslab', 'aktif')
     list_filter = ('aktif', 'nama', 'kelas')
     search_fields = ('kode', 'kode_mk', 'nama', 'dosen', 'kelas')
 
@@ -138,6 +139,19 @@ class PendaftaranAslebAdmin(admin.ModelAdmin):
     list_display = ('nama', 'nim', 'periode', 'matkul', 'program_studi', 'semester', 'rekening', 'status', 'tanggal_daftar')
     list_filter = ('periode', 'status', 'matkul', 'program_studi', 'semester')
     search_fields = ('nama', 'nim', 'no_hp', 'email', 'program_studi', 'matkul', 'rekening')
+
+
+@admin.register(KoreksiPengalamanAsleb)
+class KoreksiPengalamanAslebAdmin(admin.ModelAdmin):
+    list_display = ('nim', 'jumlah_periode', 'diatur_oleh', 'diperbarui_pada')
+    search_fields = ('nim', 'diatur_oleh__nama_pengguna')
+    readonly_fields = ('nim', 'jumlah_periode', 'diatur_oleh', 'dibuat_pada', 'diperbarui_pada')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(RiwayatAsleb)

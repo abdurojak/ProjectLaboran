@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
@@ -46,6 +47,20 @@ class MataKuliahAsleb(models.Model):
     sks = models.PositiveSmallIntegerField('SKS', default=0, blank=True)
     dosen = models.CharField(max_length=200)
     kelas = models.CharField(max_length=50)
+    maksimal_aslab = models.PositiveSmallIntegerField(
+        'Maksimal Aslab',
+        default=2,
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+    )
+    kapasitas_diatur_oleh = models.ForeignKey(
+        'pengguna.Pengguna',
+        on_delete=models.SET_NULL,
+        related_name='kapasitas_matkul_aslab_diatur',
+        blank=True,
+        null=True,
+        editable=False,
+    )
+    kapasitas_diatur_pada = models.DateTimeField(blank=True, null=True, editable=False)
     aktif = models.BooleanField(default=True)
 
     class Meta:
@@ -362,6 +377,31 @@ class RiwayatAsleb(models.Model):
         return f'{self.nama} - {self.matkul} - {self.periode}'
 
 
+class KoreksiPengalamanAsleb(models.Model):
+    nim = models.CharField('NIM', max_length=30, unique=True)
+    jumlah_periode = models.PositiveSmallIntegerField(
+        'Jumlah periode Aslab',
+        validators=[MaxValueValidator(99)],
+    )
+    diatur_oleh = models.ForeignKey(
+        'pengguna.Pengguna',
+        on_delete=models.SET_NULL,
+        related_name='koreksi_pengalaman_asleb',
+        blank=True,
+        null=True,
+    )
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+    diperbarui_pada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['nim']
+        verbose_name = 'Koreksi Pengalaman Aslab'
+        verbose_name_plural = 'Koreksi Pengalaman Aslab'
+
+    def __str__(self):
+        return f'{self.nim} - {self.jumlah_periode} periode'
+
+
 class AslabSlot(models.Model):
     STATUS_ACTIVE = 'active'
     STATUS_VACANT = 'vacant'
@@ -391,8 +431,8 @@ class AslabSlot(models.Model):
         ordering = ['periode', 'matkul', 'nomor']
         constraints = [
             models.CheckConstraint(
-                check=models.Q(nomor__in=[1, 2]),
-                name='aslab_slot_number_1_or_2',
+                check=models.Q(nomor__gte=1, nomor__lte=5),
+                name='aslab_slot_number_1_to_5',
             ),
             models.UniqueConstraint(
                 fields=['periode', 'matkul', 'nomor'],

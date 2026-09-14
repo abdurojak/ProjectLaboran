@@ -2,6 +2,7 @@ from datetime import date, timedelta
 from urllib.parse import urljoin
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.db import transaction
 from django.urls import reverse
@@ -17,7 +18,7 @@ from apps.kalender.realtime import send_user_notification
 from apps.pengguna.models import PengalamanPengguna, Pengguna
 
 from .models import (
-    AslabAssignment, MataKuliahAsleb, PendaftaranAsleb,
+    AslabAssignment, AslabSlot, KoreksiPengalamanAsleb, MataKuliahAsleb, PendaftaranAsleb,
     PengaturanPendaftaranAsleb, PeriodeAsleb, RiwayatAsleb,
 )
 
@@ -46,6 +47,59 @@ def sync_asleb_person_from_registration(registration, *, period, status='aktif',
             ),
         },
     )[0]
+
+
+def sync_regular_aslab_assignment(registration, asleb, period):
+    existing = AslabAssignment.objects.filter(
+        asleb=asleb,
+        slot__periode=period,
+        slot__matkul=registration.matkul,
+        status=AslabAssignment.STATUS_ACTIVE,
+    ).first()
+    if existing:
+        return existing
+
+    occupied_numbers = set(AslabAssignment.objects.filter(
+        slot__periode=period,
+        slot__matkul=registration.matkul,
+        status=AslabAssignment.STATUS_ACTIVE,
+    ).values_list('slot__nomor', flat=True))
+    closed_numbers = set(AslabSlot.objects.filter(
+        periode=period,
+        matkul=registration.matkul,
+        status=AslabSlot.STATUS_CLOSED,
+    ).values_list('nomor', flat=True))
+    unavailable_numbers = occupied_numbers | closed_numbers
+    free_number = next(
+        (
+            number
+            for number in range(1, registration.matkul.maksimal_aslab + 1)
+            if number not in unavailable_numbers
+        ),
+        None,
+    )
+    if free_number is None:
+        raise ValidationError(
+            f'Kapasitas {registration.matkul.maksimal_aslab} Aslab untuk '
+            f'{registration.matkul} sudah penuh.'
+        )
+
+    slot, _created = AslabSlot.objects.get_or_create(
+        periode=period,
+        matkul=registration.matkul,
+        nomor=free_number,
+        defaults={'status': AslabSlot.STATUS_ACTIVE},
+    )
+    if slot.status != AslabSlot.STATUS_ACTIVE:
+        slot.status = AslabSlot.STATUS_ACTIVE
+        slot.save(update_fields=['status', 'diperbarui_pada'])
+    return AslabAssignment.objects.create(
+        slot=slot,
+        asleb=asleb,
+        source_pendaftaran=registration,
+        mulai_pada=period.mulai,
+        status=AslabAssignment.STATUS_ACTIVE,
+    )
 
 
 def is_registration_open(value=None):
@@ -414,6 +468,31 @@ def end_asleb_period(period, ended_by, value=None):
     return sync_expired_asleb_periods(today)
 
 
+def get_recorded_asleb_period_count(nim):
+    period_ids = set(PendaftaranAsleb.objects.filter(
+        nim=nim,
+        status__in=['diterima', 'digenerate'],
+        periode__isnull=False,
+    ).values_list('periode_id', flat=True))
+    period_ids.update(RiwayatAsleb.objects.filter(nim=nim).values_list('periode_id', flat=True))
+    if period_ids:
+        return len(period_ids)
+    return PendaftaranAsleb.objects.filter(
+        nim=nim,
+        status__in=['diterima', 'digenerate'],
+        periode__isnull=True,
+    ).count()
+
+
+def get_effective_asleb_period_count(nim):
+    corrected_count = KoreksiPengalamanAsleb.objects.filter(
+        nim=nim,
+    ).values_list('jumlah_periode', flat=True).first()
+    if corrected_count is not None:
+        return corrected_count
+    return get_recorded_asleb_period_count(nim)
+
+
 def get_asleb_experience(nim):
     # A manual level is a persistent laboran decision and must remain effective
     # when the previous membership is inactive during the next registration.
@@ -422,19 +501,7 @@ def get_asleb_experience(nim):
         level = asleb_profile.level_efektif
         return level, 2 if level == 'senior' else 1
 
-    period_ids = set(PendaftaranAsleb.objects.filter(
-        nim=nim,
-        status__in=['diterima', 'digenerate'],
-        periode__isnull=False,
-    ).values_list('periode_id', flat=True))
-    period_ids.update(RiwayatAsleb.objects.filter(nim=nim).values_list('periode_id', flat=True))
-    period_count = len(period_ids)
-    if not period_count:
-        period_count = PendaftaranAsleb.objects.filter(
-            nim=nim,
-            status__in=['diterima', 'digenerate'],
-            periode__isnull=True,
-        ).count()
+    period_count = get_effective_asleb_period_count(nim)
     # Dua periode yang sudah diterima membuat pendaftaran berikutnya berlevel Senior.
     return ('senior', 2) if period_count >= 2 else ('junior', 1)
 

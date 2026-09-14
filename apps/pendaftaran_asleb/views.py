@@ -5,7 +5,7 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.contrib.staticfiles import finders
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.http import HttpResponse
 from django.urls import reverse_lazy
@@ -28,6 +28,7 @@ from apps.pengguna.models import Pengguna
 from apps.pengguna.cv import build_cv_pdf, has_complete_asleb_profile
 
 from .forms import (
+    KoreksiPengalamanAslebForm,
     MataKuliahAslebForm,
     AkhiriPeriodeAslebForm,
     MasaTugasAslebForm,
@@ -40,16 +41,27 @@ from .forms import (
     RekeningPendaftaranForm,
     decode_signature_data,
 )
-from .models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb, PeriodeAsleb, RiwayatAsleb
+from .models import (
+    AslabAssignment,
+    KoreksiPengalamanAsleb,
+    MataKuliahAsleb,
+    PendaftaranAsleb,
+    PengaturanPendaftaranAsleb,
+    PeriodeAsleb,
+    RiwayatAsleb,
+)
 from .services import (
     close_current_registration,
     get_asleb_experience,
+    get_effective_asleb_period_count,
     get_current_period,
     get_period_registration_count,
+    get_recorded_asleb_period_count,
     is_registration_open,
     open_current_registration,
     end_asleb_period,
     sync_expired_asleb_periods,
+    sync_regular_aslab_assignment,
     sync_asleb_person_from_registration,
 )
 from .utils import analyze_transcript, get_public_registration_url, is_passing_grade
@@ -130,6 +142,63 @@ class PendaftaranAslebDetailView(LaboranPendaftaranRequiredMixin, DetailView):
     model = PendaftaranAsleb
     template_name = 'pendaftaran_asleb/pendaftaran_detail.html'
     context_object_name = 'pendaftaran'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        correction = KoreksiPengalamanAsleb.objects.filter(nim=self.object.nim).select_related(
+            'diatur_oleh'
+        ).first()
+        level, limit = get_asleb_experience(self.object.nim)
+        recorded_count = get_recorded_asleb_period_count(self.object.nim)
+        context.update({
+            'experience_correction': correction,
+            'recorded_experience_count': recorded_count,
+            'effective_experience_count': get_effective_asleb_period_count(self.object.nim),
+            'experience_level': level,
+            'experience_limit': limit,
+            'experience_form': KoreksiPengalamanAslebForm(
+                instance=correction,
+                initial={'jumlah_periode': recorded_count},
+            ),
+        })
+        return context
+
+
+@require_POST
+@transaction.atomic
+def update_asleb_experience_count(request, pk):
+    if not require_laboran_operation(
+        request,
+        'Hanya Laboran yang dapat mengubah jumlah pengalaman Aslab.',
+    ):
+        return redirect('dashboard:home')
+
+    registration = get_object_or_404(PendaftaranAsleb.objects.select_for_update(), pk=pk)
+    correction = KoreksiPengalamanAsleb.objects.select_for_update().filter(
+        nim=registration.nim,
+    ).first()
+    if request.POST.get('action') == 'reset':
+        if correction:
+            correction.delete()
+        messages.success(request, 'Jumlah pengalaman kembali menggunakan riwayat sistem.')
+        return redirect('pendaftaran_asleb:pendaftaran_detail', pk=registration.pk)
+
+    form = KoreksiPengalamanAslebForm(request.POST, instance=correction)
+    if not form.is_valid():
+        messages.error(request, next(iter(form.errors.values()))[0])
+        return redirect('pendaftaran_asleb:pendaftaran_detail', pk=registration.pk)
+
+    correction = form.save(commit=False)
+    correction.nim = registration.nim
+    correction.diatur_oleh = request.current_pengguna
+    correction.save()
+    level, limit = get_asleb_experience(registration.nim)
+    messages.success(
+        request,
+        f'Jumlah pengalaman diperbarui menjadi {correction.jumlah_periode} periode. '
+        f'Level pendaftaran sekarang {level.title()} dengan batas {limit} mata kuliah.',
+    )
+    return redirect('pendaftaran_asleb:pendaftaran_detail', pk=registration.pk)
 
 
 class PendaftaranAslebCreateView(LaboranPendaftaranRequiredMixin, CreateView):
@@ -513,7 +582,30 @@ class RekeningPendaftaranUpdateView(UpdateView):
 def accept_pendaftaran(request, pk):
     if not require_laboran_operation(request, 'Hanya laboran yang dapat menerima pendaftaran aslab.'):
         return redirect('pendaftaran_asleb:pendaftaran_list')
-    pendaftaran = get_object_or_404(PendaftaranAsleb.objects.select_for_update(), pk=pk)
+    pendaftaran = get_object_or_404(
+        PendaftaranAsleb.objects.select_for_update().select_related('matkul', 'periode'),
+        pk=pk,
+    )
+    period = pendaftaran.periode or get_current_period()
+    MataKuliahAsleb.objects.select_for_update().get(pk=pendaftaran.matkul_id)
+    occupied_count = PendaftaranAsleb.objects.filter(
+        matkul=pendaftaran.matkul,
+        status__in=['diterima', 'digenerate'],
+    ).filter(
+        Q(periode=period) | Q(periode__isnull=True)
+    ).exclude(pk=pendaftaran.pk).count()
+    active_assignment_count = AslabAssignment.objects.filter(
+        slot__periode=period,
+        slot__matkul=pendaftaran.matkul,
+        status=AslabAssignment.STATUS_ACTIVE,
+    ).exclude(asleb__nim=pendaftaran.nim).count()
+    if max(occupied_count, active_assignment_count) >= pendaftaran.matkul.maksimal_aslab:
+        messages.error(
+            request,
+            f'Kuota {pendaftaran.matkul.maksimal_aslab} Aslab untuk '
+            f'{pendaftaran.matkul} sudah penuh.',
+        )
+        return redirect('pendaftaran_asleb:pendaftaran_list')
     pendaftaran.status = 'diterima'
     pendaftaran.save(update_fields=['status', 'diperbarui_pada'])
     transaction.on_commit(lambda: send_pendaftaran_status_email(pendaftaran))
@@ -577,6 +669,23 @@ def generate_all_accepted_asleb(request):
 
     accepted_registrations = [item for item in registration_list if item.status in {'diterima', 'digenerate'}]
     rejected_count = sum(item.status == 'ditolak' for item in registration_list)
+    for matkul_id in {item.matkul_id for item in accepted_registrations}:
+        course = MataKuliahAsleb.objects.select_for_update().get(pk=matkul_id)
+        candidate_nims = {
+            item.nim for item in accepted_registrations if item.matkul_id == matkul_id
+        }
+        active_nims = set(AslabAssignment.objects.filter(
+            slot__periode=current_period,
+            slot__matkul_id=matkul_id,
+            status=AslabAssignment.STATUS_ACTIVE,
+        ).values_list('asleb__nim', flat=True))
+        if len(candidate_nims | active_nims) > course.maksimal_aslab:
+            messages.error(
+                request,
+                f'Generate dibatalkan: {course} memiliki lebih dari '
+                f'{course.maksimal_aslab} Aslab yang diterima.',
+            )
+            return redirect('pendaftaran_asleb:pendaftaran_list')
     for pendaftaran in accepted_registrations:
         period = pendaftaran.periode or current_period
         RiwayatAsleb.objects.update_or_create(
@@ -787,10 +896,12 @@ def send_pendaftaran_status_email(pendaftaran):
 
 
 def create_or_update_asleb_from_pendaftaran(pendaftaran):
-    sync_asleb_person_from_registration(
+    period = pendaftaran.periode or get_current_period()
+    asleb = sync_asleb_person_from_registration(
         pendaftaran,
-        period=pendaftaran.periode or get_current_period(),
+        period=period,
     )
+    sync_regular_aslab_assignment(pendaftaran, asleb, period)
     promote_pengguna_to_asisten_lab(pendaftaran)
 
 
@@ -873,6 +984,30 @@ class MataKuliahAslebListView(LaboranPendaftaranRequiredMixin, ListView):
     template_name = 'pendaftaran_asleb/matkul_list.html'
     context_object_name = 'matkul_list'
 
+    def get_queryset(self):
+        current_period = get_current_period()
+        queryset = super().get_queryset().annotate(
+            accepted_count=Count(
+                'pendaftaran',
+                filter=(
+                    Q(pendaftaran__status__in=['diterima', 'digenerate'])
+                    & (Q(pendaftaran__periode=current_period) | Q(pendaftaran__periode__isnull=True))
+                ),
+                distinct=True,
+            ),
+            assigned_count=Count(
+                'aslab_slots__assignments',
+                filter=(
+                    Q(aslab_slots__periode=current_period)
+                    & Q(aslab_slots__assignments__status=AslabAssignment.STATUS_ACTIVE)
+                ),
+                distinct=True,
+            ),
+        )
+        for course in queryset:
+            course.aslab_terisi = max(course.accepted_count, course.assigned_count)
+        return queryset
+
 
 class MataKuliahAslebCreateView(LaboranPendaftaranRequiredMixin, CreateView):
     model = MataKuliahAsleb
@@ -880,12 +1015,23 @@ class MataKuliahAslebCreateView(LaboranPendaftaranRequiredMixin, CreateView):
     template_name = 'pendaftaran_asleb/matkul_form.html'
     success_url = reverse_lazy('pendaftaran_asleb:matkul_list')
 
+    def form_valid(self, form):
+        form.instance.kapasitas_diatur_oleh = self.request.current_pengguna
+        form.instance.kapasitas_diatur_pada = timezone.now()
+        return super().form_valid(form)
+
 
 class MataKuliahAslebUpdateView(LaboranPendaftaranRequiredMixin, UpdateView):
     model = MataKuliahAsleb
     form_class = MataKuliahAslebForm
     template_name = 'pendaftaran_asleb/matkul_form.html'
     success_url = reverse_lazy('pendaftaran_asleb:matkul_list')
+
+    def form_valid(self, form):
+        if 'maksimal_aslab' in form.changed_data:
+            form.instance.kapasitas_diatur_oleh = self.request.current_pengguna
+            form.instance.kapasitas_diatur_pada = timezone.now()
+        return super().form_valid(form)
 
 
 class MataKuliahAslebDeleteView(LaboranPendaftaranRequiredMixin, PostOnlyDeleteMixin, DeleteView):

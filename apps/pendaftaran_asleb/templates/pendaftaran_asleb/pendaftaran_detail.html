@@ -20,6 +20,50 @@
         </div>
     </div>
 
+    <section class="surface-card overflow-hidden border border-teal-100">
+        <div class="grid gap-5 p-6 md:grid-cols-[auto_minmax(0,1fr)] md:p-8">
+            <span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-100 text-teal-700">
+                <i data-lucide="badge-check" class="h-7 w-7"></i>
+            </span>
+            <div>
+                <p class="text-xs font-black uppercase tracking-[0.18em] text-teal-700">Pengalaman Aslab</p>
+                <div class="mt-2 flex flex-wrap items-end gap-x-5 gap-y-2">
+                    <p class="text-3xl font-black text-slate-900">{{ effective_experience_count }} periode</p>
+                    <span class="rounded-full {% if experience_level == 'senior' %}bg-violet-100 text-violet-700{% else %}bg-sky-100 text-sky-700{% endif %} px-3 py-1.5 text-xs font-black">
+                        {{ experience_level|title }} · maksimal {{ experience_limit }} mata kuliah
+                    </span>
+                </div>
+                <p class="mt-2 text-sm font-semibold text-slate-500">
+                    Riwayat sistem menemukan {{ recorded_experience_count }} periode.
+                    {% if experience_correction %}Jumlah efektif sedang memakai koreksi Laboran.{% else %}Jumlah efektif mengikuti riwayat sistem.{% endif %}
+                </p>
+                {% if experience_correction %}
+                <p class="mt-1 text-xs text-slate-500">
+                    Terakhir diatur oleh {{ experience_correction.diatur_oleh.nama_pengguna|default:"Laboran" }} pada {{ experience_correction.diperbarui_pada|date:"d M Y H:i" }}.
+                </p>
+                {% endif %}
+            </div>
+        </div>
+        <form method="post" action="{% url 'pendaftaran_asleb:pendaftaran_experience_update' pendaftaran.pk %}" class="grid gap-4 border-t border-slate-100 bg-slate-50/70 p-6 md:grid-cols-[minmax(0,1fr)_auto] md:items-end md:p-8" data-confirm-message="Simpan perubahan jumlah pengalaman Aslab pendaftar ini?">
+            {% csrf_token %}
+            <div>
+                <label for="{{ experience_form.jumlah_periode.id_for_label }}">{{ experience_form.jumlah_periode.label }}</label>
+                {{ experience_form.jumlah_periode }}
+                <p class="mt-1 text-xs font-semibold text-slate-500">Nilai 0-99. Koreksi ini memengaruhi level otomatis dan batas mata kuliah pendaftaran.</p>
+            </div>
+            <div class="flex flex-wrap gap-3">
+                <button type="submit" class="btn-primary bg-teal-700 hover:bg-teal-800">
+                    <i data-lucide="save" class="h-4 w-4"></i><span>Simpan Jumlah</span>
+                </button>
+                {% if experience_correction %}
+                <button type="submit" name="action" value="reset" class="btn-secondary" data-confirm-message="Kembalikan jumlah pengalaman ke perhitungan riwayat sistem?">
+                    <i data-lucide="rotate-ccw" class="h-4 w-4"></i><span>Gunakan Hitungan Sistem</span>
+                </button>
+                {% endif %}
+            </div>
+        </form>
+    </section>
+
     <div class="surface-card grid gap-5 p-6 md:grid-cols-2 md:p-8">
         <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">NIM</div><div class="mt-2 text-xl font-bold text-slate-900">{{ pendaftaran.nim }}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">No HP</div><div class="mt-2 text-xl font-bold text-slate-900">{{ pendaftaran.no_hp }}</div></div>

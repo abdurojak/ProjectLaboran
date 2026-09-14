@@ -20,10 +20,17 @@ from apps.jadwal.models import JadwalPraktikum
 from apps.pengguna.models import PengalamanPengguna, Pengguna
 from apps.ruangan.models import RuanganLab
 
-from .forms import PendaftaranAslebForm, PendaftaranAslebPublicForm, PublicBerkasPendaftaranForm, RekeningPendaftaranForm
+from .forms import (
+    PendaftaranAslebForm,
+    PendaftaranAslebPublicForm,
+    PublicBerkasPendaftaranForm,
+    PublicPilihMatkulForm,
+    RekeningPendaftaranForm,
+)
 from .models import (
     AslabAssignment,
     AslabSlot,
+    KoreksiPengalamanAsleb,
     MataKuliahAsleb,
     PendaftaranAsleb,
     PengaturanPendaftaranAsleb,
@@ -119,6 +126,199 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertContains(response, '@media (min-width: 641px) and (max-width: 1279px)')
         self.assertContains(response, 'border-top: 1px solid rgba(148, 163, 184, 0.16)')
         self.assertContains(response, 'Terima')
+
+    def test_matkul_dapat_memiliki_tiga_aslab_dan_pendaftar_keempat_ditolak(self):
+        self.matkul.maksimal_aslab = 3
+        self.matkul.save(update_fields=['maksimal_aslab'])
+        period = PeriodeAsleb.get_for_date(timezone.localdate())
+        for index in range(2):
+            PendaftaranAsleb.objects.create(
+                nama=f'Aslab Terisi {index}',
+                nim=f'ASLAB-KUOTA-{index}',
+                no_hp=f'0812000000{index}',
+                email=f'aslab-kuota-{index}@example.com',
+                program_studi='Informatika',
+                semester=5,
+                matkul=self.matkul,
+                periode=period,
+                status='diterima',
+            )
+
+        accepted_response = self.client.post(
+            reverse('pendaftaran_asleb:pendaftaran_accept', args=[self.pendaftaran.pk])
+        )
+        self.pendaftaran.refresh_from_db()
+        self.assertRedirects(accepted_response, reverse('pendaftaran_asleb:pendaftaran_list'))
+        self.assertEqual(self.pendaftaran.status, 'diterima')
+
+        fourth = PendaftaranAsleb.objects.create(
+            nama='Aslab Keempat',
+            nim='ASLAB-KUOTA-4',
+            no_hp='081200000044',
+            email='aslab-kuota-4@example.com',
+            program_studi='Informatika',
+            semester=5,
+            matkul=self.matkul,
+            periode=period,
+            status='diajukan',
+        )
+        rejected_response = self.client.post(
+            reverse('pendaftaran_asleb:pendaftaran_accept', args=[fourth.pk]),
+            follow=True,
+        )
+        fourth.refresh_from_db()
+        self.assertEqual(fourth.status, 'diajukan')
+        self.assertContains(rejected_response, 'Kuota 3 Aslab')
+
+        selection_form = PublicPilihMatkulForm()
+        self.assertNotIn(self.matkul, selection_form.fields['matkul'].queryset)
+
+    def test_generate_membuat_tiga_slot_sesuai_kapasitas_matkul(self):
+        self.matkul.maksimal_aslab = 3
+        self.matkul.save(update_fields=['maksimal_aslab'])
+        period = PeriodeAsleb.get_for_date(timezone.localdate())
+        self.pendaftaran.periode = period
+        self.pendaftaran.status = 'diterima'
+        self.pendaftaran.save(update_fields=['periode', 'status', 'diperbarui_pada'])
+        for index in range(2):
+            PendaftaranAsleb.objects.create(
+                nama=f'Aslab Generate {index}',
+                nim=f'ASLAB-GEN-{index}',
+                no_hp=f'0812111111{index}',
+                email=f'aslab-gen-{index}@example.com',
+                program_studi='Informatika',
+                semester=5,
+                matkul=self.matkul,
+                periode=period,
+                status='diterima',
+            )
+
+        response = self.client.post(reverse('pendaftaran_asleb:pendaftaran_generate_all_accepted'))
+
+        self.assertRedirects(response, reverse('asleb:asleb_list'))
+        self.assertEqual(
+            list(AslabSlot.objects.filter(
+                periode=period,
+                matkul=self.matkul,
+            ).order_by('nomor').values_list('nomor', flat=True)),
+            [1, 2, 3],
+        )
+        self.assertEqual(AslabAssignment.objects.filter(
+            slot__periode=period,
+            slot__matkul=self.matkul,
+            status=AslabAssignment.STATUS_ACTIVE,
+        ).count(), 3)
+
+    def test_kapasitas_tidak_dapat_dikurangi_di_bawah_pendaftar_diterima(self):
+        self.matkul.maksimal_aslab = 3
+        self.matkul.save(update_fields=['maksimal_aslab'])
+        period = PeriodeAsleb.get_for_date(timezone.localdate())
+        for index in range(3):
+            PendaftaranAsleb.objects.create(
+                nama=f'Aslab Aktif {index}',
+                nim=f'ASLAB-AKTIF-{index}',
+                no_hp=f'0812222222{index}',
+                email=f'aslab-aktif-{index}@example.com',
+                program_studi='Informatika',
+                semester=5,
+                matkul=self.matkul,
+                periode=period,
+                status='diterima',
+            )
+
+        response = self.client.post(
+            reverse('pendaftaran_asleb:matkul_update', args=[self.matkul.pk]),
+            {
+                'kode': self.matkul.kode,
+                'kode_mk': self.matkul.kode_mk,
+                'nama': self.matkul.nama,
+                'sks': self.matkul.sks,
+                'dosen': self.matkul.dosen,
+                'kelas': self.matkul.kelas,
+                'maksimal_aslab': 2,
+                'aktif': 'on',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Kapasitas tidak dapat dikurangi di bawah 3')
+        self.matkul.refresh_from_db()
+        self.assertEqual(self.matkul.maksimal_aslab, 3)
+
+    def test_laboran_dapat_mengoreksi_jumlah_periode_dan_kuota_pendaftar(self):
+        response = self.client.post(
+            reverse(
+                'pendaftaran_asleb:pendaftaran_experience_update',
+                args=[self.pendaftaran.pk],
+            ),
+            {'jumlah_periode': 2},
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('pendaftaran_asleb:pendaftaran_detail', args=[self.pendaftaran.pk]),
+        )
+        correction = KoreksiPengalamanAsleb.objects.get(nim=self.pendaftaran.nim)
+        self.assertEqual(correction.jumlah_periode, 2)
+        self.assertEqual(correction.diatur_oleh, self.laboran)
+        self.assertEqual(get_asleb_experience(self.pendaftaran.nim), ('senior', 2))
+
+        detail_response = self.client.get(
+            reverse('pendaftaran_asleb:pendaftaran_detail', args=[self.pendaftaran.pk])
+        )
+        self.assertContains(detail_response, '2 periode')
+        self.assertContains(detail_response, 'Senior · maksimal 2 mata kuliah')
+        self.assertContains(detail_response, 'Riwayat sistem menemukan 0 periode')
+
+    def test_laboran_dapat_mereset_koreksi_pengalaman_ke_riwayat_sistem(self):
+        KoreksiPengalamanAsleb.objects.create(
+            nim=self.pendaftaran.nim,
+            jumlah_periode=2,
+            diatur_oleh=self.laboran,
+        )
+
+        response = self.client.post(
+            reverse(
+                'pendaftaran_asleb:pendaftaran_experience_update',
+                args=[self.pendaftaran.pk],
+            ),
+            {'action': 'reset'},
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('pendaftaran_asleb:pendaftaran_detail', args=[self.pendaftaran.pk]),
+        )
+        self.assertFalse(KoreksiPengalamanAsleb.objects.filter(nim=self.pendaftaran.nim).exists())
+        self.assertEqual(get_asleb_experience(self.pendaftaran.nim), ('junior', 1))
+
+    def test_mahasiswa_tidak_dapat_mengoreksi_jumlah_periode_aslab(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Mahasiswa Uji',
+            nim_nik='MHS-KOREKSI',
+            email='mahasiswa-koreksi@example.com',
+            password='rahasia123',
+            no_hp='081234567899',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='mahasiswa',
+        )
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+
+        response = self.client.post(
+            reverse(
+                'pendaftaran_asleb:pendaftaran_experience_update',
+                args=[self.pendaftaran.pk],
+            ),
+            {'jumlah_periode': 2},
+        )
+
+        self.assertRedirects(response, reverse('dashboard:home'))
+        self.assertFalse(KoreksiPengalamanAsleb.objects.filter(nim=self.pendaftaran.nim).exists())
 
     @override_settings(
         PUBLIC_ACCESS_BASE_URL='https://lab1.trisakti.ac.id/labhub',
@@ -1009,11 +1209,14 @@ class PendaftaranAslebViewTests(TestCase):
             'nama': 'Testing Mata Kuliah',
             'dosen': 'Dosen Penguji',
             'kelas': 'TIF-01',
+            'maksimal_aslab': 2,
             'aktif': 'on',
         })
 
         self.assertEqual(response.status_code, 302)
-        self.assertTrue(MataKuliahAsleb.objects.filter(kode='TEST_MATKUL_TIF01').exists())
+        matkul = MataKuliahAsleb.objects.get(kode='TEST_MATKUL_TIF01')
+        self.assertEqual(matkul.maksimal_aslab, 2)
+        self.assertEqual(matkul.kapasitas_diatur_oleh, self.laboran)
 
     def test_matkul_bisa_dihapus(self):
         matkul = MataKuliahAsleb.objects.create(

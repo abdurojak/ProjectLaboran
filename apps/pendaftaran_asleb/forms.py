@@ -4,9 +4,42 @@ import uuid
 
 from django import forms
 from django.core.files.base import ContentFile
+from django.db.models import Count, F, Q
 
-from .models import MataKuliahAsleb, PendaftaranAsleb, PengaturanBiayaTransfer, PeriodeAsleb
+from .models import (
+    AslabAssignment,
+    KoreksiPengalamanAsleb,
+    MataKuliahAsleb,
+    PendaftaranAsleb,
+    PengaturanBiayaTransfer,
+    PeriodeAsleb,
+)
 from .utils import extract_grade_from_transcript, is_passing_grade
+
+
+def available_aslab_courses():
+    current_period = PeriodeAsleb.get_for_date()
+    return MataKuliahAsleb.objects.filter(aktif=True).annotate(
+        accepted_count=Count(
+            'pendaftaran',
+            filter=(
+                Q(pendaftaran__status__in=['diterima', 'digenerate'])
+                & (Q(pendaftaran__periode=current_period) | Q(pendaftaran__periode__isnull=True))
+            ),
+            distinct=True,
+        ),
+        assigned_count=Count(
+            'aslab_slots__assignments',
+            filter=(
+                Q(aslab_slots__periode=current_period)
+                & Q(aslab_slots__assignments__status=AslabAssignment.STATUS_ACTIVE)
+            ),
+            distinct=True,
+        ),
+    ).filter(
+        accepted_count__lt=F('maksimal_aslab'),
+        assigned_count__lt=F('maksimal_aslab'),
+    )
 
 
 class PendaftaranAslebForm(forms.ModelForm):
@@ -87,6 +120,23 @@ class PendaftaranAslebForm(forms.ModelForm):
         return instance
 
 
+class KoreksiPengalamanAslebForm(forms.ModelForm):
+    class Meta:
+        model = KoreksiPengalamanAsleb
+        fields = ['jumlah_periode']
+        widgets = {
+            'jumlah_periode': forms.NumberInput(attrs={
+                'min': 0,
+                'max': 99,
+                'inputmode': 'numeric',
+                'placeholder': 'Contoh: 2',
+            }),
+        }
+        labels = {
+            'jumlah_periode': 'Jumlah periode pernah menjadi Aslab',
+        }
+
+
 class PendaftaranAslebPublicForm(PendaftaranAslebForm):
     signature_data = forms.CharField(widget=forms.HiddenInput, required=False)
 
@@ -165,7 +215,7 @@ class PublicPilihMatkulForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['matkul'].queryset = MataKuliahAsleb.objects.filter(aktif=True)
+        self.fields['matkul'].queryset = available_aslab_courses()
 
 
 class PublicTranskripForm(forms.Form):
@@ -361,7 +411,10 @@ class AkhiriPeriodeAslebForm(forms.Form):
 class MataKuliahAslebForm(forms.ModelForm):
     class Meta:
         model = MataKuliahAsleb
-        fields = ['kode', 'kode_mk', 'nama', 'sks', 'dosen', 'kelas', 'aktif']
+        fields = [
+            'kode', 'kode_mk', 'nama', 'sks', 'dosen', 'kelas',
+            'maksimal_aslab', 'aktif',
+        ]
         widgets = {
             'kode': forms.TextInput(attrs={'placeholder': 'Contoh: PW_TIF01_NAMA'}),
             'kode_mk': forms.TextInput(attrs={'placeholder': 'Contoh: IKS6316'}),
@@ -369,7 +422,33 @@ class MataKuliahAslebForm(forms.ModelForm):
             'sks': forms.NumberInput(attrs={'min': 0, 'placeholder': 'Contoh: 3'}),
             'dosen': forms.TextInput(attrs={'placeholder': 'Nama dosen'}),
             'kelas': forms.TextInput(attrs={'placeholder': 'Contoh: TIF-01'}),
+            'maksimal_aslab': forms.NumberInput(attrs={'min': 1, 'max': 5}),
         }
+
+    def clean_maksimal_aslab(self):
+        capacity = self.cleaned_data['maksimal_aslab']
+        if not self.instance.pk:
+            return capacity
+
+        current_period = PeriodeAsleb.get_for_date()
+        accepted_count = PendaftaranAsleb.objects.filter(
+            matkul=self.instance,
+            status__in=['diterima', 'digenerate'],
+        ).filter(
+            Q(periode=current_period) | Q(periode__isnull=True)
+        ).count()
+        highest_active_slot = AslabAssignment.objects.filter(
+            slot__matkul=self.instance,
+            slot__periode=current_period,
+            status=AslabAssignment.STATUS_ACTIVE,
+        ).order_by('-slot__nomor').values_list('slot__nomor', flat=True).first() or 0
+        minimum_capacity = max(accepted_count, highest_active_slot)
+        if capacity < minimum_capacity:
+            raise forms.ValidationError(
+                f'Kapasitas tidak dapat dikurangi di bawah {minimum_capacity} karena masih '
+                'ada pendaftar diterima atau slot Aslab aktif.'
+            )
+        return capacity
 
 
 def decode_signature_data(signature_data):

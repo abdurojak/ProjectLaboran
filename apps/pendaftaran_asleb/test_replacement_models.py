@@ -501,13 +501,20 @@ class AslabAssignmentFoundationTests(TestCase):
         values.update(overrides)
         return AslabAssignment.objects.create(**values)
 
-    def test_slot_number_must_be_one_or_two(self):
+    def test_slot_number_must_be_between_one_and_five(self):
+        slot_three = AslabSlot.objects.create(
+            periode=self.period,
+            matkul=self.course,
+            nomor=3,
+        )
+
+        self.assertEqual(slot_three.nomor, 3)
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
                 AslabSlot.objects.create(
                     periode=self.period,
                     matkul=self.course,
-                    nomor=3,
+                    nomor=6,
                 )
 
     def test_period_course_and_slot_number_are_unique(self):

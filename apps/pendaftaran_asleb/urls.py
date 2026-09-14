@@ -20,6 +20,7 @@ from .views import (
     registration_qr,
     toggle_pendaftaran_status,
     update_periode_schedule,
+    update_asleb_experience_count,
     update_period_dates,
     end_period_manually,
 )
@@ -53,6 +54,7 @@ urlpatterns = [
     path('tambah/', PendaftaranAslebCreateView.as_view(), name='pendaftaran_create'),
     path('<int:pk>/', PendaftaranAslebDetailView.as_view(), name='pendaftaran_detail'),
     path('<int:pk>/edit/', PendaftaranAslebUpdateView.as_view(), name='pendaftaran_update'),
+    path('<int:pk>/pengalaman/', update_asleb_experience_count, name='pendaftaran_experience_update'),
     path('<int:pk>/hapus/', PendaftaranAslebDeleteView.as_view(), name='pendaftaran_delete'),
     path('<int:pk>/terima/', accept_pendaftaran, name='pendaftaran_accept'),
     path('<int:pk>/tolak/', reject_pendaftaran, name='pendaftaran_reject'),
