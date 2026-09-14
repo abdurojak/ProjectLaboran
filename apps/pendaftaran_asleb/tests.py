@@ -1363,3 +1363,19 @@ class PeriodeAslebTests(TestCase):
             )
 
         self.assertEqual(get_asleb_experience('0642201888'), ('senior', 2))
+
+    def test_level_manual_senior_tetap_berlaku_saat_mendaftar_periode_baru(self):
+        Asleb.objects.create(
+            nama='Aslab Senior Manual',
+            nim='0642201999',
+            no_hp='081200000099',
+            email='senior-manual@std.trisakti.ac.id',
+            program_studi='Informatika',
+            semester=6,
+            tanggal_bergabung=date(2025, 1, 1),
+            status='nonaktif',
+            level_mode='manual',
+            level_manual='senior',
+        )
+
+        self.assertEqual(get_asleb_experience('0642201999'), ('senior', 2))

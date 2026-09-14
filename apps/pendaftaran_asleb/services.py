@@ -415,9 +415,11 @@ def end_asleb_period(period, ended_by, value=None):
 
 
 def get_asleb_experience(nim):
-    active_asleb = Asleb.objects.filter(nim=nim, status='aktif').first()
-    if active_asleb and active_asleb.level_mode == 'manual':
-        level = active_asleb.level_efektif
+    # A manual level is a persistent laboran decision and must remain effective
+    # when the previous membership is inactive during the next registration.
+    asleb_profile = Asleb.objects.filter(nim=nim).first()
+    if asleb_profile and asleb_profile.level_mode == 'manual':
+        level = asleb_profile.level_efektif
         return level, 2 if level == 'senior' else 1
 
     period_ids = set(PendaftaranAsleb.objects.filter(
