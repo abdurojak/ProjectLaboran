@@ -825,6 +825,27 @@ class AslebViewTests(TestCase):
         self.assertNotContains(response, reverse('asleb:asleb_update', args=[self.asleb.pk]))
         self.assertNotContains(response, '<span>Edit</span>', html=False)
 
+    def test_detail_aslab_menampilkan_semua_mata_kuliah_aktif(self):
+        first_assignment = self.create_active_assignment()
+        other_course = MataKuliahAsleb.objects.create(
+            kode='DETAIL_TIF02', kode_mk='DET02', nama='Basis Data Lanjut',
+            dosen='Dosen Basis Data', kelas='TIF-02',
+        )
+        AslabAssignment.objects.create(
+            slot=AslabSlot.objects.create(
+                periode=first_assignment.slot.periode, matkul=other_course, nomor=1,
+            ),
+            asleb=self.asleb,
+            mulai_pada=date(2026, 7, 1),
+            status=AslabAssignment.STATUS_ACTIVE,
+        )
+
+        response = self.client.get(reverse('asleb:asleb_detail', args=[self.asleb.pk]))
+
+        self.assertContains(response, self.matkul.nama)
+        self.assertContains(response, other_course.nama)
+        self.assertContains(response, other_course.kelas)
+
     def test_input_peserta_otomatis_mencocokkan_nim_dengan_akun(self):
         self.login_asisten_for_matkul()
         mahasiswa = Pengguna.objects.create(

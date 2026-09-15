@@ -81,7 +81,21 @@
         <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">No HP</div><div class="mt-2 text-xl font-bold text-slate-900">{{ asleb.no_hp }}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Email</div><div class="mt-2 text-xl font-bold text-slate-900">{{ asleb.email|default:"-" }}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Program Studi</div><div class="mt-2 text-xl font-bold text-slate-900">{{ asleb.program_studi }}</div></div>
-        <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Matkul</div><div class="mt-2 text-xl font-bold text-slate-900">{{ asleb.matkul|default:"-" }}</div></div>
+        <div class="rounded-3xl bg-slate-50 p-5">
+            <div class="text-sm font-semibold text-slate-500">Mata Kuliah Praktikum</div>
+            {% if asleb.active_assignments %}
+            <div class="mt-3 space-y-3">
+                {% for assignment in asleb.active_assignments %}
+                <div class="border-b border-slate-200 pb-3 last:border-0 last:pb-0">
+                    <div class="text-lg font-bold text-slate-900">{{ assignment.slot.matkul.nama }}</div>
+                    <div class="mt-1 text-sm text-slate-500">{{ assignment.slot.matkul.kode_mk|default:assignment.slot.matkul.kode }} · {{ assignment.slot.matkul.kelas|default:"Tanpa kelas" }} · Slot {{ assignment.slot.nomor }}</div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="mt-2 text-xl font-bold text-slate-900">{{ asleb.matkul|default:"-" }}</div>
+            {% endif %}
+        </div>
         <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Semester</div><div class="mt-2 text-xl font-bold text-slate-900">{{ asleb.semester }}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Status</div><div class="mt-2 text-xl font-bold text-slate-900">{{ asleb.get_status_display }}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5 md:col-span-2"><div class="text-sm font-semibold text-slate-500">Tanggal Bergabung</div><div class="mt-2 text-xl font-bold text-slate-900">{{ asleb.tanggal_bergabung|date:"d M Y" }}</div></div>
