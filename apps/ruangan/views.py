@@ -24,7 +24,11 @@ class RuanganListView(ListView):
     context_object_name = 'ruangan_list'
 
     def get_queryset(self):
-        return RuanganLab.objects.filter(aktif=True).prefetch_related('foto_lab').order_by('nama')
+        return (
+            RuanganLab.objects.filter(aktif=True, tampil_di_daftar_lab=True)
+            .prefetch_related('foto_lab')
+            .order_by('nama')
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

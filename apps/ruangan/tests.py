@@ -40,29 +40,34 @@ class RuanganViewTests(TestCase):
         response = self.client.get(reverse('ruangan:ruangan_list'))
 
         self.assertEqual(response.status_code, 200)
-        expected_laboran = {
-            'LAB-PRG': 'Muhamad Ichsan Gunawan, S.Kom.',
-            'LAB-SDA': 'Muhammad Fikri, S.Kom.',
-            'LAB-SKI': 'Ricardo Dharma Saputra, S.Kom.',
-            'LAB-RPL': 'Abdurojak, S.Tr.Kom.',
-            'LAB-RD': 'Faiz Kumara, S.Kom.',
+        expected_assignments = {
+            'LAB-PRG': ('Anung B. Ariwibowo, M. Kom', 'Muhamad Ichsan Gunawan, S.Kom.'),
+            'LAB-SDA': ('Dian Pratiwi, ST, MTI', 'Muhammad Fikri, S.Kom.'),
+            'LAB-SKI': ('Ir. Gatot Budi Santoso, M.Kom.', 'Ricardo Dharma Saputra, S.Kom.'),
+            'LAB-RPL': ('Drs. Syaifudin, M.Si., Ph.D.', 'Abdurojak, S.Tr.Kom.'),
+            'LAB-RD': ('Is Mardianto, S. Si, M. Kom', 'Faiz Kumara, S.Kom.'),
         }
-        for kode, laboran in expected_laboran.items():
-            self.assertEqual(RuanganLab.objects.get(kode=kode).kepala_lab, laboran)
+        for kode, (kepala_lab, laboran) in expected_assignments.items():
+            ruangan = RuanganLab.objects.get(kode=kode)
+            self.assertEqual(ruangan.kepala_lab, kepala_lab)
+            self.assertEqual(ruangan.laboran, laboran)
+            self.assertContains(response, kepala_lab)
             self.assertContains(response, laboran)
         self.assertContains(response, 'Laboran')
-        self.assertNotContains(response, 'Kepala Lab')
+        self.assertContains(response, 'Kepala Lab')
 
     def test_kelas_paralel_memiliki_kapasitas_tak_terbatas(self):
         kelas_paralel = RuanganLab.objects.get(kode='KELAS-PARALEL')
 
         self.assertTrue(kelas_paralel.kapasitas_tak_terbatas)
+        self.assertFalse(kelas_paralel.tampil_di_daftar_lab)
         self.assertIsNone(kelas_paralel.kapasitas)
         self.assertTrue(kelas_paralel.mencukupi_kapasitas(1_000_000))
 
         response = self.client.get(reverse('ruangan:ruangan_list'))
-        self.assertContains(response, 'Kelas Paralel')
-        self.assertContains(response, 'Kapasitas tak terbatas')
+        self.assertNotContains(response, 'Kelas Paralel')
+        self.assertNotContains(response, 'KELAS-PARALEL')
+        self.assertEqual(response.context['jumlah_ruangan'], 5)
 
     def test_ruangan_page_mengambil_data_dari_database(self):
         RuanganLab.objects.all().delete()

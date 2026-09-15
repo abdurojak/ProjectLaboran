@@ -183,12 +183,21 @@
                         Kapasitas belum diatur
                         {% endif %}
                     </div>
-                    <div class="room-card-head mt-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
-                        <div class="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-slate-400">
-                            <i data-lucide="user-round-check" class="h-4 w-4"></i>
-                            Laboran
+                    <div class="mt-3 grid gap-3">
+                        <div class="room-card-head rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
+                            <div class="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-slate-400">
+                                <i data-lucide="badge-check" class="h-4 w-4"></i>
+                                Kepala Lab
+                            </div>
+                            <p class="mt-1 font-bold text-slate-800">{{ ruangan.kepala_lab|default:"Belum diatur" }}</p>
                         </div>
-                        <p class="mt-1 font-bold text-slate-800">{{ ruangan.kepala_lab|default:"Belum diatur" }}</p>
+                        <div class="room-card-head rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
+                            <div class="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-slate-400">
+                                <i data-lucide="user-round-check" class="h-4 w-4"></i>
+                                Laboran
+                            </div>
+                            <p class="mt-1 font-bold text-slate-800">{{ ruangan.laboran|default:"Belum diatur" }}</p>
+                        </div>
                     </div>
                 </div>
             </div>
