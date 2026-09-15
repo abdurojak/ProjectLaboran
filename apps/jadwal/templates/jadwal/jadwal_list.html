@@ -176,7 +176,7 @@
                 <div class="jadwal-room-track grid">
                     {% for ruangan in ruangan_list %}
                     <div class="jadwal-table-head flex h-14 items-center justify-center border-b border-r px-3 text-center text-xs font-bold md:text-sm">
-                        {{ ruangan.nama }}{% if ruangan.kapasitas %} ({{ ruangan.kapasitas }}){% endif %}
+                        {{ ruangan.nama }}{% if ruangan.kapasitas_tak_terbatas %} (Tak terbatas){% elif ruangan.kapasitas %} ({{ ruangan.kapasitas }}){% endif %}
                     </div>
                     {% empty %}
                     <div class="jadwal-table-head flex h-14 items-center justify-center border-b px-3 text-center text-xs font-bold md:text-sm">

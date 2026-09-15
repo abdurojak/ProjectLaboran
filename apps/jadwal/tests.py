@@ -531,11 +531,41 @@ class JadwalViewTests(TestCase):
         payload = response.json()
         self.assertEqual(payload['participant_count'], 30)
         self.assertTrue(payload['rooms'])
-        self.assertTrue(all(room['capacity'] >= 30 or str(room['id']) in payload['combinable_rooms'] for room in payload['rooms']))
+        self.assertTrue(all(
+            room['unlimited']
+            or room['capacity'] >= 30
+            or str(room['id']) in payload['combinable_rooms']
+            for room in payload['rooms']
+        ))
         self.assertIn(str(self.lab_rpl.pk), payload['combinable_rooms'])
         self.assertIn(str(self.lab_ski.pk), payload['combinable_rooms'])
         self.assertIn(self.lab_rpl.pk, [room['id'] for room in payload['rooms']])
         self.assertIn(self.lab_ski.pk, [room['id'] for room in payload['rooms']])
+
+    def test_kelas_paralel_tersedia_tanpa_batas_kapasitas(self):
+        PesertaPraktikum.objects.bulk_create([
+            PesertaPraktikum(matkul=self.matkul_lain, nim=f'099{i:07d}', nama=f'Peserta Paralel {i}')
+            for i in range(100)
+        ])
+
+        response = self.client.get(reverse('jadwal:ruangan_tersedia'), {'matkul': self.matkul_lain.pk})
+
+        self.assertEqual(response.status_code, 200)
+        parallel_room = next(room for room in response.json()['rooms'] if room['label'].startswith('KELAS-PARALEL'))
+        self.assertIsNone(parallel_room['capacity'])
+        self.assertTrue(parallel_room['unlimited'])
+
+        post_response = self.client.post(reverse('jadwal:jadwal_create'), {
+            'matkul': self.matkul_lain.pk,
+            'ruangan': parallel_room['id'],
+            'hari': 'rabu',
+            'waktu_mulai': '13:00',
+            'waktu_selesai': '15:00',
+            'catatan': 'Kelas paralel tanpa batas kapasitas',
+        })
+        self.assertRedirects(post_response, reverse('jadwal:jadwal_list'))
+        jadwal = JadwalPraktikum.objects.get(hari='rabu', mata_kuliah=str(self.matkul_lain))
+        self.assertEqual(jadwal.get_display_ruangan_kapasitas(), 'Tak terbatas')
 
     def test_jadwal_kelas_besar_boleh_memakai_kapasitas_gabungan_lab(self):
         PesertaPraktikum.objects.bulk_create([

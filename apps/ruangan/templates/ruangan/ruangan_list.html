@@ -175,7 +175,9 @@
                 </span>
                 <div class="min-w-0">
                     <div class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
-                        {% if ruangan.kapasitas %}
+                        {% if ruangan.kapasitas_tak_terbatas %}
+                        Kapasitas tak terbatas
+                        {% elif ruangan.kapasitas %}
                         Kapasitas {{ ruangan.kapasitas }} mahasiswa
                         {% else %}
                         Kapasitas belum diatur
@@ -184,7 +186,7 @@
                     <div class="room-card-head mt-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
                         <div class="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-slate-400">
                             <i data-lucide="user-round-check" class="h-4 w-4"></i>
-                            Kepala Lab
+                            Laboran
                         </div>
                         <p class="mt-1 font-bold text-slate-800">{{ ruangan.kepala_lab|default:"Belum diatur" }}</p>
                     </div>

@@ -125,7 +125,10 @@
             const response = await fetch(`${roomsUrl}?matkul=${encodeURIComponent(matkulInput.value)}`);
             const data = await response.json();
             roomInput.replaceChildren(new Option('Pilih ruangan', ''));
-            data.rooms.forEach((room) => roomInput.add(new Option(`${room.label} - kapasitas ${room.capacity}`, room.id)));
+            data.rooms.forEach((room) => {
+                const capacityLabel = room.unlimited ? 'kapasitas tak terbatas' : `kapasitas ${room.capacity}`;
+                roomInput.add(new Option(`${room.label} - ${capacityLabel}`, room.id));
+            });
             combinableRoomOptions = data.combinable_rooms || {};
             capacityNote.textContent = data.participant_count
                 ? `${data.participant_count} peserta aktif - lab tunggal atau grup ruangan gabungan yang mencukupi akan ditampilkan.`

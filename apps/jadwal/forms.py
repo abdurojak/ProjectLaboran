@@ -96,12 +96,16 @@ class JadwalPraktikumForm(forms.ModelForm):
         eligible_ids = []
         groups = GrupRuanganGabungan.objects.filter(aktif=True).prefetch_related('ruangan')
         for room in queryset:
-            if (room.kapasitas or 0) >= participant_count:
+            if room.mencukupi_kapasitas(participant_count):
                 eligible_ids.append(room.pk)
                 continue
             for group in groups:
                 grouped_rooms = [grouped_room for grouped_room in group.ruangan.all() if grouped_room.aktif]
-                if room in grouped_rooms and sum((grouped_room.kapasitas or 0) for grouped_room in grouped_rooms) >= participant_count:
+                group_is_unlimited = any(grouped_room.kapasitas_tak_terbatas for grouped_room in grouped_rooms)
+                if room in grouped_rooms and (
+                    group_is_unlimited
+                    or sum((grouped_room.kapasitas or 0) for grouped_room in grouped_rooms) >= participant_count
+                ):
                     eligible_ids.append(room.pk)
                     break
         return queryset.filter(pk__in=eligible_ids)
@@ -137,9 +141,11 @@ class JadwalPraktikumForm(forms.ModelForm):
         if tambahan and ruangan:
             if not GrupRuanganGabungan.get_active_pair(ruangan, tambahan):
                 self.add_error('ruangan_tambahan', 'Ruangan tambahan hanya berlaku untuk lab dalam grup ruangan gabungan aktif.')
-        if matkul and ruangan and participant_count:
+        if matkul and ruangan and participant_count and not ruangan.kapasitas_tak_terbatas:
             total_capacity = (ruangan.kapasitas or 0)
             if tambahan and GrupRuanganGabungan.get_active_pair(ruangan, tambahan):
+                if tambahan.kapasitas_tak_terbatas:
+                    return cleaned_data
                 total_capacity += tambahan.kapasitas or 0
             if total_capacity < participant_count:
                 self.add_error(

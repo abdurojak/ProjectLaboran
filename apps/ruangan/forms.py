@@ -6,11 +6,17 @@ from .models import FotoRuanganLab, RuanganLab
 class RuanganLabForm(forms.ModelForm):
     class Meta:
         model = RuanganLab
-        fields = ['nama', 'kode', 'kepala_lab', 'kapasitas', 'warna', 'deskripsi', 'aktif']
+        fields = [
+            'nama', 'kode', 'kepala_lab', 'kapasitas', 'kapasitas_tak_terbatas',
+            'warna', 'deskripsi', 'aktif',
+        ]
+        labels = {
+            'kepala_lab': 'Laboran',
+        }
         widgets = {
             'nama': forms.TextInput(attrs={'placeholder': 'Contoh: Lab Pemrograman'}),
             'kode': forms.TextInput(attrs={'placeholder': 'Contoh: LAB-PROG'}),
-            'kepala_lab': forms.TextInput(attrs={'placeholder': 'Nama kepala laboratorium'}),
+            'kepala_lab': forms.TextInput(attrs={'placeholder': 'Nama laboran penanggung jawab'}),
             'kapasitas': forms.NumberInput(attrs={'min': 0}),
             'deskripsi': forms.Textarea(attrs={'rows': 4}),
         }

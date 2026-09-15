@@ -36,6 +36,34 @@ class RuanganViewTests(TestCase):
         self.assertNotContains(response, 'Tambah Kegiatan')
         self.assertContains(response, reverse('ruangan:foto_create', args=[RuanganLab.objects.get(kode='LAB-RPL').pk]))
 
+    def test_ruangan_page_menampilkan_laboran_setiap_lab(self):
+        response = self.client.get(reverse('ruangan:ruangan_list'))
+
+        self.assertEqual(response.status_code, 200)
+        expected_laboran = {
+            'LAB-PRG': 'Muhamad Ichsan Gunawan, S.Kom.',
+            'LAB-SDA': 'Muhammad Fikri, S.Kom.',
+            'LAB-SKI': 'Ricardo Dharma Saputra, S.Kom.',
+            'LAB-RPL': 'Abdurojak, S.Tr.Kom.',
+            'LAB-RD': 'Faiz Kumara, S.Kom.',
+        }
+        for kode, laboran in expected_laboran.items():
+            self.assertEqual(RuanganLab.objects.get(kode=kode).kepala_lab, laboran)
+            self.assertContains(response, laboran)
+        self.assertContains(response, 'Laboran')
+        self.assertNotContains(response, 'Kepala Lab')
+
+    def test_kelas_paralel_memiliki_kapasitas_tak_terbatas(self):
+        kelas_paralel = RuanganLab.objects.get(kode='KELAS-PARALEL')
+
+        self.assertTrue(kelas_paralel.kapasitas_tak_terbatas)
+        self.assertIsNone(kelas_paralel.kapasitas)
+        self.assertTrue(kelas_paralel.mencukupi_kapasitas(1_000_000))
+
+        response = self.client.get(reverse('ruangan:ruangan_list'))
+        self.assertContains(response, 'Kelas Paralel')
+        self.assertContains(response, 'Kapasitas tak terbatas')
+
     def test_ruangan_page_mengambil_data_dari_database(self):
         RuanganLab.objects.all().delete()
         RuanganLab.objects.create(

@@ -53,7 +53,8 @@ SIDEBAR_LINKS = [
                     'barang_list', 'barang_create', 'inventaris_detail', 'detail_barang_create',
                     'detail_barang_update', 'detail_barang_delete', 'barang_detail', 'barang_update',
                     'barang_delete', 'lokasi_list', 'lokasi_create', 'lokasi_detail',
-                    'lokasi_update', 'lokasi_delete',
+                    'lokasi_update', 'lokasi_delete', 'paket_list', 'paket_create',
+                    'paket_detail', 'paket_update', 'paket_delete',
                 },
                 'roles': {LABORAN_ROLE},
             },
@@ -81,7 +82,7 @@ SIDEBAR_LINKS = [
         'namespace': 'asleb',
         'url_names': {
             'laporan_tugas_list', 'laporan_kelas_detail', 'laporan_submit', 'laporan_cancel',
-            'laporan_preview', 'laporan_preview_file', 'laporan_download',
+            'laporan_delete', 'laporan_preview', 'laporan_preview_file', 'laporan_download',
         },
         'roles': {MAHASISWA_ROLE},
     },
@@ -95,7 +96,11 @@ SIDEBAR_LINKS = [
                 'icon': 'clipboard-check',
                 'url': 'asleb:absensi_list',
                 'namespace': 'asleb',
-                'url_names': {'absensi_list', 'absensi_create', 'absensi_toggle_status', 'modul_create', 'modul_update', 'modul_delete', 'modul_download'},
+                'url_names': {
+                    'absensi_list', 'absensi_create', 'absensi_toggle_status',
+                    'modul_create', 'modul_update', 'modul_delete', 'modul_preview',
+                    'modul_viewer', 'modul_preview_page', 'modul_download',
+                },
                 'roles': {LABORAN_ROLE, ASISTEN_LAB_ROLE},
             },
             {
@@ -103,7 +108,12 @@ SIDEBAR_LINKS = [
                 'icon': 'clipboard-pen-line',
                 'url': 'asleb:praktikum_mahasiswa_list',
                 'namespace': 'asleb',
-                'url_names': {'praktikum_mahasiswa_list', 'praktikum_peserta_create', 'praktikum_peserta_delete', 'praktikum_peserta_delete_all', 'praktikum_nilai'},
+                'url_names': {
+                    'praktikum_mahasiswa_list', 'praktikum_peserta_create',
+                    'praktikum_peserta_update', 'praktikum_peserta_bulk_delete',
+                    'praktikum_peserta_delete', 'praktikum_peserta_delete_all',
+                    'praktikum_nilai', 'praktikum_nilai_export',
+                },
                 'roles': {LABORAN_ROLE, ASISTEN_LAB_ROLE},
             },
             {
@@ -113,7 +123,8 @@ SIDEBAR_LINKS = [
                 'namespace': 'asleb',
                 'url_names': {
                     'laporan_tugas_list', 'laporan_kelas_detail', 'laporan_tugas_create', 'laporan_submit',
-                    'laporan_review', 'laporan_preview', 'laporan_download',
+                    'laporan_review', 'laporan_delete', 'laporan_cancel',
+                    'laporan_preview', 'laporan_preview_file', 'laporan_download',
                 },
                 'roles': {ASISTEN_LAB_ROLE},
             },
@@ -122,7 +133,21 @@ SIDEBAR_LINKS = [
                 'icon': 'contact-round',
                 'url': 'asleb:asleb_list',
                 'namespace': 'asleb',
-                'url_names': {'asleb_list', 'asleb_create', 'asleb_detail', 'asleb_update', 'asleb_delete'},
+                'url_names': {
+                    'asleb_list', 'asleb_create', 'asleb_detail', 'asleb_update',
+                    'asleb_update_level', 'asleb_end_membership', 'asleb_delete',
+                },
+                'roles': {LABORAN_ROLE},
+            },
+            {
+                'title': 'Pergantian Aslab',
+                'icon': 'refresh-cw',
+                'url': 'pendaftaran_asleb:replacement_list',
+                'namespace': 'pendaftaran_asleb',
+                'url_names': {
+                    'replacement_list', 'replacement_detail', 'replacement_end',
+                    'replacement_offer_create', 'replacement_verify', 'replacement_opening',
+                },
                 'roles': {LABORAN_ROLE},
             },
             {
@@ -134,7 +159,8 @@ SIDEBAR_LINKS = [
                     'pendaftaran_list', 'pendaftaran_create', 'pendaftaran_detail', 'pendaftaran_update',
                     'pendaftaran_delete', 'pendaftaran_accept', 'pendaftaran_reject',
                     'pendaftaran_generate_asleb', 'pendaftaran_generate_all_accepted',
-                    'pendaftaran_toggle_status', 'periode_schedule_update', 'matkul_list',
+                    'pendaftaran_experience_update', 'pendaftaran_toggle_status',
+                    'periode_schedule_update', 'periode_dates_update', 'periode_end', 'matkul_list',
                     'matkul_create', 'matkul_update', 'matkul_delete',
                 },
                 'roles': {LABORAN_ROLE},

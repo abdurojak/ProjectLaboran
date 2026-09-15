@@ -77,6 +77,11 @@ class JadwalPraktikum(models.Model):
         return ' + '.join(parts)
 
     def get_display_ruangan_kapasitas(self):
+        if (
+            (self.ruangan_id and self.ruangan.kapasitas_tak_terbatas)
+            or (self.ruangan_tambahan_id and self.ruangan_tambahan.kapasitas_tak_terbatas)
+        ):
+            return 'Tak terbatas'
         capacities = []
         if self.ruangan_id and self.ruangan.kapasitas is not None:
             capacities.append(self.ruangan.kapasitas)

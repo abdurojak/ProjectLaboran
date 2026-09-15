@@ -75,6 +75,25 @@ class DashboardViewTests(TestCase):
         self.assertNotIn('children', settings_link)
         self.assertNotContains(response, 'Master Akademik')
 
+    def test_sidebar_mengaitkan_halaman_turunan_ke_menu_induk(self):
+        paket_response = self.client.get(reverse('inventaris:paket_list'))
+        barang_group = next(
+            link for link in paket_response.context['sidebar_links']
+            if link['title'] == 'Barang & Peminjaman'
+        )
+        inventaris_link = next(child for child in barang_group['children'] if child['title'] == 'Inventaris')
+        self.assertTrue(barang_group['active'])
+        self.assertTrue(inventaris_link['active'])
+
+        replacement_response = self.client.get(reverse('pendaftaran_asleb:replacement_list'))
+        aslab_group = next(
+            link for link in replacement_response.context['sidebar_links']
+            if link['title'] == 'Asisten Laboratorium'
+        )
+        replacement_link = next(child for child in aslab_group['children'] if child['title'] == 'Pergantian Aslab')
+        self.assertTrue(aslab_group['active'])
+        self.assertTrue(replacement_link['active'])
+
     def test_master_akademik_admin_hanya_muncul_di_halaman_pengaturan(self):
         self.pengguna.role = 'admin'
         self.pengguna.save(update_fields=['role'])

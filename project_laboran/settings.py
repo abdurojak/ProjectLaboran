@@ -248,7 +248,11 @@ USE_TZ = True
 STATIC_URL = f'{URL_PREFIX}/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 WHITENOISE_USE_FINDERS = DEBUG
-MEDIA_URL = os.getenv('MEDIA_URL', f'{URL_PREFIX}/media/')
+configured_media_url = os.getenv('MEDIA_URL', '/media/').strip() or '/media/'
+if URL_PREFIX and configured_media_url.startswith('/') and not configured_media_url.startswith(f'{URL_PREFIX}/'):
+    MEDIA_URL = f'{URL_PREFIX}{configured_media_url}'
+else:
+    MEDIA_URL = configured_media_url
 MEDIA_ROOT = env_path('MEDIA_ROOT', 'media')
 
 ABSENSI_CENTER_LATITUDE = float(os.getenv('ABSENSI_CENTER_LATITUDE', '-6.1680678'))

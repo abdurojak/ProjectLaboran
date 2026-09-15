@@ -15,6 +15,7 @@ class RuanganLab(models.Model):
     kepala_lab = models.CharField('Kepala Lab', max_length=150, blank=True)
     deskripsi = models.TextField(blank=True)
     kapasitas = models.PositiveSmallIntegerField(null=True, blank=True)
+    kapasitas_tak_terbatas = models.BooleanField('Kapasitas Tak Terbatas', default=False)
     warna = models.CharField(max_length=20, choices=WARNA_CHOICES, default='teal')
     aktif = models.BooleanField(default=True)
     dibuat_pada = models.DateTimeField(auto_now_add=True)
@@ -27,6 +28,9 @@ class RuanganLab(models.Model):
 
     def __str__(self):
         return f'{self.kode} - {self.nama}'
+
+    def mencukupi_kapasitas(self, jumlah_peserta):
+        return self.kapasitas_tak_terbatas or (self.kapasitas or 0) >= jumlah_peserta
 
 
 class FotoRuanganLab(models.Model):

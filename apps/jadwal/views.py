@@ -3,6 +3,7 @@ from datetime import datetime, time, timedelta
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Q
 from django.db.models.deletion import ProtectedError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
@@ -396,7 +397,11 @@ def available_rooms(request):
         return JsonResponse({'participant_count': 0, 'rooms': []})
 
     participant_count = matkul.peserta_praktikum.filter(aktif=True).count()
-    rooms = RuanganLab.objects.filter(aktif=True, kapasitas__isnull=False).order_by('kapasitas', 'nama')
+    rooms = (
+        RuanganLab.objects.filter(aktif=True)
+        .filter(Q(kapasitas__isnull=False) | Q(kapasitas_tak_terbatas=True))
+        .order_by('kapasitas_tak_terbatas', 'kapasitas', 'nama')
+    )
     pengguna = getattr(request, 'current_pengguna', None)
     groups = GrupRuanganGabungan.objects.filter(aktif=True).prefetch_related('ruangan')
     if not participant_count and pengguna and pengguna.role == 'asisten_lab':
@@ -404,13 +409,14 @@ def available_rooms(request):
     elif participant_count:
         eligible_room_ids = []
         for room in rooms:
-            if (room.kapasitas or 0) >= participant_count:
+            if room.mencukupi_kapasitas(participant_count):
                 eligible_room_ids.append(room.pk)
                 continue
             for group in groups:
                 grouped_rooms = [grouped_room for grouped_room in group.ruangan.all() if grouped_room.aktif]
                 group_capacity = sum((grouped_room.kapasitas or 0) for grouped_room in grouped_rooms)
-                if room in grouped_rooms and group_capacity >= participant_count:
+                group_is_unlimited = any(grouped_room.kapasitas_tak_terbatas for grouped_room in grouped_rooms)
+                if room in grouped_rooms and (group_is_unlimited or group_capacity >= participant_count):
                     eligible_room_ids.append(room.pk)
                     break
         rooms = rooms.filter(pk__in=eligible_room_ids)
@@ -423,6 +429,7 @@ def available_rooms(request):
                     'id': other_room.pk,
                     'label': str(other_room),
                     'capacity': other_room.kapasitas,
+                    'unlimited': other_room.kapasitas_tak_terbatas,
                 }
                 for other_room in grouped_rooms
                 if other_room.pk != room.pk
@@ -430,7 +437,15 @@ def available_rooms(request):
 
     return JsonResponse({
         'participant_count': participant_count,
-        'rooms': [{'id': room.pk, 'label': str(room), 'capacity': room.kapasitas} for room in rooms],
+        'rooms': [
+            {
+                'id': room.pk,
+                'label': str(room),
+                'capacity': room.kapasitas,
+                'unlimited': room.kapasitas_tak_terbatas,
+            }
+            for room in rooms
+        ],
         'combinable_rooms': combinable_rooms,
     })
 

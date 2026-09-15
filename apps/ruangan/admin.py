@@ -11,9 +11,9 @@ class FotoRuanganLabInline(admin.TabularInline):
 
 @admin.register(RuanganLab)
 class RuanganLabAdmin(admin.ModelAdmin):
-    list_display = ('kode', 'nama', 'kapasitas', 'warna', 'aktif')
-    list_filter = ('aktif', 'warna')
-    search_fields = ('kode', 'nama', 'deskripsi')
+    list_display = ('kode', 'nama', 'kepala_lab', 'kapasitas', 'kapasitas_tak_terbatas', 'warna', 'aktif')
+    list_filter = ('aktif', 'kapasitas_tak_terbatas', 'warna')
+    search_fields = ('kode', 'nama', 'kepala_lab', 'deskripsi')
     inlines = (FotoRuanganLabInline,)
 
 
