@@ -62,7 +62,7 @@
                                 <a class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700" href="{% url 'pendaftaran_asleb:matkul_update' matkul.pk %}">
                                     <i data-lucide="pencil" class="h-4 w-4"></i><span>Edit</span>
                                 </a>
-                                <form method="post" action="{% url 'pendaftaran_asleb:matkul_delete' matkul.pk %}" data-confirm-message="Yakin ingin menghapus data ini?" class="inline">
+                                <form method="post" action="{% url 'pendaftaran_asleb:matkul_delete' matkul.pk %}" data-confirm-message="Yakin ingin menghapus mata kuliah ini? Seluruh pendaftaran dan data operasional yang terkait akan ikut dihapus permanen." class="inline">
                                     {% csrf_token %}
                                     <button type="submit" class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700">
                                         <i data-lucide="trash-2" class="h-4 w-4"></i>

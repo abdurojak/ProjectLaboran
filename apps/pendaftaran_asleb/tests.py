@@ -1231,6 +1231,18 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertFalse(MataKuliahAsleb.objects.filter(pk=matkul.pk).exists())
 
+    def test_matkul_dengan_data_terkait_dihapus_beserta_datanya(self):
+        matkul_id = self.matkul.pk
+        pendaftaran_id = self.pendaftaran.pk
+
+        response = self.client.post(
+            reverse('pendaftaran_asleb:matkul_delete', args=[matkul_id])
+        )
+
+        self.assertRedirects(response, reverse('pendaftaran_asleb:matkul_list'))
+        self.assertFalse(MataKuliahAsleb.objects.filter(pk=matkul_id).exists())
+        self.assertFalse(PendaftaranAsleb.objects.filter(pk=pendaftaran_id).exists())
+
     def test_terima_pendaftaran_hanya_menandai_diterima(self):
         with self.captureOnCommitCallbacks(execute=True):
             response = self.client.post(

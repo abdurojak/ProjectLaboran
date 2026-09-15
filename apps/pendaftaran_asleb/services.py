@@ -5,6 +5,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.db import transaction
+from django.db.models.deletion import ProtectedError
 from django.urls import reverse
 
 from apps.asleb.models import (
@@ -21,6 +22,53 @@ from .models import (
     AslabAssignment, AslabSlot, KoreksiPengalamanAsleb, MataKuliahAsleb, PendaftaranAsleb,
     PengaturanPendaftaranAsleb, PeriodeAsleb, RiwayatAsleb,
 )
+
+
+def _delete_with_protected_dependents(queryset, active_paths=None):
+    object_ids = tuple(queryset.values_list('pk', flat=True))
+    if not object_ids:
+        return 0
+
+    active_paths = active_paths or set()
+    path = (queryset.model, object_ids)
+    if path in active_paths:
+        raise ProtectedError(
+            'Relasi data membentuk siklus dan tidak dapat dihapus otomatis.',
+            set(queryset),
+        )
+
+    active_paths.add(path)
+    deleted_total = 0
+    try:
+        try:
+            deleted_count, _ = queryset.filter(pk__in=object_ids).delete()
+            return deleted_count
+        except ProtectedError as error:
+            protected_by_model = {}
+            for protected_object in error.protected_objects:
+                protected_by_model.setdefault(type(protected_object), set()).add(
+                    protected_object.pk
+                )
+
+            for model, protected_ids in protected_by_model.items():
+                deleted_total += _delete_with_protected_dependents(
+                    model._default_manager.filter(pk__in=protected_ids),
+                    active_paths,
+                )
+
+            deleted_count, _ = queryset.filter(pk__in=object_ids).delete()
+            return deleted_total + deleted_count
+    finally:
+        active_paths.remove(path)
+
+
+@transaction.atomic
+def delete_matkul_with_related_data(matkul):
+    """Delete a course and records that depend exclusively on that course."""
+    locked_matkul = MataKuliahAsleb.objects.select_for_update().get(pk=matkul.pk)
+    return _delete_with_protected_dependents(
+        MataKuliahAsleb.objects.filter(pk=locked_matkul.pk)
+    )
 
 
 def get_current_period(value=None):

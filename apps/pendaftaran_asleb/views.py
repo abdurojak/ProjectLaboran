@@ -52,6 +52,7 @@ from .models import (
 )
 from .services import (
     close_current_registration,
+    delete_matkul_with_related_data,
     get_asleb_experience,
     get_effective_asleb_period_count,
     get_current_period,
@@ -1039,3 +1040,13 @@ class MataKuliahAslebDeleteView(LaboranPendaftaranRequiredMixin, PostOnlyDeleteM
     template_name = 'pendaftaran_asleb/matkul_confirm_delete.html'
     context_object_name = 'matkul'
     success_url = reverse_lazy('pendaftaran_asleb:matkul_list')
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        matkul_label = str(self.object)
+        deleted_count = delete_matkul_with_related_data(self.object)
+        messages.success(
+            request,
+            f'{matkul_label} dan {deleted_count - 1} data terkait berhasil dihapus.',
+        )
+        return redirect(self.success_url)
