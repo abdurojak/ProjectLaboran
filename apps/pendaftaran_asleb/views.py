@@ -1044,9 +1044,9 @@ class MataKuliahAslebDeleteView(LaboranPendaftaranRequiredMixin, PostOnlyDeleteM
     def post(self, request, *args, **kwargs):
         self.object = self.get_object()
         matkul_label = str(self.object)
-        deleted_count = delete_matkul_with_related_data(self.object)
+        delete_matkul_with_related_data(self.object)
         messages.success(
             request,
-            f'{matkul_label} dan {deleted_count - 1} data terkait berhasil dihapus.',
+            f'{matkul_label} beserta data terkait berhasil dihapus.',
         )
         return redirect(self.success_url)
