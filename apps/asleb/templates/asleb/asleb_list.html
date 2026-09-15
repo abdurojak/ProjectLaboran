@@ -3,20 +3,20 @@
 {% block title %}Data Aslab{% endblock %}
 
 {% block content %}
-<section class="space-y-6">
+<section class="asleb-page min-w-0 space-y-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
             <p class="text-sm font-bold uppercase tracking-[0.2em] text-emerald-700">Aslab</p>
             <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Data Aslab</h2>
             <p class="mt-2 text-sm text-slate-500">Kelola data asisten laboratorium, kontak, status aktif, dan program studi.</p>
         </div>
-        <a class="btn-primary bg-emerald-600 hover:bg-emerald-700 shadow-emerald-700/20" href="{% url 'asleb:asleb_create' %}">
+        <a class="asleb-add-button btn-primary bg-emerald-600 hover:bg-emerald-700 shadow-emerald-700/20" href="{% url 'asleb:asleb_create' %}">
             <i data-lucide="plus" class="h-4 w-4"></i>
             <span>Tambah Aslab</span>
         </a>
     </div>
 
-    <form id="asleb-filter-form" method="get" class="surface-card grid gap-4 p-5 md:grid-cols-[minmax(0,1.4fr)_220px_auto] md:items-end">
+    <form id="asleb-filter-form" method="get" class="asleb-filter surface-card grid gap-4 p-5 md:grid-cols-[minmax(0,1.4fr)_220px_auto] md:items-end">
         <div>
             <label for="id_q">Cari aslab</label>
             <input id="id_q" name="q" type="text" value="{{ search_query }}" placeholder="Cari nama, NIM, no HP, program studi, atau matkul" autocomplete="off">
@@ -30,7 +30,7 @@
                 {% endfor %}
             </select>
         </div>
-        <div class="flex flex-wrap gap-3">
+        <div class="asleb-filter-actions flex flex-wrap gap-3">
             <button type="submit" class="btn-primary bg-emerald-600 hover:bg-emerald-700 shadow-emerald-700/20">
                 <i data-lucide="search" class="h-4 w-4"></i>
                 <span>Terapkan</span>
@@ -42,7 +42,7 @@
         </div>
     </form>
 
-    <div class="surface-card overflow-hidden">
+    <div class="surface-card overflow-hidden" data-asleb-desktop-list>
         <div class="overflow-x-auto">
             <table>
                 <thead class="bg-slate-50">
@@ -112,7 +112,129 @@
             </table>
         </div>
     </div>
+
+    <div class="asleb-responsive-list gap-4" data-asleb-responsive-list>
+        {% for asleb in asleb_list %}
+        <article class="surface-card min-w-0 overflow-hidden p-5" data-asleb-responsive-card>
+            <div class="flex min-w-0 items-start justify-between gap-3">
+                <div class="min-w-0">
+                    <h3 class="break-words text-base font-black text-slate-900">{{ asleb.nama }}</h3>
+                    <p class="mt-1 break-all text-xs text-slate-500">{{ asleb.email|default:"Email belum diisi" }}</p>
+                </div>
+                <span class="{% if asleb.status == 'aktif' %}bg-emerald-100 text-emerald-700{% else %}bg-slate-100 text-slate-600{% endif %} inline-flex shrink-0 rounded-full px-3 py-1 text-xs font-bold">
+                    {{ asleb.get_status_display }}
+                </span>
+            </div>
+
+            <dl class="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-slate-200 pt-4 text-sm">
+                <div class="min-w-0">
+                    <dt class="text-xs font-bold uppercase text-slate-500">NIM</dt>
+                    <dd class="mt-1 break-all font-semibold text-slate-900">{{ asleb.nim }}</dd>
+                </div>
+                <div class="min-w-0">
+                    <dt class="text-xs font-bold uppercase text-slate-500">No HP</dt>
+                    <dd class="mt-1 break-all font-semibold text-slate-900">{{ asleb.no_hp }}</dd>
+                </div>
+                <div class="min-w-0">
+                    <dt class="text-xs font-bold uppercase text-slate-500">Program Studi</dt>
+                    <dd class="mt-1 break-words font-semibold text-slate-900">{{ asleb.program_studi }}</dd>
+                </div>
+                <div class="min-w-0">
+                    <dt class="text-xs font-bold uppercase text-slate-500">Semester</dt>
+                    <dd class="mt-1 font-semibold text-slate-900">{{ asleb.semester }}</dd>
+                </div>
+                <div class="col-span-2 min-w-0">
+                    <dt class="text-xs font-bold uppercase text-slate-500">Mata Kuliah</dt>
+                    <dd class="mt-1 break-words font-semibold text-slate-900">{{ asleb.matkul|default:"-" }}</dd>
+                </div>
+                <div class="col-span-2 min-w-0">
+                    <dt class="text-xs font-bold uppercase text-slate-500">Level</dt>
+                    <dd class="mt-1 flex flex-wrap items-center gap-2">
+                        <span class="inline-flex rounded-full px-3 py-1 text-xs font-bold {% if asleb.level_efektif == 'senior' %}bg-violet-100 text-violet-700{% else %}bg-sky-100 text-sky-700{% endif %}">
+                            {{ asleb.level_efektif_display }}
+                        </span>
+                        <span class="text-xs text-slate-500">{{ asleb.get_level_mode_display }}</span>
+                    </dd>
+                </div>
+            </dl>
+
+            <div class="mt-4 grid gap-2 border-t border-slate-200 pt-4 text-sm font-semibold">
+                <a class="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-brand-500 px-3 text-brand-700" href="{% url 'asleb:asleb_detail' asleb.pk %}">
+                    <i data-lucide="eye" class="h-4 w-4"></i><span>Detail</span>
+                </a>
+                {% if can_end_asleb and asleb.status == 'aktif' %}
+                    {% if asleb.active_assignments %}
+                        {% for assignment in asleb.active_assignments %}
+                        <a class="inline-flex min-h-10 min-w-0 items-center justify-center gap-2 rounded-lg border border-orange-500 px-3 text-center text-orange-600" href="{% url 'pendaftaran_asleb:replacement_end' assignment.pk %}">
+                            <i data-lucide="user-round-x" class="h-4 w-4 shrink-0"></i>
+                            <span class="break-words">Ganti/Akhiri Masa Tugas{% if asleb.active_assignments|length > 1 %} · {{ assignment.slot.matkul.kode }}{% endif %}</span>
+                        </a>
+                        {% endfor %}
+                    {% else %}
+                        <span class="inline-flex items-center justify-center gap-2 text-center text-xs font-medium text-amber-700">
+                            <i data-lucide="triangle-alert" class="h-4 w-4 shrink-0"></i>Penugasan lama belum terpetakan
+                        </span>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </article>
+        {% empty %}
+        <div class="surface-card px-4 py-10 text-center text-sm text-slate-500">Belum ada data aslab.</div>
+        {% endfor %}
+    </div>
 </section>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    [data-asleb-desktop-list] {
+        display: block !important;
+    }
+
+    [data-asleb-responsive-list] {
+        display: none !important;
+    }
+
+    @media (max-width: 1279px), (hover: none) and (pointer: coarse) {
+        .asleb-page {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: clip;
+        }
+
+        .asleb-filter {
+            grid-template-columns: minmax(0, 1fr) minmax(180px, 0.45fr) !important;
+        }
+
+        .asleb-filter-actions {
+            grid-column: 1 / -1;
+        }
+
+        [data-asleb-desktop-list] {
+            display: none !important;
+        }
+
+        [data-asleb-responsive-list] {
+            display: grid !important;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 310px), 1fr));
+        }
+    }
+
+    @media (max-width: 640px) {
+        .asleb-add-button {
+            width: 100%;
+        }
+
+        .asleb-filter {
+            grid-template-columns: minmax(0, 1fr) !important;
+        }
+
+        .asleb-filter-actions > * {
+            flex: 1 1 0;
+            min-width: 0;
+        }
+    }
+</style>
 {% endblock %}
 
 {% block extra_script %}

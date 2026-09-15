@@ -121,6 +121,10 @@ class AslebViewTests(TestCase):
         self.assertEqual(active_links, ['Asisten Laboratorium'])
         asleb_group = next(link for link in response.context['sidebar_links'] if link['title'] == 'Asisten Laboratorium')
         self.assertEqual([child['title'] for child in asleb_group['children'] if child['active']], ['Data Aslab'])
+        self.assertContains(response, 'data-asleb-desktop-list')
+        self.assertContains(response, 'data-asleb-responsive-list')
+        self.assertContains(response, 'data-asleb-responsive-card')
+        self.assertContains(response, '@media (max-width: 1279px), (hover: none) and (pointer: coarse)')
 
     def test_laboran_can_set_manual_aslab_level_and_honor_uses_it(self):
         response = self.client.post(
