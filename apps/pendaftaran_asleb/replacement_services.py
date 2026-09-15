@@ -7,7 +7,7 @@ from django.utils import timezone
 
 from apps.asleb.models import Asleb, HonorAsleb, HonorReassignment
 from apps.core.permissions import can_manage_lab_operations
-from apps.pengguna.models import Pengguna
+from apps.pengguna.models import PengalamanPengguna, Pengguna
 
 from .models import (
     AslabAssignment, AslabOffer, AslabReplacement, AslabReplacementAudit, AslabSlot,
@@ -30,6 +30,7 @@ REASON_STATUS_MAP = {
     'dismissal': AslabAssignment.STATUS_TERMINATED,
     'other': AslabAssignment.STATUS_TERMINATED,
 }
+INPUT_ERROR_REASON = 'input_error'
 
 PAYMENT_BLOCKING_REPLACEMENT_STATUSES = {
     AslabReplacement.STATUS_WAITING_ACTION,
@@ -1062,7 +1063,7 @@ def _validate_termination_input(*, actor, reason_type, reason, effective_date, m
     normalized_reason = (reason or '').strip()
     if not normalized_reason:
         raise ValidationError('Alasan pengakhiran wajib diisi.')
-    if reason_type not in REASON_STATUS_MAP:
+    if reason_type not in {*REASON_STATUS_MAP, INPUT_ERROR_REASON}:
         raise ValidationError('Jenis alasan pengakhiran tidak valid.')
     valid_methods = {value for value, _label in AslabReplacement.METHOD_CHOICES}
     if method not in valid_methods:
@@ -1184,6 +1185,39 @@ def _end_locked_assignment(
     return replacement
 
 
+def _remove_locked_assignment_entered_by_mistake(
+    *, asleb, assignments, assignment, slot, pengguna, effective_date,
+):
+    if assignment.status != AslabAssignment.STATUS_ACTIVE:
+        raise ValidationError('Penugasan ini sudah tidak aktif.')
+    if not slot.periode.mulai <= effective_date <= slot.periode.selesai:
+        raise ValidationError('Tanggal efektif harus berada dalam periode penugasan.')
+    if effective_date < assignment.mulai_pada:
+        raise ValidationError('Tanggal efektif tidak boleh sebelum tanggal mulai penugasan.')
+
+    PengalamanPengguna.objects.filter(
+        source_key=f'aslab-assignment-experience:{assignment.pk}',
+        otomatis=True,
+    ).delete()
+    assignment.delete()
+
+    slot.status = AslabSlot.STATUS_VACANT
+    slot.save(update_fields=['status', 'diperbarui_pada'])
+
+    has_other_active = any(
+        item.pk != assignment.pk and item.status == AslabAssignment.STATUS_ACTIVE
+        for item in assignments
+    )
+    if not has_other_active:
+        if asleb.status != 'nonaktif':
+            asleb.status = 'nonaktif'
+            asleb.save(update_fields=['status', 'diperbarui_pada'])
+        if pengguna and pengguna.role == 'asisten_lab':
+            pengguna.role = 'mahasiswa'
+            pengguna.save(update_fields=['role', 'diperbarui_pada'])
+    return None
+
+
 @transaction.atomic
 def end_assignment_for_replacement(
     *, assignment_id, actor, reason_type, reason, effective_date,
@@ -1201,6 +1235,11 @@ def end_assignment_for_replacement(
     if asleb_id is None:
         raise ValidationError('Penugasan aslab tidak ditemukan.')
     state = _lock_person_termination_state(asleb_id=asleb_id, assignment_id=assignment_id)
+    if reason_type == INPUT_ERROR_REASON:
+        return _remove_locked_assignment_entered_by_mistake(
+            asleb=state[0], assignments=state[1], assignment=state[2], slot=state[3],
+            pengguna=state[4], effective_date=effective_date,
+        )
     return _end_locked_assignment(
         asleb=state[0], assignments=state[1], assignment=state[2], slot=state[3],
         pengguna=state[4], actor=actor, reason_type=reason_type,
@@ -1218,6 +1257,11 @@ def end_single_active_assignment_for_replacement(
         effective_date=effective_date, method=method,
     )
     state = _lock_person_termination_state(asleb_id=asleb_id, require_single_active=True)
+    if reason_type == INPUT_ERROR_REASON:
+        return _remove_locked_assignment_entered_by_mistake(
+            asleb=state[0], assignments=state[1], assignment=state[2], slot=state[3],
+            pengguna=state[4], effective_date=effective_date,
+        )
     return _end_locked_assignment(
         asleb=state[0], assignments=state[1], assignment=state[2], slot=state[3],
         pengguna=state[4], actor=actor, reason_type=reason_type,

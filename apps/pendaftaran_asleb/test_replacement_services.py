@@ -1594,6 +1594,61 @@ class TerminationServiceTests(TestCase):
         self.assertEqual(self.asleb.status, 'aktif')
         self.assertEqual(self.student.role, 'asisten_lab')
 
+    def test_input_error_deletes_assignment_without_opening_replacement(self):
+        experience = PengalamanPengguna.objects.create(
+            pengguna=self.student,
+            kategori='pengalaman',
+            jabatan='Asisten Laboratorium',
+            organisasi='Universitas Trisakti - LabHub',
+            tanggal_mulai=self.assignment.mulai_pada,
+            masih_berjalan=True,
+            otomatis=True,
+            source_key=f'aslab-assignment-experience:{self.assignment.pk}',
+        )
+
+        result = self.end(
+            reason_type='input_error',
+            reason='Mahasiswa yang dipilih keliru',
+        )
+
+        self.slot.refresh_from_db()
+        self.asleb.refresh_from_db()
+        self.student.refresh_from_db()
+        self.assertIsNone(result)
+        self.assertFalse(AslabAssignment.objects.filter(pk=self.assignment.pk).exists())
+        self.assertFalse(PengalamanPengguna.objects.filter(pk=experience.pk).exists())
+        self.assertEqual(self.slot.status, AslabSlot.STATUS_VACANT)
+        self.assertEqual(self.asleb.status, 'nonaktif')
+        self.assertEqual(self.student.role, 'mahasiswa')
+        self.assertFalse(AslabReplacement.objects.exists())
+        self.assertFalse(AslabReplacementAudit.objects.exists())
+
+    def test_input_error_keeps_other_assignment_and_honor(self):
+        other_course = MataKuliahAsleb.objects.create(
+            kode='INPUT_TIF02', kode_mk='INPUT02', nama='Input Test 2',
+            dosen='Dosen Test', kelas='TIF-02',
+        )
+        other_slot = AslabSlot.objects.create(
+            periode=self.period, matkul=other_course, nomor=1,
+        )
+        other_assignment = AslabAssignment.objects.create(
+            slot=other_slot, asleb=self.asleb, mulai_pada=date(2026, 7, 10),
+            status=AslabAssignment.STATUS_ACTIVE,
+        )
+        honor = HonorAsleb.objects.create(
+            asleb=self.asleb, bulan=date(2026, 9, 1), jumlah_praktikum=1,
+            total_pertemuan=1, jumlah=49000,
+        )
+
+        self.end(reason_type='input_error', reason='Salah memilih slot')
+
+        self.asleb.refresh_from_db()
+        self.student.refresh_from_db()
+        self.assertTrue(AslabAssignment.objects.filter(pk=other_assignment.pk).exists())
+        self.assertTrue(HonorAsleb.objects.filter(pk=honor.pk).exists())
+        self.assertEqual(self.asleb.status, 'aktif')
+        self.assertEqual(self.student.role, 'asisten_lab')
+
     def test_rejects_invalid_input_without_partial_updates(self):
         invalid_cases = [
             ({'reason': '   '}, 'Alasan'),

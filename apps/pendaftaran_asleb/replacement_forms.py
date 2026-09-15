@@ -35,6 +35,7 @@ class EndAssignmentForm(forms.Form):
     reason_type = forms.ChoiceField(choices=[
         ('resignation', 'Mengundurkan diri'),
         ('dismissal', 'Diberhentikan'),
+        ('input_error', 'Kesalahan input'),
         ('other', 'Alasan lain'),
     ])
     reason = forms.CharField(widget=forms.Textarea(attrs={'rows': 4}))
@@ -44,6 +45,12 @@ class EndAssignmentForm(forms.Form):
         ('direct_offer', 'Penawaran langsung'),
         ('limited_registration', 'Pendaftaran terbatas'),
     ])
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get('reason_type') == 'input_error':
+            cleaned['method'] = 'undecided'
+        return cleaned
 
 
 class DeclineOfferForm(forms.Form):

@@ -90,6 +90,12 @@ class EndAssignmentView(LaboranReplacementMixin, View):
             except ValidationError as exc:
                 form.add_error(None, _error_text(exc))
             else:
+                if replacement is None:
+                    messages.success(
+                        request,
+                        'Penugasan yang salah input dan riwayat otomatisnya telah dihapus.',
+                    )
+                    return redirect('asleb:asleb_list')
                 messages.success(request, 'Masa tugas diakhiri dan proses penggantian dibuat.')
                 return redirect('pendaftaran_asleb:replacement_detail', pk=replacement.pk)
         return render(request, self.template_name, {'assignment': assignment, 'form': form})
