@@ -1,4 +1,5 @@
 from datetime import date, datetime, time, timedelta
+from math import ceil
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
@@ -134,6 +135,12 @@ class JadwalPraktikumListView(ListView):
         }
         for block in context['jadwal_blocks']:
             block['event_conflict'] = block['jadwal'].pk in conflicted_ids
+        context['lab_event_blocks'] = self.build_lab_event_blocks(
+            [item['event'] for item in context['lab_events']],
+            ruangan_list,
+            slot_keys,
+            selected_date,
+        )
         context['praktikum_saya'] = self.get_praktikum_saya(context['current_pengguna'])
         if context['current_pengguna'] and context['current_pengguna'].role == LABORAN_ROLE:
             context['permintaan_perubahan'] = PermintaanPerubahanJadwal.objects.select_related(
@@ -210,6 +217,31 @@ class JadwalPraktikumListView(ListView):
                 'can_manage': can_manage_jadwal(pengguna, jadwal),
             })
 
+        return blocks
+
+    def build_lab_event_blocks(self, events, ruangan_list, slot_keys, selected_date):
+        if not slot_keys:
+            return []
+        room_columns = {room.pk: index + 1 for index, room in enumerate(ruangan_list)}
+        board_start = datetime.combine(selected_date, time.fromisoformat(slot_keys[0]))
+        board_end = board_start + timedelta(minutes=30 * len(slot_keys))
+        blocks = []
+        for event in events:
+            column = room_columns.get(event.ruangan_id)
+            if not column or not event.waktu_selesai:
+                continue
+            start = max(datetime.combine(selected_date, event.waktu_mulai), board_start)
+            end = min(datetime.combine(selected_date, event.waktu_selesai), board_end)
+            if end <= start:
+                continue
+            start_index = int((start - board_start).total_seconds() // 1800)
+            end_index = ceil((end - board_start).total_seconds() / 1800)
+            blocks.append({
+                'event': event,
+                'grid_column': column,
+                'grid_row': start_index + 1,
+                'span': end_index - start_index,
+            })
         return blocks
 
     def get_slot_key(self, value, slot_keys):

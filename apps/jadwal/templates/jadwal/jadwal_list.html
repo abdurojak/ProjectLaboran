@@ -79,6 +79,12 @@
         color: #0f766e;
     }
 
+    .jadwal-event-block {
+        background: rgba(254, 243, 199, 0.96);
+        border-color: rgba(217, 119, 6, 0.5);
+        color: #78350f;
+    }
+
     html[data-theme="dark"] .jadwal-time-panel {
         background: rgba(15, 23, 42, 0.74);
     }
@@ -107,6 +113,12 @@
 
     html[data-theme="dark"] .jadwal-practice-block a:hover {
         color: #5eead4;
+    }
+
+    html[data-theme="dark"] .jadwal-event-block {
+        background: rgba(120, 53, 15, 0.9);
+        border-color: rgba(251, 191, 36, 0.6);
+        color: #fef3c7;
     }
 
     @media (min-width: 768px) {
@@ -212,8 +224,18 @@
                         {% endfor %}
                     {% endfor %}
 
+                    {% for block in lab_event_blocks %}
+                    <div class="z-10 min-w-0" data-lab-event-block="{{ block.event.pk }}" style="grid-column: {{ block.grid_column }}; grid-row: {{ block.grid_row }} / span {{ block.span }};">
+                        <div class="jadwal-event-block flex h-full min-w-0 flex-col items-center justify-center overflow-hidden border px-2 py-1 text-center text-xs font-bold">
+                            <span>Kegiatan lab</span>
+                            <a class="mt-1 block max-w-full truncate underline" title="{{ block.event.judul }}" href="{% url 'kalender:kegiatan_detail' block.event.pk %}">{{ block.event.judul }}</a>
+                            <span class="mt-1">{{ block.event.waktu_mulai|time:"H:i" }}–{{ block.event.waktu_selesai|time:"H:i" }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+
                     {% for block in jadwal_blocks %}
-                    <div class="z-10" style="grid-column: {{ block.grid_column }} / span {{ block.column_span }}; grid-row: {{ block.grid_row }} / span {{ block.span }};">
+                    <div class="z-20" style="grid-column: {{ block.grid_column }} / span {{ block.column_span }}; grid-row: {{ block.grid_row }} / span {{ block.span }};">
                         <div class="jadwal-practice-block flex h-full min-h-20 flex-col items-center justify-center border px-3 py-4 text-center font-bold">
                             <a href="{% url 'jadwal:jadwal_detail' block.jadwal.pk %}" class="transition">
                                 <span>{{ block.jadwal.mata_kuliah }}</span>

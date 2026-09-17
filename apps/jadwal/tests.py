@@ -104,6 +104,25 @@ class JadwalViewTests(TestCase):
         self.assertNotContains(other_date, 'Seminar Lab')
         self.assertEqual(JadwalPraktikum.objects.filter(status='diterima').count(), 1)
 
+    def test_event_lab_mengisi_slot_ruangan_dan_jam_pada_tanggalnya(self):
+        event = KegiatanKalender.objects.create(
+            judul='Kegiatan Lab RPL', tanggal=date(2026, 9, 18),
+            waktu_mulai=time(16), waktu_selesai=time(18), ruangan=self.lab_rpl,
+            dibuat_oleh=self.laboran,
+        )
+
+        response = self.client.get(reverse('jadwal:jadwal_list'), {'tanggal': '2026-09-18'})
+
+        self.assertEqual(response.status_code, 200)
+        block = next(item for item in response.context['lab_event_blocks'] if item['event'] == event)
+        self.assertEqual(block['grid_row'], 18)
+        self.assertEqual(block['span'], 4)
+        self.assertEqual(response.context['ruangan_list'][block['grid_column'] - 1], self.lab_rpl)
+        self.assertContains(response, f'data-lab-event-block="{event.pk}"')
+
+        other_date = self.client.get(reverse('jadwal:jadwal_list'), {'tanggal': '2026-09-25'})
+        self.assertNotContains(other_date, f'data-lab-event-block="{event.pk}"')
+
     def test_only_aslab_with_overlapping_practicum_gets_event_notification(self):
         period = PeriodeAsleb.objects.create(
             tahun=2026, semester=2, mulai=date(2026, 7, 1), selesai=date(2026, 12, 31),
