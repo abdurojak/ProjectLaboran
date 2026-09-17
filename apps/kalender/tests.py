@@ -5,7 +5,7 @@ from channels.layers import get_channel_layer
 from channels.testing import WebsocketCommunicator
 from django.conf import settings
 from django.contrib.sessions.backends.db import SessionStore
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.test.utils import override_script_prefix
 from django.utils import timezone
 from django.urls import reverse
@@ -54,6 +54,20 @@ class NotificationRealtimeTests(TransactionTestCase):
             connected, close_code = await socket.connect()
             self.assertFalse(connected)
             self.assertEqual(close_code, 4401)
+
+        async_to_sync(scenario)()
+
+    @override_settings(FORCE_SCRIPT_NAME='/labhub')
+    def test_websocket_notifikasi_berjalan_di_bawah_prefix_aplikasi(self):
+        headers = self.session_headers(self.mahasiswa)
+
+        async def scenario():
+            socket = WebsocketCommunicator(application, '/labhub/ws/notifikasi/', headers=headers)
+            connected, _ = await socket.connect()
+            self.assertTrue(connected)
+            payload = await socket.receive_json_from()
+            self.assertEqual(payload['payload']['event'], 'notification.sync')
+            await socket.disconnect()
 
         async_to_sync(scenario)()
 
