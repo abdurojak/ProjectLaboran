@@ -267,7 +267,7 @@ class PendaftaranAslebViewTests(TestCase):
             reverse('pendaftaran_asleb:pendaftaran_detail', args=[self.pendaftaran.pk])
         )
         self.assertContains(detail_response, '2 periode')
-        self.assertContains(detail_response, 'Senior · maksimal 2 mata kuliah')
+        self.assertContains(detail_response, 'Senior · batas diterima 1 mata kuliah')
         self.assertContains(detail_response, 'Riwayat sistem menemukan 0 periode')
 
     def test_laboran_dapat_mereset_koreksi_pengalaman_ke_riwayat_sistem(self):
@@ -387,7 +387,7 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertEqual(notify_pendaftaran_dibuka(), 1)
         self.assertEqual(
             send_email.call_args.kwargs['note'],
-            'Junior dapat mengambil maksimal 1 matkul dan Senior maksimal 2 matkul dalam satu periode.',
+            'Setiap mahasiswa dapat memilih maksimal 3 matkul dalam satu periode.',
         )
 
     def test_buka_pendaftaran_memulihkan_periode_yang_sudah_diakhiri(self):
@@ -764,14 +764,53 @@ class PendaftaranAslebViewTests(TestCase):
         }
         session.save()
 
-    def test_public_form_semester_hanya_tiga_sampai_delapan(self):
+    def test_mahasiswa_boleh_memilih_tiga_matkul_tanpa_melihat_level(self):
+        mahasiswa = self.create_mahasiswa_dengan_cv('064102500007')
+        period = PeriodeAsleb.get_for_date(timezone.localdate())
+        courses = [MataKuliahAsleb.objects.create(
+            kode=f'PILIH-3-{number}', nama=f'Pilihan {number}',
+            dosen='Dosen', kelas='TIF-01',
+        ) for number in range(4)]
+        for course in courses[:2]:
+            PendaftaranAsleb.objects.create(
+                nama=mahasiswa.nama_pengguna, nim=mahasiswa.nim_nik,
+                no_hp=mahasiswa.no_hp, email=mahasiswa.email,
+                program_studi=mahasiswa.prodi, semester=3,
+                matkul=course, periode=period,
+            )
+
+        third = self.client.post(
+            reverse('pendaftaran_asleb:pendaftaran_public'),
+            {'matkul': courses[2].pk},
+        )
+        self.assertEqual(third.status_code, 302)
+        self.assertEqual(self.client.session[WIZARD_SESSION_KEY]['step'], 'transkrip')
+
+        PendaftaranAsleb.objects.create(
+            nama=mahasiswa.nama_pengguna, nim=mahasiswa.nim_nik,
+            no_hp=mahasiswa.no_hp, email=mahasiswa.email,
+            program_studi=mahasiswa.prodi, semester=3,
+            matkul=courses[2], periode=period,
+        )
+        session = self.client.session
+        session.pop(WIZARD_SESSION_KEY, None)
+        session.save()
+        fourth = self.client.post(
+            reverse('pendaftaran_asleb:pendaftaran_public'),
+            {'matkul': courses[3].pk},
+        )
+        self.assertEqual(fourth.status_code, 302)
+        self.assertEqual(fourth.url, reverse('pendaftaran_asleb:pendaftaran_success'))
+        self.assertNotEqual(self.client.session[WIZARD_SESSION_KEY].get('matkul_id'), courses[3].pk)
+
+    def test_public_form_semester_hanya_satu_sampai_delapan(self):
         form = PendaftaranAslebPublicForm(data={
             'nama': 'Andi',
             'nim': '2201003',
             'no_hp': '081111111112',
             'email': 'andi@std.trisakti.ac.id',
             'program_studi': 'Informatika',
-            'semester': 2,
+            'semester': 0,
             'matkul': self.matkul.pk,
             'metode_rekening': 'dana',
             'rekening': '081111111112',
@@ -780,6 +819,7 @@ class PendaftaranAslebViewTests(TestCase):
 
         self.assertFalse(form.is_valid())
         self.assertIn('semester', form.errors)
+        self.assertIn((2, 'Semester 2'), PublicBerkasPendaftaranForm.SEMESTER_CHOICES)
 
     def test_pendaftaran_form_save_assigns_current_periode(self):
         form = PendaftaranAslebForm(data={

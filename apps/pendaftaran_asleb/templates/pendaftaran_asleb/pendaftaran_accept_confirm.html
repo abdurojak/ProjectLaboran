@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Konfirmasi Penerimaan Aslab{% endblock %}
+{% block content %}
+<section class="mx-auto max-w-2xl space-y-6">
+    <div>
+        <h1 class="text-2xl font-bold">Konfirmasi penerimaan</h1>
+        <p class="mt-2 text-slate-600">{{ pendaftaran.nama }} ({{ pendaftaran.nim }}) untuk {{ pendaftaran.matkul }}.</p>
+    </div>
+    <form method="post" action="{% url 'pendaftaran_asleb:pendaftaran_accept' pendaftaran.pk %}" class="surface-card space-y-5 p-6">
+        {% csrf_token %}
+        <p>Pendaftar ini sudah diterima pada {{ accepted_count }} mata kuliah dalam periode ini. Batas normalnya {{ acceptance_limit }} mata kuliah{% if academic_semester %} (semester {{ academic_semester }} menurut NIM){% endif %}.</p>
+        <div>
+            <label for="override_phrase" class="block font-semibold">Ketik persis: {{ override_phrase }}</label>
+            <input id="override_phrase" name="override_phrase" required autocomplete="off" class="mt-2 w-full" aria-describedby="override-help">
+            <p id="override-help" class="mt-2 text-sm text-slate-600">Keputusan di luar batas normal akan dicatat atas nama Anda.</p>
+        </div>
+        <div class="flex flex-wrap gap-3">
+            <button class="btn-primary" type="submit">Terima di luar batas</button>
+            <a class="btn-secondary" href="{% url 'pendaftaran_asleb:pendaftaran_list' %}">Batal</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

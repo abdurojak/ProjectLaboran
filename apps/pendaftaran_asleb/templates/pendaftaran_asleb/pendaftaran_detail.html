@@ -30,7 +30,7 @@
                 <div class="mt-2 flex flex-wrap items-end gap-x-5 gap-y-2">
                     <p class="text-3xl font-black text-slate-900">{{ effective_experience_count }} periode</p>
                     <span class="rounded-full {% if experience_level == 'senior' %}bg-violet-100 text-violet-700{% else %}bg-sky-100 text-sky-700{% endif %} px-3 py-1.5 text-xs font-black">
-                        {{ experience_level|title }} · maksimal {{ experience_limit }} mata kuliah
+                        {{ experience_level|title }} · batas diterima {{ experience_limit }} mata kuliah
                     </span>
                 </div>
                 <p class="mt-2 text-sm font-semibold text-slate-500">
@@ -49,7 +49,7 @@
             <div>
                 <label for="{{ experience_form.jumlah_periode.id_for_label }}">{{ experience_form.jumlah_periode.label }}</label>
                 {{ experience_form.jumlah_periode }}
-                <p class="mt-1 text-xs font-semibold text-slate-500">Nilai 0-99. Koreksi ini memengaruhi level otomatis dan batas mata kuliah pendaftaran.</p>
+                <p class="mt-1 text-xs font-semibold text-slate-500">Nilai 0-99. Koreksi ini memengaruhi level otomatis, bukan batas pilihan pendaftaran.</p>
             </div>
             <div class="flex flex-wrap gap-3">
                 <button type="submit" class="btn-primary bg-teal-700 hover:bg-teal-800">
@@ -71,6 +71,7 @@
         <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Program Studi</div><div class="mt-2 text-xl font-bold text-slate-900">{{ pendaftaran.program_studi }}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Semester</div><div class="mt-2 text-xl font-bold text-slate-900">{{ pendaftaran.semester }}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Matkul</div><div class="mt-2 text-xl font-bold text-slate-900">{{ pendaftaran.matkul }}</div></div>
+        {% for decision in selection_decisions %}{% if decision.matkul_pilihan_id != decision.matkul_tujuan_id %}<div class="rounded-3xl bg-slate-50 p-5 md:col-span-2"><div class="text-sm font-semibold text-slate-500">Pilihan awal</div><div class="mt-2 font-bold text-slate-900">{{ decision.matkul_pilihan }}</div><div class="mt-1 text-sm text-slate-500">Dipindahkan oleh {{ decision.diatur_oleh.nama_pengguna }}; nilai tujuan {{ decision.nilai_tujuan }}.</div></div>{% endif %}{% endfor %}
         <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Nilai Transkrip</div><div class="mt-2 text-xl font-bold text-slate-900">{{ pendaftaran.get_nilai_transkrip_display }}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Status</div><div class="mt-2 text-xl font-bold text-slate-900">{{ pendaftaran.get_status_display }}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Tanggal Daftar</div><div class="mt-2 text-xl font-bold text-slate-900">{{ pendaftaran.tanggal_daftar|date:"d M Y" }}</div></div>

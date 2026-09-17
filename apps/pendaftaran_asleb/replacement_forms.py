@@ -92,6 +92,10 @@ class VerificationForm(forms.Form):
     ])
     active_date = forms.DateField(required=False, widget=forms.DateInput(attrs={'type': 'date'}))
     notes = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 4}))
+    override_phrase = forms.CharField(
+        required=False, label='Konfirmasi di luar batas (jika diperlukan)',
+        help_text='Jika melewati batas, ketik TERIMA DI LUAR BATAS.',
+    )
 
     def clean(self):
         cleaned = super().clean()

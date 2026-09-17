@@ -520,6 +520,7 @@
                                     {% csrf_token %}
                                     <button type="submit" class="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white">Terima</button>
                                 </form>
+                                <a href="{% url 'pendaftaran_asleb:pendaftaran_move' pendaftaran.pk %}" class="rounded-xl border border-teal-300 px-3 py-2 text-xs font-bold text-teal-700">Pindahkan</a>
                                 <form method="post" action="{% url 'pendaftaran_asleb:pendaftaran_reject' pendaftaran.pk %}">
                                     {% csrf_token %}
                                     <button type="submit" class="rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-700">Tolak</button>

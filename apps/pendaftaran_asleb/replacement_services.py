@@ -11,8 +11,9 @@ from apps.pengguna.models import PengalamanPengguna, Pengguna
 
 from .models import (
     AslabAssignment, AslabOffer, AslabReplacement, AslabReplacementAudit, AslabSlot,
-    LimitedReplacementOpening, PendaftaranAsleb,
+    KeputusanSeleksiAsleb, LimitedReplacementOpening, PendaftaranAsleb,
 )
+from .selection import OVERRIDE_PHRASE, acceptance_limit, accepted_course_ids
 from .replacement_notifications import (
     notify_assignment_ended,
     notify_honor_correction_required,
@@ -689,7 +690,7 @@ def _validate_activation_registration(*, offer, replacement, slot, candidate, re
 
 
 @transaction.atomic
-def activate_replacement(*, offer_id, actor, active_date):
+def activate_replacement(*, offer_id, actor, active_date, override_phrase=''):
     if not can_manage_lab_operations(actor):
         raise ValidationError('Hanya laboran yang dapat mengaktifkan pengganti.')
     offer_hint = AslabOffer.objects.filter(pk=offer_id).values(
@@ -756,6 +757,14 @@ def activate_replacement(*, offer_id, actor, active_date):
         offer=offer, replacement=replacement, slot=slot,
         candidate=candidate, registration=registration,
     )
+    accepted_courses = accepted_course_ids(candidate.nim_nik, slot.periode)
+    if slot.matkul_id in accepted_courses:
+        raise ValidationError('Kandidat sudah diterima untuk mata kuliah ini pada periode yang sama.')
+    exceeds_limit = (
+        len(accepted_courses) >= acceptance_limit(candidate.nim_nik, slot.periode)
+    )
+    if exceeds_limit and override_phrase.strip() != OVERRIDE_PHRASE:
+        raise ValidationError('Penerimaan melewati batas. Ketik frasa konfirmasi persis untuk melanjutkan.')
 
     incoming_asleb = sync_asleb_person_from_registration(
         registration, period=slot.periode, status='aktif', joined_on=active_date,
@@ -772,6 +781,13 @@ def activate_replacement(*, offer_id, actor, active_date):
     )
     registration.status = 'diterima'
     registration.save(update_fields=['status', 'diperbarui_pada'])
+    if exceeds_limit:
+        KeputusanSeleksiAsleb.objects.create(
+            nim=candidate.nim_nik, periode=slot.periode,
+            source_pendaftaran_id=registration.pk,
+            matkul_pilihan=slot.matkul, matkul_tujuan=slot.matkul,
+            melewati_batas=True, diatur_oleh=actor,
+        )
     offer.status = AslabOffer.STATUS_VERIFIED
     offer.verified_at = timezone.now()
     offer.verified_by = actor

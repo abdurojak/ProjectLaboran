@@ -1274,6 +1274,30 @@ class DirectOfferServiceTests(TestCase):
         self.assertEqual(offer.status, AslabOffer.STATUS_VERIFIED)
         self.assertEqual(offer.registration.status, 'diterima')
 
+    def test_activation_over_limit_requires_typed_laboran_override(self):
+        self.candidate.nim_nik = '064102500007'
+        self.candidate.save(update_fields=['nim_nik'])
+        other_course = MataKuliahAsleb.objects.create(
+            kode='OFFER-OTHER', nama='Matkul Lain', dosen='Dosen', kelas='TIF-02',
+        )
+        PendaftaranAsleb.objects.create(
+            nama=self.candidate.nama_pengguna, nim=self.candidate.nim_nik,
+            no_hp='08123', email=self.candidate.email, program_studi='TI',
+            semester=3, matkul=other_course, periode=self.period, status='diterima',
+        )
+        offer = self.submitted_offer()
+
+        with self.assertRaisesMessage(ValidationError, 'batas'):
+            activate_replacement(
+                offer_id=offer.pk, actor=self.laboran, active_date=date(2026, 9, 5),
+            )
+
+        assignment = activate_replacement(
+            offer_id=offer.pk, actor=self.laboran, active_date=date(2026, 9, 5),
+            override_phrase='TERIMA DI LUAR BATAS',
+        )
+        self.assertEqual(assignment.slot.matkul, self.course)
+
     def test_activation_rejects_invalid_state_actor_and_date_without_partial_changes(self):
         offer = self.submitted_offer()
         invalid_actor = self.user('BAD-ACT', 'Bad Actor', 'mahasiswa')
