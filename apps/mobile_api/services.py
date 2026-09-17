@@ -6,8 +6,9 @@ from django.conf import settings
 from django.utils import timezone
 
 from apps.asleb.models import AbsensiMasukAsleb, Asleb
+from apps.asleb.services import get_active_asleb_matkul_ids
 from apps.jadwal.models import JadwalPraktikum
-from apps.pendaftaran_asleb.models import PendaftaranAsleb, RiwayatAsleb
+from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, RiwayatAsleb
 
 
 WEEKDAY_KEYS = ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu']
@@ -18,6 +19,14 @@ def get_active_asleb(pengguna):
 
 
 def get_asleb_course_labels(asleb):
+    assigned_ids = get_active_asleb_matkul_ids(asleb)
+    if assigned_ids:
+        return [
+            str(course) for course in MataKuliahAsleb.objects.filter(
+                pk__in=assigned_ids, aktif=True,
+            ).order_by('nama', 'kelas', 'pk')
+        ]
+
     registrations = PendaftaranAsleb.objects.filter(
         nim=asleb.nim,
         status__in=['diterima', 'digenerate'],

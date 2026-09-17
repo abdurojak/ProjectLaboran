@@ -537,6 +537,53 @@ class AslebViewTests(TestCase):
         self.assertEqual(get_active_absensi_schedule(self.asleb, late_same_day), schedule)
         self.assertIsNone(get_active_absensi_schedule(self.asleb, next_day))
 
+    def test_absensi_dapat_memilih_dua_praktikum_pada_hari_yang_sama(self):
+        assignment = self.create_active_assignment()
+        other_matkul = MataKuliahAsleb.objects.create(
+            kode='WEB_DUAL', nama='Pemrograman Web', dosen='Dosen Web', kelas='TIF-02',
+        )
+        AslabAssignment.objects.create(
+            slot=AslabSlot.objects.create(periode=assignment.slot.periode, matkul=other_matkul, nomor=1),
+            asleb=self.asleb, mulai_pada=assignment.mulai_pada,
+            status=AslabAssignment.STATUS_ACTIVE,
+        )
+        today_key = dict(enumerate(key for key, _ in JadwalPraktikum.HARI_CHOICES))[timezone.localdate().weekday()]
+        first_schedule = JadwalPraktikum.objects.create(
+            mata_kuliah=str(self.matkul), kelas=self.matkul.kelas, ruangan=self.test_room,
+            pengampu=self.matkul.dosen, hari=today_key, waktu_mulai='08:00', waktu_selesai='10:00',
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+        second_schedule = JadwalPraktikum.objects.create(
+            mata_kuliah=str(other_matkul), kelas=other_matkul.kelas, ruangan=self.test_room,
+            pengampu=other_matkul.dosen, hari=today_key, waktu_mulai='10:00', waktu_selesai='12:00',
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+        other_modul = ModulPraktikum.objects.create(
+            matkul=other_matkul, nomor=1, judul='Modul Web',
+            file=SimpleUploadedFile('web.pdf', b'%PDF-1.4\n%%EOF', content_type='application/pdf'),
+        )
+        pengguna = Pengguna.objects.create(
+            nama_pengguna=self.asleb.nama, nim_nik=self.asleb.nim,
+            email='aslab-dual@std.trisakti.ac.id', password='rahasia123',
+            no_hp=self.asleb.no_hp, alamat='Jakarta', fakultas='Teknologi Industri',
+            prodi='Informatika', gender='perempuan', role='asisten_lab', is_verified=True,
+        )
+        session = self.client.session
+        session['pengguna_id'] = pengguna.pk
+        session.save()
+        PengaturanAbsensiAsleb.objects.update_or_create(pk=1, defaults={'dibuka': True})
+
+        response = self.client.get(reverse('asleb:absensi_create'), {'jadwal': second_schedule.pk})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="jadwal"')
+        self.assertEqual(response.context['view'].jadwal, second_schedule)
+        self.assertIn(other_modul, response.context['form'].fields['modul_praktikum'].queryset)
+        self.assertNotEqual(first_schedule, response.context['view'].jadwal)
+
+        invalid = self.client.get(reverse('asleb:absensi_create'), {'jadwal': 999999})
+        self.assertRedirects(invalid, reverse('asleb:absensi_list'), fetch_redirect_response=False)
+
     def test_asisten_lab_tidak_dapat_menambah_modul(self):
         aslab_user = Pengguna.objects.create(
             nama_pengguna='Siti Nurhaliza',

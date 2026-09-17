@@ -739,10 +739,19 @@ class AbsensiAslebCreateView(CreateView):
             messages.warning(request, 'Absensi aslab sedang ditutup oleh laboran.')
             return redirect('asleb:absensi_list')
 
-        self.jadwal = get_active_absensi_schedule(self.asleb)
-        if not self.jadwal:
+        self.available_schedules = get_available_absensi_schedules(self.asleb)
+        if not self.available_schedules:
             messages.warning(request, 'Absensi hanya dapat diisi pada hari jadwal praktikum.')
             return redirect('asleb:absensi_list')
+
+        selected_id = request.POST.get('jadwal') if request.method == 'POST' else request.GET.get('jadwal')
+        if selected_id:
+            self.jadwal = next((item for item in self.available_schedules if str(item.pk) == selected_id), None)
+            if self.jadwal is None:
+                messages.error(request, 'Jadwal praktikum tidak tersedia untuk aslab ini hari ini.')
+                return redirect('asleb:absensi_list')
+        else:
+            self.jadwal = self.available_schedules[0]
 
         return super().dispatch(request, *args, **kwargs)
 
@@ -756,6 +765,7 @@ class AbsensiAslebCreateView(CreateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['enable_camera_location_capture'] = ENABLE_CAMERA_LOCATION_CAPTURE
+        context['available_schedules'] = self.available_schedules
         return context
 
     def form_valid(self, form):
@@ -811,6 +821,11 @@ class AbsensiAslebCreateView(CreateView):
 
 
 def get_active_absensi_schedule(asleb, current_time=None):
+    schedules = get_available_absensi_schedules(asleb, current_time)
+    return schedules[0] if schedules else None
+
+
+def get_available_absensi_schedules(asleb, current_time=None):
     current_time = current_time or timezone.localtime()
     from apps.pendaftaran_asleb.models import MataKuliahAsleb
 
@@ -822,16 +837,16 @@ def get_active_absensi_schedule(asleb, current_time=None):
         )
     ]
     if not matkul_labels:
-        return None
+        return []
     day_keys = [key for key, _ in JadwalPraktikum.HARI_CHOICES]
     weekday = current_time.weekday()
     if weekday >= len(day_keys):
-        return None
-    return JadwalPraktikum.objects.filter(
+        return []
+    return list(JadwalPraktikum.objects.filter(
         mata_kuliah__in=matkul_labels,
         hari=day_keys[weekday],
         status=JadwalPraktikum.STATUS_DITERIMA,
-    ).order_by('waktu_mulai').first()
+    ).order_by('waktu_mulai', 'pk'))
 
 
 class ModulManageRequiredMixin:

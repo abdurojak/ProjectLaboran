@@ -11,8 +11,22 @@
     </div>
 
     <div class="rounded-2xl border border-cyan-200 bg-cyan-50 p-5 text-sm text-cyan-900">
-        <span class="font-bold">Mata kuliah:</span> {{ view.asleb.matkul|default:"Belum ditentukan" }}. File modul dapat diunduh dari halaman Absensi Aslab.
+        <span class="font-bold">Mata kuliah:</span> {{ view.jadwal.mata_kuliah }}. File modul dapat diunduh dari halaman Absensi Aslab.
     </div>
+
+    {% if available_schedules|length > 1 %}
+    <form method="get" class="surface-card p-5">
+        <label for="jadwal-choice" class="block text-sm font-semibold text-slate-700">Jadwal praktikum</label>
+        <div class="mt-2 flex flex-wrap gap-3">
+            <select id="jadwal-choice" name="jadwal" class="min-w-0 flex-1" aria-label="Pilih jadwal praktikum">
+                {% for schedule in available_schedules %}
+                <option value="{{ schedule.pk }}" {% if schedule.pk == view.jadwal.pk %}selected{% endif %}>{{ schedule.mata_kuliah }} - {{ schedule.waktu_mulai }} sampai {{ schedule.waktu_selesai }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn-secondary">Pilih</button>
+        </div>
+    </form>
+    {% endif %}
 
     <div class="surface-card min-w-0 max-w-full overflow-hidden grid gap-4 p-5 md:grid-cols-2">
         <div class="min-w-0">
@@ -27,6 +41,7 @@
 
     <form method="post" enctype="multipart/form-data" class="surface-card min-w-0 max-w-full overflow-hidden grid gap-5 p-5 md:grid-cols-2 md:p-8" data-location-form>
         {% csrf_token %}
+        <input type="hidden" name="jadwal" value="{{ view.jadwal.pk }}">
         {% if form.non_field_errors %}
         <div class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 md:col-span-2">
             {{ form.non_field_errors|striptags }}

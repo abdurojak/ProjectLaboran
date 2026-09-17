@@ -25,7 +25,7 @@ from apps.mobile_api.services import validate_schedule_time
 from apps.inventaris.models import Barang, FotoInventarisBarang, InventarisBarang, Lokasi
 from apps.core.models import PercakapanBantuan, PesanBantuan
 from apps.jadwal.models import JadwalPraktikum
-from apps.pendaftaran_asleb.models import MataKuliahAsleb, PeriodeAsleb, RiwayatAsleb
+from apps.pendaftaran_asleb.models import AslabAssignment, AslabSlot, MataKuliahAsleb, PeriodeAsleb, RiwayatAsleb
 from apps.pengguna.models import Pengguna
 from apps.peminjaman.models import PeminjamanAlat
 from apps.ruangan.models import RuanganLab
@@ -276,6 +276,37 @@ class MobileAbsensiApiTests(TestCase):
         ids = {item['id'] for item in response.data['results']}
         self.assertIn(self.schedule.pk, ids)
         self.assertNotIn(old_schedule.pk, ids)
+
+    def test_jadwal_dua_penugasan_aktif_muncul_untuk_absensi(self):
+        web_course = MataKuliahAsleb.objects.create(
+            kode='WEB-MOBILE', nama='Pemrograman Web', dosen='Dosen Web', kelas='TIF-02',
+        )
+        for course in (self.matkul, web_course):
+            slot = AslabSlot.objects.create(periode=self.period, matkul=course, nomor=1)
+            AslabAssignment.objects.create(
+                slot=slot, asleb=self.asleb, mulai_pada=self.period.mulai,
+                status=AslabAssignment.STATUS_ACTIVE,
+            )
+        web_schedule = JadwalPraktikum.objects.create(
+            mata_kuliah=str(web_course), kelas=web_course.kelas, ruangan=self.room,
+            pengampu=web_course.dosen, hari='senin', waktu_mulai=time(10, 0),
+            waktu_selesai=time(12, 0), status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+        self.authenticate()
+
+        response = self.client.get(reverse('mobile_api:schedule_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual({item['id'] for item in response.data['results']}, {self.schedule.pk, web_schedule.pk})
+
+        with patch('apps.mobile_api.views.validate_schedule_time', return_value=(True, '', 'sudah_absen')):
+            check_in = self.client.post(
+                reverse('mobile_api:check_in'),
+                self.check_in_payload(jadwal_id=web_schedule.pk),
+                format='multipart',
+            )
+        self.assertEqual(check_in.status_code, 201, check_in.data)
+        self.assertTrue(AbsensiMasukAsleb.objects.filter(asleb=self.asleb, jadwal=web_schedule).exists())
 
     def test_dashboard_laboran_membedakan_total_barang_dan_total_unit(self):
         InventarisBarang.objects.create(nama='Router Mobile', jumlah=3)
