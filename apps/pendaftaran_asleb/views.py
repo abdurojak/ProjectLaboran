@@ -43,12 +43,17 @@ from .forms import (
 )
 from .models import (
     AslabAssignment,
+    KeputusanSeleksiAsleb,
     KoreksiPengalamanAsleb,
     MataKuliahAsleb,
     PendaftaranAsleb,
     PengaturanPendaftaranAsleb,
     PeriodeAsleb,
     RiwayatAsleb,
+)
+from .selection import (
+    OVERRIDE_PHRASE, REGISTRATION_LIMIT, acceptance_limit,
+    accepted_course_ids, academic_semester_from_nim,
 )
 from .services import (
     close_current_registration,
@@ -65,7 +70,10 @@ from .services import (
     sync_regular_aslab_assignment,
     sync_asleb_person_from_registration,
 )
-from .utils import analyze_transcript, get_public_registration_url, is_passing_grade
+from .utils import (
+    analyze_transcript, extract_transcript_text, find_grade_for_course,
+    get_public_registration_url, is_passing_grade, transcript_contains_nim,
+)
 
 
 WIZARD_SESSION_KEY = 'pendaftaran_asleb_wizard'
@@ -149,7 +157,9 @@ class PendaftaranAslebDetailView(LaboranPendaftaranRequiredMixin, DetailView):
         correction = KoreksiPengalamanAsleb.objects.filter(nim=self.object.nim).select_related(
             'diatur_oleh'
         ).first()
-        level, limit = get_asleb_experience(self.object.nim)
+        level, _ = get_asleb_experience(self.object.nim)
+        period = self.object.periode or get_current_period()
+        limit = acceptance_limit(self.object.nim, period)
         recorded_count = get_recorded_asleb_period_count(self.object.nim)
         context.update({
             'experience_correction': correction,
@@ -157,6 +167,10 @@ class PendaftaranAslebDetailView(LaboranPendaftaranRequiredMixin, DetailView):
             'effective_experience_count': get_effective_asleb_period_count(self.object.nim),
             'experience_level': level,
             'experience_limit': limit,
+            'academic_semester': academic_semester_from_nim(self.object.nim, period),
+            'selection_decisions': KeputusanSeleksiAsleb.objects.filter(
+                source_pendaftaran_id=self.object.pk,
+            ).select_related('matkul_pilihan', 'matkul_tujuan', 'diatur_oleh'),
             'experience_form': KoreksiPengalamanAslebForm(
                 instance=correction,
                 initial={'jumlah_periode': recorded_count},
@@ -193,11 +207,11 @@ def update_asleb_experience_count(request, pk):
     correction.nim = registration.nim
     correction.diatur_oleh = request.current_pengguna
     correction.save()
-    level, limit = get_asleb_experience(registration.nim)
+    level, _ = get_asleb_experience(registration.nim)
     messages.success(
         request,
         f'Jumlah pengalaman diperbarui menjadi {correction.jumlah_periode} periode. '
-        f'Level pendaftaran sekarang {level.title()} dengan batas {limit} mata kuliah.',
+        f'Level sekarang {level.title()}. Batas pendaftaran tetap {REGISTRATION_LIMIT} pilihan.',
     )
     return redirect('pendaftaran_asleb:pendaftaran_detail', pk=registration.pk)
 
@@ -214,6 +228,9 @@ class PendaftaranAslebCreateView(LaboranPendaftaranRequiredMixin, CreateView):
         return kwargs
 
     def form_valid(self, form):
+        if form.cleaned_data['status'] in {'diterima', 'digenerate'}:
+            form.add_error('status', 'Penerimaan harus melalui tombol Terima agar batas penugasan diperiksa.')
+            return self.form_invalid(form)
         form.instance.periode = get_current_period()
         return super().form_valid(form)
 
@@ -228,6 +245,21 @@ class PendaftaranAslebUpdateView(LaboranPendaftaranRequiredMixin, UpdateView):
         kwargs = super().get_form_kwargs()
         kwargs['files'] = self.request.FILES or None
         return kwargs
+
+    def form_valid(self, form):
+        original = PendaftaranAsleb.objects.get(pk=self.object.pk)
+        new_status = form.cleaned_data['status']
+        if new_status in {'diterima', 'digenerate'} and original.status not in {'diterima', 'digenerate'}:
+            form.add_error('status', 'Penerimaan harus melalui tombol Terima agar batas penugasan diperiksa.')
+        if original.status in {'diterima', 'digenerate'} and (
+            new_status != original.status
+            or form.cleaned_data['matkul'].pk != original.matkul_id
+            or form.cleaned_data['nim'] != original.nim
+        ):
+            form.add_error('status', 'Status, NIM, dan mata kuliah yang sudah diterima tidak dapat diubah melalui edit.')
+        if form.errors:
+            return self.form_invalid(form)
+        return super().form_valid(form)
 
 
 class PendaftaranAslebDeleteView(LaboranPendaftaranRequiredMixin, PostOnlyDeleteMixin, DeleteView):
@@ -322,11 +354,10 @@ class PendaftaranAslebPublicCreateView(View):
                 return redirect('pengguna:detail', pk=current_pengguna.pk)
             return redirect('pengguna:login')
 
-        level, limit = get_asleb_experience(current_pengguna.nim_nik)
-        if get_period_registration_count(current_pengguna.nim_nik) >= limit:
+        if get_period_registration_count(current_pengguna.nim_nik) >= REGISTRATION_LIMIT:
             messages.warning(
                 request,
-                f'Batas pengambilan matkul untuk level {level.title()} adalah maksimal {limit} matkul per periode.',
+                f'Batas pendaftaran adalah {REGISTRATION_LIMIT} matkul per periode.',
             )
             return redirect('pendaftaran_asleb:pendaftaran_success')
 
@@ -452,16 +483,15 @@ class PendaftaranAslebPublicCreateView(View):
         with transaction.atomic():
             # Mengunci akun membuat pemeriksaan limit aman dari klik/request paralel.
             locked_pengguna = Pengguna.objects.select_for_update().get(pk=current_pengguna.pk)
-            level, limit = get_asleb_experience(locked_pengguna.nim_nik)
             active_registrations = PendaftaranAsleb.objects.filter(
                 nim=locked_pengguna.nim_nik,
                 periode=period,
             ).exclude(status='ditolak')
-            if active_registrations.count() >= limit:
+            if active_registrations.count() >= REGISTRATION_LIMIT:
                 self.clear_wizard(request)
                 messages.error(
                     request,
-                    f'Batas pengambilan matkul {level.title()} ({limit} matkul) untuk periode ini sudah tercapai.',
+                    f'Batas pendaftaran {REGISTRATION_LIMIT} matkul untuk periode ini sudah tercapai.',
                 )
                 return redirect('pendaftaran_asleb:pendaftaran_success')
             if active_registrations.filter(matkul=matkul).exists():
@@ -512,9 +542,9 @@ class PendaftaranAslebPublicCreateView(View):
             'berkas_form': forms.get('berkas_form') or PublicBerkasPendaftaranForm(current_pengguna=current_pengguna),
         }
         if current_pengguna:
-            level, limit = get_asleb_experience(current_pengguna.nim_nik)
+            level, _ = get_asleb_experience(current_pengguna.nim_nik)
             context['registration_level'] = level
-            context['registration_limit'] = limit
+            context['registration_limit'] = REGISTRATION_LIMIT
             context['registration_count'] = get_period_registration_count(current_pengguna.nim_nik)
         if step == 'transkrip' and not matkul:
             wizard['step'] = 'matkul'
@@ -588,6 +618,18 @@ def accept_pendaftaran(request, pk):
         pk=pk,
     )
     period = pendaftaran.periode or get_current_period()
+    if pendaftaran.status != 'diajukan':
+        messages.error(request, 'Hanya pendaftaran yang masih diajukan yang dapat diterima.')
+        return redirect('pendaftaran_asleb:pendaftaran_list')
+    Pengguna.objects.select_for_update().filter(nim_nik=pendaftaran.nim).first()
+    accepted_courses = accepted_course_ids(pendaftaran.nim, period)
+    if pendaftaran.matkul_id in accepted_courses:
+        messages.error(request, 'Mahasiswa ini sudah diterima untuk matkul yang sama pada periode ini.')
+        return redirect('pendaftaran_asleb:pendaftaran_list')
+    limit = acceptance_limit(pendaftaran.nim, period)
+    exceeds_limit = pendaftaran.matkul_id not in accepted_courses and len(accepted_courses) >= limit
+    if exceeds_limit and request.POST.get('override_phrase', '').strip() != OVERRIDE_PHRASE:
+        return redirect('pendaftaran_asleb:pendaftaran_accept_confirm', pk=pk)
     MataKuliahAsleb.objects.select_for_update().get(pk=pendaftaran.matkul_id)
     occupied_count = PendaftaranAsleb.objects.filter(
         matkul=pendaftaran.matkul,
@@ -609,6 +651,12 @@ def accept_pendaftaran(request, pk):
         return redirect('pendaftaran_asleb:pendaftaran_list')
     pendaftaran.status = 'diterima'
     pendaftaran.save(update_fields=['status', 'diperbarui_pada'])
+    if exceeds_limit:
+        KeputusanSeleksiAsleb.objects.create(
+            nim=pendaftaran.nim, periode=period, source_pendaftaran_id=pendaftaran.pk,
+            matkul_pilihan=pendaftaran.matkul, matkul_tujuan=pendaftaran.matkul,
+            melewati_batas=True, diatur_oleh=request.current_pengguna,
+        )
     transaction.on_commit(lambda: send_pendaftaran_status_email(pendaftaran))
     transaction.on_commit(lambda: send_registration_status_update(pendaftaran))
     transaction.on_commit(lambda: send_data_refresh(
@@ -617,6 +665,92 @@ def accept_pendaftaran(request, pk):
     ))
     messages.success(request, 'Pendaftaran aslab ditandai diterima. Role akan berubah setelah proses Generate berhasil.')
     return redirect('pendaftaran_asleb:pendaftaran_list')
+
+
+def confirm_accept_pendaftaran(request, pk):
+    if not require_laboran_operation(request):
+        return redirect('pendaftaran_asleb:pendaftaran_list')
+    registration = get_object_or_404(
+        PendaftaranAsleb.objects.select_related('matkul', 'periode'), pk=pk,
+    )
+    period = registration.periode or get_current_period()
+    if request.method == 'POST':
+        return accept_pendaftaran(request, pk)
+    return render(request, 'pendaftaran_asleb/pendaftaran_accept_confirm.html', {
+        'pendaftaran': registration,
+        'accepted_count': len(accepted_course_ids(registration.nim, period)),
+        'acceptance_limit': acceptance_limit(registration.nim, period),
+        'academic_semester': academic_semester_from_nim(registration.nim, period),
+        'override_phrase': OVERRIDE_PHRASE,
+    })
+
+
+@transaction.atomic
+def move_pendaftaran(request, pk):
+    if not require_laboran_operation(request):
+        return redirect('pendaftaran_asleb:pendaftaran_list')
+    registration = get_object_or_404(
+        PendaftaranAsleb.objects.select_for_update().select_related('matkul', 'periode'), pk=pk,
+    )
+    period = registration.periode or get_current_period()
+    courses = MataKuliahAsleb.objects.filter(aktif=True).exclude(pk=registration.matkul_id)
+    target_id = request.POST.get('target_matkul') if request.method == 'POST' else request.GET.get('target_matkul')
+    target = courses.filter(pk=target_id).first() if target_id and str(target_id).isdigit() else None
+    grade = None
+    if target and registration.transkrip:
+        with registration.transkrip.open('rb') as transcript:
+            text = extract_transcript_text(transcript)
+        if transcript_contains_nim(text, registration.nim):
+            grade = find_grade_for_course(text, target)
+    context = {
+        'pendaftaran': registration, 'courses': courses, 'target': target,
+        'grade': grade, 'override_phrase': OVERRIDE_PHRASE,
+        'acceptance_limit': acceptance_limit(registration.nim, period),
+        'accepted_count': len(accepted_course_ids(registration.nim, period)),
+    }
+    if request.method != 'POST':
+        return render(request, 'pendaftaran_asleb/pendaftaran_move.html', context)
+    if registration.status != 'diajukan' or registration.jenis != PendaftaranAsleb.JENIS_REGULER:
+        messages.error(request, 'Hanya pendaftar reguler yang belum ditugaskan dapat dipindahkan.')
+    elif accepted_course_ids(registration.nim, period):
+        messages.error(request, 'Pendaftar ini sudah mendapat tugas pada periode tersebut.')
+    elif not target or not is_passing_grade(grade) or request.POST.get('verify_grade') != 'on':
+        messages.error(request, 'Nilai matkul tujuan wajib terbukti minimal B dari transkrip dan diverifikasi Laboran.')
+    elif PendaftaranAsleb.objects.filter(
+        nim=registration.nim, periode=period, matkul=target,
+    ).exclude(status='ditolak').exists():
+        messages.error(request, 'Pendaftar sudah memiliki pilihan untuk matkul tujuan.')
+    else:
+        Pengguna.objects.select_for_update().filter(nim_nik=registration.nim).first()
+        MataKuliahAsleb.objects.select_for_update().get(pk=target.pk)
+        occupied = PendaftaranAsleb.objects.filter(
+            matkul=target, periode=period, status__in=['diterima', 'digenerate'],
+        ).count()
+        active = AslabAssignment.objects.filter(
+            slot__periode=period, slot__matkul=target,
+            status=AslabAssignment.STATUS_ACTIVE,
+        ).count()
+        if max(occupied, active) >= target.maksimal_aslab:
+            messages.error(request, 'Kuota Aslab matkul tujuan sudah penuh.')
+        else:
+            original = registration.matkul
+            registration.matkul = target
+            registration.nilai_transkrip = grade
+            registration.skor_nilai = PendaftaranAsleb.grade_to_score(grade)
+            registration.status = 'diterima'
+            registration.save(update_fields=[
+                'matkul', 'nilai_transkrip', 'skor_nilai', 'status', 'diperbarui_pada',
+            ])
+            KeputusanSeleksiAsleb.objects.create(
+                nim=registration.nim, periode=period, source_pendaftaran_id=registration.pk,
+                matkul_pilihan=original, matkul_tujuan=target, nilai_tujuan=grade,
+                diatur_oleh=request.current_pengguna,
+            )
+            transaction.on_commit(lambda: send_pendaftaran_status_email(registration))
+            transaction.on_commit(lambda: send_registration_status_update(registration))
+            messages.success(request, 'Pendaftar berhasil ditempatkan pada matkul tujuan.')
+            return redirect('pendaftaran_asleb:pendaftaran_detail', pk=pk)
+    return render(request, 'pendaftaran_asleb/pendaftaran_move.html', context)
 
 
 @require_POST
@@ -794,7 +928,7 @@ def notify_pendaftaran_dibuka():
             ],
             action_url=registration_url,
             action_label='Daftar Sebagai Aslab',
-            note='Junior dapat mengambil maksimal 1 matkul dan Senior maksimal 2 matkul dalam satu periode.',
+            note='Setiap mahasiswa dapat memilih maksimal 3 matkul dalam satu periode.',
             fail_silently=True,
         )
         sent_count += sent

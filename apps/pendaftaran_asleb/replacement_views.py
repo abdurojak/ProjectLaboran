@@ -210,7 +210,11 @@ class VerifyOfferView(LaboranReplacementMixin, View):
         if form.is_valid():
             try:
                 if form.cleaned_data['action'] == VerificationForm.ACTION_ACTIVATE:
-                    activate_replacement(offer_id=pk, actor=_current(request), active_date=form.cleaned_data['active_date'])
+                    activate_replacement(
+                        offer_id=pk, actor=_current(request),
+                        active_date=form.cleaned_data['active_date'],
+                        override_phrase=form.cleaned_data['override_phrase'],
+                    )
                     message = 'Pengganti berhasil diverifikasi dan diaktifkan.'
                 else:
                     return_offer_for_revision(offer_id=pk, actor=_current(request), notes=form.cleaned_data['notes'])

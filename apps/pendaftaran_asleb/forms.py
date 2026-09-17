@@ -43,7 +43,7 @@ def available_aslab_courses():
 
 
 class PendaftaranAslebForm(forms.ModelForm):
-    SEMESTER_CHOICES = [(semester, f'Semester {semester}') for semester in range(3, 9)]
+    SEMESTER_CHOICES = [(semester, f'Semester {semester}') for semester in range(1, 9)]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -84,8 +84,8 @@ class PendaftaranAslebForm(forms.ModelForm):
 
     def clean_semester(self):
         semester = self.cleaned_data['semester']
-        if semester < 3 or semester > 8:
-            raise forms.ValidationError('Semester hanya boleh 3 sampai 8.')
+        if semester < 1 or semester > 8:
+            raise forms.ValidationError('Semester hanya boleh 1 sampai 8.')
         return semester
 
     def clean(self):
@@ -227,7 +227,7 @@ class PublicTranskripForm(forms.Form):
 
 
 class PublicBerkasPendaftaranForm(forms.Form):
-    SEMESTER_CHOICES = [(semester, f'Semester {semester}') for semester in range(3, 9)]
+    SEMESTER_CHOICES = [(semester, f'Semester {semester}') for semester in range(1, 9)]
     signature_data = forms.CharField(widget=forms.HiddenInput, required=False)
     pernyataan_data = forms.BooleanField(
         required=True,
@@ -271,8 +271,8 @@ class PublicBerkasPendaftaranForm(forms.Form):
 
     def clean_semester(self):
         semester = int(self.cleaned_data['semester'])
-        if semester < 3 or semester > 8:
-            raise forms.ValidationError('Semester hanya boleh 3 sampai 8.')
+        if semester < 1 or semester > 8:
+            raise forms.ValidationError('Semester hanya boleh 1 sampai 8.')
         return semester
 
     def clean_signature_data(self):

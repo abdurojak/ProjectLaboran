@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Tempatkan Pendaftar{% endblock %}
+{% block content %}
+<section class="mx-auto max-w-3xl space-y-6">
+    <div>
+        <h1 class="text-2xl font-bold">Tempatkan ke mata kuliah lain</h1>
+        <p class="mt-2 text-slate-600">{{ pendaftaran.nama }} ({{ pendaftaran.nim }}) semula memilih {{ pendaftaran.matkul }}.</p>
+    </div>
+    <div class="surface-card space-y-5 p-6">
+        <form method="get" class="space-y-2">
+            <label for="target_matkul" class="block font-semibold">Mata kuliah tujuan</label>
+            <select id="target_matkul" name="target_matkul" class="w-full" onchange="this.form.submit()" required>
+                <option value="">Pilih mata kuliah</option>
+                {% for course in courses %}
+                <option value="{{ course.pk }}" {% if target.pk == course.pk %}selected{% endif %}>{{ course }}</option>
+                {% endfor %}
+            </select>
+            <noscript><button class="btn-secondary" type="submit">Periksa nilai</button></noscript>
+        </form>
+        {% if target %}
+        <p>Nilai {{ target.nama }} dari transkrip: <strong>{{ grade|default:"Tidak terbaca" }}</strong>.</p>
+        {% if pendaftaran.transkrip %}<a class="btn-secondary" href="{{ pendaftaran.transkrip.url }}" target="_blank" rel="noopener">Lihat transkrip</a>{% endif %}
+        <form method="post" class="space-y-5">
+            {% csrf_token %}
+            <input type="hidden" name="target_matkul" value="{{ target.pk }}">
+            <label class="flex items-start gap-3"><input type="checkbox" name="verify_grade" required><span>Saya sudah memeriksa transkrip dan memastikan nilai mata kuliah tujuan minimal B.</span></label>
+            <div class="flex flex-wrap gap-3">
+                <button class="btn-primary" type="submit" {% if grade != 'A' and grade != 'B' %}disabled{% endif %}>Tempatkan dan terima</button>
+                <a class="btn-secondary" href="{% url 'pendaftaran_asleb:pendaftaran_detail' pendaftaran.pk %}">Batal</a>
+            </div>
+        </form>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

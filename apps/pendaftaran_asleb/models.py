@@ -377,6 +377,27 @@ class RiwayatAsleb(models.Model):
         return f'{self.nama} - {self.matkul} - {self.periode}'
 
 
+class KeputusanSeleksiAsleb(models.Model):
+    nim = models.CharField(max_length=30, db_index=True)
+    periode = models.ForeignKey(PeriodeAsleb, on_delete=models.PROTECT)
+    source_pendaftaran_id = models.PositiveBigIntegerField()
+    matkul_pilihan = models.ForeignKey(
+        MataKuliahAsleb, on_delete=models.CASCADE, related_name='keputusan_pilihan',
+    )
+    matkul_tujuan = models.ForeignKey(
+        MataKuliahAsleb, on_delete=models.CASCADE, related_name='keputusan_tujuan',
+    )
+    nilai_tujuan = models.CharField(max_length=2, blank=True)
+    melewati_batas = models.BooleanField(default=False)
+    diatur_oleh = models.ForeignKey(
+        'pengguna.Pengguna', on_delete=models.PROTECT, related_name='keputusan_seleksi_asleb',
+    )
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-dibuat_pada']
+
+
 class KoreksiPengalamanAsleb(models.Model):
     nim = models.CharField('NIM', max_length=30, unique=True)
     jumlah_periode = models.PositiveSmallIntegerField(
