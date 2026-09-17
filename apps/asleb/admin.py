@@ -5,6 +5,7 @@ from .models import (
     AbsensiMasukAsleb,
     Asleb,
     HonorAsleb,
+    IzinAbsensiManualAsleb,
     ModulPraktikum,
     HasilPraktikumMahasiswa,
     LogAktivitasPraktikum,
@@ -45,6 +46,13 @@ class AbsensiAslebAdmin(admin.ModelAdmin):
     list_display = ('asleb', 'tanggal_praktikum', 'modul', 'materi_praktikum', 'dibuat_pada')
     list_filter = ('tanggal_praktikum', 'modul')
     search_fields = ('asleb__nama', 'asleb__nim', 'materi_praktikum')
+
+
+@admin.register(IzinAbsensiManualAsleb)
+class IzinAbsensiManualAslebAdmin(admin.ModelAdmin):
+    list_display = ('asleb', 'jadwal', 'tanggal_praktikum', 'berlaku_sampai', 'dibuka_oleh', 'digunakan_pada')
+    list_filter = ('tanggal_praktikum', 'digunakan_pada', 'dibatalkan_pada')
+    search_fields = ('asleb__nama', 'asleb__nim', 'jadwal__mata_kuliah', 'alasan')
 
 
 @admin.register(AbsensiMasukAsleb)

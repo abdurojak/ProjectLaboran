@@ -1,6 +1,7 @@
 import logging
 import mimetypes
 import zipfile
+from datetime import timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from io import BytesIO
 from html import escape
@@ -58,6 +59,7 @@ from .models import (
     Asleb,
     HasilPraktikumMahasiswa,
     HonorAsleb,
+    IzinAbsensiManualAsleb,
     LogAktivitasPraktikum,
     ModulPraktikum,
     PengumpulanLaporanPraktikum,
@@ -72,6 +74,23 @@ from .surat_honor import generate_surat_honor_pdf, month_year_label
 
 
 logger = logging.getLogger(__name__)
+
+
+def get_active_manual_attendance_permission(asleb):
+    if not asleb:
+        return None
+    return (
+        IzinAbsensiManualAsleb.objects
+        .filter(
+            asleb=asleb,
+            digunakan_pada__isnull=True,
+            dibatalkan_pada__isnull=True,
+            berlaku_sampai__gt=timezone.now(),
+        )
+        .select_related('jadwal', 'dibuka_oleh')
+        .order_by('-dibuat_pada')
+        .first()
+    )
 
 
 def nilai_huruf(nilai):
@@ -624,6 +643,17 @@ class AbsensiAslebListView(ListView):
         context['modul_list'] = self.get_modul_list(pengguna, context['asleb_profile'])
         context['can_manage_modul'] = can_manage_lab_operations(pengguna)
         context['mobile_absensi_list'] = self.get_mobile_absensi_queryset(pengguna)
+        context['manual_attendance_permission'] = get_active_manual_attendance_permission(context['asleb_profile'])
+        if can_manage_lab_operations(pengguna):
+            context['manual_permission_asleb_list'] = Asleb.objects.filter(status='aktif').order_by('nama')
+            context['manual_permission_schedule_list'] = JadwalPraktikum.objects.filter(
+                status=JadwalPraktikum.STATUS_DITERIMA,
+            ).order_by('mata_kuliah', 'kelas', 'hari', 'waktu_mulai')
+            context['active_manual_permissions'] = IzinAbsensiManualAsleb.objects.filter(
+                digunakan_pada__isnull=True,
+                dibatalkan_pada__isnull=True,
+                berlaku_sampai__gt=timezone.now(),
+            ).select_related('asleb', 'jadwal', 'dibuka_oleh')
         return context
 
     def get_mobile_absensi_queryset(self, pengguna):
@@ -692,7 +722,10 @@ class RiwayatAbsensiAslebView(TemplateView):
             web_history = (
                 AbsensiAsleb.objects
                 .filter(asleb=asleb_profile)
-                .select_related('jadwal', 'jadwal__ruangan', 'modul_praktikum', 'modul_praktikum__matkul', 'periode')
+                .select_related(
+                    'jadwal', 'jadwal__ruangan', 'modul_praktikum', 'modul_praktikum__matkul',
+                    'periode', 'izin_manual', 'izin_manual__dibuka_oleh',
+                )
                 .order_by('-dibuat_pada')
             )
             mobile_history = (
@@ -735,11 +768,21 @@ class AbsensiAslebCreateView(CreateView):
             messages.error(request, 'Data Aslab untuk akun ini belum ditemukan.')
             return redirect('dashboard:home')
 
-        if not PengaturanAbsensiAsleb.get_solo().dibuka:
+        self.manual_permission = get_active_manual_attendance_permission(self.asleb)
+        if not self.manual_permission and not PengaturanAbsensiAsleb.get_solo().dibuka:
             messages.warning(request, 'Absensi aslab sedang ditutup oleh laboran.')
             return redirect('asleb:absensi_list')
 
-        self.available_schedules = get_available_absensi_schedules(self.asleb)
+        self.attendance_date = (
+            self.manual_permission.tanggal_praktikum
+            if self.manual_permission
+            else timezone.localdate()
+        )
+        self.available_schedules = (
+            [self.manual_permission.jadwal]
+            if self.manual_permission
+            else get_available_absensi_schedules(self.asleb)
+        )
         if not self.available_schedules:
             messages.warning(request, 'Absensi hanya dapat diisi pada hari jadwal praktikum.')
             return redirect('asleb:absensi_list')
@@ -760,16 +803,19 @@ class AbsensiAslebCreateView(CreateView):
         kwargs['files'] = self.request.FILES or None
         kwargs['asleb'] = self.asleb
         kwargs['jadwal'] = self.jadwal
+        kwargs['attendance_date'] = self.attendance_date
         return kwargs
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['enable_camera_location_capture'] = ENABLE_CAMERA_LOCATION_CAPTURE
         context['available_schedules'] = self.available_schedules
+        context['manual_permission'] = self.manual_permission
         return context
 
     def form_valid(self, form):
         form.instance.asleb = self.asleb
+        form.instance.izin_manual = self.manual_permission
         try:
             response = super().form_valid(form)
         except IntegrityError:
@@ -783,6 +829,9 @@ class AbsensiAslebCreateView(CreateView):
                 form.add_error(None, 'Absensi modul ini sudah pernah tersimpan sebelumnya.')
             return self.form_invalid(form)
         sync_honor_from_absensi(self.object)
+        if self.manual_permission:
+            self.manual_permission.digunakan_pada = timezone.now()
+            self.manual_permission.save(update_fields=['digunakan_pada'])
         transaction.on_commit(lambda: send_attendance_update(self.object))
         messages.success(self.request, f'Absensi Modul {self.object.modul} berhasil disimpan.')
         return response
@@ -2495,6 +2544,92 @@ def toggle_absensi_status(request):
 
     status = 'dibuka' if pengaturan.dibuka else 'ditutup'
     messages.success(request, f'Absensi aslab berhasil {status}.')
+    return redirect('asleb:absensi_list')
+
+
+@require_POST
+@transaction.atomic
+def grant_manual_attendance_permission(request):
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not can_manage_lab_operations(pengguna):
+        messages.error(request, 'Hanya laboran yang dapat membuka izin absensi susulan.')
+        return redirect('asleb:absensi_list')
+
+    asleb = get_object_or_404(Asleb.objects.select_for_update(), pk=request.POST.get('asleb_id'), status='aktif')
+    jadwal = get_object_or_404(
+        JadwalPraktikum,
+        pk=request.POST.get('jadwal_id'),
+        status=JadwalPraktikum.STATUS_DITERIMA,
+    )
+    from django.utils.dateparse import parse_date
+
+    attendance_date = parse_date(request.POST.get('tanggal_praktikum', '').strip())
+    reason = request.POST.get('alasan', '').strip()
+    try:
+        duration_hours = int(request.POST.get('durasi_jam', '2'))
+    except (TypeError, ValueError):
+        duration_hours = 0
+
+    errors = []
+    if not attendance_date or attendance_date > timezone.localdate():
+        errors.append('Tanggal praktikum harus valid dan tidak boleh melewati hari ini.')
+    elif attendance_date.weekday() >= len(JadwalPraktikum.HARI_CHOICES) or JadwalPraktikum.HARI_CHOICES[attendance_date.weekday()][0] != jadwal.hari:
+        errors.append('Tanggal yang dipilih tidak sesuai dengan hari pada jadwal praktikum.')
+    if not get_asleb_matkul_for_schedule(asleb, jadwal):
+        errors.append('Jadwal tersebut tidak termasuk mata kuliah yang diampu Aslab ini.')
+    if not reason:
+        errors.append('Alasan pembukaan absensi susulan wajib diisi.')
+    if duration_hours not in {1, 2, 4, 8, 12, 24}:
+        errors.append('Durasi izin tidak valid.')
+    if attendance_date and AbsensiAsleb.objects.filter(
+        asleb=asleb,
+        jadwal=jadwal,
+        tanggal_praktikum=attendance_date,
+    ).exists():
+        errors.append('Aslab tersebut sudah memiliki absensi untuk jadwal dan tanggal yang dipilih.')
+    if errors:
+        for error in errors:
+            messages.error(request, error)
+        return redirect('asleb:absensi_list')
+
+    now = timezone.now()
+    IzinAbsensiManualAsleb.objects.filter(
+        asleb=asleb,
+        digunakan_pada__isnull=True,
+        dibatalkan_pada__isnull=True,
+        berlaku_sampai__gt=now,
+    ).update(dibatalkan_pada=now)
+    permission = IzinAbsensiManualAsleb.objects.create(
+        asleb=asleb,
+        jadwal=jadwal,
+        tanggal_praktikum=attendance_date,
+        berlaku_sampai=now + timedelta(hours=duration_hours),
+        alasan=reason,
+        dibuka_oleh=pengguna,
+    )
+    messages.success(
+        request,
+        f'Absensi susulan untuk {asleb.nama} dibuka selama {duration_hours} jam sampai '
+        f'{timezone.localtime(permission.berlaku_sampai):%d %b %Y %H:%M}.',
+    )
+    return redirect('asleb:absensi_list')
+
+
+@require_POST
+def revoke_manual_attendance_permission(request, pk):
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not can_manage_lab_operations(pengguna):
+        messages.error(request, 'Hanya laboran yang dapat membatalkan izin absensi susulan.')
+        return redirect('asleb:absensi_list')
+    permission = get_object_or_404(
+        IzinAbsensiManualAsleb,
+        pk=pk,
+        digunakan_pada__isnull=True,
+        dibatalkan_pada__isnull=True,
+    )
+    permission.dibatalkan_pada = timezone.now()
+    permission.save(update_fields=['dibatalkan_pada'])
+    messages.success(request, f'Izin absensi susulan {permission.asleb.nama} dibatalkan.')
     return redirect('asleb:absensi_list')
 
 

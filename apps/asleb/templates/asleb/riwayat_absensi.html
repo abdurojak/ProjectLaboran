@@ -63,7 +63,7 @@
                         <p class="text-xs font-black uppercase tracking-[0.16em] text-cyan-700">Bukti #WEB-{{ absensi.pk|stringformat:"06d" }}</p>
                         <h4 class="mt-2 text-lg font-black text-slate-900">Modul {{ absensi.modul }} · {{ absensi.materi_praktikum|default:"Praktikum" }}</h4>
                     </div>
-                    <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700">Tersimpan</span>
+                    <span class="rounded-full {% if absensi.izin_manual %}bg-amber-100 text-amber-700{% else %}bg-emerald-100 text-emerald-700{% endif %} px-3 py-1 text-xs font-black">{% if absensi.izin_manual %}Susulan Resmi{% else %}Tersimpan{% endif %}</span>
                 </div>
                 <dl class="mt-5 grid gap-3 text-sm sm:grid-cols-2">
                     <div><dt class="font-bold text-slate-400">Tanggal praktikum</dt><dd class="mt-1 font-black text-slate-800">{{ absensi.tanggal_praktikum|date:"d M Y" }}</dd></div>
@@ -72,6 +72,11 @@
                     <div><dt class="font-bold text-slate-400">Jarak lokasi</dt><dd class="mt-1 font-black text-slate-800">{% if absensi.jarak_lokasi_meter != None %}{{ absensi.jarak_lokasi_meter }} meter{% else %}-{% endif %}</dd></div>
                     <div><dt class="font-bold text-slate-400">Periode</dt><dd class="mt-1 font-black text-slate-800">{{ absensi.periode|default:"-" }}</dd></div>
                 </dl>
+                {% if absensi.izin_manual %}
+                <div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+                    <strong>Dibuka oleh {{ absensi.izin_manual.dibuka_oleh.nama_pengguna }}</strong> · {{ absensi.izin_manual.alasan }}
+                </div>
+                {% endif %}
                 <div class="mt-5 flex flex-wrap gap-2" data-no-print>
                     {% if absensi.bukti_foto %}<a class="btn-secondary gap-2" href="{{ absensi.bukti_foto.url }}" target="_blank" rel="noreferrer"><i data-lucide="image" class="h-4 w-4"></i>Lihat Foto</a>{% endif %}
                     {% if absensi.bukti_video %}<a class="btn-secondary gap-2" href="{{ absensi.bukti_video.url }}" target="_blank" rel="noreferrer"><i data-lucide="video" class="h-4 w-4"></i>Lihat Video</a>{% endif %}

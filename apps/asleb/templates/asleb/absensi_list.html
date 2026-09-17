@@ -28,7 +28,7 @@
             </form>
             {% endif %}
 
-            {% if is_asisten_lab and pengaturan_absensi.dibuka and asleb_profile and jadwal_aktif %}
+            {% if is_asisten_lab and asleb_profile and manual_attendance_permission or is_asisten_lab and pengaturan_absensi.dibuka and asleb_profile and jadwal_aktif %}
             <a class="btn-primary w-full justify-center gap-2 sm:w-auto" href="{% url 'asleb:absensi_create' %}">
                 <i data-lucide="clipboard-check" class="h-4 w-4"></i>
                 <span>Isi Absensi</span>
@@ -36,6 +36,43 @@
             {% endif %}
         </div>
     </div>
+
+    {% if manual_attendance_permission %}
+    <div class="rounded-3xl border border-amber-300 bg-amber-50 px-5 py-4 text-sm text-amber-900">
+        <p class="font-black">Izin absensi susulan aktif</p>
+        <p class="mt-1">{{ manual_attendance_permission.jadwal.mata_kuliah }} · tanggal {{ manual_attendance_permission.tanggal_praktikum|date:"d M Y" }} · berlaku sampai {{ manual_attendance_permission.berlaku_sampai|date:"d M Y H:i" }} WIB.</p>
+        <p class="mt-1">Alasan: {{ manual_attendance_permission.alasan }}</p>
+    </div>
+    {% endif %}
+
+    {% if can_manage_modul %}
+    <section class="surface-card overflow-hidden p-5 md:p-6">
+        <div>
+            <p class="text-xs font-black uppercase tracking-[0.18em] text-amber-700">Kontrol Laboran</p>
+            <h3 class="mt-2 text-xl font-black text-slate-900">Buka Absensi Susulan</h3>
+            <p class="mt-1 text-sm text-slate-500">Berikan akses satu kali hanya kepada Aslab yang terlambat atau belum absen.</p>
+        </div>
+        <form method="post" action="{% url 'asleb:absensi_manual_grant' %}" class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            {% csrf_token %}
+            <div><label for="manual-asleb">Aslab</label><select id="manual-asleb" name="asleb_id" required><option value="">Pilih Aslab</option>{% for item in manual_permission_asleb_list %}<option value="{{ item.pk }}">{{ item.nama }} · {{ item.nim }}</option>{% endfor %}</select></div>
+            <div><label for="manual-jadwal">Jadwal/Kelas</label><select id="manual-jadwal" name="jadwal_id" required><option value="">Pilih jadwal</option>{% for item in manual_permission_schedule_list %}<option value="{{ item.pk }}">{{ item.mata_kuliah }} · {{ item.kelas }} · {{ item.get_hari_display }}</option>{% endfor %}</select></div>
+            <div><label for="manual-date">Tanggal yang terlewat</label><input id="manual-date" name="tanggal_praktikum" type="date" max="{% now 'Y-m-d' %}" required></div>
+            <div><label for="manual-duration">Berlaku</label><select id="manual-duration" name="durasi_jam"><option value="1">1 jam</option><option value="2" selected>2 jam</option><option value="4">4 jam</option><option value="8">8 jam</option><option value="12">12 jam</option><option value="24">24 jam</option></select></div>
+            <div><label for="manual-reason">Alasan</label><input id="manual-reason" name="alasan" maxlength="300" placeholder="Contoh: kendala jaringan" required></div>
+            <button class="btn-primary justify-center gap-2 md:col-span-2 xl:col-span-5" type="submit"><i data-lucide="unlock" class="h-4 w-4"></i>Buka Absensi Susulan</button>
+        </form>
+        {% if active_manual_permissions %}
+        <div class="mt-5 space-y-2">
+            {% for permission in active_manual_permissions %}
+            <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
+                <span><strong>{{ permission.asleb.nama }}</strong> · {{ permission.jadwal.mata_kuliah }} · {{ permission.tanggal_praktikum|date:"d M Y" }} · sampai {{ permission.berlaku_sampai|date:"H:i" }}</span>
+                <form method="post" action="{% url 'asleb:absensi_manual_revoke' permission.pk %}">{% csrf_token %}<button class="font-black text-rose-700" type="submit">Batalkan</button></form>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </section>
+    {% endif %}
 
     <div class="surface-card min-w-0 max-w-full overflow-hidden p-5 md:p-6">
         <div class="flex flex-wrap items-end justify-between gap-3">

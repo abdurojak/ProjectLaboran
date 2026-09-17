@@ -129,8 +129,8 @@ class HonorAsleb(models.Model):
     asleb = models.ForeignKey(Asleb, on_delete=models.CASCADE, related_name='honorarium')
     bulan = models.DateField(default=timezone.localdate)
     level = models.CharField(max_length=20, choices=LEVEL_CHOICES, default='junior')
-    jumlah_praktikum = models.PositiveSmallIntegerField(default=0)
-    total_pertemuan = models.PositiveSmallIntegerField(default=0)
+    jumlah_praktikum = models.PositiveSmallIntegerField('Jumlah Modul', default=1)
+    total_pertemuan = models.PositiveSmallIntegerField('Total Pertemuan', default=0)
     jumlah = models.DecimalField(max_digits=12, decimal_places=2)
     metode_transfer = models.CharField(
         max_length=30,
@@ -185,7 +185,7 @@ class HonorAsleb(models.Model):
 
     @property
     def total_jam_terealisasi(self):
-        return 7 * self.total_pertemuan
+        return 7 * self.jumlah_praktikum * self.total_pertemuan
 
     @property
     def total_akhir(self):
@@ -426,6 +426,38 @@ class PengaturanAbsensiAsleb(models.Model):
         return 'Absensi Aslab Dibuka' if self.dibuka else 'Absensi Aslab Ditutup'
 
 
+class IzinAbsensiManualAsleb(models.Model):
+    asleb = models.ForeignKey(Asleb, on_delete=models.CASCADE, related_name='izin_absensi_manual')
+    jadwal = models.ForeignKey(
+        'jadwal.JadwalPraktikum',
+        on_delete=models.PROTECT,
+        related_name='izin_absensi_manual_asleb',
+    )
+    tanggal_praktikum = models.DateField()
+    berlaku_sampai = models.DateTimeField()
+    alasan = models.CharField(max_length=300)
+    dibuka_oleh = models.ForeignKey(
+        'pengguna.Pengguna',
+        on_delete=models.PROTECT,
+        related_name='izin_absensi_manual_dibuka',
+    )
+    digunakan_pada = models.DateTimeField(blank=True, null=True)
+    dibatalkan_pada = models.DateTimeField(blank=True, null=True)
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-dibuat_pada']
+        verbose_name = 'Izin Absensi Manual Aslab'
+        verbose_name_plural = 'Izin Absensi Manual Aslab'
+
+    @property
+    def aktif(self):
+        return not self.digunakan_pada and not self.dibatalkan_pada and self.berlaku_sampai > timezone.now()
+
+    def __str__(self):
+        return f'Izin susulan {self.asleb.nama} - {self.tanggal_praktikum:%d-%m-%Y}'
+
+
 class ModulPraktikum(models.Model):
     matkul = models.ForeignKey(
         'pendaftaran_asleb.MataKuliahAsleb',
@@ -493,6 +525,13 @@ class AbsensiAsleb(models.Model):
         'jadwal.JadwalPraktikum',
         on_delete=models.SET_NULL,
         related_name='absensi_asleb',
+        blank=True,
+        null=True,
+    )
+    izin_manual = models.OneToOneField(
+        IzinAbsensiManualAsleb,
+        on_delete=models.PROTECT,
+        related_name='absensi',
         blank=True,
         null=True,
     )

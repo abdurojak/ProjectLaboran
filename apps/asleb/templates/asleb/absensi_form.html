@@ -13,6 +13,12 @@
     <div class="rounded-2xl border border-cyan-200 bg-cyan-50 p-5 text-sm text-cyan-900">
         <span class="font-bold">Mata kuliah:</span> {{ view.jadwal.mata_kuliah }}. File modul dapat diunduh dari halaman Absensi Aslab.
     </div>
+    {% if manual_permission %}
+    <div class="rounded-2xl border border-amber-300 bg-amber-50 p-5 text-sm text-amber-900">
+        <p class="font-black">Absensi susulan resmi dari Laboran</p>
+        <p class="mt-1">Tanggal praktikum: {{ manual_permission.tanggal_praktikum|date:"d M Y" }}. Alasan: {{ manual_permission.alasan }}</p>
+    </div>
+    {% endif %}
 
     {% if available_schedules|length > 1 %}
     <form method="get" class="surface-card p-5">

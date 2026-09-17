@@ -244,6 +244,7 @@ class AbsensiAslebForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.asleb = kwargs.pop('asleb')
         self.jadwal = kwargs.pop('jadwal')
+        self.attendance_date = kwargs.pop('attendance_date', None) or timezone.localdate()
         super().__init__(*args, **kwargs)
         self.periode = get_active_asleb_period(self.asleb)
         if self.periode is None:
@@ -309,7 +310,7 @@ class AbsensiAslebForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
-        attendance_date = timezone.localdate()
+        attendance_date = self.attendance_date
         latitude = self._read_decimal(cleaned_data.get('latitude'))
         longitude = self._read_decimal(cleaned_data.get('longitude'))
         accuracy = self._read_float(cleaned_data.get('gps_accuracy'))
@@ -322,7 +323,7 @@ class AbsensiAslebForm(forms.ModelForm):
             daily_attendance = daily_attendance.exclude(pk=self.instance.pk)
         if daily_attendance.count() >= MAX_DAILY_MODULE_ATTENDANCE:
             raise forms.ValidationError(
-                f'Anda sudah melakukan absensi maksimal {MAX_DAILY_MODULE_ATTENDANCE} modul untuk jadwal praktikum hari ini.'
+                f'Anda sudah melakukan absensi maksimal {MAX_DAILY_MODULE_ATTENDANCE} modul untuk tanggal praktikum ini.'
             )
 
         if not ENABLE_CAMERA_LOCATION_CAPTURE:
@@ -361,7 +362,7 @@ class AbsensiAslebForm(forms.ModelForm):
         modul = self.cleaned_data['modul_praktikum']
         instance.jadwal = self.jadwal
         instance.periode = self.periode
-        instance.tanggal_praktikum = timezone.localdate()
+        instance.tanggal_praktikum = self.attendance_date
         instance.modul = modul.nomor
         instance.materi_praktikum = modul.judul
         instance.file_modul.name = modul.file.name

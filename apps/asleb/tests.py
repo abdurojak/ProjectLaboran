@@ -43,6 +43,7 @@ from .models import (
     HasilPraktikumMahasiswa,
     HonorAsleb,
     HonorReassignment,
+    IzinAbsensiManualAsleb,
     ModulPraktikum,
     PengaturanAbsensiAsleb,
     PengingatAbsensiAsleb,
@@ -680,6 +681,57 @@ class AslebViewTests(TestCase):
 
         self.assertRedirects(response, reverse('asleb:absensi_list'))
         self.assertTrue(PengaturanAbsensiAsleb.get_solo().dibuka)
+
+    @patch('apps.asleb.views.timezone.localdate', return_value=date(2026, 7, 9))
+    def test_laboran_dapat_membuka_absensi_susulan_satu_kali_untuk_aslab(self, _localdate):
+        aslab_user = self.login_asisten_for_matkul()
+        jadwal = self.create_active_schedule()
+        modul = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=12,
+            judul='Modul Susulan',
+            file=SimpleUploadedFile('modul-susulan.pdf', b'%PDF-1.4', content_type='application/pdf'),
+        )
+        PengaturanAbsensiAsleb.get_solo().__class__.objects.update_or_create(pk=1, defaults={'dibuka': False})
+        session = self.client.session
+        session['pengguna_id'] = self.pengguna.pk
+        session.save()
+
+        grant_response = self.client.post(reverse('asleb:absensi_manual_grant'), {
+            'asleb_id': self.asleb.pk,
+            'jadwal_id': jadwal.pk,
+            'tanggal_praktikum': '2026-07-06',
+            'durasi_jam': '2',
+            'alasan': 'Kendala jaringan saat jadwal berlangsung.',
+        })
+
+        self.assertRedirects(grant_response, reverse('asleb:absensi_list'))
+        permission = IzinAbsensiManualAsleb.objects.get(asleb=self.asleb)
+        self.assertIsNone(permission.digunakan_pada)
+
+        session = self.client.session
+        session['pengguna_id'] = aslab_user.pk
+        session.save()
+        form_response = self.client.get(reverse('asleb:absensi_create'))
+        self.assertEqual(form_response.status_code, 200)
+        self.assertContains(form_response, 'Absensi susulan resmi dari Laboran')
+
+        submit_response = self.client.post(reverse('asleb:absensi_create'), {
+            'modul_praktikum': modul.pk,
+            'pekerjaan': 'Mengajar kelas susulan',
+            'bukti_foto': self.make_camera_photo('foto-susulan.png'),
+            'bukti_video': SimpleUploadedFile('video-susulan.mp4', b'video-test', content_type='video/mp4'),
+        })
+
+        self.assertRedirects(submit_response, reverse('asleb:absensi_list'))
+        attendance = AbsensiAsleb.objects.get(izin_manual=permission)
+        self.assertEqual(attendance.tanggal_praktikum, date(2026, 7, 6))
+        permission.refresh_from_db()
+        self.assertIsNotNone(permission.digunakan_pada)
+        self.assertRedirects(
+            self.client.get(reverse('asleb:absensi_create')),
+            reverse('asleb:absensi_list'),
+        )
 
     def test_asleb_search_filters_data(self):
         response = self.client.get(reverse('asleb:asleb_list'), {'q': '2301001'})
@@ -1496,7 +1548,7 @@ class AslebViewTests(TestCase):
             status='diproses',
         )
 
-        self.assertEqual(honor.total_jam_terealisasi, 70)
+        self.assertEqual(honor.total_jam_terealisasi, 140)
         self.assertEqual(honor.total_akhir, 60)
         self.assertEqual(honor.level, 'senior')
         self.assertEqual(honor.honor_per_jam, 8000)
@@ -1504,6 +1556,21 @@ class AslebViewTests(TestCase):
         self.assertEqual(honor.metode_transfer, 'bni')
         self.assertEqual(honor.nomor_transfer, '123456789')
         self.assertEqual(honor.nama_pemilik_transfer, 'Riwayat Asleb 3')
+
+    def test_honor_mengalikan_jumlah_modul_pertemuan_dan_tujuh_jam(self):
+        honor = HonorAsleb.objects.create(
+            asleb=self.asleb,
+            bulan=date(2026, 4, 1),
+            jumlah_praktikum=2,
+            total_pertemuan=3,
+            status='diproses',
+        )
+
+        self.assertEqual(honor.level, 'junior')
+        self.assertEqual(honor.total_jam_terealisasi, 42)
+        self.assertEqual(honor.total_akhir, 42)
+        self.assertEqual(honor.honor_per_jam, 7000)
+        self.assertEqual(honor.jumlah, 294000)
 
     def test_asisten_lab_hanya_melihat_honor_milik_sendiri_tanpa_aksi_pengelola(self):
         asisten_user = Pengguna.objects.create(
