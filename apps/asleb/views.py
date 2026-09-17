@@ -668,6 +668,51 @@ class AbsensiAslebListView(ListView):
         )
 
 
+class RiwayatAbsensiAslebView(TemplateView):
+    template_name = 'asleb/riwayat_absensi.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        pengguna = getattr(request, 'current_pengguna', None)
+        if not pengguna or pengguna.role != ASISTEN_LAB_ROLE:
+            messages.error(request, 'Riwayat absensi pribadi hanya tersedia untuk Asisten Lab.')
+            return redirect('dashboard:home')
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        pengguna = self.request.current_pengguna
+        asleb_profile = (
+            Asleb.objects.filter(nim=pengguna.nim_nik)
+            .order_by('-diperbarui_pada', '-pk')
+            .first()
+        )
+        web_history = AbsensiAsleb.objects.none()
+        mobile_history = AbsensiMasukAsleb.objects.none()
+        if asleb_profile:
+            web_history = (
+                AbsensiAsleb.objects
+                .filter(asleb=asleb_profile)
+                .select_related('jadwal', 'jadwal__ruangan', 'modul_praktikum', 'modul_praktikum__matkul', 'periode')
+                .order_by('-dibuat_pada')
+            )
+            mobile_history = (
+                AbsensiMasukAsleb.objects
+                .filter(asleb=asleb_profile)
+                .select_related('jadwal', 'jadwal__ruangan', 'jadwal__ruangan_tambahan')
+                .order_by('-waktu_masuk')
+            )
+
+        context.update({
+            'asleb_profile': asleb_profile,
+            'web_history': web_history,
+            'mobile_history': mobile_history,
+            'total_web': web_history.count(),
+            'total_mobile': mobile_history.count(),
+            'total_absensi': web_history.count() + mobile_history.count(),
+        })
+        return context
+
+
 class AbsensiAslebCreateView(CreateView):
     model = AbsensiAsleb
     form_class = AbsensiAslebForm
@@ -936,6 +981,41 @@ def get_praktikum_matkul_queryset(pengguna):
     return queryset.none()
 
 
+def get_peserta_praktikum_manager(matkul):
+    peserta_pertama = (
+        matkul.peserta_praktikum
+        .filter(dibuat_oleh__isnull=False)
+        .select_related('dibuat_oleh')
+        .order_by('dibuat_pada', 'pk')
+        .first()
+    )
+    return peserta_pertama.dibuat_oleh if peserta_pertama else None
+
+
+def can_manage_peserta_praktikum(pengguna, matkul):
+    if not pengguna or pengguna.role != ASISTEN_LAB_ROLE or not matkul:
+        return False
+    if not get_praktikum_matkul_queryset(pengguna).filter(pk=matkul.pk).exists():
+        return False
+
+    manager = get_peserta_praktikum_manager(matkul)
+    if not manager or manager.pk == pengguna.pk:
+        return True
+
+    # Pengelolaan dapat diambil alih jika Aslab pembuat sudah tidak aktif
+    # atau tidak lagi ditugaskan pada mata kuliah yang sama.
+    return not get_praktikum_matkul_queryset(manager).filter(pk=matkul.pk).exists()
+
+
+def get_manageable_peserta_matkul_queryset(pengguna):
+    queryset = get_praktikum_matkul_queryset(pengguna)
+    manageable_ids = [
+        matkul.pk for matkul in queryset
+        if can_manage_peserta_praktikum(pengguna, matkul)
+    ]
+    return queryset.filter(pk__in=manageable_ids)
+
+
 def get_active_asleb_for_matkul(pengguna, matkul):
     if not pengguna or pengguna.role != ASISTEN_LAB_ROLE or not matkul:
         return None
@@ -1072,7 +1152,7 @@ class PesertaPraktikumManageMixin:
         return super().dispatch(request, *args, **kwargs)
 
     def get_manageable_matkul_queryset(self):
-        return get_praktikum_matkul_queryset(self.request.current_pengguna)
+        return get_manageable_peserta_matkul_queryset(self.request.current_pengguna)
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -1133,6 +1213,8 @@ class PraktikumMahasiswaListView(PraktikumMahasiswaAccessMixin, TemplateView):
             matkul.jumlah_peserta = matkul.peserta_praktikum.filter(aktif=True).count()
             matkul.modul_tersedia = list(matkul.modul_praktikum.all())
             matkul.peserta_modal_list = list(matkul.peserta_praktikum.select_related('pengguna').all())
+            matkul.peserta_manager = get_peserta_praktikum_manager(matkul)
+            matkul.can_manage_peserta = can_manage_peserta_praktikum(pengguna, matkul)
             self.attach_participant_summaries(matkul.peserta_modal_list)
 
         selected_id = self.request.GET.get('matkul', '').strip()
@@ -1176,7 +1258,7 @@ class PraktikumMahasiswaListView(PraktikumMahasiswaAccessMixin, TemplateView):
             'search_query': search_query,
             'peserta_list': peserta_list,
             'selected_matkul_id': effective_selected_id,
-            'can_manage_peserta': pengguna.role == ASISTEN_LAB_ROLE,
+            'can_manage_peserta': any(item.can_manage_peserta for item in matkul_list),
             'is_asisten_lab': pengguna.role == ASISTEN_LAB_ROLE,
             'show_peserta_modal': self.request.GET.get('show_peserta') == '1',
         })
@@ -1697,14 +1779,38 @@ class PesertaPraktikumBulkCreateView(PesertaPraktikumManageMixin, FormView):
     template_name = 'asleb/peserta_praktikum_form.html'
     success_url = reverse_lazy('asleb:praktikum_mahasiswa_list')
 
+    def dispatch(self, request, *args, **kwargs):
+        pengguna = getattr(request, 'current_pengguna', None)
+        if (
+            pengguna
+            and pengguna.role == ASISTEN_LAB_ROLE
+            and get_praktikum_matkul_queryset(pengguna).exists()
+            and not get_manageable_peserta_matkul_queryset(pengguna).exists()
+        ):
+            messages.info(
+                request,
+                'Daftar peserta sudah dikelola Aslab lain dan otomatis tersambung ke akun Anda.',
+            )
+            return redirect('asleb:praktikum_mahasiswa_list')
+        return super().dispatch(request, *args, **kwargs)
+
     def form_valid(self, form):
-        matkul = form.cleaned_data['matkul']
         created = 0
         updated = 0
         with transaction.atomic():
+            from apps.pendaftaran_asleb.models import MataKuliahAsleb
+
+            matkul = MataKuliahAsleb.objects.select_for_update().get(pk=form.cleaned_data['matkul'].pk)
+            list(matkul.peserta_praktikum.select_for_update().values_list('pk', flat=True))
+            if not can_manage_peserta_praktikum(self.request.current_pengguna, matkul):
+                messages.info(
+                    self.request,
+                    'Daftar peserta sudah diinput Aslab lain dan otomatis tersambung ke akun Anda.',
+                )
+                return redirect(f'{self.success_url}?matkul={matkul.pk}')
             for row in form.cleaned_data['peserta_rows']:
                 account = Pengguna.objects.filter(nim_nik=row['nim']).first()
-                _, was_created = PesertaPraktikum.objects.update_or_create(
+                peserta, was_created = PesertaPraktikum.objects.get_or_create(
                     matkul=matkul,
                     nim=row['nim'],
                     defaults={
@@ -1714,6 +1820,13 @@ class PesertaPraktikumBulkCreateView(PesertaPraktikumManageMixin, FormView):
                         'dibuat_oleh': self.request.current_pengguna,
                     },
                 )
+                if not was_created:
+                    peserta.nama = row['nama']
+                    peserta.pengguna = account
+                    peserta.aktif = True
+                    if not peserta.dibuat_oleh_id:
+                        peserta.dibuat_oleh = self.request.current_pengguna
+                    peserta.save(update_fields=['nama', 'pengguna', 'aktif', 'dibuat_oleh', 'diperbarui_pada'])
                 created += int(was_created)
                 updated += int(not was_created)
         messages.success(self.request, f'{created} peserta ditambahkan dan {updated} peserta diperbarui.')
@@ -1767,7 +1880,7 @@ def delete_peserta_praktikum(request, pk):
         return redirect('asleb:praktikum_mahasiswa_list')
     peserta = get_object_or_404(
         PesertaPraktikum.objects.select_related('matkul').filter(
-            matkul__in=get_praktikum_matkul_queryset(pengguna),
+            matkul__in=get_manageable_peserta_matkul_queryset(pengguna),
         ),
         pk=pk,
     )
@@ -1801,7 +1914,7 @@ def bulk_delete_peserta_praktikum(request):
         return redirect('asleb:praktikum_mahasiswa_list')
     participant_ids = request.POST.getlist('peserta_ids')
     matkul_id = request.POST.get('matkul_id', '').strip()
-    manageable_matkul = get_praktikum_matkul_queryset(pengguna)
+    manageable_matkul = get_manageable_peserta_matkul_queryset(pengguna)
     peserta_queryset = PesertaPraktikum.objects.filter(
         pk__in=participant_ids,
         matkul__in=manageable_matkul,
@@ -1846,7 +1959,7 @@ def delete_all_peserta_praktikum(request, matkul_pk):
     if not pengguna or pengguna.role != ASISTEN_LAB_ROLE:
         messages.error(request, 'Hanya Asisten Lab yang dapat menghapus peserta praktikum.')
         return redirect('asleb:praktikum_mahasiswa_list')
-    matkul = get_object_or_404(get_praktikum_matkul_queryset(pengguna), pk=matkul_pk)
+    matkul = get_object_or_404(get_manageable_peserta_matkul_queryset(pengguna), pk=matkul_pk)
     peserta_qs = matkul.peserta_praktikum.all()
     total = peserta_qs.count()
     with transaction.atomic():

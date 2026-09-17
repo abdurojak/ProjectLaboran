@@ -46,8 +46,8 @@ class JadwalPraktikumForm(forms.ModelForm):
         self.fields['ruangan_tambahan'].queryset = self.get_additional_room_queryset()
         self.fields['ruangan_tambahan'].help_text = 'Hanya lab dalam grup ruangan gabungan aktif yang dapat dipakai sebagai ruangan tambahan.'
         self.combinable_room_options = self.get_combinable_room_options()
-        selected_matkul = self.get_selected_matkul()
-        self.participant_count = selected_matkul.peserta_praktikum.filter(aktif=True).count() if selected_matkul else 0
+        self.selected_matkul = self.get_selected_matkul()
+        self.participant_count = self.selected_matkul.peserta_praktikum.filter(aktif=True).count() if self.selected_matkul else 0
 
     class Meta:
         model = JadwalPraktikum
@@ -137,7 +137,10 @@ class JadwalPraktikumForm(forms.ModelForm):
         tambahan = cleaned_data.get('ruangan_tambahan')
         participant_count = matkul.peserta_praktikum.filter(aktif=True).count() if matkul else 0
         if matkul and self.current_pengguna and self.current_pengguna.role == 'asisten_lab' and not participant_count:
-            self.add_error('ruangan', 'Laboran harus menginput mahasiswa mata kuliah ini sebelum Asisten Lab memilih laboratorium.')
+            self.add_error(
+                'ruangan',
+                'Masukkan peserta mahasiswa terlebih dahulu sebelum memilih kelas atau laboratorium.',
+            )
         if tambahan and ruangan:
             if not GrupRuanganGabungan.get_active_pair(ruangan, tambahan):
                 self.add_error('ruangan_tambahan', 'Ruangan tambahan hanya berlaku untuk lab dalam grup ruangan gabungan aktif.')

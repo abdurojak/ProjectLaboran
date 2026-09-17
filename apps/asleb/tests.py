@@ -331,6 +331,47 @@ class AslebViewTests(TestCase):
         self.assertContains(response, 'Hashing')
         self.assertContains(response, '<span class="text-slate-400">-</span>', html=True)
 
+    def test_aslab_memiliki_riwayat_absensi_pribadi_sebagai_bukti(self):
+        self.login_asisten_for_matkul()
+        jadwal = self.create_active_schedule()
+        modul = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=6,
+            judul='Riwayat Bukti',
+            file=SimpleUploadedFile('modul-bukti.pdf', b'%PDF-1.4', content_type='application/pdf'),
+        )
+        absensi_web = AbsensiAsleb.objects.create(
+            asleb=self.asleb,
+            jadwal=jadwal,
+            modul_praktikum=modul,
+            tanggal_praktikum=date(2026, 7, 1),
+            modul=6,
+            materi_praktikum='Materi Bukti',
+            pekerjaan='Mengajar praktikum',
+            file_modul=SimpleUploadedFile('bukti-modul.pdf', b'%PDF-1.4', content_type='application/pdf'),
+            bukti_foto=self.make_camera_photo('bukti-web.png'),
+        )
+        absensi_mobile = AbsensiMasukAsleb.objects.create(
+            asleb=self.asleb,
+            jadwal=jadwal,
+            tanggal_absensi=date(2026, 7, 1),
+            foto_absensi=self.make_camera_photo('bukti-mobile.png'),
+        )
+
+        response = self.client.get(reverse('asleb:absensi_history'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Riwayat Absensi Saya')
+        self.assertContains(response, f'Bukti #WEB-{absensi_web.pk:06d}')
+        self.assertContains(response, f'Bukti #APP-{absensi_mobile.pk:06d}')
+        self.assertContains(response, 'Cetak / Simpan PDF')
+        self.assertEqual(response.context['total_absensi'], 2)
+
+    def test_laboran_tidak_dapat_membuka_riwayat_absensi_pribadi_aslab(self):
+        response = self.client.get(reverse('asleb:absensi_history'))
+
+        self.assertRedirects(response, reverse('dashboard:home'))
+
     def test_daftar_absensi_modul_memakai_preview_inline(self):
         modul = ModulPraktikum.objects.create(
             matkul=self.matkul,
@@ -866,6 +907,66 @@ class AslebViewTests(TestCase):
         unlinked = PesertaPraktikum.objects.get(matkul=self.matkul, nim='0640020088')
         self.assertEqual(linked.pengguna, mahasiswa)
         self.assertIsNone(unlinked.pengguna)
+
+    def test_peserta_diinput_sekali_dan_otomatis_tersambung_ke_aslab_lain(self):
+        aslab_pertama = self.login_asisten_for_matkul()
+        first_assignment = AslabAssignment.objects.get(asleb=self.asleb)
+        self.client.post(reverse('asleb:praktikum_peserta_create'), {
+            'metode_input': 'manual',
+            'matkul': self.matkul.pk,
+            'daftar_mahasiswa': '0640020099, Mahasiswa Bersama',
+        })
+
+        asleb_kedua = Asleb.objects.create(
+            nama='Aslab Kedua', nim='2301002', no_hp='081234567892',
+            email='aslab-kedua@example.com', program_studi='Informatika',
+            matkul=str(self.matkul), semester=4, tanggal_bergabung=date(2026, 6, 22),
+            periode_aktif=first_assignment.slot.periode,
+        )
+        second_slot = AslabSlot.objects.create(
+            periode=first_assignment.slot.periode,
+            matkul=self.matkul,
+            nomor=2,
+        )
+        AslabAssignment.objects.create(
+            slot=second_slot,
+            asleb=asleb_kedua,
+            mulai_pada=date(2026, 7, 1),
+            status=AslabAssignment.STATUS_ACTIVE,
+        )
+        aslab_kedua = Pengguna.objects.create(
+            nama_pengguna='Aslab Kedua', nim_nik=asleb_kedua.nim,
+            email='aslab-kedua@std.trisakti.ac.id', password='rahasia123',
+            no_hp=asleb_kedua.no_hp, alamat='Jakarta', fakultas='Teknologi Industri',
+            prodi='Informatika', gender='laki_laki', role='asisten_lab', is_verified=True,
+        )
+        session = self.client.session
+        session['pengguna_id'] = aslab_kedua.pk
+        session.save()
+
+        list_response = self.client.get(reverse('asleb:praktikum_mahasiswa_list'))
+        create_response = self.client.post(reverse('asleb:praktikum_peserta_create'), {
+            'metode_input': 'manual',
+            'matkul': self.matkul.pk,
+            'daftar_mahasiswa': '0640020088, Peserta Duplikat',
+        }, follow=True)
+
+        self.assertContains(list_response, 'Mahasiswa Bersama')
+        self.assertContains(list_response, f'Otomatis tersambung dari {aslab_pertama.nama_pengguna}')
+        self.assertNotContains(list_response, reverse('asleb:praktikum_peserta_create'))
+        self.assertContains(create_response, 'Daftar peserta sudah dikelola Aslab lain')
+        self.assertEqual(PesertaPraktikum.objects.filter(matkul=self.matkul).count(), 1)
+        peserta = PesertaPraktikum.objects.get(matkul=self.matkul)
+        self.assertEqual(peserta.dibuat_oleh, aslab_pertama)
+        self.assertEqual(
+            self.client.get(reverse('asleb:praktikum_peserta_update', args=[peserta.pk])).status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.post(reverse('asleb:praktikum_peserta_delete', args=[peserta.pk])).status_code,
+            404,
+        )
+        self.assertTrue(PesertaPraktikum.objects.filter(pk=peserta.pk).exists())
 
     def test_import_peserta_praktikum_dari_csv(self):
         self.login_asisten_for_matkul()

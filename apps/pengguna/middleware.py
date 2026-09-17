@@ -49,6 +49,7 @@ class PenggunaLoginRequiredMiddleware:
     ASISTEN_LAB_ALLOWED_ASLEB_URLS = {
         'absensi_list',
         'absensi_create',
+        'absensi_history',
         'honor_list',
         'praktikum_mahasiswa_list',
         'praktikum_nilai',

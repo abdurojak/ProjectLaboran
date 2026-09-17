@@ -104,6 +104,14 @@ SIDEBAR_LINKS = [
                 'roles': {LABORAN_ROLE, ASISTEN_LAB_ROLE},
             },
             {
+                'title': 'Riwayat Absensi Saya',
+                'icon': 'history',
+                'url': 'asleb:absensi_history',
+                'namespace': 'asleb',
+                'url_names': {'absensi_history'},
+                'roles': {ASISTEN_LAB_ROLE},
+            },
+            {
                 'title': 'Nilai & Absensi Mahasiswa',
                 'icon': 'clipboard-pen-line',
                 'url': 'asleb:praktikum_mahasiswa_list',

@@ -3,6 +3,7 @@ from django.urls import path
 from .views import (
     AbsensiAslebCreateView,
     AbsensiAslebListView,
+    RiwayatAbsensiAslebView,
     AslebCreateView,
     AslebDeleteView,
     AslebDetailView,
@@ -53,6 +54,7 @@ urlpatterns = [
     path('', AslebListView.as_view(), name='asleb_list'),
     path('tambah/', AslebCreateView.as_view(), name='asleb_create'),
     path('absensi/', AbsensiAslebListView.as_view(), name='absensi_list'),
+    path('absensi/riwayat-saya/', RiwayatAbsensiAslebView.as_view(), name='absensi_history'),
     path('absensi/tambah/', AbsensiAslebCreateView.as_view(), name='absensi_create'),
     path('absensi/toggle/', toggle_absensi_status, name='absensi_toggle_status'),
     path('absensi/modul/tambah/', ModulPraktikumCreateView.as_view(), name='modul_create'),

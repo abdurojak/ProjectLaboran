@@ -706,7 +706,7 @@ class JadwalViewTests(TestCase):
         jadwal = JadwalPraktikum.objects.get(hari='rabu', mata_kuliah=str(self.matkul_lain))
         self.assertEqual(jadwal.get_display_ruangan_kapasitas(), 38)
 
-    def test_aslab_tidak_dapat_memilih_lab_sebelum_peserta_diinput_laboran(self):
+    def test_aslab_diberi_peringatan_input_peserta_sebelum_memilih_kelas(self):
         aslab = self.login_as_asisten_lab(self.matkul_lain)
         PendaftaranAsleb.objects.create(
             nama=aslab.nama_pengguna, nim=aslab.nim_nik, no_hp=aslab.no_hp,
@@ -718,7 +718,8 @@ class JadwalViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.context['form'].fields['ruangan'].queryset.exists())
-        self.assertContains(response, 'Laboran belum menginput mahasiswa')
+        self.assertContains(response, 'Masukkan peserta mahasiswa terlebih dahulu')
+        self.assertContains(response, reverse('asleb:praktikum_peserta_create'))
 
     def test_lab_lain_ditolak_jika_memilih_ruang_tambahan(self):
         response = self.client.post(reverse('jadwal:jadwal_create'), {

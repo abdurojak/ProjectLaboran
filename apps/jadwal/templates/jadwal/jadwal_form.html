@@ -91,7 +91,18 @@
             {% endfor %}
         </div>
         <div id="capacity-note" class="schedule-note-card schedule-note-card--info px-4 py-3 pl-7 text-sm font-semibold">
-            {% if form.participant_count %}Ada {{ form.participant_count }} peserta aktif. Semua lab tersedia; pilihan yang kapasitasnya kurang memerlukan konfirmasi.{% elif request.current_pengguna.role == 'asisten_lab' %}Laboran belum menginput mahasiswa. Pilihan lab belum dapat digunakan.{% else %}Pilih mata kuliah untuk melihat jumlah peserta dan kapasitas lab.{% endif %}
+            {% if form.participant_count %}
+            Ada {{ form.participant_count }} peserta aktif. Semua lab tersedia; pilihan yang kapasitasnya kurang memerlukan konfirmasi.
+            {% elif request.current_pengguna.role == 'asisten_lab' and form.selected_matkul %}
+            <span class="flex flex-wrap items-center justify-between gap-3">
+                <span>Masukkan peserta mahasiswa terlebih dahulu sebelum memilih kelas atau laboratorium.</span>
+                <a class="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-3 py-2 text-xs font-black text-white transition hover:bg-amber-700" href="{% url 'asleb:praktikum_peserta_create' %}">
+                    <i data-lucide="user-round-plus" class="h-4 w-4"></i>Input Peserta
+                </a>
+            </span>
+            {% else %}
+            Pilih mata kuliah terlebih dahulu agar sistem dapat memeriksa peserta dan menyesuaikan kapasitas kelas atau laboratorium.
+            {% endif %}
         </div>
         {% if request.current_pengguna.role == 'asisten_lab' and object %}
         <div class="schedule-note-card schedule-note-card--warn px-4 py-3 pl-7 text-sm leading-6">
@@ -122,6 +133,7 @@
     const participantCountInitial = {{ form.participant_count|default:0 }};
     let participantCount = participantCountInitial;
     const roomsUrl = "{% url 'jadwal:ruangan_tersedia' %}";
+    const participantInputUrl = "{% url 'asleb:praktikum_peserta_create' %}";
     let combinableRoomOptions = JSON.parse(document.getElementById('combinable-room-options')?.textContent || '{}');
     let roomCapacities = JSON.parse(document.getElementById('room-capacities')?.textContent || '{}');
 
@@ -141,9 +153,18 @@
             combinableRoomOptions = data.combinable_rooms || {};
             participantCount = data.participant_count;
             if (confirmation) confirmation.checked = false;
-            capacityNote.textContent = data.participant_count
-                ? `${data.participant_count} peserta aktif. Lab dengan kapasitas kurang tetap dapat dipilih setelah konfirmasi.`
-                : 'Belum ada peserta aktif. Asisten Lab belum dapat memilih laboratorium sebelum data diinput laboran.';
+            if (data.participant_count) {
+                capacityNote.textContent = `${data.participant_count} peserta aktif. Lab dengan kapasitas kurang tetap dapat dipilih setelah konfirmasi.`;
+            } else {
+                capacityNote.replaceChildren();
+                const message = document.createElement('span');
+                message.textContent = 'Masukkan peserta mahasiswa terlebih dahulu sebelum memilih kelas atau laboratorium. ';
+                const link = document.createElement('a');
+                link.href = participantInputUrl;
+                link.className = 'font-black underline underline-offset-4';
+                link.textContent = 'Input Peserta sekarang';
+                capacityNote.append(message, link);
+            }
             updateAdditionalRoomState();
         });
     }

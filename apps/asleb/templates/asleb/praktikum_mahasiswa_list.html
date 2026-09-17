@@ -480,7 +480,7 @@
                                 <p class="praktikum-muted-text text-xs font-black uppercase tracking-[0.16em]">Modul Tersedia</p>
                                 <h4 class="mt-2 text-lg font-black text-slate-900">Akses cepat per modul</h4>
                             </div>
-                            {% if can_manage_peserta %}
+                            {% if is_asisten_lab %}
                             <button type="button" class="btn-secondary gap-2" data-participant-modal-open="participants-{{ rekap_matkul.pk }}">
                                 <i data-lucide="list" class="h-4 w-4"></i>Daftar Peserta
                             </button>
@@ -539,7 +539,7 @@
                                     <p class="praktikum-muted-text text-xs font-black uppercase tracking-[0.16em]">Modul Tersedia</p>
                                     <h4 class="mt-2 text-lg font-black text-slate-900">Akses cepat per modul</h4>
                                 </div>
-                                {% if can_manage_peserta %}
+                                {% if is_asisten_lab %}
                                 <button type="button" class="btn-secondary gap-2" data-participant-modal-open="participants-{{ item.pk }}">
                                     <i data-lucide="list" class="h-4 w-4"></i>Daftar Peserta
                                 </button>
@@ -629,7 +629,7 @@
         </div>
     </div>
 
-    {% if can_manage_peserta %}
+    {% if is_asisten_lab %}
         {% for item in matkul_list %}
         <div class="participant-modal fixed z-50 bg-slate-950/60 p-4 backdrop-blur-sm" id="participants-{{ item.pk }}" aria-hidden="true" role="dialog" aria-modal="true">
             <div class="mx-auto flex h-full max-w-6xl items-center justify-center">
@@ -639,9 +639,15 @@
                             <p class="text-xs font-black uppercase tracking-[0.18em] text-brand-700">Daftar Peserta</p>
                             <h3 class="mt-2 text-2xl font-black text-slate-900">{{ item.nama }}{% if item.kelas %} - {{ item.kelas }}{% endif %}</h3>
                             <p class="mt-1 text-sm text-slate-500" data-participant-counter>{{ item.jumlah_peserta }} peserta aktif</p>
+                            {% if item.peserta_manager and not item.can_manage_peserta %}
+                            <p class="mt-2 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
+                                <i data-lucide="users-round" class="h-3.5 w-3.5"></i>
+                                Otomatis tersambung dari {{ item.peserta_manager.nama_pengguna }}
+                            </p>
+                            {% endif %}
                         </div>
                         <div class="flex flex-wrap gap-2">
-                            {% if item.peserta_modal_list %}
+                            {% if item.peserta_modal_list and item.can_manage_peserta %}
                             <form method="post" action="{% url 'asleb:praktikum_peserta_delete_all' item.pk %}" data-no-global-loading="true" data-confirm-delete-form data-confirm-title="Hapus semua peserta?" data-confirm-message="Semua peserta pada {{ item.nama }}{% if item.kelas %} - {{ item.kelas }}{% endif %} akan dihapus atau dinonaktifkan. Riwayat nilai tetap disimpan.">
                                 {% csrf_token %}
                                 <button class="inline-flex items-center justify-center rounded-2xl border border-rose-200 px-4 py-3 text-sm font-black text-rose-700 transition hover:bg-rose-50" data-delete-all-button type="submit">
@@ -679,16 +685,16 @@
                                     <option value="belum">Belum terhubung</option>
                                 </select>
                             </div>
-                            <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-45" data-bulk-delete-button data-confirm-title="Hapus peserta terpilih?" data-confirm-message="Peserta yang dipilih akan dihapus atau dinonaktifkan. Riwayat nilai yang sudah ada tetap aman.">
+                            {% if item.can_manage_peserta %}<button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-45" data-bulk-delete-button data-confirm-title="Hapus peserta terpilih?" data-confirm-message="Peserta yang dipilih akan dihapus atau dinonaktifkan. Riwayat nilai yang sudah ada tetap aman.">
                                 <i data-lucide="trash-2" class="mr-2 h-4 w-4"></i>Hapus Terpilih
-                            </button>
+                            </button>{% endif %}
                         </div>
 
                         <div class="min-h-0 flex-1 overflow-auto">
                             <table class="min-w-[920px]">
                                 <thead>
                                     <tr>
-                                        <th class="w-12"><input type="checkbox" data-select-all aria-label="Pilih semua peserta"></th>
+                                        <th class="w-12">{% if item.can_manage_peserta %}<input type="checkbox" data-select-all aria-label="Pilih semua peserta">{% endif %}</th>
                                         <th>NIM</th>
                                         <th>Nama</th>
                                         <th>Akun</th>
@@ -701,7 +707,7 @@
                                 <tbody>
                                     {% for peserta in item.peserta_modal_list %}
                                     <tr data-participant-row data-participant-id="{{ peserta.pk }}" data-search="{{ peserta.nim|lower }} {{ peserta.nama|lower }}" data-status="{% if peserta.aktif %}aktif{% else %}nonaktif{% endif %}" data-account="{% if peserta.pengguna %}terhubung{% else %}belum{% endif %}">
-                                        <td><input type="checkbox" name="peserta_ids" value="{{ peserta.pk }}" data-participant-checkbox aria-label="Pilih {{ peserta.nama }}"></td>
+                                        <td>{% if item.can_manage_peserta %}<input type="checkbox" name="peserta_ids" value="{{ peserta.pk }}" data-participant-checkbox aria-label="Pilih {{ peserta.nama }}">{% endif %}</td>
                                         <td class="font-bold">{{ peserta.nim }}</td>
                                         <td>{{ peserta.nama }}</td>
                                         <td>{% if peserta.pengguna %}<span class="font-bold text-emerald-700">Terhubung</span>{% else %}<span class="text-slate-500">Belum terhubung</span>{% endif %}</td>
@@ -709,6 +715,7 @@
                                         <td>{% if peserta.nilai_huruf != '-' %}<span class="rounded-full {% if peserta.nilai_huruf == 'A' %}bg-emerald-50 text-emerald-700{% elif peserta.nilai_huruf == 'B' %}bg-blue-50 text-blue-700{% else %}bg-amber-50 text-amber-700{% endif %} px-3 py-1 text-xs font-black">{{ peserta.nilai_huruf }}</span>{% else %}<span class="text-slate-400">-</span>{% endif %}</td>
                                         <td>{% if peserta.aktif %}<span class="text-emerald-700">Aktif</span>{% else %}<span class="text-slate-500">Nonaktif</span>{% endif %}</td>
                                         <td>
+                                            {% if item.can_manage_peserta %}
                                             <div class="flex flex-wrap gap-2">
                                                 <a class="participant-table-action inline-flex items-center justify-center rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-700 transition hover:border-brand-300 hover:text-brand-800" href="{% url 'asleb:praktikum_peserta_update' peserta.pk %}">
                                                     <i data-lucide="pencil" class="mr-1.5 h-3.5 w-3.5"></i>Edit
@@ -717,6 +724,9 @@
                                                     <i data-lucide="trash-2" class="mr-1.5 h-3.5 w-3.5"></i>Hapus
                                                 </button>
                                             </div>
+                                            {% else %}
+                                            <span class="text-xs font-bold text-slate-400">Dikelola Aslab utama</span>
+                                            {% endif %}
                                         </td>
                                     </tr>
                                     {% empty %}
