@@ -1790,6 +1790,10 @@ class AslebViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Rekap Honorarium Aslab')
+        self.assertContains(response, 'Tarif per Jam')
+        self.assertContains(response, 'Junior')
+        self.assertContains(response, 'Senior')
+        self.assertContains(response, 'Rp 8.000')
         self.assertContains(response, 'Siti Nurhaliza')
         self.assertContains(response, 'Rp 147.000')
         self.assertContains(response, '123456789')
