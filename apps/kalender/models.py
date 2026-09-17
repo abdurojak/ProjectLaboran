@@ -17,6 +17,10 @@ class KegiatanKalender(models.Model):
     waktu_mulai = models.TimeField()
     waktu_selesai = models.TimeField(blank=True, null=True)
     lokasi = models.CharField(max_length=150, blank=True)
+    ruangan = models.ForeignKey(
+        'ruangan.RuanganLab', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='kegiatan_kalender',
+    )
     deskripsi = models.TextField(blank=True)
     tampilkan_notifikasi = models.BooleanField(default=True)
     hari_libur = models.BooleanField(
@@ -44,8 +48,21 @@ class KegiatanKalender(models.Model):
         verbose_name_plural = 'Kegiatan Kalender'
 
     def clean(self):
-        if self.waktu_selesai and self.waktu_selesai < self.waktu_mulai:
+        if self.waktu_selesai and self.waktu_selesai <= self.waktu_mulai:
             raise ValidationError({'waktu_selesai': 'Waktu selesai tidak boleh lebih awal dari waktu mulai.'})
+        if self.ruangan_id and not self.waktu_selesai:
+            raise ValidationError({'waktu_selesai': 'Waktu selesai wajib diisi untuk pemakaian lab.'})
+
+    def save(self, *args, **kwargs):
+        if self.ruangan_id:
+            roles = self.target_role_list
+            for role in ('admin', 'laboran', 'asisten_lab'):
+                if role not in roles:
+                    roles.append(role)
+            self.target_role = ','.join(roles)
+            if kwargs.get('update_fields') is not None:
+                kwargs['update_fields'] = set(kwargs['update_fields']) | {'target_role'}
+        super().save(*args, **kwargs)
 
     @property
     def target_role_list(self):

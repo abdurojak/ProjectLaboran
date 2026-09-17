@@ -11,6 +11,9 @@ from apps.pendaftaran_asleb.models import (
 from apps.pengguna.models import Pengguna
 from apps.ruangan.models import GrupRuanganGabungan, RuanganLab
 from apps.asleb.models import AbsensiAsleb, Asleb, PesertaPraktikum
+from apps.kalender.models import KegiatanKalender
+from apps.kalender.notifications import build_notification_payloads, sync_user_notifications
+from apps.kalender.models import Notifikasi
 
 from .models import JadwalPraktikum, PermintaanPerubahanJadwal
 
@@ -84,6 +87,124 @@ class JadwalViewTests(TestCase):
         self.assertContains(response, 'Senin')
         self.assertContains(response, 'Sabtu')
         self.assertNotContains(response, 'Minggu')
+
+    def test_event_lab_only_appears_on_selected_date_without_changing_recurring_schedule(self):
+        event = KegiatanKalender.objects.create(
+            judul='Seminar Lab', tanggal=date(2026, 9, 17),
+            waktu_mulai=time(8), waktu_selesai=time(10), ruangan=self.ruangan,
+            dibuat_oleh=self.laboran,
+            target_role='admin,laboran,asisten_lab',
+        )
+        on_date = self.client.get(reverse('jadwal:jadwal_list'), {'tanggal': '2026-09-17'})
+        other_date = self.client.get(reverse('jadwal:jadwal_list'), {'tanggal': '2026-09-24'})
+
+        self.assertContains(on_date, 'Seminar Lab')
+        self.assertContains(on_date, 'Praktikum Basis Data')
+        self.assertContains(on_date, 'Bentrok')
+        self.assertNotContains(other_date, 'Seminar Lab')
+        self.assertEqual(JadwalPraktikum.objects.filter(status='diterima').count(), 1)
+
+    def test_only_aslab_with_overlapping_practicum_gets_event_notification(self):
+        period = PeriodeAsleb.objects.create(
+            tahun=2026, semester=2, mulai=date(2026, 7, 1), selesai=date(2026, 12, 31),
+            pendaftaran_mulai=date(2026, 6, 1), pendaftaran_selesai=date(2026, 6, 30),
+        )
+        user = Pengguna.objects.create(
+            nama_pengguna='Aslab Terdampak', nim_nik='ASLAB-EVENT', email='event@example.com',
+            password='secret', no_hp='08123', alamat='Jakarta', fakultas='FTI', prodi='TI',
+            gender='laki_laki', role='asisten_lab',
+        )
+        asleb = Asleb.objects.create(
+            nama=user.nama_pengguna, nim=user.nim_nik, no_hp=user.no_hp, email=user.email,
+            program_studi=user.prodi, semester=5, status='aktif', periode_aktif=period,
+            tanggal_bergabung=date(2026, 7, 1),
+        )
+        slot = AslabSlot.objects.create(periode=period, matkul=self.matkul, nomor=1)
+        AslabAssignment.objects.create(
+            slot=slot, asleb=asleb, mulai_pada=date(2026, 7, 1),
+            status=AslabAssignment.STATUS_ACTIVE,
+        )
+        event = KegiatanKalender.objects.create(
+            judul='Seminar Lab', tanggal=date(2026, 9, 17),
+            waktu_mulai=time(8), waktu_selesai=time(10), ruangan=self.ruangan,
+            dibuat_oleh=self.laboran,
+        )
+        self.assertIn('asisten_lab', event.target_role_list)
+
+        self.assertTrue(any(
+            item['source_key'] == f'lab-event:{event.pk}'
+            for item in build_notification_payloads(user)
+        ))
+        self.assertFalse(any(
+            item['source_key'] == f'kalender:{event.pk}'
+            for item in build_notification_payloads(user)
+        ))
+        sync_user_notifications(user)
+        self.assertTrue(Notifikasi.objects.filter(pengguna=user, source_key=f'lab-event:{event.pk}').exists())
+        event.waktu_mulai = time(11)
+        event.waktu_selesai = time(12)
+        event.save()
+        sync_user_notifications(user)
+        self.assertFalse(Notifikasi.objects.filter(pengguna=user, source_key=f'lab-event:{event.pk}').exists())
+
+    def test_under_capacity_room_requires_explicit_confirmation(self):
+        PesertaPraktikum.objects.bulk_create([
+            PesertaPraktikum(matkul=self.matkul_lain, nim=f'080{i:07d}', nama=f'Mahasiswa {i}')
+            for i in range(31)
+        ])
+        response = self.client.get(reverse('jadwal:ruangan_tersedia'), {'matkul': self.matkul_lain.pk})
+        self.assertIn(self.ruangan.pk, [room['id'] for room in response.json()['rooms']])
+        data = {
+            'matkul': self.matkul_lain.pk, 'ruangan': self.ruangan.pk,
+            'hari': 'rabu', 'waktu_mulai': '13:00', 'waktu_selesai': '15:00',
+        }
+        rejected = self.client.post(reverse('jadwal:jadwal_create'), data)
+        self.assertEqual(rejected.status_code, 200)
+        self.assertContains(rejected, 'Konfirmasi kapasitas')
+        self.assertFalse(JadwalPraktikum.objects.filter(hari='rabu').exists())
+
+        accepted = self.client.post(reverse('jadwal:jadwal_create'), {
+            **data, 'confirm_under_capacity': 'on',
+        })
+        self.assertRedirects(accepted, reverse('jadwal:jadwal_list'))
+
+    def test_aslab_can_request_under_capacity_room_after_confirmation(self):
+        period = PeriodeAsleb.objects.create(
+            tahun=2026, semester=2, mulai=date(2026, 7, 1), selesai=date(2026, 12, 31),
+            pendaftaran_mulai=date(2026, 6, 1), pendaftaran_selesai=date(2026, 6, 30),
+        )
+        user = Pengguna.objects.create(
+            nama_pengguna='Aslab Kapasitas', nim_nik='ASLAB-CAP', email='cap@example.com',
+            password='secret', no_hp='08123', alamat='Jakarta', fakultas='FTI',
+            prodi='TI', gender='laki_laki', role='asisten_lab',
+        )
+        asleb = Asleb.objects.create(
+            nama=user.nama_pengguna, nim=user.nim_nik, no_hp=user.no_hp, email=user.email,
+            program_studi=user.prodi, semester=5, status='aktif', periode_aktif=period,
+            tanggal_bergabung=date(2026, 7, 1),
+        )
+        AslabAssignment.objects.create(
+            slot=AslabSlot.objects.create(periode=period, matkul=self.matkul_lain, nomor=1),
+            asleb=asleb, mulai_pada=date(2026, 7, 1), status=AslabAssignment.STATUS_ACTIVE,
+        )
+        PesertaPraktikum.objects.bulk_create([
+            PesertaPraktikum(matkul=self.matkul_lain, nim=f'081{i:07d}', nama=f'Mahasiswa {i}')
+            for i in range(31)
+        ])
+        session = self.client.session
+        session['pengguna_id'] = user.pk
+        session.save()
+
+        response = self.client.post(reverse('jadwal:jadwal_create'), {
+            'matkul': self.matkul_lain.pk, 'ruangan': self.ruangan.pk,
+            'hari': 'rabu', 'waktu_mulai': '13:00', 'waktu_selesai': '15:00',
+            'confirm_under_capacity': 'on',
+        })
+
+        self.assertRedirects(response, reverse('jadwal:jadwal_list'))
+        self.assertTrue(JadwalPraktikum.objects.filter(
+            mata_kuliah=str(self.matkul_lain), status=JadwalPraktikum.STATUS_DIAJUKAN,
+        ).exists())
 
     def test_jadwal_list_menampilkan_grid_berdasarkan_hari_dan_ruangan(self):
         response = self.client.get(reverse('jadwal:jadwal_list'), {'hari': 'kamis'})
@@ -519,7 +640,7 @@ class JadwalViewTests(TestCase):
         self.assertEqual(delete_response.status_code, 404)
         self.assertTrue(JadwalPraktikum.objects.filter(pk=jadwal_lain.pk).exists())
 
-    def test_ruangan_difilter_ke_semua_kapasitas_yang_mencukupi_peserta(self):
+    def test_ruangan_kecil_tetap_tersedia_dengan_informasi_kapasitas(self):
         PesertaPraktikum.objects.bulk_create([
             PesertaPraktikum(matkul=self.matkul_lain, nim=f'064{i:07d}', nama=f'Mahasiswa {i}')
             for i in range(30)
@@ -531,12 +652,10 @@ class JadwalViewTests(TestCase):
         payload = response.json()
         self.assertEqual(payload['participant_count'], 30)
         self.assertTrue(payload['rooms'])
-        self.assertTrue(all(
-            room['unlimited']
-            or room['capacity'] >= 30
-            or str(room['id']) in payload['combinable_rooms']
-            for room in payload['rooms']
-        ))
+        room_ids = {room['id'] for room in payload['rooms']}
+        self.assertIn(self.lab_rpl.pk, room_ids)
+        self.assertIn(self.lab_ski.pk, room_ids)
+        self.assertEqual(next(room['capacity'] for room in payload['rooms'] if room['id'] == self.lab_ski.pk), 18)
         self.assertIn(str(self.lab_rpl.pk), payload['combinable_rooms'])
         self.assertIn(str(self.lab_ski.pk), payload['combinable_rooms'])
         self.assertIn(self.lab_rpl.pk, [room['id'] for room in payload['rooms']])

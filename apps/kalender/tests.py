@@ -354,6 +354,45 @@ class KalenderViewsTests(TestCase):
         self.assertEqual(kegiatan.target_role_list, ['asisten_lab', 'laboran'])
         self.assertEqual(kegiatan.target_role_display, 'Asisten Lab, Laboran')
 
+    def test_laboran_event_lab_otomatis_terlihat_oleh_aslab_dan_pengelola(self):
+        room = RuanganLab.objects.create(nama='Lab Event', kode='LAB-EVENT', kapasitas=20)
+        session = self.client.session
+        session['pengguna_id'] = self.laboran.pk
+        session.save()
+
+        response = self.client.post(reverse('kalender:kegiatan_create'), {
+            'judul': 'Seminar di lab',
+            'tanggal': date.today() + timedelta(days=2),
+            'waktu_mulai': '09:00', 'waktu_selesai': '10:00',
+            'ruangan': room.pk,
+        })
+
+        self.assertRedirects(response, reverse('kalender:kegiatan_list'))
+        event = KegiatanKalender.objects.get(judul='Seminar di lab')
+        self.assertEqual(event.ruangan, room)
+        self.assertTrue({'admin', 'laboran', 'asisten_lab'} <= set(event.target_role_list))
+
+    def test_mahasiswa_tidak_bisa_memesan_lab_melalui_event_pribadi(self):
+        room = RuanganLab.objects.create(nama='Lab Privat', kode='LAB-PRIVAT', kapasitas=20)
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Mahasiswa', nim_nik='MHS-EVENT', email='mhs-event@example.com',
+            password='secret', no_hp='08123', alamat='Jakarta', fakultas='FTI',
+            prodi='Informatika', gender='laki_laki', role='mahasiswa',
+        )
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+
+        response = self.client.post(reverse('kalender:kegiatan_create'), {
+            'judul': 'Catatan pribadi',
+            'tanggal': date.today() + timedelta(days=2),
+            'waktu_mulai': '09:00', 'waktu_selesai': '10:00',
+            'ruangan': room.pk,
+        })
+
+        self.assertRedirects(response, reverse('kalender:kegiatan_list'))
+        self.assertIsNone(KegiatanKalender.objects.get(judul='Catatan pribadi').ruangan_id)
+
     def test_mahasiswa_membuat_kegiatan_pribadi(self):
         mahasiswa = Pengguna.objects.create(
             nama_pengguna='Siti Aminah',

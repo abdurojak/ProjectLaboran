@@ -8,6 +8,10 @@ from .models import JadwalPraktikum
 
 
 class JadwalPraktikumForm(forms.ModelForm):
+    confirm_under_capacity = forms.BooleanField(
+        required=False, label='Konfirmasi kapasitas',
+        help_text='Saya memahami kapasitas lab lebih kecil dari jumlah peserta aktif.',
+    )
     matkul = forms.ModelChoiceField(
         queryset=MataKuliahAsleb.objects.none(),
         empty_label='Pilih mata kuliah',
@@ -32,6 +36,13 @@ class JadwalPraktikumForm(forms.ModelForm):
         self.fields['matkul'].initial = self.get_initial_matkul()
         room_queryset = self.get_optimal_room_queryset()
         self.fields['ruangan'].queryset = room_queryset
+        self.room_capacities = {
+            str(room.pk): {
+                'capacity': room.kapasitas or 0,
+                'unlimited': room.kapasitas_tak_terbatas,
+            }
+            for room in room_queryset
+        }
         self.fields['ruangan_tambahan'].queryset = self.get_additional_room_queryset()
         self.fields['ruangan_tambahan'].help_text = 'Hanya lab dalam grup ruangan gabungan aktif yang dapat dipakai sebagai ruangan tambahan.'
         self.combinable_room_options = self.get_combinable_room_options()
@@ -93,22 +104,7 @@ class JadwalPraktikumForm(forms.ModelForm):
             if self.current_pengguna and self.current_pengguna.role == 'asisten_lab':
                 return queryset.none()
             return queryset
-        eligible_ids = []
-        groups = GrupRuanganGabungan.objects.filter(aktif=True).prefetch_related('ruangan')
-        for room in queryset:
-            if room.mencukupi_kapasitas(participant_count):
-                eligible_ids.append(room.pk)
-                continue
-            for group in groups:
-                grouped_rooms = [grouped_room for grouped_room in group.ruangan.all() if grouped_room.aktif]
-                group_is_unlimited = any(grouped_room.kapasitas_tak_terbatas for grouped_room in grouped_rooms)
-                if room in grouped_rooms and (
-                    group_is_unlimited
-                    or sum((grouped_room.kapasitas or 0) for grouped_room in grouped_rooms) >= participant_count
-                ):
-                    eligible_ids.append(room.pk)
-                    break
-        return queryset.filter(pk__in=eligible_ids)
+        return queryset
 
     def get_additional_room_queryset(self):
         return (
@@ -124,7 +120,11 @@ class JadwalPraktikumForm(forms.ModelForm):
             grouped_rooms = [room for room in group.ruangan.all() if room.aktif]
             for room in grouped_rooms:
                 options[str(room.pk)] = [
-                    {'id': other_room.pk, 'label': str(other_room)}
+                    {
+                        'id': other_room.pk, 'label': str(other_room),
+                        'capacity': other_room.kapasitas or 0,
+                        'unlimited': other_room.kapasitas_tak_terbatas,
+                    }
                     for other_room in grouped_rooms
                     if other_room.pk != room.pk
                 ]
@@ -147,10 +147,10 @@ class JadwalPraktikumForm(forms.ModelForm):
                 if tambahan.kapasitas_tak_terbatas:
                     return cleaned_data
                 total_capacity += tambahan.kapasitas or 0
-            if total_capacity < participant_count:
+            if total_capacity < participant_count and not cleaned_data.get('confirm_under_capacity'):
                 self.add_error(
-                    'ruangan',
-                    f'Kapasitas lab hanya {total_capacity}, sedangkan peserta aktif berjumlah {participant_count}.',
+                    'confirm_under_capacity',
+                    f'Kapasitas lab hanya {total_capacity}, sedangkan peserta aktif berjumlah {participant_count}. Konfirmasi pilihan ini untuk melanjutkan.',
                 )
         return cleaned_data
 

@@ -153,6 +153,15 @@
                     {% if form.lokasi.errors %}<p class="mt-2 text-sm font-semibold text-rose-600">{{ form.lokasi.errors|striptags }}</p>{% endif %}
                 </div>
 
+                {% if form.ruangan %}
+                <div class="md:col-span-2">
+                    <label for="{{ form.ruangan.id_for_label }}" class="mb-2 block text-sm font-bold text-slate-800">Lab yang dipakai</label>
+                    {{ form.ruangan }}
+                    <p class="mt-2 text-sm text-slate-500">Opsional. Event lab otomatis terlihat oleh pengelola dan aslab. Aslab dengan praktikum yang bentrok akan diberi tahu.</p>
+                    {% if form.ruangan.errors %}<p class="mt-2 text-sm font-semibold text-rose-600">{{ form.ruangan.errors|striptags }}</p>{% endif %}
+                </div>
+                {% endif %}
+
                 <div>
                     <label for="{{ form.waktu_mulai.id_for_label }}" class="mb-2 block text-sm font-bold text-slate-800">Waktu mulai</label>
                     {{ form.waktu_mulai }}

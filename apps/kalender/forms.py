@@ -22,6 +22,9 @@ class KegiatanKalenderForm(forms.ModelForm):
         if not self.can_share_to_roles:
             self.fields.pop('target_role', None)
             self.fields.pop('hari_libur', None)
+            self.fields.pop('ruangan', None)
+        else:
+            self.fields['ruangan'].queryset = self.fields['ruangan'].queryset.filter(aktif=True).order_by('nama')
 
     @property
     def can_share_to_roles(self):
@@ -35,6 +38,7 @@ class KegiatanKalenderForm(forms.ModelForm):
             'waktu_mulai',
             'waktu_selesai',
             'lokasi',
+            'ruangan',
             'deskripsi',
             'tampilkan_notifikasi',
             'hari_libur',
@@ -52,4 +56,10 @@ class KegiatanKalenderForm(forms.ModelForm):
         if not self.can_share_to_roles:
             return ''
         return ','.join(roles)
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get('ruangan') and not cleaned.get('waktu_selesai'):
+            self.add_error('waktu_selesai', 'Waktu selesai wajib diisi untuk pemakaian lab.')
+        return cleaned
 

@@ -91,7 +91,7 @@
             {% endfor %}
         </div>
         <div id="capacity-note" class="schedule-note-card schedule-note-card--info px-4 py-3 pl-7 text-sm font-semibold">
-            {% if form.participant_count %}Pilihan lab menyesuaikan {{ form.participant_count }} peserta aktif. Lab berkapasitas kecil tetap dapat dipilih jika memiliki grup ruangan gabungan yang kapasitas totalnya mencukupi.{% elif request.current_pengguna.role == 'asisten_lab' %}Laboran belum menginput mahasiswa. Pilihan lab belum dapat digunakan.{% else %}Pilih mata kuliah agar sistem menyesuaikan kapasitas lab dan grup ruangan gabungan dengan jumlah peserta.{% endif %}
+            {% if form.participant_count %}Ada {{ form.participant_count }} peserta aktif. Semua lab tersedia; pilihan yang kapasitasnya kurang memerlukan konfirmasi.{% elif request.current_pengguna.role == 'asisten_lab' %}Laboran belum menginput mahasiswa. Pilihan lab belum dapat digunakan.{% else %}Pilih mata kuliah untuk melihat jumlah peserta dan kapasitas lab.{% endif %}
         </div>
         {% if request.current_pengguna.role == 'asisten_lab' and object %}
         <div class="schedule-note-card schedule-note-card--warn px-4 py-3 pl-7 text-sm leading-6">
@@ -109,6 +109,7 @@
     </form>
 </section>
 {{ form.combinable_room_options|json_script:"combinable-room-options" }}
+{{ form.room_capacities|json_script:"room-capacities" }}
 {% endblock %}
 
 {% block extra_script %}
@@ -117,8 +118,12 @@
     const roomInput = document.getElementById('id_ruangan');
     const additionalRoomInput = document.getElementById('id_ruangan_tambahan');
     const capacityNote = document.getElementById('capacity-note');
+    const confirmation = document.getElementById('id_confirm_under_capacity');
+    const participantCountInitial = {{ form.participant_count|default:0 }};
+    let participantCount = participantCountInitial;
     const roomsUrl = "{% url 'jadwal:ruangan_tersedia' %}";
     let combinableRoomOptions = JSON.parse(document.getElementById('combinable-room-options')?.textContent || '{}');
+    let roomCapacities = JSON.parse(document.getElementById('room-capacities')?.textContent || '{}');
 
     if (matkulInput && roomInput) {
         matkulInput.addEventListener('change', async () => {
@@ -127,11 +132,17 @@
             roomInput.replaceChildren(new Option('Pilih ruangan', ''));
             data.rooms.forEach((room) => {
                 const capacityLabel = room.unlimited ? 'kapasitas tak terbatas' : `kapasitas ${room.capacity}`;
-                roomInput.add(new Option(`${room.label} - ${capacityLabel}`, room.id));
+                roomInput.add(new Option(`${room.label} - ${capacityLabel}${!room.unlimited && room.capacity < data.participant_count ? ' (di bawah jumlah peserta)' : ''}`, room.id));
             });
+            roomCapacities = Object.fromEntries(data.rooms.map((room) => [String(room.id), {
+                capacity: room.capacity || 0,
+                unlimited: room.unlimited,
+            }]));
             combinableRoomOptions = data.combinable_rooms || {};
+            participantCount = data.participant_count;
+            if (confirmation) confirmation.checked = false;
             capacityNote.textContent = data.participant_count
-                ? `${data.participant_count} peserta aktif - lab tunggal atau grup ruangan gabungan yang mencukupi akan ditampilkan.`
+                ? `${data.participant_count} peserta aktif. Lab dengan kapasitas kurang tetap dapat dipilih setelah konfirmasi.`
                 : 'Belum ada peserta aktif. Asisten Lab belum dapat memilih laboratorium sebelum data diinput laboran.';
             updateAdditionalRoomState();
         });
@@ -153,6 +164,46 @@
     }
     roomInput?.addEventListener('change', updateAdditionalRoomState);
     updateAdditionalRoomState();
+
+    function selectedCapacity() {
+        const room = roomCapacities[roomInput?.value];
+        if (!room || room.unlimited) return null;
+        const extra = (combinableRoomOptions[roomInput.value] || []).find(
+            (item) => String(item.id) === additionalRoomInput?.value
+        );
+        if (extra?.unlimited) return null;
+        return room.capacity + (extra?.capacity || 0);
+    }
+
+    function syncCapacityWarning() {
+        if (!capacityNote || !participantCount) return;
+        const capacity = selectedCapacity();
+        if (capacity !== null && capacity < participantCount) {
+            capacityNote.textContent = `Peringatan: kapasitas lab ${capacity}, sedangkan peserta aktif ${participantCount}. Anda dapat tetap memilih lab ini setelah konfirmasi.`;
+            capacityNote.classList.add('schedule-note-card--warn');
+            capacityNote.classList.remove('schedule-note-card--info');
+        } else {
+            capacityNote.textContent = `${participantCount} peserta aktif. Semua lab tersedia; pilihan yang kapasitasnya kurang memerlukan konfirmasi.`;
+            capacityNote.classList.add('schedule-note-card--info');
+            capacityNote.classList.remove('schedule-note-card--warn');
+        }
+    }
+    roomInput?.addEventListener('change', syncCapacityWarning);
+    additionalRoomInput?.addEventListener('change', syncCapacityWarning);
+    syncCapacityWarning();
+
+    const scheduleForm = roomInput?.closest('form');
+    scheduleForm?.addEventListener('submit', (event) => {
+        if (!confirmation || confirmation.checked || !participantCount) return;
+        const totalCapacity = selectedCapacity();
+        if (totalCapacity !== null && totalCapacity < participantCount) {
+            event.preventDefault();
+            if (window.confirm(`Kapasitas lab ${totalCapacity}, sedangkan peserta aktif ${participantCount}. Tetap ajukan jadwal ini?`)) {
+                confirmation.checked = true;
+                scheduleForm.requestSubmit();
+            }
+        }
+    });
 
     document.querySelectorAll('input[type="time"][min][max]').forEach((input) => {
         const label = input.name === 'waktu_mulai' ? 'Waktu mulai' : 'Waktu selesai';

@@ -1,4 +1,4 @@
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
@@ -54,7 +54,21 @@ class JadwalPraktikumListView(ListView):
     day_order = [key for key, _ in JadwalPraktikum.HARI_CHOICES]
     day_labels = dict(JadwalPraktikum.HARI_CHOICES)
 
+    def get_selected_date(self):
+        requested = self.request.GET.get('tanggal', '')
+        try:
+            selected = date.fromisoformat(requested) if requested else timezone.localdate()
+        except ValueError:
+            selected = timezone.localdate()
+        requested_day = self.request.GET.get('hari', '').strip().lower()
+        if not requested and requested_day in self.day_order:
+            selected += timedelta(days=self.day_order.index(requested_day) - selected.weekday())
+        return selected
+
     def get_selected_hari(self):
+        if self.request.GET.get('tanggal'):
+            weekday = self.get_selected_date().weekday()
+            return self.day_order[weekday] if weekday < len(self.day_order) else 'senin'
         requested_hari = self.request.GET.get('hari', '').strip().lower()
         if requested_hari in self.day_order:
             return requested_hari
@@ -79,12 +93,20 @@ class JadwalPraktikumListView(ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         selected_hari = self.get_selected_hari()
+        selected_date = self.get_selected_date()
+        if selected_date.weekday() == 6:
+            selected_date += timedelta(days=1)
         ruangan_list = list(RuanganLab.objects.filter(aktif=True).order_by('nama'))
         context['current_pengguna'] = getattr(self.request, 'current_pengguna', None)
         context['hari_tabs'] = [
-            {'value': value, 'label': label, 'active': value == selected_hari}
-            for value, label in JadwalPraktikum.HARI_CHOICES
+            {
+                'value': value, 'label': label, 'active': value == selected_hari,
+                'date': (selected_date - timedelta(days=selected_date.weekday())
+                         + timedelta(days=index)).isoformat(),
+            }
+            for index, (value, label) in enumerate(JadwalPraktikum.HARI_CHOICES)
         ]
+        context['selected_date'] = selected_date
         context['selected_hari'] = selected_hari
         context['selected_hari_label'] = self.day_labels[selected_hari]
         context['ruangan_list'] = ruangan_list
@@ -98,6 +120,20 @@ class JadwalPraktikumListView(ListView):
             slot_keys,
             context['current_pengguna'],
         )
+        from apps.kalender.lab_events import conflicting_practicum_schedules
+        from apps.kalender.views import get_visible_kegiatan_queryset
+
+        context['lab_events'] = []
+        for event in get_visible_kegiatan_queryset(context['current_pengguna']).select_related('ruangan').filter(
+            tanggal=selected_date, ruangan__isnull=False,
+        ):
+            conflicts = list(conflicting_practicum_schedules(event))
+            context['lab_events'].append({'event': event, 'conflicts': conflicts})
+        conflicted_ids = {
+            schedule.pk for item in context['lab_events'] for schedule in item['conflicts']
+        }
+        for block in context['jadwal_blocks']:
+            block['event_conflict'] = block['jadwal'].pk in conflicted_ids
         context['praktikum_saya'] = self.get_praktikum_saya(context['current_pengguna'])
         if context['current_pengguna'] and context['current_pengguna'].role == LABORAN_ROLE:
             context['permintaan_perubahan'] = PermintaanPerubahanJadwal.objects.select_related(
@@ -406,20 +442,6 @@ def available_rooms(request):
     groups = GrupRuanganGabungan.objects.filter(aktif=True).prefetch_related('ruangan')
     if not participant_count and pengguna and pengguna.role == 'asisten_lab':
         rooms = rooms.none()
-    elif participant_count:
-        eligible_room_ids = []
-        for room in rooms:
-            if room.mencukupi_kapasitas(participant_count):
-                eligible_room_ids.append(room.pk)
-                continue
-            for group in groups:
-                grouped_rooms = [grouped_room for grouped_room in group.ruangan.all() if grouped_room.aktif]
-                group_capacity = sum((grouped_room.kapasitas or 0) for grouped_room in grouped_rooms)
-                group_is_unlimited = any(grouped_room.kapasitas_tak_terbatas for grouped_room in grouped_rooms)
-                if room in grouped_rooms and (group_is_unlimited or group_capacity >= participant_count):
-                    eligible_room_ids.append(room.pk)
-                    break
-        rooms = rooms.filter(pk__in=eligible_room_ids)
     combinable_rooms = {}
     for group in groups:
         grouped_rooms = [room for room in group.ruangan.all() if room.aktif]

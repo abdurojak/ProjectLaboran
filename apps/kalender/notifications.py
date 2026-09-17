@@ -28,7 +28,18 @@ def sync_user_notifications(pengguna):
     if not pengguna:
         return
 
-    for payload in build_notification_payloads(pengguna):
+    payloads = build_notification_payloads(pengguna)
+    current_event_keys = {
+        item['source_key'] for item in payloads
+        if item['source_key'].startswith('lab-event:')
+    }
+    stale_events = Notifikasi.objects.filter(
+        pengguna=pengguna, source_key__startswith='lab-event:',
+    )
+    if current_event_keys:
+        stale_events = stale_events.exclude(source_key__in=current_event_keys)
+    stale_events.delete()
+    for payload in payloads:
         upsert_notification(pengguna, payload)
 
 
@@ -36,6 +47,10 @@ def build_notification_payloads(pengguna):
     today = timezone.localdate()
     limit_date = today + timedelta(days=7)
     payloads = []
+    lab_event_payloads = build_lab_event_notifications(pengguna, today)
+    affected_event_ids = {
+        int(payload['source_key'].split(':', 1)[1]) for payload in lab_event_payloads
+    }
 
     kegiatan_list = (
         KegiatanKalender.objects.filter(
@@ -46,6 +61,8 @@ def build_notification_payloads(pengguna):
         .order_by('tanggal', 'waktu_mulai')
     )
     for kegiatan in kegiatan_list:
+        if kegiatan.pk in affected_event_ids:
+            continue
         if not kegiatan.visible_for(pengguna):
             continue
         payload = build_manual_notification(
@@ -68,6 +85,52 @@ def build_notification_payloads(pengguna):
     payloads.extend(build_peminjaman_notifications(pengguna))
     payloads.extend(build_pendaftaran_aslab_notifications(pengguna))
     payloads.extend(build_jadwal_praktikum_notifications(pengguna))
+    payloads.extend(lab_event_payloads)
+    return payloads
+
+
+def build_lab_event_notifications(pengguna, today):
+    if pengguna.role != 'asisten_lab':
+        return []
+
+    from apps.kalender.lab_events import conflicting_practicum_schedules
+    from apps.pendaftaran_asleb.models import AslabAssignment
+
+    assignments = AslabAssignment.objects.select_related('slot__matkul', 'slot__periode').filter(
+        asleb__nim=pengguna.nim_nik,
+        status=AslabAssignment.STATUS_ACTIVE,
+    )
+    events = KegiatanKalender.objects.select_related('ruangan').filter(
+        tanggal__gte=today, tanggal__lte=today + timedelta(days=7),
+        ruangan__isnull=False,
+    )
+    payloads = []
+    for event in events:
+        conflicting_labels = {
+            schedule.mata_kuliah for schedule in conflicting_practicum_schedules(event)
+        }
+        if not any(
+            assignment.mulai_pada <= event.tanggal <= assignment.slot.periode.selesai
+            and str(assignment.slot.matkul) in conflicting_labels
+            for assignment in assignments
+        ):
+            continue
+        payloads.append({
+            'source_key': f'lab-event:{event.pk}',
+            'judul': f'Praktikum berbenturan dengan event: {event.judul}',
+            'deskripsi': (
+                'Lab digunakan untuk event pada jam praktikum Anda. '
+                'Tentukan sendiri apakah perlu mengajukan jadwal pengganti.'
+            ),
+            'tanggal': event.tanggal,
+            'waktu_label': f'{event.waktu_mulai:%H:%M} - {event.waktu_selesai:%H:%M}',
+            'lokasi': event.ruangan.nama,
+            'url': reverse('kalender:kegiatan_detail', kwargs={'pk': event.pk}),
+            'badge': 'Bentrok Lab',
+            'icon': 'calendar-clock',
+            'icon_class': 'bg-amber-50 text-amber-700',
+            'source_updated_at': event.diperbarui_pada,
+        })
     return payloads
 
 

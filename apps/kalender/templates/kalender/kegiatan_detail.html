@@ -39,6 +39,7 @@
             <div class="text-sm font-semibold text-slate-500">Lokasi</div>
             <div class="mt-2 text-xl font-bold text-slate-900">{{ kegiatan.lokasi|default:"-" }}</div>
         </div>
+        {% if kegiatan.ruangan %}<div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Lab yang Dipakai</div><div class="mt-2 text-xl font-bold text-slate-900">{{ kegiatan.ruangan.nama }}</div></div>{% endif %}
         <div class="rounded-3xl bg-slate-50 p-5">
             <div class="text-sm font-semibold text-slate-500">Notifikasi</div>
             <div class="mt-2 text-xl font-bold text-slate-900">{% if kegiatan.tampilkan_notifikasi %}Aktif{% else %}Nonaktif{% endif %}</div>
