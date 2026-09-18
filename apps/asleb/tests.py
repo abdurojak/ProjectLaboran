@@ -402,6 +402,33 @@ class AslebViewTests(TestCase):
         self.assertContains(response, reverse('asleb:modul_download', args=[modul.pk]))
         self.assertNotContains(response, f'href="{reverse("asleb:modul_download", args=[modul.pk])}">Unduh modul</a>')
 
+    def test_katalog_modul_dikelompokkan_per_mata_kuliah_dan_dapat_dicari(self):
+        matkul_lain = MataKuliahAsleb.objects.create(
+            kode='KATALOG-LAIN', nama='Jaringan Komputer',
+            dosen='Dosen Jaringan', kelas='TIF-02',
+        )
+        ModulPraktikum.objects.create(
+            matkul=self.matkul, nomor=1, judul='Struktur Data Dasar',
+            file=SimpleUploadedFile('struktur-data.pdf', b'%PDF-1.4', content_type='application/pdf'),
+        )
+        ModulPraktikum.objects.create(
+            matkul=matkul_lain, nomor=1, judul='Topologi Jaringan',
+            file=SimpleUploadedFile('jaringan.pdf', b'%PDF-1.4', content_type='application/pdf'),
+        )
+
+        response = self.client.get(reverse('asleb:absensi_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '2 modul tersusun dalam 2 mata kuliah/kelas')
+        self.assertEqual(
+            response.content.decode().count('data-module-group data-search='),
+            2,
+        )
+        self.assertContains(response, 'id="module-catalog-search"')
+        self.assertContains(response, 'Struktur Data Dasar')
+        self.assertContains(response, 'Topologi Jaringan')
+        self.assertContains(response, "group.open = true")
+
     def test_preview_modul_dikirim_inline_dan_download_tetap_attachment(self):
         modul = ModulPraktikum.objects.create(
             matkul=self.matkul,
@@ -732,6 +759,37 @@ class AslebViewTests(TestCase):
             self.client.get(reverse('asleb:absensi_create')),
             reverse('asleb:absensi_list'),
         )
+
+    def test_pilihan_jadwal_susulan_otomatis_mengikuti_aslab_yang_dipilih(self):
+        self.login_asisten_for_matkul()
+        jadwal_sendiri = self.create_active_schedule()
+        matkul_lain = MataKuliahAsleb.objects.create(
+            kode='JADWAL-LAIN', nama='Mata Kuliah Aslab Lain',
+            dosen='Dosen Lain', kelas='TIF-99',
+        )
+        jadwal_lain = JadwalPraktikum.objects.create(
+            mata_kuliah=str(matkul_lain), kelas=matkul_lain.kelas,
+            ruangan=self.test_room, pengampu=matkul_lain.dosen,
+            hari='selasa', waktu_mulai='13:00', waktu_selesai='15:00',
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+        session = self.client.session
+        session['pengguna_id'] = self.pengguna.pk
+        session.save()
+
+        page_response = self.client.get(reverse('asleb:absensi_list'))
+        response = self.client.get(
+            reverse('asleb:absensi_manual_schedules'),
+            {'asleb': self.asleb.pk},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        schedule_ids = {item['id'] for item in response.json()['schedules']}
+        self.assertEqual(schedule_ids, {jadwal_sendiri.pk})
+        self.assertNotIn(jadwal_lain.pk, schedule_ids)
+        self.assertContains(page_response, 'Pilih Aslab terlebih dahulu')
+        self.assertContains(page_response, reverse('asleb:absensi_manual_schedules'))
 
     def test_asleb_search_filters_data(self):
         response = self.client.get(reverse('asleb:asleb_list'), {'q': '2301001'})
@@ -1797,6 +1855,11 @@ class AslebViewTests(TestCase):
         self.assertContains(response, 'Siti Nurhaliza')
         self.assertContains(response, 'Rp 147.000')
         self.assertContains(response, '123456789')
+        self.assertContains(response, 'Detail Perhitungan')
+        self.assertContains(response, '1 modul × 3 pertemuan')
+        self.assertContains(response, '1 × 3 × 7 = 21 jam')
+        self.assertContains(response, 'Periode ke-1 · Junior')
+        self.assertContains(response, 'Honor bersih = Rp 147.000')
         active_links = [link['title'] for link in response.context['sidebar_links'] if link['active']]
         self.assertEqual(active_links, ['Asisten Laboratorium'])
         asleb_group = next(link for link in response.context['sidebar_links'] if link['title'] == 'Asisten Laboratorium')

@@ -55,7 +55,7 @@
         <form method="post" action="{% url 'asleb:absensi_manual_grant' %}" class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             {% csrf_token %}
             <div><label for="manual-asleb">Aslab</label><select id="manual-asleb" name="asleb_id" required><option value="">Pilih Aslab</option>{% for item in manual_permission_asleb_list %}<option value="{{ item.pk }}">{{ item.nama }} · {{ item.nim }}</option>{% endfor %}</select></div>
-            <div><label for="manual-jadwal">Jadwal/Kelas</label><select id="manual-jadwal" name="jadwal_id" required><option value="">Pilih jadwal</option>{% for item in manual_permission_schedule_list %}<option value="{{ item.pk }}">{{ item.mata_kuliah }} · {{ item.kelas }} · {{ item.get_hari_display }}</option>{% endfor %}</select></div>
+            <div><label for="manual-jadwal">Jadwal/Kelas yang Diampu</label><select id="manual-jadwal" name="jadwal_id" required disabled><option value="">Pilih Aslab terlebih dahulu</option></select><p class="mt-1 text-xs font-semibold text-slate-500" id="manual-jadwal-hint">Jadwal akan muncul otomatis sesuai penugasan Aslab.</p></div>
             <div><label for="manual-date">Tanggal yang terlewat</label><input id="manual-date" name="tanggal_praktikum" type="date" max="{% now 'Y-m-d' %}" required></div>
             <div><label for="manual-duration">Berlaku</label><select id="manual-duration" name="durasi_jam"><option value="1">1 jam</option><option value="2" selected>2 jam</option><option value="4">4 jam</option><option value="8">8 jam</option><option value="12">12 jam</option><option value="24">24 jam</option></select></div>
             <div><label for="manual-reason">Alasan</label><input id="manual-reason" name="alasan" maxlength="300" placeholder="Contoh: kendala jaringan" required></div>
@@ -74,56 +74,67 @@
     </section>
     {% endif %}
 
+    {% regroup modul_list by matkul as module_groups %}
     <div class="surface-card min-w-0 max-w-full overflow-hidden p-5 md:p-6">
-        <div class="flex flex-wrap items-end justify-between gap-3">
+        <div class="flex flex-wrap items-end justify-between gap-4">
             <div>
                 <h3 class="text-xl font-black text-slate-900">Modul Mata Kuliah</h3>
-                <p class="mt-1 text-sm text-slate-500">{{ modul_list|length }} modul tersedia. Modul yang sudah dipakai tidak muncul lagi pada pilihan absensi.</p>
+                <p class="mt-1 text-sm text-slate-500">{{ modul_list|length }} modul tersusun dalam {{ module_groups|length }} mata kuliah/kelas.</p>
             </div>
+            {% if modul_list %}
+            <div class="w-full sm:w-80">
+                <label class="sr-only" for="module-catalog-search">Cari modul</label>
+                <div class="relative">
+                    <i data-lucide="search" class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"></i>
+                    <input id="module-catalog-search" type="search" class="pl-11" placeholder="Cari mata kuliah atau modul..." autocomplete="off">
+                </div>
+            </div>
+            {% endif %}
         </div>
-        <div class="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {% for modul in modul_list %}
-            <article class="rounded-lg border border-slate-200 bg-white p-5">
-                <div class="flex items-start justify-between gap-3">
+        <div class="mt-5 space-y-3" data-module-catalog>
+            {% for group in module_groups %}
+            <details class="group overflow-hidden rounded-[1.5rem] border border-slate-200 bg-slate-50/70" data-module-group data-search="{{ group.grouper.nama|lower }} {{ group.grouper.kelas|lower }} {{ group.grouper.dosen|lower }}" {% if forloop.first %}open{% endif %}>
+                <summary class="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4">
                     <div class="min-w-0">
-                        <div class="text-xs font-black uppercase text-cyan-700">Modul {{ modul.nomor }}</div>
-                        <h4 class="mt-2 break-words font-black text-slate-900">{{ modul.judul }}</h4>
-                        <p class="mt-2 break-words text-xs text-slate-500">{{ modul.matkul }}</p>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="rounded-full bg-cyan-100 px-2.5 py-1 text-[11px] font-black uppercase tracking-wider text-cyan-800">{{ group.grouper.kode_mk|default:group.grouper.kode }}</span>
+                            <span class="rounded-full bg-white px-2.5 py-1 text-[11px] font-black text-slate-600">{{ group.list|length }} modul</span>
+                        </div>
+                        <h4 class="mt-2 truncate text-base font-black text-slate-900 sm:text-lg">{{ group.grouper.nama }} · {{ group.grouper.kelas }}</h4>
+                        <p class="mt-1 truncate text-xs text-slate-500">{{ group.grouper.dosen }}</p>
                     </div>
-                    <i data-lucide="book-open" class="h-5 w-5 shrink-0 text-cyan-700"></i>
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-cyan-700 shadow-sm">
+                        <i data-lucide="chevron-down" class="h-5 w-5 transition group-open:rotate-180"></i>
+                    </span>
+                </summary>
+                <div class="grid gap-3 border-t border-slate-200 bg-white/70 p-4 sm:grid-cols-2 xl:grid-cols-3">
+                    {% for modul in group.list %}
+                    <article class="flex min-h-48 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" data-module-card data-search="modul {{ modul.nomor }} {{ modul.judul|lower }} {{ group.grouper.nama|lower }} {{ group.grouper.kelas|lower }}">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <div class="text-xs font-black uppercase text-cyan-700">Modul {{ modul.nomor }}</div>
+                                <h5 class="mt-2 break-words font-black leading-6 text-slate-900">{{ modul.judul }}</h5>
+                            </div>
+                            <i data-lucide="book-open" class="h-5 w-5 shrink-0 text-cyan-700"></i>
+                        </div>
+                        <div class="mt-auto flex flex-wrap gap-2 pt-4">
+                            {% if can_manage_modul %}
+                            <button type="button" class="btn-secondary gap-2" data-open-inline-modul-preview data-preview-title="Modul {{ modul.nomor }} - {{ modul.judul }}" data-preview-url="{% url 'asleb:modul_preview' modul.pk %}" data-viewer-url="{% url 'asleb:modul_viewer' modul.pk %}" data-download-url="{% url 'asleb:modul_download' modul.pk %}" data-preview-type="{{ modul.file_type }}" data-preview-size="{{ modul.file_size|default:0 }}" data-preview-date="{{ modul.dibuat_pada|date:'d M Y H:i' }}"><i data-lucide="eye" class="h-4 w-4"></i><span>Preview</span></button>
+                            {% endif %}
+                            <a href="{% url 'asleb:modul_download' modul.pk %}" class="btn-secondary gap-2"><i data-lucide="download" class="h-4 w-4"></i><span>Unduh</span></a>
+                            {% if can_manage_modul %}
+                            <a href="{% url 'asleb:modul_update' modul.pk %}" class="btn-secondary" title="Edit modul"><i data-lucide="pencil" class="h-4 w-4"></i></a>
+                            <form method="post" action="{% url 'asleb:modul_delete' modul.pk %}" data-confirm-message="Hapus modul {{ modul.judul }}? Riwayat absensi lama tetap tersimpan, tetapi file modul ini akan dihapus dari daftar aktif.">{% csrf_token %}<button type="submit" class="btn-secondary text-rose-700" title="Hapus modul"><i data-lucide="trash-2" class="h-4 w-4"></i></button></form>
+                            {% endif %}
+                        </div>
+                    </article>
+                    {% endfor %}
                 </div>
-                <div class="mt-4 flex flex-wrap gap-2">
-                    {% if can_manage_modul %}
-                    <button
-                        type="button"
-                        class="btn-secondary gap-2"
-                        data-open-inline-modul-preview
-                        data-preview-title="Modul {{ modul.nomor }} - {{ modul.judul }}"
-                        data-preview-url="{% url 'asleb:modul_preview' modul.pk %}"
-                        data-viewer-url="{% url 'asleb:modul_viewer' modul.pk %}"
-                        data-download-url="{% url 'asleb:modul_download' modul.pk %}"
-                        data-preview-type="{{ modul.file_type }}"
-                        data-preview-size="{{ modul.file_size|default:0 }}"
-                        data-preview-date="{{ modul.dibuat_pada|date:'d M Y H:i' }}"
-                    >
-                        <i data-lucide="eye" class="h-4 w-4"></i><span>Preview</span>
-                    </button>
-                    {% endif %}
-                    <a href="{% url 'asleb:modul_download' modul.pk %}" class="btn-secondary gap-2">
-                        <i data-lucide="download" class="h-4 w-4"></i><span>Unduh</span>
-                    </a>
-                    {% if can_manage_modul %}
-                    <a href="{% url 'asleb:modul_update' modul.pk %}" class="btn-secondary" title="Edit modul"><i data-lucide="pencil" class="h-4 w-4"></i></a>
-                    <form method="post" action="{% url 'asleb:modul_delete' modul.pk %}" data-confirm-message="Hapus modul {{ modul.judul }}? Riwayat absensi lama tetap tersimpan, tetapi file modul ini akan dihapus dari daftar aktif.">
-                        {% csrf_token %}
-                        <button type="submit" class="btn-secondary text-rose-700" title="Hapus modul"><i data-lucide="trash-2" class="h-4 w-4"></i></button>
-                    </form>
-                    {% endif %}
-                </div>
-            </article>
+            </details>
             {% empty %}
-            <div class="rounded-lg border border-dashed border-slate-300 p-7 text-center text-sm text-slate-500 sm:col-span-2 xl:col-span-3">Belum ada modul untuk mata kuliah ini.</div>
+            <div class="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">Belum ada modul mata kuliah.</div>
             {% endfor %}
+            <div class="hidden rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500" data-module-empty>Tidak ada modul yang cocok dengan pencarian.</div>
         </div>
     </div>
 
@@ -327,7 +338,65 @@
         const form = document.getElementById('absensi-filter-form');
         const searchInput = document.getElementById('id_q');
         const modulSelect = document.getElementById('id_modul');
+        const manualAsleb = document.getElementById('manual-asleb');
+        const manualSchedule = document.getElementById('manual-jadwal');
+        const manualScheduleHint = document.getElementById('manual-jadwal-hint');
+        const manualScheduleUrl = "{% url 'asleb:absensi_manual_schedules' %}";
+        const moduleCatalogSearch = document.getElementById('module-catalog-search');
+        const moduleEmpty = document.querySelector('[data-module-empty]');
         let searchTimer = null;
+
+        moduleCatalogSearch?.addEventListener('input', function () {
+            const query = moduleCatalogSearch.value.trim().toLowerCase();
+            let visibleGroups = 0;
+            document.querySelectorAll('[data-module-group]').forEach(function (group) {
+                const groupMatches = group.dataset.search.includes(query);
+                let visibleCards = 0;
+                group.querySelectorAll('[data-module-card]').forEach(function (card) {
+                    const visible = !query || groupMatches || card.dataset.search.includes(query);
+                    card.classList.toggle('hidden', !visible);
+                    if (visible) visibleCards += 1;
+                });
+                const visible = visibleCards > 0;
+                group.classList.toggle('hidden', !visible);
+                if (visible) {
+                    visibleGroups += 1;
+                    if (query) group.open = true;
+                }
+            });
+            moduleEmpty?.classList.toggle('hidden', visibleGroups > 0);
+        });
+
+        manualAsleb?.addEventListener('change', async function () {
+            manualSchedule.disabled = true;
+            manualSchedule.replaceChildren(new Option('Memuat jadwal...', ''));
+            manualScheduleHint.textContent = 'Memeriksa mata kuliah dan kelas yang diampu Aslab.';
+            if (!manualAsleb.value) {
+                manualSchedule.replaceChildren(new Option('Pilih Aslab terlebih dahulu', ''));
+                manualScheduleHint.textContent = 'Jadwal akan muncul otomatis sesuai penugasan Aslab.';
+                return;
+            }
+            try {
+                const response = await fetch(`${manualScheduleUrl}?asleb=${encodeURIComponent(manualAsleb.value)}`, {
+                    headers: {'X-Requested-With': 'XMLHttpRequest'},
+                });
+                if (!response.ok) throw new Error('Jadwal tidak dapat dimuat.');
+                const data = await response.json();
+                manualSchedule.replaceChildren(new Option('Pilih jadwal/kelas', ''));
+                data.schedules.forEach((schedule) => {
+                    const option = new Option(schedule.label, schedule.id);
+                    option.dataset.day = schedule.day;
+                    manualSchedule.add(option);
+                });
+                manualSchedule.disabled = data.schedules.length === 0;
+                manualScheduleHint.textContent = data.schedules.length
+                    ? `${data.schedules.length} jadwal ditemukan sesuai penugasan Aslab.`
+                    : 'Aslab ini belum memiliki jadwal aktif yang dapat dipilih.';
+            } catch (error) {
+                manualSchedule.replaceChildren(new Option('Gagal memuat jadwal', ''));
+                manualScheduleHint.textContent = error.message;
+            }
+        });
 
         if (searchInput) {
             searchInput.addEventListener('input', function () {

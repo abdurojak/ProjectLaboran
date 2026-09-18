@@ -289,7 +289,15 @@ class PenggunaListView(ListView):
             })
 
         context['grouped_users'] = grouped_users
+        context['prodi_options'] = sorted({
+            item.prodi.strip()
+            for item in context['pengguna_list']
+            if item.prodi and item.prodi.strip()
+        })
         context['can_manage_users'] = bool(pengguna and pengguna.role == 'admin')
+        context['can_view_private_contacts'] = bool(
+            pengguna and pengguna.role == 'laboran'
+        )
         return context
 
 
@@ -300,9 +308,24 @@ class PenggunaDetailView(DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        current_pengguna = getattr(self.request, 'current_pengguna', None)
+        context['can_edit_profile'] = bool(
+            current_pengguna
+            and (
+                current_pengguna.role == 'admin'
+                or current_pengguna.pk == self.object.pk
+            )
+        )
+        context['can_view_private_contacts'] = bool(
+            current_pengguna
+            and (
+                current_pengguna.role == 'laboran'
+                or current_pengguna.pk == self.object.pk
+            )
+        )
         context['profile_form'] = PenggunaProfileForm(
             instance=self.object,
-            current_pengguna=getattr(self.request, 'current_pengguna', None),
+            current_pengguna=current_pengguna,
         )
         context['asleb_profile'] = None
         context['asleb_profile'] = Asleb.objects.filter(nim=self.object.nim_nik).first()

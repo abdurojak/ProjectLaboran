@@ -93,11 +93,11 @@
 
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {% for group in grouped_users %}
-        <article class="surface-card p-5">
+        <article class="surface-card p-5" data-user-summary="{{ group.role }}">
             <div class="flex items-start justify-between gap-4">
                 <div>
                     <div class="text-sm font-semibold text-slate-500">{{ group.title }}</div>
-                    <div class="mt-2 text-3xl font-black tracking-tight text-brand-700">{{ group.count }}</div>
+                    <div class="mt-2 text-3xl font-black tracking-tight text-brand-700" data-user-summary-count>{{ group.count }}</div>
                 </div>
                 <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-700">
                     {% if group.role == 'mahasiswa' %}
@@ -113,13 +113,51 @@
         {% endfor %}
     </div>
 
+    <section class="surface-card p-5 md:p-6" aria-labelledby="user-filter-title">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+                <p class="text-xs font-black uppercase tracking-[0.18em] text-brand-700">Pencarian</p>
+                <h3 id="user-filter-title" class="mt-1 text-xl font-black text-slate-900">Cari Pengguna</h3>
+                <p class="mt-1 text-sm text-slate-500">Cari berdasarkan nama, NIM/NIK, kode pengguna, fakultas, atau program studi.</p>
+            </div>
+            <button type="button" class="btn-secondary gap-2" data-user-filter-reset>
+                <i data-lucide="rotate-ccw" class="h-4 w-4"></i>
+                Reset Filter
+            </button>
+        </div>
+        <div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1.5fr)_minmax(180px,0.7fr)_minmax(220px,0.8fr)]">
+            <div>
+                <label for="user-search">Kata kunci</label>
+                <div class="relative">
+                    <i data-lucide="search" class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"></i>
+                    <input id="user-search" type="search" class="pl-11" placeholder="Contoh: Andi, NIM, atau kode pengguna" autocomplete="off" data-user-search>
+                </div>
+            </div>
+            <div>
+                <label for="user-role-filter">Role</label>
+                <select id="user-role-filter" data-user-role-filter>
+                    <option value="">Semua role</option>
+                    {% for group in grouped_users %}<option value="{{ group.role }}">{{ group.title }}</option>{% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="user-prodi-filter">Program studi</label>
+                <select id="user-prodi-filter" data-user-prodi-filter>
+                    <option value="">Semua program studi</option>
+                    {% for prodi in prodi_options %}<option value="{{ prodi|lower }}">{{ prodi }}</option>{% endfor %}
+                </select>
+            </div>
+        </div>
+        <p class="mt-4 text-sm font-semibold text-slate-500" data-user-result-summary aria-live="polite"></p>
+    </section>
+
     {% for group in grouped_users %}
-    <div class="surface-card overflow-hidden">
+    <div class="surface-card overflow-hidden" data-user-group="{{ group.role }}">
         <div class="border-b border-slate-200 bg-slate-50/80 px-5 py-4">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h3 class="text-xl font-black text-slate-900">{{ group.title }}</h3>
-                    <p class="mt-1 text-sm text-slate-500">{{ group.count }} akun terdaftar.</p>
+                    <p class="mt-1 text-sm text-slate-500"><span data-user-group-count>{{ group.count }}</span> akun ditampilkan.</p>
                 </div>
                 <span class="inline-flex rounded-full bg-brand-50 px-3 py-1 text-xs font-black text-brand-700">{{ group.title }}</span>
             </div>
@@ -127,7 +165,7 @@
 
         <div class="grid gap-4 p-4 lg:grid-cols-2 2xl:grid-cols-3">
             {% for pengguna in group.users %}
-            <article class="pengguna-card rounded-[24px] border p-4">
+            <article class="pengguna-card rounded-[24px] border p-4" data-user-card data-role="{{ pengguna.role }}" data-prodi="{{ pengguna.prodi|lower }}" data-search="{{ pengguna.nama_pengguna|lower }} {{ pengguna.nim_nik|lower }} {{ pengguna.kode_pengguna|lower }} {{ pengguna.fakultas|lower }} {{ pengguna.prodi|lower }}">
                 <div class="flex min-w-0 items-start gap-4">
                     {% if pengguna.foto %}
                     <img src="{{ pengguna.foto.url }}" alt="{{ pengguna.nama_pengguna }}" class="pengguna-avatar shrink-0 rounded-2xl object-cover ring-1 ring-slate-200">
@@ -146,6 +184,7 @@
                         </div>
                         <div class="pengguna-card-muted mt-1 text-sm">{{ pengguna.kode_pengguna }} &middot; {{ pengguna.nim_nik }}</div>
                         <div class="pengguna-card-muted mt-3 grid gap-2 text-sm">
+                            {% if can_view_private_contacts %}
                             <div class="flex min-w-0 items-center gap-2">
                                 <i data-lucide="mail" class="pengguna-card-icon h-4 w-4 shrink-0"></i>
                                 <span class="min-w-0 truncate">{{ pengguna.email }}</span>
@@ -154,6 +193,7 @@
                                 <i data-lucide="phone" class="pengguna-card-icon h-4 w-4 shrink-0"></i>
                                 <span class="min-w-0 truncate">{{ pengguna.no_hp }}</span>
                             </div>
+                            {% endif %}
                             <div class="flex min-w-0 items-center gap-2">
                                 <i data-lucide="school" class="pengguna-card-icon h-4 w-4 shrink-0"></i>
                                 <span class="min-w-0 truncate">{{ pengguna.fakultas }} / {{ pengguna.prodi }}</span>
@@ -194,9 +234,79 @@
         Belum ada data pengguna.
     </div>
     {% endfor %}
+    <div class="surface-card hidden p-10 text-center" data-user-empty>
+        <span class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400"><i data-lucide="user-search" class="h-6 w-6"></i></span>
+        <h3 class="mt-4 text-lg font-black text-slate-900">Pengguna tidak ditemukan</h3>
+        <p class="mt-2 text-sm text-slate-500">Coba ubah kata kunci atau reset filter yang aktif.</p>
+    </div>
 </section>
 {% endblock %}
 
 {% block extra_script %}
 {% include "components/confirmation_modal.html" with title="Konfirmasi Hapus Pengguna" confirm_label="Lanjutkan" confirm_icon="arrow-right" %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const searchInput = document.querySelector('[data-user-search]');
+        const roleFilter = document.querySelector('[data-user-role-filter]');
+        const prodiFilter = document.querySelector('[data-user-prodi-filter]');
+        const resetButton = document.querySelector('[data-user-filter-reset]');
+        const cards = Array.from(document.querySelectorAll('[data-user-card]'));
+        const groups = Array.from(document.querySelectorAll('[data-user-group]'));
+        const emptyState = document.querySelector('[data-user-empty]');
+        const resultSummary = document.querySelector('[data-user-result-summary]');
+
+        function normalize(value) {
+            return (value || '').toLocaleLowerCase('id-ID').trim();
+        }
+
+        function applyUserFilters() {
+            const query = normalize(searchInput.value);
+            const selectedRole = roleFilter.value;
+            const selectedProdi = normalize(prodiFilter.value);
+            let totalVisible = 0;
+
+            cards.forEach(function (card) {
+                const matchesSearch = !query || normalize(card.dataset.search).includes(query);
+                const matchesRole = !selectedRole || card.dataset.role === selectedRole;
+                const matchesProdi = !selectedProdi || normalize(card.dataset.prodi) === selectedProdi;
+                const visible = matchesSearch && matchesRole && matchesProdi;
+                card.classList.toggle('hidden', !visible);
+                if (visible) totalVisible += 1;
+            });
+
+            groups.forEach(function (group) {
+                const visibleCards = group.querySelectorAll('[data-user-card]:not(.hidden)').length;
+                group.classList.toggle('hidden', visibleCards === 0);
+                const count = group.querySelector('[data-user-group-count]');
+                if (count) count.textContent = visibleCards;
+            });
+
+            document.querySelectorAll('[data-user-summary]').forEach(function (summary) {
+                const role = summary.dataset.userSummary;
+                const visibleCount = cards.filter(function (card) {
+                    return card.dataset.role === role && !card.classList.contains('hidden');
+                }).length;
+                summary.classList.toggle('hidden', Boolean(selectedRole) && role !== selectedRole);
+                const count = summary.querySelector('[data-user-summary-count]');
+                if (count) count.textContent = visibleCount;
+            });
+
+            emptyState.classList.toggle('hidden', totalVisible !== 0);
+            resultSummary.textContent = totalVisible + ' pengguna ditemukan.';
+        }
+
+        [searchInput, roleFilter, prodiFilter].forEach(function (control) {
+            control.addEventListener('input', applyUserFilters);
+            control.addEventListener('change', applyUserFilters);
+        });
+        resetButton.addEventListener('click', function () {
+            searchInput.value = '';
+            roleFilter.value = '';
+            prodiFilter.value = '';
+            applyUserFilters();
+            searchInput.focus();
+        });
+        applyUserFilters();
+    });
+</script>
 {% endblock %}

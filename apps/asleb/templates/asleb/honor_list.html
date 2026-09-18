@@ -229,6 +229,45 @@
                     </div>
                 </div>
 
+                <div class="mt-4 overflow-hidden rounded-[22px] border border-violet-200 bg-gradient-to-br from-violet-50/90 to-white">
+                    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-violet-100 px-4 py-3">
+                        <div>
+                            <div class="text-xs font-black uppercase tracking-[0.16em] text-violet-700">Detail Perhitungan</div>
+                            <div class="mt-1 text-sm text-slate-500">Penjabaran honor {{ honor.asleb.nama }} untuk {{ honor.bulan|date:"F Y" }}</div>
+                        </div>
+                        <span class="rounded-full bg-white px-3 py-1 text-xs font-black text-violet-700 shadow-sm">Periode ke-{{ honor.asleb.jumlah_periode_asleb }} · {{ honor.get_level_display }}</span>
+                    </div>
+                    <div class="grid gap-px bg-violet-100 sm:grid-cols-2 xl:grid-cols-5">
+                        <div class="bg-white/90 p-4">
+                            <div class="text-xs font-bold uppercase text-slate-400">1. Aktivitas</div>
+                            <div class="mt-2 font-black text-slate-900">{{ honor.jumlah_praktikum }} modul × {{ honor.total_pertemuan }} pertemuan</div>
+                        </div>
+                        <div class="bg-white/90 p-4">
+                            <div class="text-xs font-bold uppercase text-slate-400">2. Jam Mentah</div>
+                            <div class="mt-2 font-black text-slate-900">{{ honor.jumlah_praktikum }} × {{ honor.total_pertemuan }} × 7 = {{ honor.total_jam_terealisasi }} jam</div>
+                        </div>
+                        <div class="bg-white/90 p-4">
+                            <div class="text-xs font-bold uppercase text-slate-400">3. Jam Dibayar</div>
+                            <div class="mt-2 font-black {% if honor.total_jam_terealisasi > honor.total_akhir %}text-amber-700{% else %}text-slate-900{% endif %}">{{ honor.total_akhir }} jam</div>
+                            {% if honor.total_jam_terealisasi > honor.total_akhir %}<div class="mt-1 text-xs font-bold text-amber-600">Dibatasi maksimal 60 jam</div>{% endif %}
+                        </div>
+                        <div class="bg-white/90 p-4">
+                            <div class="text-xs font-bold uppercase text-slate-400">4. Tarif</div>
+                            <div class="mt-2 font-black text-slate-900">{{ honor.honor_per_jam_rupiah }}/jam</div>
+                            <div class="mt-1 text-xs text-slate-500">{{ honor.get_level_display }}</div>
+                        </div>
+                        <div class="bg-white/90 p-4">
+                            <div class="text-xs font-bold uppercase text-slate-400">5. Honor Kotor</div>
+                            <div class="mt-2 font-black text-violet-700">{{ honor.total_akhir }} × {{ honor.honor_per_jam_rupiah }}</div>
+                            <div class="mt-1 text-sm font-black text-violet-800">{{ honor.honor_sebelum_potongan_rupiah }}</div>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap items-center justify-between gap-3 bg-violet-700 px-4 py-3 text-white">
+                        <div class="text-sm font-bold">{{ honor.honor_sebelum_potongan_rupiah }} − {{ honor.biaya_admin_rupiah }} biaya admin</div>
+                        <div class="text-base font-black">Honor bersih = {{ honor.jumlah_rupiah }}</div>
+                    </div>
+                </div>
+
                 <div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(260px,0.8fr)]">
                     <div class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
                         <div class="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Laboran TF</div>

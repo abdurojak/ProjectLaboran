@@ -394,7 +394,7 @@ class HonorAslebListView(HonorAccessMixin, ListView):
         context['is_admin'] = False
         context['is_laboran'] = bool(pengguna and pengguna.role == LABORAN_ROLE)
         context['is_asisten_lab'] = bool(pengguna and pengguna.role == ASISTEN_LAB_ROLE)
-        context['formula_note'] = 'Total Honor = Status Aslab (Senior/Junior x (Jumlah Modul x Total Pertemuan )) = *7 jam /modul maximal 60 jam /bulan. Level otomatis: periode aslab ke-1 dan ke-2 Junior Rp7.000, mulai ke-3 Senior Rp8.000.'
+        context['formula_note'] = 'Total jam = jumlah modul × total pertemuan × 7 jam, maksimal 60 jam per bulan. Periode ke-1 dan ke-2 Junior Rp7.000/jam; mulai periode ke-3 Senior Rp8.000/jam.'
         context['biaya_transfer_form'] = PengaturanBiayaTransferForm(instance=PengaturanBiayaTransfer.get_solo())
         return context
 
@@ -646,9 +646,6 @@ class AbsensiAslebListView(ListView):
         context['manual_attendance_permission'] = get_active_manual_attendance_permission(context['asleb_profile'])
         if can_manage_lab_operations(pengguna):
             context['manual_permission_asleb_list'] = Asleb.objects.filter(status='aktif').order_by('nama')
-            context['manual_permission_schedule_list'] = JadwalPraktikum.objects.filter(
-                status=JadwalPraktikum.STATUS_DITERIMA,
-            ).order_by('mata_kuliah', 'kelas', 'hari', 'waktu_mulai')
             context['active_manual_permissions'] = IzinAbsensiManualAsleb.objects.filter(
                 digunakan_pada__isnull=True,
                 dibatalkan_pada__isnull=True,
@@ -2545,6 +2542,41 @@ def toggle_absensi_status(request):
     status = 'dibuka' if pengaturan.dibuka else 'ditutup'
     messages.success(request, f'Absensi aslab berhasil {status}.')
     return redirect('asleb:absensi_list')
+
+
+def manual_attendance_schedule_options(request):
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not can_manage_lab_operations(pengguna):
+        return JsonResponse({'detail': 'Akses ditolak.'}, status=403)
+
+    asleb = get_object_or_404(Asleb, pk=request.GET.get('asleb'), status='aktif')
+    from apps.pendaftaran_asleb.models import MataKuliahAsleb
+
+    matkul_labels = list(
+        MataKuliahAsleb.objects.filter(
+            pk__in=get_active_asleb_matkul_ids(asleb),
+            aktif=True,
+        ).values_list('nama', 'dosen', 'kelas')
+    )
+    labels = {f'{nama} - {dosen} - {kelas}' for nama, dosen, kelas in matkul_labels}
+    schedules = JadwalPraktikum.objects.filter(
+        mata_kuliah__in=labels,
+        status=JadwalPraktikum.STATUS_DITERIMA,
+    ).select_related('ruangan', 'ruangan_tambahan').order_by('mata_kuliah', 'kelas', 'hari', 'waktu_mulai')
+    return JsonResponse({
+        'schedules': [
+            {
+                'id': schedule.pk,
+                'label': (
+                    f'{schedule.mata_kuliah} · {schedule.kelas} · '
+                    f'{schedule.get_hari_display()} {schedule.waktu_mulai:%H:%M} · '
+                    f'{schedule.get_display_ruangan_nama()}'
+                ),
+                'day': schedule.hari,
+            }
+            for schedule in schedules
+        ],
+    })
 
 
 @require_POST

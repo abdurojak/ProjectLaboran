@@ -147,6 +147,31 @@ class PenggunaViewTests(TestCase):
         self.assertContains(response, laboran.nama_pengguna)
         self.assertContains(response, asisten.nama_pengguna)
         self.assertContains(response, 'data-confirmation-modal')
+        self.assertContains(response, 'data-user-search')
+        self.assertContains(response, 'data-user-role-filter')
+        self.assertContains(response, 'data-user-prodi-filter')
+        self.assertContains(response, 'data-user-filter-reset')
+        self.assertEqual(response.content.decode().count('data-user-card data-role='), 3)
+        self.assertContains(response, 'applyUserFilters()')
+        self.assertContains(response, '<option value="informatika">Informatika</option>', html=False)
+
+    def test_indeks_pencarian_pengguna_tidak_memuat_email_atau_nomor_hp(self):
+        target = Pengguna.objects.create(
+            nama_pengguna='Pengguna Filter Aman', nim_nik='2202099',
+            email='rahasia-filter@example.com', password='rahasia123',
+            no_hp='081299999999', alamat='Alamat Privat',
+            fakultas='Teknologi Industri', prodi='Sistem Informasi',
+            gender='perempuan', role='mahasiswa',
+        )
+
+        response = self.client.get(reverse('pengguna:list'))
+        body = response.content.decode()
+
+        self.assertContains(response, target.nama_pengguna)
+        self.assertIn(target.nim_nik, body)
+        self.assertIn(target.prodi.lower(), body.lower())
+        self.assertNotIn(target.email, body)
+        self.assertNotIn(target.no_hp, body)
 
     def test_laboran_hanya_melihat_mahasiswa_dan_asisten_lab_di_menu_pengguna(self):
         laboran = Pengguna.objects.create(
@@ -369,6 +394,59 @@ class PenggunaViewTests(TestCase):
         self.assertContains(response, 'input[type="date"]::-webkit-calendar-picker-indicator')
         self.assertNotContains(response, 'Konfirmasi Hapus Pengguna')
         self.assertNotContains(response, f'href="{reverse("pengguna:delete", args=[self.pengguna.pk])}"')
+
+    def test_mahasiswa_tidak_melihat_kontak_pribadi_profil_orang_lain(self):
+        viewer = Pengguna.objects.create(
+            nama_pengguna='Viewer Mahasiswa', nim_nik='2203010',
+            email='viewer-private@example.com', password='rahasia123',
+            no_hp='081200000010', alamat='Depok',
+            fakultas='Teknologi Industri', prodi='Informatika',
+            gender='laki_laki', role='mahasiswa',
+        )
+        target = Pengguna.objects.create(
+            nama_pengguna='Target Aslab', nim_nik='2203011',
+            email='target-private@example.com', password='rahasia123',
+            no_hp='081299999911', alamat='Alamat Rahasia Target',
+            fakultas='Teknologi Industri', prodi='Informatika',
+            gender='perempuan', role='asisten_lab',
+        )
+        session = self.client.session
+        session['pengguna_id'] = viewer.pk
+        session.save()
+
+        response = self.client.get(reverse('pengguna:detail', args=[target.pk]))
+
+        self.assertEqual(response.status_code, 302)
+        response_body = response.content.decode()
+        self.assertNotIn(target.email, response_body)
+        self.assertNotIn(target.no_hp, response_body)
+        self.assertNotIn(target.alamat, response_body)
+
+    def test_laboran_dapat_melihat_kontak_pribadi_profil(self):
+        laboran = Pengguna.objects.create(
+            nama_pengguna='Laboran Kontak', nim_nik='3303010',
+            email='laboran-private@example.com', password='rahasia123',
+            no_hp='081200000020', alamat='Jakarta',
+            fakultas='Teknologi Industri', prodi='Informatika',
+            gender='laki_laki', role='laboran',
+        )
+        target = Pengguna.objects.create(
+            nama_pengguna='Mahasiswa Kontak', nim_nik='2203020',
+            email='mahasiswa-private@example.com', password='rahasia123',
+            no_hp='081299999920', alamat='Bekasi Timur',
+            fakultas='Teknologi Industri', prodi='Informatika',
+            gender='perempuan', role='mahasiswa',
+        )
+        session = self.client.session
+        session['pengguna_id'] = laboran.pk
+        session.save()
+
+        response = self.client.get(reverse('pengguna:detail', args=[target.pk]))
+
+        self.assertContains(response, target.email)
+        self.assertContains(response, target.no_hp)
+        self.assertContains(response, target.alamat)
+        self.assertContains(response, 'Informasi Kontak')
 
     def test_detail_asisten_lab_menampilkan_status_junior_senior(self):
         self.pengguna.role = 'asisten_lab'
