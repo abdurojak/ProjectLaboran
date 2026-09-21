@@ -1,6 +1,8 @@
 from datetime import time
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.core import mail
 from django.urls import reverse
 from django.utils import timezone
@@ -62,6 +64,33 @@ class DashboardViewTests(TestCase):
         self.assertContains(response, '-webkit-backdrop-filter: blur(18px) saturate(1.18);')
         self.assertContains(response, 'border-color: rgba(71, 85, 105, 0.40) !important;')
         self.assertContains(response, 'scrollbar-color: rgba(71, 85, 105, 0.76) rgba(15, 23, 42, 0.58);')
+
+    def test_dashboard_menampilkan_halaman_unduh_android_untuk_tiga_role(self):
+        for role in ('laboran', 'asisten_lab', 'mahasiswa'):
+            with self.subTest(role=role):
+                self.pengguna.role = role
+                self.pengguna.save(update_fields=['role'])
+                response = self.client.get(reverse('dashboard:home'))
+                self.assertContains(response, reverse('dashboard:android_app'))
+
+    def test_unduhan_android_mengirim_apk_sebagai_lampiran(self):
+        with TemporaryDirectory() as directory:
+            apk_path = Path(directory) / 'LabHub-test.apk'
+            apk_path.write_bytes(b'test-apk')
+            with override_settings(MOBILE_APK_PATH=apk_path):
+                page = self.client.get(reverse('dashboard:android_app'))
+                response = self.client.get(reverse('dashboard:android_app_download'))
+
+                self.assertContains(page, 'Unduh APK versi')
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response['Content-Type'], 'application/vnd.android.package-archive')
+                self.assertIn('attachment', response['Content-Disposition'])
+                self.assertEqual(b''.join(response.streaming_content), b'test-apk')
+
+    def test_unduhan_android_tidak_tersedia_jika_file_hilang(self):
+        with override_settings(MOBILE_APK_PATH=Path('missing-labhub.apk')):
+            response = self.client.get(reverse('dashboard:android_app_download'))
+            self.assertEqual(response.status_code, 404)
 
     def test_sidebar_laboran_mengelompokkan_menu_barang(self):
         response = self.client.get(reverse('dashboard:home'))

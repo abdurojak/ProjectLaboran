@@ -9,7 +9,7 @@ from .jwt_service import decode_token, get_active_session
 
 
 def has_mobile_access(pengguna):
-    if pengguna.role == 'laboran':
+    if pengguna.role in {'laboran', 'mahasiswa'}:
         return True
     return bool(
         pengguna.role == 'asisten_lab'

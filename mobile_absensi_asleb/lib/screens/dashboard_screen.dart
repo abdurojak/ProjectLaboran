@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/attendance_provider.dart';
 import '../utils/app_theme.dart';
+import '../widgets/authenticated_network_image.dart';
 import '../widgets/labhub_loading.dart';
 import '../widgets/schedule_card.dart';
 import '../widgets/state_views.dart';
@@ -39,14 +40,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               actions: [
                 Padding(
                   padding: const EdgeInsets.only(right: 18),
-                  child: CircleAvatar(
+                  child: AuthenticatedCircleAvatar(
                     backgroundColor: Colors.white,
-                    backgroundImage: profile?.fotoUrl == null
-                        ? null
-                        : NetworkImage(profile!.fotoUrl!),
-                    child: profile?.fotoUrl == null
-                        ? const Icon(Icons.person_outline)
-                        : null,
+                    imageUrl: profile?.fotoUrl,
+                    fallback: const Icon(Icons.person_outline),
                   ),
                 ),
               ],

@@ -1,9 +1,11 @@
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Q, Sum
+from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils import timezone
@@ -31,6 +33,31 @@ from apps.peminjaman.services import update_peminjaman_status
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb, RiwayatAsleb
 from apps.pendaftaran_asleb.services import is_registration_open
 from apps.pendaftaran_asleb.utils import get_public_registration_url
+
+
+class AndroidAppView(TemplateView):
+    template_name = 'dashboard/android_app.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['apk_available'] = settings.MOBILE_APK_PATH.is_file()
+        context['apk_version'] = settings.MOBILE_APK_VERSION
+        return context
+
+
+def download_android_app(request):
+    apk_path = settings.MOBILE_APK_PATH
+    if not apk_path.is_file():
+        raise Http404('APK belum tersedia.')
+    response = FileResponse(
+        apk_path.open('rb'),
+        as_attachment=True,
+        filename=settings.MOBILE_APK_NAME,
+        content_type='application/vnd.android.package-archive',
+    )
+    response['Cache-Control'] = 'private, no-store'
+    response['X-Content-Type-Options'] = 'nosniff'
+    return response
 
 
 class DashboardView(TemplateView):

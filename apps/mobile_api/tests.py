@@ -65,6 +65,13 @@ class MobileAbsensiApiTests(TestCase):
             fakultas='Teknologi Industri', prodi='Informatika', gender='laki_laki',
             role='laboran', is_verified=True,
         )
+        self.mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Mahasiswa Mobile', nim_nik='0640020002',
+            email='mahasiswa.mobile@std.trisakti.ac.id', password='Password123!',
+            no_hp='081200000002', alamat='Jakarta', fakultas='Teknologi Industri',
+            prodi='Informatika', gender='perempuan', role='mahasiswa',
+            is_verified=True,
+        )
         self.period = PeriodeAsleb.objects.create(
             tahun=2030, semester=1, mulai=date(2030, 1, 1), selesai=date(2030, 6, 30),
             pendaftaran_mulai=date(2030, 1, 1), pendaftaran_selesai=date(2030, 1, 30),
@@ -116,7 +123,7 @@ class MobileAbsensiApiTests(TestCase):
         payload.update(overrides)
         return payload
 
-    def test_login_menerima_asisten_lab_aktif_dan_laboran(self):
+    def test_login_menerima_asisten_lab_aktif_laboran_dan_mahasiswa(self):
         response = self.client.post(reverse('mobile_api:login'), {
             'identifier': self.user.email,
             'password': 'Password123!',
@@ -130,13 +137,48 @@ class MobileAbsensiApiTests(TestCase):
         }, format='json')
         self.assertEqual(laboran_response.status_code, 200)
 
-        self.user.role = 'mahasiswa'
-        self.user.save(update_fields=['role'])
-        denied = self.client.post(reverse('mobile_api:login'), {
-            'identifier': self.user.email,
+        mahasiswa_response = self.client.post(reverse('mobile_api:login'), {
+            'identifier': self.mahasiswa.email,
             'password': 'Password123!',
         }, format='json')
-        self.assertEqual(denied.status_code, 403)
+        self.assertEqual(mahasiswa_response.status_code, 200)
+        self.assertEqual(mahasiswa_response.data['user']['role'], 'mahasiswa')
+
+    def test_mahasiswa_hanya_melihat_peminjaman_miliknya(self):
+        own_barang = Barang.objects.create(nama='Barang Mahasiswa', kode_barang='BM-001')
+        other_barang = Barang.objects.create(nama='Barang Lain', kode_barang='BM-002')
+        PeminjamanAlat.objects.create(
+            barang=own_barang, nama_peminjam=self.mahasiswa.nama_pengguna,
+            nim=self.mahasiswa.nim_nik, tanggal_pinjam=date(2030, 1, 1),
+            tanggal_kembali=date(2030, 1, 2),
+        )
+        PeminjamanAlat.objects.create(
+            barang=other_barang, nama_peminjam='Mahasiswa Lain',
+            nim='0640020099', tanggal_pinjam=date(2030, 1, 1),
+            tanggal_kembali=date(2030, 1, 2),
+        )
+        login = self.client.post(reverse('mobile_api:login'), {
+            'identifier': self.mahasiswa.nim_nik,
+            'password': 'Password123!',
+        }, format='json')
+        self.assertEqual(login.status_code, 200)
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {login.data['tokens']['access']}"
+        )
+
+        profile = self.client.get(reverse('mobile_api:profile'))
+        loans = self.client.get(reverse('mobile_api:mahasiswa_loans'))
+        asleb_dashboard = self.client.get(reverse('mobile_api:dashboard'))
+        laboran_loans = self.client.get(reverse('mobile_api:laboran_loans'))
+
+        self.assertEqual(profile.status_code, 200)
+        self.assertEqual(profile.data['user']['role'], 'mahasiswa')
+        self.assertIsNone(profile.data['asleb'])
+        self.assertEqual(loans.status_code, 200)
+        self.assertEqual(len(loans.data['results']), 1)
+        self.assertEqual(loans.data['results'][0]['barang'], 'Barang Mahasiswa')
+        self.assertEqual(asleb_dashboard.status_code, 403)
+        self.assertEqual(laboran_loans.status_code, 403)
 
     def test_endpoint_mobile_dipisahkan_berdasarkan_role(self):
         self.authenticate_laboran()

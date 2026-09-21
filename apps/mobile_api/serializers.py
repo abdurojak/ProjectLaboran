@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from django.conf import settings
+from django.urls import reverse
 from PIL import Image, UnidentifiedImageError
 from mutagen.mp4 import MP4, MP4StreamInfoError
 from rest_framework import serializers
@@ -13,7 +14,9 @@ from apps.inventaris.models import Lokasi
 def absolute_file_url(request, field):
     if not field:
         return None
-    return request.build_absolute_uri(field.url)
+    return request.build_absolute_uri(
+        reverse('mobile_api:media', kwargs={'path': field.name})
+    )
 
 
 class LoginSerializer(serializers.Serializer):

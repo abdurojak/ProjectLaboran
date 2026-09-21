@@ -127,6 +127,15 @@ class ApiService {
     }
   }
 
+  Future<Map<String, String>> authenticatedMediaHeaders() async {
+    var token = await storage.accessToken;
+    if (token != null && _isTokenExpiring(token)) {
+      token = await _refreshAccessToken();
+    }
+    if (token == null) return const {};
+    return {'Authorization': 'Bearer $token'};
+  }
+
   Future<UserProfile> login(String identifier, String password) async {
     try {
       final response = await dio.post(
@@ -301,6 +310,15 @@ class ApiService {
 
   Future<List<LoanItem>> laboranLoans() async {
     final data = await _getMap('laboran/loans/');
+    return (data['results'] as List)
+        .map(
+          (item) => LoanItem.fromJson(Map<String, dynamic>.from(item as Map)),
+        )
+        .toList();
+  }
+
+  Future<List<LoanItem>> mahasiswaLoans() async {
+    final data = await _getMap('mahasiswa/loans/');
     return (data['results'] as List)
         .map(
           (item) => LoanItem.fromJson(Map<String, dynamic>.from(item as Map)),

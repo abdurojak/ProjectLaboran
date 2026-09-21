@@ -546,12 +546,19 @@ class SuratHonorAslebGenerateView(SuratHonorAccessMixin, FormView):
     def form_valid(self, form):
         pengguna = getattr(self.request, 'current_pengguna', None)
         bulan = form.cleaned_data['bulan']
+
+        # Surat bulanan harus mencakup setiap Aslab aktif, termasuk yang belum
+        # memiliki baris honor karena belum mencatat pertemuan pada bulan ini.
+        for active_asleb in Asleb.objects.select_for_update().filter(status='aktif'):
+            _sync_honor_attendance(active_asleb, bulan)
+
         honors = list(payment_eligible_honors(
             HonorAsleb.objects.select_for_update().select_related('asleb').filter(
-            bulan__year=bulan.year,
-            bulan__month=bulan.month,
+                bulan__year=bulan.year,
+                bulan__month=bulan.month,
+                asleb__status='aktif',
             )
-        ).order_by('asleb__matkul', 'asleb__nama'))
+        ).order_by('asleb__nama', 'asleb__nim'))
 
         if not honors:
             form.add_error('bulan', 'Belum ada rekap honor aslab untuk bulan ini.')

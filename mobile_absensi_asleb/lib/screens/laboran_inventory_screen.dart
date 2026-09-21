@@ -9,6 +9,7 @@ import '../models/inventory_item.dart';
 import '../providers/laboran_provider.dart';
 import '../utils/app_theme.dart';
 import '../widgets/labhub_loading.dart';
+import '../widgets/authenticated_network_image.dart';
 
 class LaboranInventoryScreen extends StatefulWidget {
   const LaboranInventoryScreen({super.key});
@@ -121,7 +122,7 @@ class _InventoryCard extends StatelessWidget {
                       size: 38,
                     ),
                   )
-                : Image.network(
+                : AuthenticatedNetworkImage(
                     item.photoUrl!,
                     fit: BoxFit.cover,
                     errorBuilder: (_, _, _) =>
@@ -562,7 +563,10 @@ class _InventoryGallery extends StatelessWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                Image.network(item.photoUrls[index], fit: BoxFit.cover),
+                AuthenticatedNetworkImage(
+                  item.photoUrls[index],
+                  fit: BoxFit.cover,
+                ),
                 Positioned(
                   right: 12,
                   bottom: 12,

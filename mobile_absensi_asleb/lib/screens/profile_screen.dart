@@ -5,6 +5,7 @@ import '../providers/attendance_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/theme_provider.dart';
 import '../utils/app_theme.dart';
+import '../widgets/authenticated_network_image.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -30,19 +31,15 @@ class ProfileScreen extends StatelessWidget {
               padding: const EdgeInsets.all(22),
               child: Column(
                 children: [
-                  CircleAvatar(
+                  AuthenticatedCircleAvatar(
                     radius: 48,
                     backgroundColor: AppTheme.teal.withValues(alpha: .12),
-                    backgroundImage: user?.fotoUrl == null
-                        ? null
-                        : NetworkImage(user!.fotoUrl!),
-                    child: user?.fotoUrl == null
-                        ? const Icon(
-                            Icons.person_outline,
-                            color: AppTheme.teal,
-                            size: 44,
-                          )
-                        : null,
+                    imageUrl: user?.fotoUrl,
+                    fallback: const Icon(
+                      Icons.person_outline,
+                      color: AppTheme.teal,
+                      size: 44,
+                    ),
                   ),
                   const SizedBox(height: 15),
                   Text(
@@ -73,7 +70,11 @@ class ProfileScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(99),
                     ),
                     child: Text(
-                      isLaboran ? 'Laboran' : 'Asisten Laboratorium',
+                      isLaboran
+                          ? 'Laboran'
+                          : user?.role == 'mahasiswa'
+                          ? 'Mahasiswa'
+                          : 'Asisten Laboratorium',
                       style: const TextStyle(
                         color: AppTheme.teal,
                         fontWeight: FontWeight.w900,
@@ -119,7 +120,7 @@ class ProfileScreen extends StatelessWidget {
                     label: 'Program Studi',
                     value: user?.programStudi ?? '-',
                   ),
-                  if (!isLaboran)
+                  if (user?.role == 'asisten_lab')
                     _ProfileRow(
                       icon: Icons.menu_book_outlined,
                       label: 'Mata Kuliah',

@@ -1,7 +1,9 @@
 from django.urls import path
 
 from .views import (
+    AndroidAppView,
     DashboardView,
+    download_android_app,
     accept_jadwal,
     accept_peminjaman,
     reject_jadwal,
@@ -16,6 +18,8 @@ app_name = 'dashboard'
 
 urlpatterns = [
     path('', DashboardView.as_view(), name='home'),
+    path('aplikasi-android/', AndroidAppView.as_view(), name='android_app'),
+    path('aplikasi-android/unduh/', download_android_app, name='android_app_download'),
     path('jadwal/<int:pk>/terima/', accept_jadwal, name='jadwal_accept'),
     path('jadwal/<int:pk>/tolak/', reject_jadwal, name='jadwal_reject'),
     path('peminjaman/<int:pk>/terima/', accept_peminjaman, name='peminjaman_accept'),

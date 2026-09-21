@@ -22,3 +22,4 @@ hatch-pet-runs
 build/protected/
 dist/protected/
 *.protected.tar.gz
+*.apk

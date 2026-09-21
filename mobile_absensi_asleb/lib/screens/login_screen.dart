@@ -139,7 +139,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             const SizedBox(height: 8),
                             const Text(
-                              'Masuk sebagai Asisten Lab aktif atau Laboran untuk mengakses fitur mobile.',
+                              'Masuk sebagai Laboran, Asisten Lab aktif, atau Mahasiswa untuk mengakses fitur mobile.',
                               style: TextStyle(
                                 color: Color(0xFF64748B),
                                 height: 1.5,

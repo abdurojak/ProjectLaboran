@@ -8,6 +8,7 @@ import 'history_screen.dart';
 import 'laboran_dashboard_screen.dart';
 import 'laboran_inventory_screen.dart';
 import 'laboran_loans_screen.dart';
+import 'mahasiswa_home_screen.dart';
 import 'profile_screen.dart';
 import 'schedule_list_screen.dart';
 
@@ -51,7 +52,9 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
-    final isLaboran = context.watch<AuthProvider>().user?.role == 'laboran';
+    final role = context.watch<AuthProvider>().user?.role;
+    final isLaboran = role == 'laboran';
+    final isMahasiswa = role == 'mahasiswa';
     final screens = isLaboran
         ? const [
             LaboranDashboardScreen(),
@@ -60,6 +63,8 @@ class _MainShellState extends State<MainShell> {
             ChatbotScreen(),
             ProfileScreen(),
           ]
+        : isMahasiswa
+        ? const [MahasiswaHomeScreen(), ChatbotScreen(), ProfileScreen()]
         : const [
             DashboardScreen(),
             ScheduleListScreen(),
@@ -83,6 +88,24 @@ class _MainShellState extends State<MainShell> {
               icon: Icon(Icons.swap_horiz_outlined),
               selectedIcon: Icon(Icons.swap_horiz),
               label: 'Pinjam',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.chat_bubble_outline),
+              selectedIcon: Icon(Icons.chat_bubble),
+              label: 'Bantuan',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.person_outline),
+              selectedIcon: Icon(Icons.person),
+              label: 'Profil',
+            ),
+          ]
+        : isMahasiswa
+        ? const [
+            NavigationDestination(
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home),
+              label: 'Beranda',
             ),
             NavigationDestination(
               icon: Icon(Icons.chat_bubble_outline),

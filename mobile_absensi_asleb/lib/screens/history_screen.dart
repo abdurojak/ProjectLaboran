@@ -6,6 +6,7 @@ import 'package:video_player/video_player.dart';
 import '../models/attendance.dart';
 import '../providers/attendance_provider.dart';
 import '../widgets/state_views.dart';
+import '../widgets/authenticated_network_image.dart';
 import '../widgets/status_badge.dart';
 import '../widgets/labhub_loading.dart';
 
@@ -176,7 +177,7 @@ class _HistoryDetailState extends State<_HistoryDetail> {
               borderRadius: BorderRadius.circular(20),
               child: AspectRatio(
                 aspectRatio: 4 / 3,
-                child: Image.network(
+                child: AuthenticatedNetworkImage(
                   record.fotoUrl,
                   fit: BoxFit.cover,
                   errorBuilder: (_, _, _) => const ColoredBox(

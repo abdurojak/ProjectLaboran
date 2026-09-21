@@ -156,13 +156,21 @@ def generate_surat_honor_pdf(honors, nomor_surat, tanggal_surat, bulan, perihal)
     )
     styles = build_styles()
     story = []
-    grouped = group_honors_by_laboratorium(honors)
+    honors = list(honors)
+    combined_title = 'Seluruh Asisten Laboratorium'
+    grouped = OrderedDict([(combined_title, honors)]) if honors else OrderedDict()
     bulan_label = month_year_label(bulan)
 
     story.extend(build_cover_letter(styles, grouped, nomor_surat, tanggal_surat, bulan_label, perihal))
-    for lab_name, lab_honors in grouped.items():
+    if honors:
         story.append(PageBreak())
-        story.extend(build_lampiran_page(styles, lab_name, lab_honors, bulan_label))
+        story.extend(build_lampiran_page(
+            styles,
+            combined_title,
+            honors,
+            bulan_label,
+            combined=True,
+        ))
 
     if not grouped:
         story.append(PageBreak())
@@ -294,7 +302,7 @@ def build_lab_signature(styles, lab_name):
     return wrapper
 
 
-def build_lampiran_page(styles, lab_name, honors, bulan_label):
+def build_lampiran_page(styles, lab_name, honors, bulan_label, combined=False):
     story = [
         paragraph('LAPORAN KEGIATAN ASISTEN', styles['TitleCenter']),
         paragraph(lab_name.upper(), styles['TitleCenter']),
@@ -336,6 +344,6 @@ def build_lampiran_page(styles, lab_name, honors, bulan_label):
     story.extend([
         table,
         Spacer(1, 0.75 * cm),
-        build_lab_signature(styles, lab_name),
+        build_chair_signature(styles) if combined else build_lab_signature(styles, lab_name),
     ])
     return story

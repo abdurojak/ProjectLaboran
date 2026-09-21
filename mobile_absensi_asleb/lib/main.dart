@@ -29,6 +29,7 @@ class LabHubApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        Provider<ApiService>.value(value: api),
         ChangeNotifierProvider(
           create: (_) => AuthProvider(api, storage)..restoreSession(),
         ),

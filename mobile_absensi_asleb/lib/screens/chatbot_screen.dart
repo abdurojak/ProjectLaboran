@@ -70,7 +70,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
     if (auth.user?.role == 'laboran') {
       final provider = context.read<LaboranProvider>();
       if (provider.summary.isEmpty) await provider.loadDashboard();
-    } else {
+    } else if (auth.user?.role == 'asisten_lab') {
       final provider = context.read<AttendanceProvider>();
       if (provider.profile == null) await provider.loadDashboard();
     }
@@ -124,6 +124,15 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
         return 'Halo ${auth.user?.nama ?? 'Laboran'}. Saya siap membantu informasi inventaris, peminjaman, dan penggunaan aplikasi Laboran.';
       }
       return 'Maaf, koneksi bot server sedang bermasalah. Saya masih bisa membantu ringkasan inventaris dan peminjaman Laboran.';
+    }
+
+    if (auth.user?.role == 'mahasiswa') {
+      if (normalized.contains('halo') ||
+          normalized.contains('hai') ||
+          normalized.contains('pagi')) {
+        return 'Halo ${auth.user?.nama ?? 'Mahasiswa'}. Saya siap membantu informasi peminjaman dan penggunaan aplikasi.';
+      }
+      return 'Maaf, bot server sedang bermasalah. Riwayat peminjaman Anda tetap bisa dilihat di Beranda.';
     }
 
     final provider = context.read<AttendanceProvider>();

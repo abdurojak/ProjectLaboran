@@ -517,6 +517,17 @@
 
 {% block content %}
 <div class="dashboard-page grid max-w-full min-w-0 gap-4 overflow-hidden sm:gap-5 lg:gap-6">
+        <section class="surface-card flex min-w-0 flex-wrap items-center justify-between gap-4 p-5 md:p-6">
+            <div class="flex min-w-0 items-center gap-4">
+                <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700"><i data-lucide="smartphone" class="h-6 w-6"></i></span>
+                <div class="min-w-0">
+                    <p class="text-xs font-black uppercase tracking-[0.2em] text-emerald-700">LabHub Mobile</p>
+                    <h2 class="mt-1 text-lg font-black text-slate-900">Aplikasi Android sudah tersedia</h2>
+                    <p class="mt-1 text-sm text-slate-500">Untuk Laboran, Asisten Lab aktif, dan Mahasiswa.</p>
+                </div>
+            </div>
+            <a href="{% url 'dashboard:android_app' %}" class="btn-primary gap-2"><i data-lucide="download" class="h-4 w-4"></i><span>Unduh APK Android</span></a>
+        </section>
         {% comment %}
         <div class="grid gap-4">
             <article class="surface-card overflow-hidden bg-gradient-to-br from-white via-brand-50/60 to-slate-100/70 p-7 md:p-9">

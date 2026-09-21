@@ -1,4 +1,6 @@
 import hashlib
+import mimetypes
+from pathlib import PurePosixPath
 
 from django.conf import settings
 from django.contrib.auth.hashers import check_password
@@ -6,6 +8,8 @@ from django.core.cache import cache
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Q, Sum
 from django.core.exceptions import SuspiciousFileOperation
+from django.http import FileResponse, Http404
+from django.utils._os import safe_join
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
@@ -34,6 +38,7 @@ from apps.peminjaman.notifications import send_peminjaman_status_notification
 from apps.peminjaman.services import update_peminjaman_status
 from apps.pendaftaran_asleb.services import sync_expired_asleb_periods
 from apps.pengguna.models import Pengguna
+from apps.pengguna.middleware import PenggunaLoginRequiredMiddleware
 
 from .authentication import has_mobile_access
 from .jwt_service import (
@@ -42,7 +47,7 @@ from .jwt_service import (
     get_active_session,
     revoke_session,
 )
-from .permissions import IsAsistenLab, IsLaboran, IsMobileUser
+from .permissions import IsAsistenLab, IsLaboran, IsMahasiswa, IsMobileUser
 from .serializers import (
     AttendanceSerializer,
     CheckInSerializer,
@@ -66,6 +71,43 @@ from .services import (
 
 def api_error(message, code, http_status=status.HTTP_400_BAD_REQUEST, **extra):
     return Response({'detail': message, 'code': code, **extra}, status=http_status)
+
+
+class MobileMediaView(APIView):
+    permission_classes = [IsMobileUser]
+
+    def get(self, request, path):
+        media_name = str(PurePosixPath(path)).lstrip('/')
+        if not media_name or media_name.startswith('../'):
+            raise Http404
+
+        media_path = f'/media/{media_name}'
+        access_policy = PenggunaLoginRequiredMiddleware(lambda _: None)
+        if not access_policy.can_access_media(
+            request.user,
+            media_path,
+            media_url='/media/',
+        ):
+            return api_error(
+                'Anda tidak memiliki akses ke berkas ini.',
+                'media_forbidden',
+                status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            file_path = safe_join(settings.MEDIA_ROOT, media_name)
+            file_handle = open(file_path, 'rb')
+        except (SuspiciousFileOperation, FileNotFoundError, IsADirectoryError):
+            raise Http404 from None
+
+        content_type, _ = mimetypes.guess_type(file_path)
+        response = FileResponse(
+            file_handle,
+            content_type=content_type or 'application/octet-stream',
+        )
+        response['Cache-Control'] = 'private, no-store, no-cache, must-revalidate'
+        response['X-Content-Type-Options'] = 'nosniff'
+        return response
 
 
 def mobile_login_attempt_key(request, identifier):
@@ -126,7 +168,7 @@ class LoginView(APIView):
         pengguna.refresh_from_db(fields=['role'])
         if not has_mobile_access(pengguna):
             return api_error(
-                'Aplikasi hanya dapat diakses oleh Asisten Lab aktif atau Laboran.',
+                'Aplikasi hanya dapat diakses oleh Laboran, Asisten Lab aktif, atau Mahasiswa.',
                 'role_not_allowed',
                 status.HTTP_403_FORBIDDEN,
             )
@@ -172,7 +214,7 @@ class ProfileView(APIView):
     permission_classes = [IsMobileUser]
 
     def get(self, request):
-        if request.user.role == 'laboran':
+        if request.user.role in {'laboran', 'mahasiswa'}:
             return Response({
                 'user': ProfileSerializer(request.user, context={'request': request}).data,
                 'asleb': None,
@@ -680,6 +722,16 @@ class LaboranLoanListView(APIView):
         if requested_status:
             queryset = queryset.filter(status=requested_status)
         return Response({'results': [loan_payload(item) for item in queryset[:200]]})
+
+
+class MahasiswaLoanListView(APIView):
+    permission_classes = [IsMahasiswa]
+
+    def get(self, request):
+        queryset = PeminjamanAlat.objects.select_related('barang').filter(
+            nim=request.user.nim_nik,
+        ).order_by('-dibuat_pada')
+        return Response({'results': [loan_payload(item) for item in queryset[:100]]})
 
 
 class LaboranLoanStatusView(APIView):

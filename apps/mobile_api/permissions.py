@@ -27,7 +27,7 @@ class IsMobileUser(BasePermission):
     def has_permission(self, request, view):
         if not request.user:
             return False
-        if getattr(request.user, 'role', None) == 'laboran':
+        if getattr(request.user, 'role', None) in {'laboran', 'mahasiswa'}:
             return True
         return bool(
             getattr(request.user, 'role', None) == 'asisten_lab'
@@ -36,3 +36,10 @@ class IsMobileUser(BasePermission):
                 status='aktif',
             ).exists()
         )
+
+
+class IsMahasiswa(BasePermission):
+    message = 'Fitur ini hanya dapat diakses oleh Mahasiswa.'
+
+    def has_permission(self, request, view):
+        return bool(request.user and getattr(request.user, 'role', None) == 'mahasiswa')

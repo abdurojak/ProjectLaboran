@@ -53,7 +53,13 @@ from .models import (
     TugasLaporanPraktikum,
 )
 from .views import get_active_absensi_schedule, get_praktikum_matkul_queryset
-from .surat_honor import LAB_SIGNATURES, build_lab_signature, build_lampiran_page, build_styles
+from .surat_honor import (
+    LAB_SIGNATURES,
+    build_lab_signature,
+    build_lampiran_page,
+    build_styles,
+    generate_surat_honor_pdf,
+)
 
 
 class AslebViewTests(TestCase):
@@ -1856,7 +1862,8 @@ class AslebViewTests(TestCase):
         self.assertContains(response, 'Rp 147.000')
         self.assertContains(response, '123456789')
         self.assertContains(response, 'Detail Perhitungan')
-        self.assertContains(response, '1 modul × 3 pertemuan')
+        self.assertContains(response, '3 pertemuan')
+        self.assertNotContains(response, '1 modul × 3 pertemuan')
         self.assertContains(response, '1 × 3 × 7 = 21 jam')
         self.assertContains(response, 'Periode ke-1 · Junior')
         self.assertContains(response, 'Honor bersih = Rp 147.000')
@@ -1917,6 +1924,73 @@ class AslebViewTests(TestCase):
                 'bukti_transfer': SimpleUploadedFile('ulang.jpg', b'ulang', content_type='image/jpeg'),
             })
         self.assertEqual(len(mail.outbox), 1)
+
+    @patch('apps.asleb.views.generate_surat_honor_pdf', return_value=b'%PDF-1.4\n%%EOF')
+    def test_generate_surat_mencakup_seluruh_aslab_aktif(self, pdf_mock):
+        active_without_honor = Asleb.objects.create(
+            nama='Aslab Aktif Kedua',
+            nim='HON-ACTIVE-2',
+            no_hp='081200000002',
+            program_studi='Informatika',
+            semester=5,
+            tanggal_bergabung=date(2026, 7, 1),
+            status='aktif',
+        )
+        inactive = Asleb.objects.create(
+            nama='Aslab Nonaktif',
+            nim='HON-INACTIVE',
+            no_hp='081200000003',
+            program_studi='Informatika',
+            semester=7,
+            tanggal_bergabung=date(2025, 7, 1),
+            status='nonaktif',
+        )
+
+        response = self.client.post(reverse('asleb:surat_honor_generate'), {
+            'bulan': '2026-10',
+            'nomor_surat': '001/HON/X/2026',
+            'tanggal_surat': '2026-10-31',
+            'perihal': 'Honor Oktober',
+        })
+
+        self.assertRedirects(response, reverse('asleb:surat_honor_list'))
+        surat = SuratHonorAsleb.objects.get()
+        self.assertSetEqual(
+            set(surat.honors.values_list('asleb_id', flat=True)),
+            {self.asleb.pk, active_without_honor.pk},
+        )
+        self.assertEqual(surat.jumlah_asleb, 2)
+        self.assertFalse(HonorAsleb.objects.filter(asleb=inactive, bulan=date(2026, 10, 1)).exists())
+        generated_honors = pdf_mock.call_args.kwargs['honors']
+        self.assertEqual([honor.asleb.nama for honor in generated_honors], [
+            'Aslab Aktif Kedua',
+            self.asleb.nama,
+        ])
+
+    @patch('apps.asleb.surat_honor.SimpleDocTemplate.build')
+    @patch('apps.asleb.surat_honor.build_lampiran_page', return_value=[])
+    def test_pdf_surat_memakai_satu_lampiran_gabungan(self, lampiran_mock, _build_mock):
+        honor = HonorAsleb.objects.create(
+            asleb=self.asleb,
+            bulan=date(2026, 10, 1),
+            jumlah_praktikum=1,
+            total_pertemuan=2,
+            status='diproses',
+        )
+
+        generate_surat_honor_pdf(
+            honors=[honor],
+            nomor_surat='001/HON/X/2026',
+            tanggal_surat=date(2026, 10, 31),
+            bulan=date(2026, 10, 1),
+            perihal='Honor Oktober',
+        )
+
+        lampiran_mock.assert_called_once()
+        args, kwargs = lampiran_mock.call_args
+        self.assertEqual(args[1], 'Seluruh Asisten Laboratorium')
+        self.assertEqual(args[2], [honor])
+        self.assertTrue(kwargs['combined'])
 
     @patch('apps.asleb.views.generate_surat_honor_pdf', return_value=b'%PDF-1.4\n%%EOF')
     def test_honor_ditahan_visible_tetapi_tidak_dapat_dibayar_atau_masuk_surat(self, _pdf):
