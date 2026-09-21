@@ -103,7 +103,6 @@ def get_active_asleb_matkul_labels(pengguna):
         str(matkul)
         for matkul in MataKuliahAsleb.objects.filter(
             pk__in=matkul_ids,
-            aktif=True,
         ).order_by('nama', 'kelas', 'pk')
     ]
 
@@ -119,14 +118,14 @@ def get_active_asleb_matkul(asleb):
     preferred = next(
         (
             matkul
-            for matkul in MataKuliahAsleb.objects.filter(pk__in=matkul_ids, aktif=True)
+            for matkul in MataKuliahAsleb.objects.filter(pk__in=matkul_ids)
             if str(matkul) == asleb.matkul
         ),
         None,
     )
     if preferred:
         return preferred
-    return MataKuliahAsleb.objects.filter(pk__in=matkul_ids, aktif=True).order_by('pk').first()
+    return MataKuliahAsleb.objects.filter(pk__in=matkul_ids).order_by('pk').first()
 
 
 def get_asleb_matkul_for_schedule(asleb, jadwal):
@@ -141,7 +140,6 @@ def get_asleb_matkul_for_schedule(asleb, jadwal):
             matkul
             for matkul in MataKuliahAsleb.objects.filter(
                 pk__in=get_active_asleb_matkul_ids(asleb),
-                aktif=True,
             )
             if str(matkul) == jadwal.mata_kuliah
         ),

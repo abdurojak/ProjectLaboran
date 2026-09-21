@@ -769,6 +769,32 @@ class AslebViewTests(TestCase):
     def test_pilihan_jadwal_susulan_otomatis_mengikuti_aslab_yang_dipilih(self):
         self.login_asisten_for_matkul()
         jadwal_sendiri = self.create_active_schedule()
+        matkul_penugasan_nonaktif = MataKuliahAsleb.objects.create(
+            kode='JADWAL-NONAKTIF', nama='Mata Kuliah Penugasan Lama',
+            dosen='Dosen Penugasan', kelas='TIF-02', aktif=False,
+        )
+        active_assignment = AslabAssignment.objects.get(
+            asleb=self.asleb,
+            status=AslabAssignment.STATUS_ACTIVE,
+        )
+        AslabAssignment.objects.create(
+            slot=AslabSlot.objects.create(
+                periode=active_assignment.slot.periode,
+                matkul=matkul_penugasan_nonaktif,
+                nomor=1,
+            ),
+            asleb=self.asleb,
+            mulai_pada=date(2026, 7, 1),
+            status=AslabAssignment.STATUS_ACTIVE,
+        )
+        jadwal_penugasan_nonaktif = JadwalPraktikum.objects.create(
+            mata_kuliah=str(matkul_penugasan_nonaktif),
+            kelas=matkul_penugasan_nonaktif.kelas,
+            ruangan=self.test_room,
+            pengampu=matkul_penugasan_nonaktif.dosen,
+            hari='kamis', waktu_mulai='13:00', waktu_selesai='15:00',
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
         matkul_lain = MataKuliahAsleb.objects.create(
             kode='JADWAL-LAIN', nama='Mata Kuliah Aslab Lain',
             dosen='Dosen Lain', kelas='TIF-99',
@@ -792,7 +818,10 @@ class AslebViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         schedule_ids = {item['id'] for item in response.json()['schedules']}
-        self.assertEqual(schedule_ids, {jadwal_sendiri.pk})
+        self.assertEqual(
+            schedule_ids,
+            {jadwal_sendiri.pk, jadwal_penugasan_nonaktif.pk},
+        )
         self.assertNotIn(jadwal_lain.pk, schedule_ids)
         self.assertContains(page_response, 'Pilih Aslab terlebih dahulu')
         self.assertContains(page_response, reverse('asleb:absensi_manual_schedules'))

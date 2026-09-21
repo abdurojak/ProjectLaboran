@@ -2562,7 +2562,6 @@ def manual_attendance_schedule_options(request):
     matkul_labels = list(
         MataKuliahAsleb.objects.filter(
             pk__in=get_active_asleb_matkul_ids(asleb),
-            aktif=True,
         ).values_list('nama', 'dosen', 'kelas')
     )
     labels = {f'{nama} - {dosen} - {kelas}' for nama, dosen, kelas in matkul_labels}
