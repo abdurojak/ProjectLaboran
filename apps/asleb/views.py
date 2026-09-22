@@ -7,6 +7,7 @@ from io import BytesIO
 from html import escape
 
 from django.contrib import messages
+from django.core.paginator import Paginator
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.db import IntegrityError, transaction
@@ -17,6 +18,7 @@ from django.template.response import TemplateResponse
 from django.urls import reverse, reverse_lazy
 from django.utils.http import content_disposition_header
 from django.utils.text import slugify
+from django.utils.dateparse import parse_date
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.views.decorators.clickjacking import xframe_options_sameorigin
@@ -608,6 +610,38 @@ class AbsensiAslebListView(ListView):
     model = AbsensiAsleb
     template_name = 'asleb/absensi_list.html'
     context_object_name = 'absensi_list'
+    paginate_by = 25
+    page_kwarg = 'web_page'
+
+    def attendance_filters(self):
+        params = self.request.GET
+        return {
+            'asleb': params.get('asleb', '').strip(),
+            'matkul': params.get('matkul', '').strip(),
+            'date_from': params.get('date_from', '').strip(),
+            'date_to': params.get('date_to', '').strip(),
+            'source': params.get('source', '').strip(),
+        }
+
+    def filter_attendance(self, queryset, *, mobile=False):
+        filters = self.attendance_filters()
+        date_field = 'tanggal_absensi' if mobile else 'tanggal_praktikum'
+        if filters['asleb'].isdigit():
+            queryset = queryset.filter(asleb_id=filters['asleb'])
+        if filters['matkul']:
+            course = Q(jadwal__mata_kuliah__icontains=filters['matkul'])
+            if not mobile:
+                course |= Q(modul_praktikum__matkul__nama__icontains=filters['matkul'])
+            queryset = queryset.filter(course)
+        start = parse_date(filters['date_from'])
+        end = parse_date(filters['date_to'])
+        if start:
+            queryset = queryset.filter(**{f'{date_field}__gte': start})
+        if end:
+            queryset = queryset.filter(**{f'{date_field}__lte': end})
+        if filters['source'] == ('web' if mobile else 'mobile'):
+            queryset = queryset.none()
+        return queryset
 
     def get_queryset(self):
         queryset = AbsensiAsleb.objects.select_related('asleb', 'modul_praktikum', 'modul_praktikum__matkul')
@@ -631,7 +665,7 @@ class AbsensiAslebListView(ListView):
         if modul:
             queryset = queryset.filter(modul=modul)
 
-        return queryset
+        return self.filter_attendance(queryset, mobile=False).order_by('-tanggal_praktikum', '-dibuat_pada', '-pk')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -649,7 +683,19 @@ class AbsensiAslebListView(ListView):
         )
         context['modul_list'] = self.get_modul_list(pengguna, context['asleb_profile'])
         context['can_manage_modul'] = can_manage_lab_operations(pengguna)
-        context['mobile_absensi_list'] = self.get_mobile_absensi_queryset(pengguna)
+        mobile_page = Paginator(self.get_mobile_absensi_queryset(pengguna), 25).get_page(
+            self.request.GET.get('mobile_page')
+        )
+        context['mobile_absensi_list'] = mobile_page
+        context['mobile_page'] = mobile_page
+        context['attendance_filters'] = self.attendance_filters()
+        context['attendance_asleb_list'] = Asleb.objects.filter(
+            Q(absensi__isnull=False) | Q(absensi_masuk__isnull=False)
+        ).distinct().order_by('nama', 'pk') if can_manage_lab_operations(pengguna) else Asleb.objects.none()
+        query = self.request.GET.copy()
+        query.pop('web_page', None)
+        query.pop('mobile_page', None)
+        context['attendance_query'] = query.urlencode()
         context['manual_attendance_permission'] = get_active_manual_attendance_permission(context['asleb_profile'])
         if can_manage_lab_operations(pengguna):
             context['manual_permission_asleb_list'] = Asleb.objects.filter(status='aktif').order_by('nama')
@@ -682,7 +728,7 @@ class AbsensiAslebListView(ListView):
                 Q(jadwal__kelas__icontains=search)
             )
 
-        return queryset[:50]
+        return self.filter_attendance(queryset, mobile=True).order_by('-tanggal_absensi', '-waktu_masuk', '-pk')
 
     def get_modul_list(self, pengguna, asleb_profile):
         queryset = ModulPraktikum.objects.select_related('matkul', 'diunggah_oleh')

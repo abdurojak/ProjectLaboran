@@ -219,6 +219,36 @@ class AslebViewTests(TestCase):
         self.assertContains(response, '-mx-2 max-w-full overflow-x-auto')
         self.assertContains(response, 'min-w-[860px]')
 
+    def test_riwayat_laboran_dapat_difilter_aslab_tanggal_dan_jenis(self):
+        jadwal = self.create_active_schedule()
+        AbsensiAsleb.objects.create(
+            asleb=self.asleb, jadwal=jadwal,
+            tanggal_praktikum=date(2026, 7, 1), modul=1,
+            materi_praktikum='Materi terpilih',
+            file_modul=SimpleUploadedFile('materi.pdf', b'%PDF-1.4'),
+        )
+        AbsensiMasukAsleb.objects.create(
+            asleb=self.asleb, jadwal=jadwal,
+            tanggal_absensi=date(2026, 7, 1),
+            foto_absensi=self.make_camera_photo('masuk.png'),
+        )
+
+        response = self.client.get(reverse('asleb:absensi_list'), {
+            'asleb': self.asleb.pk, 'date_from': '2026-07-01',
+            'date_to': '2026-07-01', 'source': 'web',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['paginator'].count, 1)
+        self.assertEqual(response.context['mobile_page'].paginator.count, 0)
+        self.assertContains(response, 'Materi terpilih')
+        self.assertNotContains(response, 'Absensi Masuk dari Aplikasi Mobile')
+
+        response = self.client.get(reverse('asleb:absensi_list'), {
+            'asleb': self.asleb.pk, 'date_from': '2026-07-02',
+        })
+        self.assertEqual(response.context['paginator'].count, 0)
+        self.assertEqual(response.context['mobile_page'].paginator.count, 0)
+
     def test_absensi_form_memakai_layout_responsif(self):
         PengaturanAbsensiAsleb.get_solo().__class__.objects.update_or_create(pk=1, defaults={'dibuka': True})
         aslab_user = Pengguna.objects.create(
@@ -665,6 +695,26 @@ class AslebViewTests(TestCase):
 
         self.assertRedirects(response, reverse('asleb:absensi_list'))
         self.assertTrue(ModulPraktikum.objects.filter(matkul=self.matkul, nomor=1, diunggah_oleh=laboran).exists())
+
+    def test_dropdown_upload_modul_hanya_menampilkan_matkul_aktif(self):
+        matkul_nonaktif = MataKuliahAsleb.objects.create(
+            kode='ML-SI01-NONAKTIF',
+            nama='Machine Learning',
+            dosen='Dosen Nonaktif',
+            kelas='SI-01',
+            aktif=False,
+        )
+
+        response = self.client.get(reverse('asleb:modul_create'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f'<option value="{self.matkul.pk}">', html=False)
+        self.assertNotContains(response, f'<option value="{matkul_nonaktif.pk}">', html=False)
+        matkul_ids = set(
+            response.context['form'].fields['matkul'].queryset.values_list('pk', flat=True)
+        )
+        self.assertIn(self.matkul.pk, matkul_ids)
+        self.assertNotIn(matkul_nonaktif.pk, matkul_ids)
 
     def test_laboran_tidak_dapat_mengunggah_file_palsu_bernama_pdf(self):
         laboran = Pengguna.objects.create(

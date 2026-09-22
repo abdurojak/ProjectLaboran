@@ -6,6 +6,7 @@ from pathlib import Path
 
 from django import forms
 from django.conf import settings
+from django.db.models import Q
 from django.utils import timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from math import asin, cos, radians, sin, sqrt
@@ -423,6 +424,17 @@ class ModulPraktikumForm(forms.ModelForm):
             'judul': forms.TextInput(attrs={'placeholder': 'Judul atau materi modul'}),
             'file': forms.FileInput(attrs={'accept': '.pdf,.doc,.docx'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.pendaftaran_asleb.models import MataKuliahAsleb
+
+        queryset = MataKuliahAsleb.objects.filter(aktif=True)
+        if self.instance.pk and self.instance.matkul_id:
+            queryset = MataKuliahAsleb.objects.filter(
+                Q(aktif=True) | Q(pk=self.instance.matkul_id)
+            )
+        self.fields['matkul'].queryset = queryset.order_by('nama', 'kelas', 'pk')
 
     def clean_file(self):
         uploaded = self.cleaned_data.get('file')
