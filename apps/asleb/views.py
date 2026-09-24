@@ -71,7 +71,11 @@ from .models import (
     TugasLaporanPraktikum,
 )
 from .notifications import send_honor_paid_email
-from .services import get_active_asleb_matkul_ids, get_asleb_matkul_for_schedule
+from .services import (
+    get_active_asleb_matkul_ids,
+    get_asleb_matkul_for_schedule,
+    matkul_matches_schedule,
+)
 from .surat_honor import generate_surat_honor_pdf, month_year_label
 
 
@@ -928,24 +932,24 @@ def get_available_absensi_schedules(asleb, current_time=None):
     current_time = current_time or timezone.localtime()
     from apps.pendaftaran_asleb.models import MataKuliahAsleb
 
-    matkul_labels = [
-        str(matkul)
-        for matkul in MataKuliahAsleb.objects.filter(
-            pk__in=get_active_asleb_matkul_ids(asleb),
-            aktif=True,
-        )
-    ]
-    if not matkul_labels:
+    assigned_courses = list(MataKuliahAsleb.objects.filter(
+        pk__in=get_active_asleb_matkul_ids(asleb),
+    ))
+    if not assigned_courses:
         return []
     day_keys = [key for key, _ in JadwalPraktikum.HARI_CHOICES]
     weekday = current_time.weekday()
     if weekday >= len(day_keys):
         return []
-    return list(JadwalPraktikum.objects.filter(
-        mata_kuliah__in=matkul_labels,
+    schedules = JadwalPraktikum.objects.filter(
         hari=day_keys[weekday],
         status=JadwalPraktikum.STATUS_DITERIMA,
-    ).order_by('waktu_mulai', 'pk'))
+    ).order_by('waktu_mulai', 'pk')
+    return [
+        schedule
+        for schedule in schedules
+        if any(matkul_matches_schedule(matkul, schedule) for matkul in assigned_courses)
+    ]
 
 
 class ModulManageRequiredMixin:

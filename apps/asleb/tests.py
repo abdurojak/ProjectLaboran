@@ -52,7 +52,12 @@ from .models import (
     SuratHonorAsleb,
     TugasLaporanPraktikum,
 )
-from .views import get_active_absensi_schedule, get_praktikum_matkul_queryset
+from .services import get_asleb_matkul_for_schedule
+from .views import (
+    get_active_absensi_schedule,
+    get_available_absensi_schedules,
+    get_praktikum_matkul_queryset,
+)
 from .surat_honor import (
     LAB_SIGNATURES,
     build_lab_signature,
@@ -600,6 +605,36 @@ class AslebViewTests(TestCase):
 
         self.assertEqual(get_active_absensi_schedule(self.asleb, late_same_day), schedule)
         self.assertIsNone(get_active_absensi_schedule(self.asleb, next_day))
+
+    def test_absensi_tetap_menampilkan_jadwal_dari_penugasan_aktif_saat_master_matkul_nonaktif(self):
+        self.matkul.aktif = False
+        self.matkul.save(update_fields=['aktif'])
+        self.create_active_assignment()
+        schedule = self.create_active_schedule()
+        schedule_time = timezone.make_aware(datetime(2026, 6, 29, 13, 0))
+
+        self.assertIn(schedule, get_available_absensi_schedules(self.asleb, schedule_time))
+
+    def test_absensi_mencocokkan_matkul_dan_kelas_saat_teks_dosen_jadwal_berbeda(self):
+        self.matkul.nama = 'Kecerdasan Buatan'
+        self.matkul.dosen = 'Anung B. Ariwibowo, M.Kom'
+        self.matkul.kelas = 'SI-02'
+        self.matkul.save(update_fields=['nama', 'dosen', 'kelas'])
+        self.create_active_assignment()
+        schedule = JadwalPraktikum.objects.create(
+            mata_kuliah='Kecerdasan Buatan - Anung B. Ariwibowo, S.Kom., M.Kom - SI-02',
+            kelas='SI-02',
+            ruangan=self.test_room,
+            pengampu='Anung B. Ariwibowo, S.Kom., M.Kom',
+            hari='senin',
+            waktu_mulai='10:00',
+            waktu_selesai='12:00',
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+        schedule_time = timezone.make_aware(datetime(2026, 6, 29, 10, 0))
+
+        self.assertIn(schedule, get_available_absensi_schedules(self.asleb, schedule_time))
+        self.assertEqual(get_asleb_matkul_for_schedule(self.asleb, schedule), self.matkul)
 
     def test_absensi_dapat_memilih_dua_praktikum_pada_hari_yang_sama(self):
         assignment = self.create_active_assignment()

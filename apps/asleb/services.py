@@ -128,6 +128,23 @@ def get_active_asleb_matkul(asleb):
     return MataKuliahAsleb.objects.filter(pk__in=matkul_ids).order_by('pk').first()
 
 
+def matkul_matches_schedule(matkul, jadwal):
+    """Match a schedule to its course without depending on lecturer title text."""
+    if not matkul or not jadwal:
+        return False
+    if str(matkul) == jadwal.mata_kuliah:
+        return True
+
+    matkul_class = (matkul.kelas or '').strip().casefold()
+    schedule_class = (jadwal.kelas or '').strip().casefold()
+    if not matkul_class or matkul_class != schedule_class:
+        return False
+
+    course_name = (matkul.nama or '').strip().casefold()
+    schedule_label = (jadwal.mata_kuliah or '').strip().casefold()
+    return schedule_label == course_name or schedule_label.startswith(f'{course_name} - ')
+
+
 def get_asleb_matkul_for_schedule(asleb, jadwal):
     """Resolve the assigned course represented by a schedule label."""
     if not jadwal:
@@ -141,7 +158,7 @@ def get_asleb_matkul_for_schedule(asleb, jadwal):
             for matkul in MataKuliahAsleb.objects.filter(
                 pk__in=get_active_asleb_matkul_ids(asleb),
             )
-            if str(matkul) == jadwal.mata_kuliah
+            if matkul_matches_schedule(matkul, jadwal)
         ),
         None,
     )
