@@ -242,7 +242,9 @@
                     <span class="font-black {% if credit_profile.label == 'Baik' %}text-emerald-700{% elif credit_profile.label == 'Waspada' %}text-amber-700{% else %}text-rose-700{% endif %}">{{ credit_profile.label }}</span>
                 </div>
                 <p class="mt-1 text-sm font-semibold text-slate-500">Batas pengajuan Anda saat ini maksimal {{ credit_profile.max_loan_days }} hari.</p>
+                <p class="mt-1 text-xs font-semibold text-slate-500">Pengembalian tepat waktu setelah skor berkurang memulihkan 10 poin, maksimal hingga 100. Perpanjangan yang disetujui tidak mengurangi skor.</p>
                 {% if credit_profile.has_active_overdue %}<p class="mt-2 text-sm font-bold text-rose-700">Selesaikan peminjaman yang terlambat sebelum mengajukan kembali.</p>{% endif %}
+                {% if credit_profile.blocked_for_low_score %}<p class="mt-2 text-sm font-bold text-rose-700">Skor Anda di bawah 40 sehingga peminjaman diblokir. Buat konten edukasi sesuai arahan, lalu hubungi Laboran untuk verifikasi dan perubahan skor.</p>{% endif %}
             </div>
         </div>
         <div class="surface-card flex items-center px-5 py-4 text-sm font-semibold text-slate-600 md:max-w-sm">
@@ -563,7 +565,7 @@
 
     <div class="surface-card min-w-0 max-w-full overflow-hidden">
         <div class="max-w-full overflow-x-auto overscroll-x-contain">
-            <table class="w-full min-w-[920px]">
+            <table class="w-full min-w-[920px]" data-mobile-card-table>
                 <thead class="bg-slate-50">
                     <tr>
                         {% if is_manager %}<th class="w-12">Pilih</th>{% endif %}

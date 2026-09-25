@@ -66,6 +66,23 @@
         {% elif field.name == 'bukti_foto' %}
         <div class="min-w-0 md:col-span-2">
             {% include "components/file_upload.html" with field=field current_file=None button_label="Pilih Foto" title="Upload bukti foto" empty_label="Belum ada foto dipilih" preview_label="Preview foto" preview_alt="Preview bukti foto absensi" icon="image-plus" %}
+            <div class="mt-4 rounded-2xl border border-cyan-200 bg-cyan-50 p-4" data-web-photo-camera>
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <p class="font-bold text-slate-900">Foto langsung dari web</p>
+                        <p class="text-sm text-slate-600">Gunakan kamera perangkat atau tetap pilih foto dari file.</p>
+                    </div>
+                    <button type="button" class="btn-secondary gap-2" data-web-photo-start><i data-lucide="camera" class="h-4 w-4"></i><span>Aktifkan Kamera</span></button>
+                </div>
+                <div class="mt-4 hidden" data-web-photo-live-wrap>
+                    <video class="aspect-video max-h-80 w-full rounded-xl bg-slate-950 object-contain" autoplay muted playsinline data-web-photo-live></video>
+                    <div class="mt-3 flex flex-wrap gap-3">
+                        <button type="button" class="btn-primary" data-web-photo-capture>Ambil Foto</button>
+                        <button type="button" class="btn-secondary" data-web-photo-close>Tutup Kamera</button>
+                    </div>
+                </div>
+                <p class="mt-3 text-sm font-semibold text-slate-600" role="status" aria-live="polite" data-web-photo-status>Kamera belum aktif.</p>
+            </div>
             {% if field.help_text %}
             <p class="mt-2 text-xs text-slate-500">{{ field.help_text }}</p>
             {% endif %}
@@ -155,6 +172,74 @@
 {% block extra_script %}
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        const webPhotoCamera = document.querySelector('[data-web-photo-camera]');
+        if (webPhotoCamera) {
+            const photoInput = document.getElementById('id_bukti_foto');
+            const startButton = webPhotoCamera.querySelector('[data-web-photo-start]');
+            const captureButton = webPhotoCamera.querySelector('[data-web-photo-capture]');
+            const closeButton = webPhotoCamera.querySelector('[data-web-photo-close]');
+            const liveWrap = webPhotoCamera.querySelector('[data-web-photo-live-wrap]');
+            const liveVideo = webPhotoCamera.querySelector('[data-web-photo-live]');
+            const cameraStatus = webPhotoCamera.querySelector('[data-web-photo-status]');
+            let photoStream = null;
+
+            function stopPhotoCamera() {
+                photoStream?.getTracks().forEach(function (track) { track.stop(); });
+                photoStream = null;
+                liveVideo.srcObject = null;
+                liveWrap.classList.add('hidden');
+                startButton.disabled = false;
+            }
+
+            startButton.addEventListener('click', async function () {
+                if (!navigator.mediaDevices?.getUserMedia) {
+                    cameraStatus.textContent = 'Kamera browser tidak tersedia. Gunakan HTTPS atau pilih foto dari file.';
+                    return;
+                }
+                startButton.disabled = true;
+                cameraStatus.textContent = 'Meminta izin kamera...';
+                try {
+                    photoStream = await navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment'}, audio: false});
+                    liveVideo.srcObject = photoStream;
+                    liveWrap.classList.remove('hidden');
+                    await liveVideo.play();
+                    cameraStatus.textContent = 'Kamera aktif. Tekan Ambil Foto saat gambar sudah jelas.';
+                } catch (error) {
+                    stopPhotoCamera();
+                    cameraStatus.textContent = 'Kamera tidak dapat diakses. Izinkan kamera untuk situs ini atau pilih foto dari file.';
+                }
+            });
+
+            captureButton.addEventListener('click', function () {
+                if (!photoInput || !liveVideo.videoWidth || !liveVideo.videoHeight) {
+                    cameraStatus.textContent = 'Gambar kamera belum siap. Coba lagi sebentar.';
+                    return;
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = liveVideo.videoWidth;
+                canvas.height = liveVideo.videoHeight;
+                canvas.getContext('2d').drawImage(liveVideo, 0, 0);
+                canvas.toBlob(function (blob) {
+                    if (!blob) {
+                        cameraStatus.textContent = 'Foto gagal dibuat. Coba ambil ulang.';
+                        return;
+                    }
+                    const transfer = new DataTransfer();
+                    transfer.items.add(new File([blob], 'bukti-foto-aslab.jpg', {type: 'image/jpeg'}));
+                    photoInput.files = transfer.files;
+                    photoInput.dispatchEvent(new Event('change', {bubbles: true}));
+                    stopPhotoCamera();
+                    cameraStatus.textContent = 'Foto berhasil diambil dan siap dikirim bersama absensi.';
+                }, 'image/jpeg', 0.85);
+            });
+
+            closeButton.addEventListener('click', function () {
+                stopPhotoCamera();
+                cameraStatus.textContent = 'Kamera ditutup.';
+            });
+            window.addEventListener('pagehide', stopPhotoCamera);
+        }
+
         document.querySelectorAll('[data-file-upload]').forEach(function (component) {
             const fileInput = component.querySelector('input[type="file"]');
             const previewWrapper = component.querySelector('[data-preview-wrapper]');

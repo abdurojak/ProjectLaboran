@@ -1,4 +1,6 @@
 from django.contrib import messages
+from django.core.exceptions import ValidationError
+from django.core.validators import URLValidator
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Exists, OuterRef, Q
@@ -17,7 +19,7 @@ from apps.inventaris.models import ACTIVE_PEMINJAMAN_STATUSES, Barang, PaketBara
 from apps.kalender.realtime import send_peminjaman_request_update, send_peminjaman_status_update
 from apps.pengguna.models import Pengguna
 from .forms import PengajuanPerpanjanganForm, PeminjamanAlatForm
-from .models import PengajuanPerpanjangan, PeminjamanAlat, PeminjamanTransaksi
+from .models import PenyesuaianSkorKredit, PengajuanPerpanjangan, PeminjamanAlat, PeminjamanTransaksi
 from .notifications import (
     send_extension_request_notifications,
     send_extension_status_notification,
@@ -36,6 +38,53 @@ BULK_STATUS_UI_CHOICES = [
     ('selesai', 'Selesai'),
 ]
 ARCHIVED_STATUS_CHOICES = {'ditolak', 'digantikan', 'dikembalikan'}
+
+
+@require_POST
+def adjust_credit_score(request, pengguna_pk):
+    current_pengguna = getattr(request, 'current_pengguna', None)
+    target_user = get_object_or_404(Pengguna, pk=pengguna_pk)
+    if not current_pengguna or current_pengguna.role != LABORAN_ROLE:
+        messages.error(request, 'Hanya Laboran yang dapat mengubah skor kredit pengguna.')
+        return redirect('pengguna:detail', pk=target_user.pk)
+    if target_user.role not in BORROWER_ROLES:
+        messages.error(request, 'Skor kredit hanya berlaku untuk Mahasiswa dan Asisten Lab.')
+        return redirect('pengguna:detail', pk=target_user.pk)
+
+    try:
+        new_score = int(request.POST.get('skor_baru', ''))
+    except (TypeError, ValueError):
+        new_score = -1
+    content_url = request.POST.get('tautan_konten', '').strip()
+    note = request.POST.get('catatan', '').strip()
+    current_score = get_credit_profile(target_user.nim_nik).score
+
+    if not 0 <= new_score <= 100:
+        messages.error(request, 'Skor baru harus berada di antara 0 sampai 100.')
+    elif new_score == current_score:
+        messages.info(request, 'Skor baru sama dengan skor pengguna saat ini.')
+    elif new_score > current_score and not content_url:
+        messages.error(request, 'Tautan konten wajib diisi untuk menaikkan skor kredit.')
+    elif len(note) < 5:
+        messages.error(request, 'Catatan verifikasi minimal 5 karakter.')
+    else:
+        try:
+            if content_url:
+                URLValidator()(content_url)
+        except ValidationError:
+            messages.error(request, 'Tautan konten tidak valid.')
+        else:
+            PenyesuaianSkorKredit.objects.create(
+                pengguna=target_user,
+                skor_sebelum=current_score,
+                skor_baru=new_score,
+                nilai_penyesuaian=new_score - current_score,
+                tautan_konten=content_url,
+                catatan=note,
+                diubah_oleh=current_pengguna,
+            )
+            messages.success(request, f'Skor kredit {target_user.nama_pengguna} diubah dari {current_score} menjadi {new_score}.')
+    return redirect('pengguna:detail', pk=target_user.pk)
 
 
 def get_barang_photo_urls(barang):

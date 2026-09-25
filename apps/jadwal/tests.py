@@ -584,6 +584,12 @@ class JadwalViewTests(TestCase):
         detail_response = self.client.get(reverse('jadwal:jadwal_detail', args=[JadwalPraktikum.objects.first().pk]))
         self.assertNotContains(detail_response, reverse('jadwal:jadwal_update', args=[JadwalPraktikum.objects.first().pk]))
 
+    def test_laboran_tidak_dapat_menambah_jadwal(self):
+        response = self.client.get(reverse('jadwal:jadwal_list'))
+        self.assertNotContains(response, 'Tambah Jadwal')
+        response = self.client.get(reverse('jadwal:jadwal_create'))
+        self.assertRedirects(response, reverse('jadwal:jadwal_list'))
+
     def test_mahasiswa_tidak_melihat_jadwal_yang_masih_diajukan(self):
         self.login_as_mahasiswa()
         jadwal_diajukan = JadwalPraktikum.objects.create(

@@ -21,6 +21,7 @@ from rest_framework.views import APIView
 from apps.asleb.models import AbsensiMasukAsleb, PengaturanAbsensiAsleb
 from apps.asleb.views import sync_honor_from_mobile_absensi
 from apps.asleb.models import HonorAsleb
+from apps.barang_tertinggal.notifications import publish_barang_tertinggal_news
 from apps.core.views import bot_answer
 from apps.core.models import PesanBantuan
 from apps.core.realtime import broadcast_help_message, broadcast_help_status
@@ -52,6 +53,7 @@ from .serializers import (
     AttendanceSerializer,
     CheckInSerializer,
     LaboranInventoryCreateSerializer,
+    LaboranLostItemCreateSerializer,
     LoginSerializer,
     ProfileSerializer,
     RefreshSerializer,
@@ -230,6 +232,22 @@ class ProfileView(APIView):
                 'periode': asleb.periode_aktif.nama if asleb.periode_aktif else None,
             },
         })
+
+
+class LaboranLostItemCreateView(APIView):
+    permission_classes = [IsLaboran]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        serializer = LaboranLostItemCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        barang = serializer.save(status='tertinggal')
+        transaction.on_commit(lambda: publish_barang_tertinggal_news(barang))
+        return Response({
+            'id': barang.pk,
+            'kode': barang.kode_barang_tertinggal,
+            'nama_barang': barang.nama_barang,
+        }, status=status.HTTP_201_CREATED)
 
 
 class DashboardView(APIView):

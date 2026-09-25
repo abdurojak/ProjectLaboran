@@ -2,11 +2,12 @@ from dataclasses import dataclass
 from datetime import timedelta
 
 from django.utils import timezone
+from django.db.models import Sum
 
 from apps.inventaris.models import Barang
 from apps.kalender.models import KegiatanKalender
 
-from .models import PeminjamanTransaksi
+from .models import PenyesuaianSkorKredit, PeminjamanTransaksi
 
 
 LIBUR_NASIONAL_TETAP = {
@@ -27,10 +28,17 @@ class CreditProfile:
     has_active_overdue: bool
     late_transactions: int
     problem_transactions: int
+    on_time_returns: int
+    recovery_points: int
+    manual_adjustment: int
 
     @property
     def can_submit(self):
-        return not self.has_active_overdue
+        return not self.has_active_overdue and self.score >= 40
+
+    @property
+    def blocked_for_low_score(self):
+        return self.score < 40
 
 
 def is_non_operational_date(value):
@@ -52,7 +60,16 @@ def get_credit_profile(nim, today=None):
     late_transactions = 0
     problem_transactions = 0
     has_active_overdue = False
-    transactions = PeminjamanTransaksi.objects.filter(nim=nim).prefetch_related('detail')
+    on_time_returns = 0
+    recovery_points = 0
+    transactions = list(
+        PeminjamanTransaksi.objects.filter(nim=nim).prefetch_related('detail')
+    )
+    transactions.sort(key=lambda item: (
+        item.tanggal_dikembalikan or today,
+        item.tanggal_pinjam,
+        item.pk,
+    ))
 
     for transaksi in transactions:
         statuses = {detail.status for detail in transaksi.detail.all()}
@@ -79,9 +96,26 @@ def get_credit_profile(nim, today=None):
             score -= 20
             problem_transactions += 1
 
+        returned_on_time = bool(
+            transaksi.tanggal_dikembalikan
+            and transaksi.tanggal_dikembalikan <= transaksi.tanggal_kembali
+            and risk == 'normal'
+            and not ({'hilang', 'rusak'} & statuses)
+        )
+        if returned_on_time:
+            on_time_returns += 1
+            if score < 100:
+                restored = min(10, 100 - score)
+                score += restored
+                recovery_points += restored
+
     score = max(0, score)
+    manual_adjustment = PenyesuaianSkorKredit.objects.filter(
+        pengguna__nim_nik=nim,
+    ).aggregate(total=Sum('nilai_penyesuaian'))['total'] or 0
+    score = min(100, max(0, score + manual_adjustment))
     has_late_history = late_transactions > 0
-    if has_late_history or score < 60:
+    if has_active_overdue or (has_late_history and recovery_points == 0) or score < 60:
         max_loan_days = 1
     elif score < 80:
         max_loan_days = 3
@@ -96,6 +130,9 @@ def get_credit_profile(nim, today=None):
         has_active_overdue=has_active_overdue,
         late_transactions=late_transactions,
         problem_transactions=problem_transactions,
+        on_time_returns=on_time_returns,
+        recovery_points=recovery_points,
+        manual_adjustment=manual_adjustment,
     )
 
 

@@ -317,6 +317,42 @@ class ApiService {
         .toList();
   }
 
+  Future<String> createLaboranLostItem({
+    required String name,
+    required String type,
+    required int quantity,
+    required String location,
+    required String foundDate,
+    required String ownerName,
+    required String ownerNim,
+    XFile? photo,
+  }) async {
+    try {
+      final data = FormData.fromMap({
+        'nama_barang': name,
+        'jenis_barang': type,
+        'jumlah_barang': quantity,
+        'lokasi_ditemukan': location,
+        'tanggal_ditemukan': foundDate,
+        'nama_pemilik': ownerName,
+        'nim_pemilik': ownerNim,
+        if (photo != null)
+          'foto': await MultipartFile.fromFile(
+            photo.path,
+            filename: photo.name,
+            contentType: DioMediaType(
+              'image',
+              photo.name.toLowerCase().endsWith('.png') ? 'png' : 'jpeg',
+            ),
+          ),
+      });
+      final response = await dio.post('laboran/lost-items/', data: data);
+      return Map<String, dynamic>.from(response.data as Map)['kode'] as String;
+    } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
+  }
+
   Future<List<LoanItem>> mahasiswaLoans() async {
     final data = await _getMap('mahasiswa/loans/');
     return (data['results'] as List)

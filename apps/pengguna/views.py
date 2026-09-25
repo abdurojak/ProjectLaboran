@@ -22,6 +22,7 @@ from apps.core.views import PostOnlyDeleteMixin
 from apps.asleb.services import link_peserta_praktikum_to_pengguna
 from apps.core.emails import send_branded_email
 from apps.pendaftaran_asleb.models import PendaftaranAsleb
+from apps.peminjaman.services import get_credit_profile
 
 from .forms import (
     ChangePasswordForm,
@@ -322,6 +323,16 @@ class PenggunaDetailView(DetailView):
                 current_pengguna.role == 'laboran'
                 or current_pengguna.pk == self.object.pk
             )
+        )
+        if self.object.role in {'mahasiswa', 'asisten_lab'}:
+            context['credit_profile'] = get_credit_profile(self.object.nim_nik)
+            context['credit_adjustments'] = self.object.penyesuaian_skor_kredit.select_related(
+                'diubah_oleh'
+            )[:10]
+        context['can_adjust_credit_score'] = bool(
+            current_pengguna
+            and current_pengguna.role == 'laboran'
+            and self.object.role in {'mahasiswa', 'asisten_lab'}
         )
         context['profile_form'] = PenggunaProfileForm(
             instance=self.object,

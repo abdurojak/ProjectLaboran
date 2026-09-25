@@ -89,10 +89,16 @@ class PeminjamanAlatForm(forms.ModelForm):
         if tanggal_pinjam and tanggal_kembali and tanggal_kembali >= tanggal_pinjam:
             credit_profile = get_credit_profile(nim) if nim else None
             if credit_profile and not credit_profile.can_submit and not self.instance.pk:
-                self.add_error(
-                    'tanggal_kembali',
-                    'Masih ada peminjaman terlambat. Kembalikan barang tersebut sebelum mengajukan lagi.',
-                )
+                if credit_profile.blocked_for_low_score:
+                    self.add_error(
+                        'tanggal_kembali',
+                        'Skor kredit di bawah 40. Buat konten edukasi sesuai arahan Laboran, lalu hubungi Laboran untuk verifikasi dan pemulihan skor.',
+                    )
+                else:
+                    self.add_error(
+                        'tanggal_kembali',
+                        'Masih ada peminjaman terlambat. Kembalikan barang tersebut sebelum mengajukan lagi.',
+                    )
             max_days = credit_profile.max_loan_days if credit_profile else 7
             requested_days = (tanggal_kembali - tanggal_pinjam).days
             if requested_days > max_days:
@@ -126,6 +132,8 @@ class PeminjamanAlatForm(forms.ModelForm):
 
 
 class PengajuanPerpanjanganForm(forms.ModelForm):
+    MAX_EXTENSION_DAYS = 7
+
     class Meta:
         model = PengajuanPerpanjangan
         fields = [
@@ -170,7 +178,7 @@ class PengajuanPerpanjanganForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['tanggal_kembali_diminta'].widget.attrs.update({
             'min': (transaksi.tanggal_kembali + timedelta(days=1)).isoformat(),
-            'max': (transaksi.tanggal_kembali + timedelta(days=credit_profile.max_loan_days)).isoformat(),
+            'max': (transaksi.tanggal_kembali + timedelta(days=self.MAX_EXTENSION_DAYS)).isoformat(),
         })
         self.fields['pernyataan_jujur'].required = True
 
@@ -187,10 +195,10 @@ class PengajuanPerpanjanganForm(forms.ModelForm):
             raise forms.ValidationError('Tanggal baru harus setelah tanggal kembali saat ini.')
 
         extension_days = (requested_date - current_date).days
-        max_days = self.credit_profile.max_loan_days
+        max_days = self.MAX_EXTENSION_DAYS
         if extension_days > max_days:
             raise forms.ValidationError(
-                f'Perpanjangan maksimal {max_days} hari berdasarkan skor kredit peminjam.'
+                f'Setiap perpanjangan maksimal {max_days} hari dari tanggal kembali saat ini.'
             )
         return adjust_return_date(requested_date)
 

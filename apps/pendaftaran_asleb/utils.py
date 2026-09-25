@@ -25,6 +25,11 @@ TRANSCRIPT_GRADE_PATTERN = re.compile(r'\b((?:A|B|C|D|E)(?:[+-])?)\b', re.IGNORE
 
 PASSING_GRADES = {'A', 'B'}
 
+# Padanan operasional khusus pendaftaran Aslab; bukan perubahan kode mata kuliah akademik.
+ASLAB_TRANSCRIPT_COURSE_EQUIVALENTS = {
+    'IKH6323': {'codes': ('ISC6301',), 'names': ('Keamanan Komputasi',)},
+}
+
 
 def extract_grade_from_transcript(file_obj, matkul=None):
     if not file_obj:
@@ -276,8 +281,10 @@ def find_grade_for_course(text, matkul):
 
 
 def get_course_code_candidates(matkul):
+    selected_code = normalize_spaces(getattr(matkul, 'kode_mk', '')).upper()
     raw_candidates = [
-        getattr(matkul, 'kode_mk', ''),
+        selected_code,
+        *ASLAB_TRANSCRIPT_COURSE_EQUIVALENTS.get(selected_code, {}).get('codes', ()),
     ]
     return [
         normalize_spaces(candidate).upper()
@@ -295,9 +302,11 @@ def line_matches_course_code(line, course_codes):
 
 
 def get_course_name_candidates(matkul):
+    selected_code = normalize_spaces(getattr(matkul, 'kode_mk', '')).upper()
     raw_candidates = [
         getattr(matkul, 'nama', ''),
         str(matkul).split(' - ')[0],
+        *ASLAB_TRANSCRIPT_COURSE_EQUIVALENTS.get(selected_code, {}).get('names', ()),
     ]
     return [
         normalize_spaces(candidate).lower()

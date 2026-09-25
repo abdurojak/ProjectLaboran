@@ -138,6 +138,39 @@ class LaboranProvider extends ChangeNotifier {
     }
   }
 
+  Future<String?> createLostItem({
+    required String name,
+    required String type,
+    required int quantity,
+    required String location,
+    required String foundDate,
+    required String ownerName,
+    required String ownerNim,
+    XFile? photo,
+  }) async {
+    submitting = true;
+    error = null;
+    notifyListeners();
+    try {
+      return await api.createLaboranLostItem(
+        name: name,
+        type: type,
+        quantity: quantity,
+        location: location,
+        foundDate: foundDate,
+        ownerName: ownerName,
+        ownerNim: ownerNim,
+        photo: photo,
+      );
+    } on ApiException catch (exception) {
+      error = exception.message;
+      return null;
+    } finally {
+      submitting = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> _load(Future<void> Function() action) async {
     loading = true;
     error = null;

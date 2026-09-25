@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta
 
+from django.db import transaction
 from django.db.models import Q
 from django.http import JsonResponse
+from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views.decorators.http import require_GET
@@ -11,8 +13,10 @@ from apps.asleb.models import PesertaPraktikum
 from apps.asleb.services import get_active_asleb_matkul_labels
 from apps.core.views import PostOnlyDeleteMixin
 from apps.jadwal.models import JadwalPraktikum
+from apps.ruangan.models import RuanganLab
 
 from .forms import KegiatanKalenderForm
+from .lab_events import conflicting_practicum_schedules
 from .models import KegiatanKalender, Notifikasi
 from .notifications import sync_user_notifications
 from .utils import build_manual_notification, get_perayaan_calendar_events, get_perayaan_notifications
@@ -188,6 +192,45 @@ class KegiatanKalenderCreateView(CreateView):
         if not pengguna or pengguna.role not in {'admin', 'laboran'}:
             form.instance.target_role = ''
             form.instance.hari_libur = False
+        if form.cleaned_data.get('ulang_mingguan'):
+            start = form.cleaned_data['tanggal']
+            end = form.cleaned_data['tanggal_akhir']
+            dates = []
+            current = start
+            while current <= end:
+                dates.append(current)
+                current += timedelta(days=7)
+
+            with transaction.atomic():
+                RuanganLab.objects.select_for_update().get(pk=form.instance.ruangan_id)
+                for booked_date in dates:
+                    form.instance.tanggal = booked_date
+                    existing = KegiatanKalender.objects.filter(
+                        tanggal=booked_date,
+                        ruangan=form.instance.ruangan,
+                        waktu_mulai__lt=form.instance.waktu_selesai,
+                        waktu_selesai__gt=form.instance.waktu_mulai,
+                    ).first()
+                    schedule = conflicting_practicum_schedules(form.instance)
+                    if existing or schedule:
+                        detail = existing.judul if existing else schedule[0].mata_kuliah
+                        form.add_error(None, f'Booking tidak disimpan: {booked_date:%d/%m/%Y} bentrok dengan {detail}. Pilih waktu atau lab lain.')
+                        form.instance.tanggal = start
+                        return self.form_invalid(form)
+
+                form.instance.tanggal = start
+                first = form.save()
+                for booked_date in dates[1:]:
+                    KegiatanKalender.objects.create(
+                        judul=first.judul, tanggal=booked_date,
+                        waktu_mulai=first.waktu_mulai, waktu_selesai=first.waktu_selesai,
+                        lokasi=first.lokasi, ruangan=first.ruangan,
+                        deskripsi=first.deskripsi, tampilkan_notifikasi=first.tampilkan_notifikasi,
+                        hari_libur=first.hari_libur, dibuat_oleh=first.dibuat_oleh,
+                        target_role=first.target_role,
+                    )
+            self.object = first
+            return redirect(self.get_success_url())
         return super().form_valid(form)
 
 

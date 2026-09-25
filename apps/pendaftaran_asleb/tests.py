@@ -38,7 +38,7 @@ from .models import (
     RiwayatAsleb,
 )
 from .services import get_asleb_experience, is_registration_open, sync_expired_asleb_periods
-from .utils import analyze_transcript, extract_grade_from_transcript, get_public_registration_url
+from .utils import analyze_transcript, extract_grade_from_transcript, extract_transcript_text, find_grade_for_course, get_public_registration_url
 from .views import WIZARD_SESSION_KEY, notify_pendaftaran_dibuka
 
 
@@ -951,6 +951,24 @@ class PendaftaranAslebViewTests(TestCase):
 
         self.assertEqual(detected_grade, 'A')
 
+    def test_padanan_keamanan_komputasi_hanya_untuk_keamanan_informasi(self):
+        matkul = MataKuliahAsleb.objects.create(
+            kode='KI_TIF02_ADRIAN_TEST', kode_mk='IKH6323',
+            nama='Keamanan Informasi', dosen='Dosen Keamanan', kelas='TIF-02',
+        )
+        transcript = SimpleUploadedFile(
+            'transkrip-keamanan.txt',
+            b'NIM: 1234567890\nKeamanan Komputasi\nISC6301 3.00 A 4.00 12.00\n',
+            content_type='text/plain',
+        )
+
+        grade, nim_matches = analyze_transcript(transcript, matkul, '1234567890')
+
+        self.assertEqual(grade, 'A')
+        self.assertTrue(nim_matches)
+        transcript.seek(0)
+        self.assertIsNone(find_grade_for_course(extract_transcript_text(transcript), self.matkul))
+
     def test_public_form_wajib_tanda_tangan(self):
         form = PendaftaranAslebPublicForm(data={
             'nama': 'Andi',
@@ -1242,6 +1260,41 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Kelola Matkul Aslab')
         self.assertContains(response, 'Struktur Data dan Algoritma')
+        self.assertContains(response, 'data-matkul-search')
+        self.assertContains(response, 'data-matkul-class')
+        self.assertContains(response, 'data-matkul-status')
+        self.assertContains(response, 'data-matkul-row')
+        self.assertContains(response, "row.classList.toggle('hidden', !matches)")
+
+    def test_edit_matkul_menyinkronkan_label_dan_kelas_jadwal_kalender(self):
+        room = RuanganLab.objects.create(kode='LAB-MATKUL-SYNC', nama='Lab Sinkronisasi')
+        old_label = str(self.matkul)
+        schedule = JadwalPraktikum.objects.create(
+            mata_kuliah=old_label, kelas=self.matkul.kelas, pengampu=self.matkul.dosen,
+            ruangan=room, hari='senin', waktu_mulai='10:00', waktu_selesai='12:00',
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+        other_schedule = JadwalPraktikum.objects.create(
+            mata_kuliah='Mata Kuliah Lain - Dosen Lain - TIF-02', kelas='TIF-02',
+            pengampu='Dosen Lain', ruangan=room, hari='selasa',
+            waktu_mulai='10:00', waktu_selesai='12:00',
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+
+        response = self.client.post(reverse('pendaftaran_asleb:matkul_update', args=[self.matkul.pk]), {
+            'kode': self.matkul.kode, 'kode_mk': self.matkul.kode_mk,
+            'nama': self.matkul.nama, 'sks': self.matkul.sks,
+            'dosen': self.matkul.dosen, 'kelas': 'TIF-01-BARU',
+            'maksimal_aslab': self.matkul.maksimal_aslab, 'aktif': 'on',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        schedule.refresh_from_db()
+        other_schedule.refresh_from_db()
+        self.matkul.refresh_from_db()
+        self.assertEqual(schedule.mata_kuliah, str(self.matkul))
+        self.assertEqual(schedule.kelas, 'TIF-01-BARU')
+        self.assertEqual(other_schedule.kelas, 'TIF-02')
 
     def test_matkul_bisa_ditambahkan(self):
         response = self.client.post(reverse('pendaftaran_asleb:matkul_create'), {

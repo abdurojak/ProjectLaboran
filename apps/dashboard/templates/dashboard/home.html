@@ -523,7 +523,6 @@
                 <div class="min-w-0">
                     <p class="text-xs font-black uppercase tracking-[0.2em] text-emerald-700">LabHub Mobile</p>
                     <h2 class="mt-1 text-lg font-black text-slate-900">Aplikasi Android sudah tersedia</h2>
-                    <p class="mt-1 text-sm text-slate-500">Untuk Laboran, Asisten Lab aktif, dan Mahasiswa.</p>
                 </div>
             </div>
             <a href="{% url 'dashboard:android_app' %}" class="btn-primary gap-2"><i data-lucide="download" class="h-4 w-4"></i><span>Unduh APK Android</span></a>
@@ -643,7 +642,7 @@
             {% include "components/dashboard_table_card_header.html" with title="Riwayat Honor Saya" description="Honor tetap tersimpan per bulan. Jika sudah ditransfer, saldo bulan berjalan otomatis menjadi Rp 0." action_url=honor_action_url action_label="Buka Absensi" %}
 
             <div class="dashboard-table-scroll overflow-x-auto">
-                <table class="dashboard-table min-w-max">
+                <table class="dashboard-table min-w-max" data-mobile-card-table>
                     <thead class="bg-slate-50">
                         <tr class="{% if peminjaman.is_overdue %}bg-rose-50/80{% endif %}">
                             <th>Bulan</th>
@@ -727,7 +726,7 @@
             </div>
 
             <div class="dashboard-table-scroll max-w-full overflow-x-auto overscroll-x-contain">
-                <table class="min-w-[620px]">
+                <table class="min-w-[620px]" data-mobile-card-table>
                     <thead class="bg-slate-50">
                         <tr>
                             <th>Kode Pinjam</th>
@@ -766,7 +765,7 @@
             {% include "components/dashboard_table_card_header.html" with title="Jadwal Praktikum Hari Ini" description="Jadwal praktikum yang tercatat untuk hari ini." action_url=jadwal_action_url action_label="Lihat jadwal" %}
 
             <div class="dashboard-table-scroll overflow-x-auto">
-                <table class="dashboard-table min-w-max">
+                <table class="dashboard-table min-w-max" data-mobile-card-table>
                     <thead class="bg-slate-50">
                         <tr>
                             <th>Mata Praktikum</th>
@@ -1297,7 +1296,7 @@
             </div>
 
             <div class="dashboard-table-scroll max-w-full overflow-x-auto overscroll-x-contain">
-                <table class="min-w-[560px]">
+                <table class="min-w-[560px]" data-mobile-card-table>
                     <thead>
                         <tr>
                             <th>Kode</th>
@@ -1334,7 +1333,7 @@
             </div>
 
             <div class="dashboard-table-scroll max-w-full overflow-x-auto overscroll-x-contain">
-                <table class="min-w-[520px]">
+                <table class="min-w-[520px]" data-mobile-card-table>
                     <thead>
                         <tr>
                             <th>Barang</th>

@@ -12,6 +12,7 @@ from .views import (
     LaboranInventoryDetailView,
     LaboranLoanListView,
     LaboranLoanStatusView,
+    LaboranLostItemCreateView,
     LaboranLocationListView,
     LoginView,
     LogoutView,
@@ -50,4 +51,5 @@ urlpatterns = [
     ),
     path('laboran/loans/', LaboranLoanListView.as_view(), name='laboran_loans'),
     path('laboran/loans/<int:pk>/status/', LaboranLoanStatusView.as_view(), name='laboran_loan_status'),
+    path('laboran/lost-items/', LaboranLostItemCreateView.as_view(), name='laboran_lost_item_create'),
 ]

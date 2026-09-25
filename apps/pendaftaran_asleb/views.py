@@ -20,6 +20,7 @@ import qrcode
 from PIL import Image, ImageDraw
 
 from apps.asleb.models import Asleb, HonorAsleb
+from apps.jadwal.models import JadwalPraktikum
 from apps.kalender.realtime import send_data_refresh, send_registration_status_update
 from apps.core.views import PostOnlyDeleteMixin
 from apps.core.permissions import LABORAN_ROLE, can_manage_lab_operations
@@ -1163,10 +1164,28 @@ class MataKuliahAslebUpdateView(LaboranPendaftaranRequiredMixin, UpdateView):
     success_url = reverse_lazy('pendaftaran_asleb:matkul_list')
 
     def form_valid(self, form):
+        old_label = str(MataKuliahAsleb.objects.get(pk=form.instance.pk))
         if 'maksimal_aslab' in form.changed_data:
             form.instance.kapasitas_diatur_oleh = self.request.current_pengguna
             form.instance.kapasitas_diatur_pada = timezone.now()
-        return super().form_valid(form)
+        with transaction.atomic():
+            response = super().form_valid(form)
+            new_label = str(self.object)
+            if old_label != new_label:
+                updated = JadwalPraktikum.objects.filter(mata_kuliah=old_label).update(
+                    mata_kuliah=new_label,
+                    kelas=self.object.kelas,
+                    pengampu=self.object.dosen,
+                    diperbarui_pada=timezone.now(),
+                )
+                if updated:
+                    transaction.on_commit(lambda: send_data_refresh(
+                        ('laboran', 'asisten_lab', 'mahasiswa'),
+                        'schedule.course_updated',
+                        ['/jadwal/', '/kalender/', '/'],
+                        related_object_id=self.object.pk,
+                    ))
+        return response
 
 
 class MataKuliahAslebDeleteView(LaboranPendaftaranRequiredMixin, PostOnlyDeleteMixin, DeleteView):

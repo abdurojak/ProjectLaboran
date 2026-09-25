@@ -32,8 +32,8 @@ def env_path(name, default):
     return value if value.is_absolute() else BASE_DIR / value
 
 
-MOBILE_APK_NAME = 'LabHub-1.0.3-3-role.apk'
-MOBILE_APK_VERSION = '1.0.3'
+MOBILE_APK_NAME = 'LabHub-1.0.4-barang-hilang.apk'
+MOBILE_APK_VERSION = '1.0.4'
 MOBILE_APK_PATH = env_path('MOBILE_APK_PATH', BASE_DIR / MOBILE_APK_NAME)
 
 

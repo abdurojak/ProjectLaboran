@@ -288,6 +288,13 @@ class JadwalPraktikumCreateView(JadwalMutationAccessMixin, CreateView):
     template_name = 'jadwal/jadwal_form.html'
     success_url = reverse_lazy('jadwal:jadwal_list')
 
+    def dispatch(self, request, *args, **kwargs):
+        pengguna = getattr(request, 'current_pengguna', None)
+        if pengguna and pengguna.role == LABORAN_ROLE:
+            messages.warning(request, 'Laboran tidak dapat menambah jadwal praktikum. Gunakan Kalender untuk booking ruangan.')
+            return redirect('jadwal:jadwal_list')
+        return super().dispatch(request, *args, **kwargs)
+
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs['current_pengguna'] = getattr(self.request, 'current_pengguna', None)

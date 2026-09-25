@@ -11,6 +11,7 @@ from .views import (
     request_extension,
     review_extension,
     update_detail_status,
+    adjust_credit_score,
 )
 
 app_name = 'peminjaman'
@@ -20,6 +21,7 @@ urlpatterns = [
     path('tambah/', PeminjamanAlatCreateView.as_view(), name='peminjaman_create'),
     path('bulk-update-status/', bulk_update_status, name='peminjaman_bulk_update'),
     path('barang-options/', barang_options, name='barang_options'),
+    path('skor-kredit/<int:pengguna_pk>/ubah/', adjust_credit_score, name='credit_score_adjust'),
     path('<int:pk>/perpanjangan/', request_extension, name='peminjaman_extension_request'),
     path('perpanjangan/<int:pk>/tinjau/', review_extension, name='peminjaman_extension_review'),
     path('<int:pk>/', PeminjamanAlatDetailView.as_view(), name='peminjaman_detail'),

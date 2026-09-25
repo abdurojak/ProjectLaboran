@@ -20,6 +20,7 @@ from apps.asleb.models import (
     PengaturanAbsensiAsleb,
 )
 from apps.asleb.views import sync_honor_from_absensi
+from apps.barang_tertinggal.models import BarangTertinggal
 from apps.mobile_api.models import MobileSession
 from apps.mobile_api.services import validate_schedule_time
 from apps.inventaris.models import Barang, FotoInventarisBarang, InventarisBarang, Lokasi
@@ -122,6 +123,38 @@ class MobileAbsensiApiTests(TestCase):
         }
         payload.update(overrides)
         return payload
+
+    def test_laboran_dapat_input_barang_hilang_dari_mobile(self):
+        self.authenticate_laboran()
+        response = self.client.post(
+            reverse('mobile_api:laboran_lost_item_create'),
+            {
+                'nama_barang': 'Kalkulator Casio',
+                'jenis_barang': 'Elektronik',
+                'jumlah_barang': 1,
+                'lokasi_ditemukan': 'Lab Pemrograman',
+                'tanggal_ditemukan': '2026-09-24',
+                'foto': valid_photo('kalkulator.jpg'),
+            },
+            format='multipart',
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        barang = BarangTertinggal.objects.get(nama_barang='Kalkulator Casio')
+        self.assertEqual(barang.status, 'tertinggal')
+        self.assertEqual(response.data['kode'], barang.kode_barang_tertinggal)
+
+    def test_aslab_tidak_dapat_input_barang_hilang_dari_mobile(self):
+        self.authenticate()
+        response = self.client.post(
+            reverse('mobile_api:laboran_lost_item_create'),
+            {
+                'nama_barang': 'Dompet', 'jenis_barang': 'Pribadi',
+                'jumlah_barang': 1, 'lokasi_ditemukan': 'Lab',
+                'tanggal_ditemukan': '2026-09-24',
+            },
+            format='multipart',
+        )
+        self.assertEqual(response.status_code, 403)
 
     def test_login_menerima_asisten_lab_aktif_laboran_dan_mahasiswa(self):
         response = self.client.post(reverse('mobile_api:login'), {

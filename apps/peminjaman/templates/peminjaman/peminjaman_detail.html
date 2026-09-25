@@ -70,7 +70,8 @@
         </div>
         <div>
             <p class="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Skor Kredit · {{ credit_profile.label }}</p>
-            <p class="mt-2 font-bold text-slate-900">Batas pinjam/perpanjangan saat ini maksimal {{ credit_profile.max_loan_days }} hari.</p>
+            <p class="mt-2 font-bold text-slate-900">Batas peminjaman awal saat ini maksimal {{ credit_profile.max_loan_days }} hari.</p>
+            <p class="mt-1 text-sm text-slate-500">Kembalikan tepat waktu untuk memulihkan 10 poin. Perpanjangan yang disetujui tidak mengurangi skor.</p>
             <p class="mt-1 text-sm text-slate-500">Terlambat, kehilangan, dan kerusakan mengurangi skor. Pengembalian tepat waktu menjaga akses peminjaman.</p>
         </div>
     </div>
@@ -119,7 +120,7 @@
         <div class="mb-4">
             <p class="text-xs font-black uppercase tracking-[0.18em] text-cyan-700">Butuh Tambahan Waktu?</p>
             <h3 class="mt-2 text-xl font-black text-slate-900">Ajukan Perpanjangan</h3>
-            <p class="mt-1 text-sm text-slate-500">Tanggal baru berlaku setelah disetujui Asisten Lab. Maksimal {{ credit_profile.max_loan_days }} hari tambahan.</p>
+            <p class="mt-1 text-sm text-slate-500">Tanggal baru berlaku setelah disetujui Asisten Lab. Setiap pengajuan maksimal 7 hari tambahan dan dapat diajukan kembali setelah pengajuan sebelumnya selesai.</p>
         </div>
         <form method="post" action="{% url 'peminjaman:peminjaman_extension_request' peminjaman.pk %}" class="grid gap-4 md:grid-cols-2" data-confirm-message="Kirim pengajuan perpanjangan kepada Asisten Lab?">
             {% csrf_token %}
@@ -267,7 +268,7 @@
         </div>
         {% endif %}
         <div class="overflow-x-auto">
-            <table class="w-full min-w-[760px]">
+            <table class="w-full min-w-[760px]" data-mobile-card-table>
                 <thead class="bg-slate-50">
                     <tr>
                         {% if is_manager %}<th class="w-12">Pilih</th>{% endif %}

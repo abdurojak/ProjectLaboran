@@ -386,6 +386,36 @@ class KalenderViewsTests(TestCase):
         self.assertEqual(event.ruangan, room)
         self.assertTrue({'admin', 'laboran', 'asisten_lab'} <= set(event.target_role_list))
 
+    def test_booking_mingguan_satu_semester_membuat_setiap_pekan(self):
+        room = RuanganLab.objects.create(nama='Lab Semester', kode='LAB-SEMESTER', kapasitas=20)
+        start = date(2026, 9, 23)
+        response = self.client.post(reverse('kalender:kegiatan_create'), {
+            'judul': 'Booking semester', 'tanggal': start.isoformat(),
+            'tanggal_akhir': date(2026, 10, 14).isoformat(),
+            'ulang_mingguan': 'on', 'waktu_mulai': '13:00',
+            'waktu_selesai': '15:00', 'ruangan': room.pk,
+        })
+        self.assertRedirects(response, reverse('kalender:kegiatan_list'))
+        self.assertEqual(
+            list(KegiatanKalender.objects.filter(judul='Booking semester').values_list('tanggal', flat=True)),
+            [start + timedelta(weeks=week) for week in range(4)],
+        )
+
+    def test_booking_mingguan_bentrok_tidak_menyimpan_sebagian(self):
+        room = RuanganLab.objects.create(nama='Lab Bentrok Semester', kode='LAB-BENTROK-SEM', kapasitas=20)
+        KegiatanKalender.objects.create(
+            judul='Sudah dibooking', tanggal=date(2026, 9, 30),
+            waktu_mulai=time(14), waktu_selesai=time(16), ruangan=room,
+        )
+        response = self.client.post(reverse('kalender:kegiatan_create'), {
+            'judul': 'Booking semester', 'tanggal': '2026-09-23',
+            'tanggal_akhir': '2026-10-14', 'ulang_mingguan': 'on',
+            'waktu_mulai': '13:00', 'waktu_selesai': '15:00', 'ruangan': room.pk,
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'bentrok')
+        self.assertFalse(KegiatanKalender.objects.filter(judul='Booking semester').exists())
+
     def test_mahasiswa_tidak_bisa_memesan_lab_melalui_event_pribadi(self):
         room = RuanganLab.objects.create(nama='Lab Privat', kode='LAB-PRIVAT', kapasitas=20)
         mahasiswa = Pengguna.objects.create(

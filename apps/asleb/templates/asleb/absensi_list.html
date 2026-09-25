@@ -149,7 +149,7 @@
         <h3 class="mt-1 text-xl font-black text-slate-900">Riwayat Absensi Aslab</h3>
         <p class="mt-1 text-sm text-slate-500">Absensi praktikum dan absensi masuk APK dipisahkan, masing-masing diurutkan dari yang terbaru.</p>
     </div>
-    <form id="absensi-filter-form" method="get" class="surface-card min-w-0 max-w-full overflow-hidden grid gap-4 p-4 sm:p-5 md:grid-cols-2 lg:grid-cols-4">
+    <form id="absensi-filter-form" method="get" data-no-global-loading="true" class="surface-card min-w-0 max-w-full overflow-hidden grid gap-4 p-4 sm:p-5 md:grid-cols-2 lg:grid-cols-4">
         <div class="min-w-0">
             <label for="id_q">Cari absensi</label>
             <input id="id_q" name="q" type="text" value="{{ search_query }}" placeholder="Cari nama, NIM, materi, atau pekerjaan" autocomplete="off">
@@ -206,6 +206,8 @@
         </div>
     </form>
 
+    <p id="absensi-filter-status" class="hidden text-sm font-semibold text-slate-600" role="status" aria-live="polite"></p>
+    <div id="absensi-filter-results" class="min-w-0 space-y-6" aria-live="polite">
     {% if attendance_filters.source != 'mobile' %}
     <div class="surface-card min-w-0 max-w-full overflow-hidden">
         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
@@ -213,7 +215,7 @@
             <span class="text-sm font-semibold text-slate-500">{{ paginator.count }} data</span>
         </div>
         <div class="-mx-2 max-w-full overflow-x-auto px-2 pb-2">
-            <table class="min-w-[860px]">
+            <table class="min-w-[860px]" data-mobile-card-table>
                 <thead class="bg-slate-50">
                     <tr>
                         <th>Nama</th>
@@ -288,7 +290,7 @@
             <span class="rounded-full bg-cyan-50 px-4 py-2 text-xs font-black text-cyan-700">{{ mobile_page.paginator.count }} data</span>
         </div>
         <div class="-mx-2 max-w-full overflow-x-auto px-2 pb-2">
-            <table class="min-w-[980px]">
+            <table class="min-w-[980px]" data-mobile-card-table>
                 <thead class="bg-slate-50">
                     <tr>
                         <th>Nama</th>
@@ -343,6 +345,7 @@
     </nav>
     {% endif %}
     {% endif %}
+    </div>
 </section>
 
 <div class="fixed inset-0 z-[90] hidden items-center justify-center bg-slate-950/70 p-4" data-inline-preview-modal>
@@ -398,8 +401,8 @@
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const form = document.getElementById('absensi-filter-form');
-        const searchInput = document.getElementById('id_q');
-        const modulSelect = document.getElementById('id_modul');
+        const results = document.getElementById('absensi-filter-results');
+        const filterStatus = document.getElementById('absensi-filter-status');
         const manualAsleb = document.getElementById('manual-asleb');
         const manualSchedule = document.getElementById('manual-jadwal');
         const manualScheduleHint = document.getElementById('manual-jadwal-hint');
@@ -407,6 +410,83 @@
         const moduleCatalogSearch = document.getElementById('module-catalog-search');
         const moduleEmpty = document.querySelector('[data-module-empty]');
         let searchTimer = null;
+        let filterRequest = null;
+
+        async function updateAttendance(url, saveHistory = true) {
+            filterRequest?.abort();
+            const request = new AbortController();
+            filterRequest = request;
+            results.setAttribute('aria-busy', 'true');
+            filterStatus.textContent = 'Memuat riwayat absensi...';
+            filterStatus.classList.remove('hidden');
+            try {
+                const response = await fetch(url, {
+                    signal: request.signal,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    credentials: 'same-origin',
+                });
+                if (!response.ok || response.redirected) throw new Error('Riwayat tidak dapat dimuat.');
+                const documentBaru = new DOMParser().parseFromString(await response.text(), 'text/html');
+                const hasilBaru = documentBaru.getElementById('absensi-filter-results');
+                if (!hasilBaru) throw new Error('Tampilan riwayat tidak tersedia.');
+                results.replaceChildren(...Array.from(hasilBaru.childNodes));
+                if (saveHistory) history.pushState(null, '', url);
+                if (window.lucide?.createIcons) window.lucide.createIcons();
+                filterStatus.classList.add('hidden');
+            } catch (error) {
+                if (error.name !== 'AbortError') filterStatus.textContent = `${error.message} Coba lagi.`;
+            } finally {
+                if (filterRequest === request) {
+                    results.removeAttribute('aria-busy');
+                    filterRequest = null;
+                }
+            }
+        }
+
+        form?.addEventListener('submit', function (event) {
+            event.preventDefault();
+            clearTimeout(searchTimer);
+            const url = new URL(form.action || window.location.pathname, window.location.origin);
+            url.search = new URLSearchParams(new FormData(form)).toString();
+            updateAttendance(url);
+        });
+
+        results?.addEventListener('click', function (event) {
+            const link = event.target.closest('nav a[href]');
+            if (!link || !results.contains(link)) return;
+            event.preventDefault();
+            updateAttendance(new URL(link.href, window.location.origin));
+        });
+
+        form?.querySelector('a[href]')?.addEventListener('click', function (event) {
+            event.preventDefault();
+            form.reset();
+            form.requestSubmit();
+        });
+
+        window.addEventListener('popstate', function () {
+            const params = new URLSearchParams(window.location.search);
+            Array.from(form.elements).forEach(function (field) {
+                if (field.name && 'value' in field) field.value = params.get(field.name) || '';
+            });
+            updateAttendance(window.location.href, false);
+        });
+
+        // Pilihan dan tanggal langsung menyaring; teks menunggu pengguna selesai mengetik.
+        form?.querySelectorAll('select, input[type="date"]').forEach(function (field) {
+            field.addEventListener('change', function () {
+                clearTimeout(searchTimer);
+                form.requestSubmit();
+            });
+        });
+        form?.querySelectorAll('input[type="text"], input[type="search"]').forEach(function (field) {
+            field.addEventListener('input', function () {
+                clearTimeout(searchTimer);
+                searchTimer = setTimeout(function () {
+                    form.requestSubmit();
+                }, 500);
+            });
+        });
 
         moduleCatalogSearch?.addEventListener('input', function () {
             const query = moduleCatalogSearch.value.trim().toLowerCase();
@@ -459,21 +539,6 @@
                 manualScheduleHint.textContent = error.message;
             }
         });
-
-        if (searchInput) {
-            searchInput.addEventListener('input', function () {
-                clearTimeout(searchTimer);
-                searchTimer = setTimeout(function () {
-                    form.submit();
-                }, 350);
-            });
-        }
-
-        if (modulSelect) {
-            modulSelect.addEventListener('change', function () {
-                form.submit();
-            });
-        }
 
         const previewModal = document.querySelector('[data-inline-preview-modal]');
         const previewTitle = document.querySelector('[data-inline-preview-title]');
@@ -574,29 +639,29 @@
             if (pdfPages) pdfPages.innerHTML = '<div class="rounded-2xl bg-white px-4 py-8 text-center text-sm font-semibold text-slate-500">Menyiapkan preview modul...</div>';
         }
 
-        document.querySelectorAll('[data-open-inline-modul-preview]').forEach(function (button) {
-            button.addEventListener('click', function () {
-                const type = String(button.dataset.previewType || '').toLowerCase();
-                const isPdf = type === 'pdf';
-                previewTitle.textContent = button.dataset.previewTitle || 'Preview Modul';
-                previewMeta.textContent = `${String(type || 'file').toUpperCase()} - ${formatBytes(button.dataset.previewSize)} - ${button.dataset.previewDate || '-'}`;
-                openLink.href = button.dataset.viewerUrl || button.dataset.previewUrl;
-                downloadLink.href = button.dataset.downloadUrl || button.dataset.previewUrl;
-                downloadLink.setAttribute('download', '');
-                if (isPdf) {
-                    pdfWrap.classList.remove('hidden');
-                    docWrap.classList.add('hidden');
-                    renderPdfPages(button.dataset.previewUrl);
-                } else {
-                    pdfWrap.classList.add('hidden');
-                    docWrap.classList.remove('hidden');
-                    docType.textContent = String(type || 'file').toUpperCase();
-                    docSize.textContent = formatBytes(button.dataset.previewSize);
-                    docDate.textContent = button.dataset.previewDate || '-';
-                }
-                previewModal.classList.remove('hidden');
-                previewModal.classList.add('flex');
-            });
+        document.addEventListener('click', function (event) {
+            const button = event.target.closest('[data-open-inline-modul-preview]');
+            if (!button) return;
+            const type = String(button.dataset.previewType || '').toLowerCase();
+            const isPdf = type === 'pdf';
+            previewTitle.textContent = button.dataset.previewTitle || 'Preview Modul';
+            previewMeta.textContent = `${String(type || 'file').toUpperCase()} - ${formatBytes(button.dataset.previewSize)} - ${button.dataset.previewDate || '-'}`;
+            openLink.href = button.dataset.viewerUrl || button.dataset.previewUrl;
+            downloadLink.href = button.dataset.downloadUrl || button.dataset.previewUrl;
+            downloadLink.setAttribute('download', '');
+            if (isPdf) {
+                pdfWrap.classList.remove('hidden');
+                docWrap.classList.add('hidden');
+                renderPdfPages(button.dataset.previewUrl);
+            } else {
+                pdfWrap.classList.add('hidden');
+                docWrap.classList.remove('hidden');
+                docType.textContent = String(type || 'file').toUpperCase();
+                docSize.textContent = formatBytes(button.dataset.previewSize);
+                docDate.textContent = button.dataset.previewDate || '-';
+            }
+            previewModal.classList.remove('hidden');
+            previewModal.classList.add('flex');
         });
 
         document.querySelectorAll('[data-close-inline-preview]').forEach(function (button) {

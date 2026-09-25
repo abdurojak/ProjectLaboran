@@ -9,6 +9,7 @@ from rest_framework import serializers
 from apps.asleb.models import AbsensiMasukAsleb
 from apps.jadwal.models import JadwalPraktikum
 from apps.inventaris.models import Lokasi
+from apps.barang_tertinggal.models import BarangTertinggal
 
 
 def absolute_file_url(request, field):
@@ -36,6 +37,24 @@ class LaboranInventoryCreateSerializer(serializers.Serializer):
     )
     keterangan = serializers.CharField(required=False, allow_blank=True, max_length=3000)
     foto = serializers.ImageField(required=False, allow_null=True)
+
+    def validate_foto(self, photo):
+        return validate_inventory_photo(photo)
+
+
+class LaboranLostItemCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BarangTertinggal
+        fields = [
+            'nama_barang', 'jenis_barang', 'jumlah_barang', 'foto',
+            'lokasi_ditemukan', 'tanggal_ditemukan', 'nama_pemilik',
+            'nim_pemilik',
+        ]
+        extra_kwargs = {
+            'nama_pemilik': {'required': False, 'allow_blank': True},
+            'nim_pemilik': {'required': False, 'allow_blank': True},
+            'foto': {'required': False, 'allow_null': True},
+        }
 
     def validate_foto(self, photo):
         return validate_inventory_photo(photo)

@@ -22,9 +22,34 @@
         </div>
     </div>
 
+    <div class="surface-card grid gap-4 p-4 sm:p-5 md:grid-cols-3" data-matkul-filters>
+        <div class="min-w-0">
+            <label for="matkul-search">Cari matkul</label>
+            <input id="matkul-search" type="search" placeholder="Nama, kode, atau dosen" autocomplete="off" data-matkul-search>
+        </div>
+        <div class="min-w-0">
+            <label for="matkul-class-filter">Kelas</label>
+            <select id="matkul-class-filter" data-matkul-class>
+                <option value="">Semua kelas</option>
+            </select>
+        </div>
+        <div class="min-w-0">
+            <label for="matkul-status-filter">Status</label>
+            <select id="matkul-status-filter" data-matkul-status>
+                <option value="">Semua status</option>
+                <option value="aktif">Aktif</option>
+                <option value="nonaktif">Nonaktif</option>
+            </select>
+        </div>
+        <div class="flex flex-wrap items-center gap-3 md:col-span-3">
+            <span class="text-sm font-semibold text-slate-600" role="status" aria-live="polite" data-matkul-count>{{ matkul_list|length }} matkul ditampilkan</span>
+            <button type="button" class="btn-secondary" data-matkul-reset>Reset filter</button>
+        </div>
+    </div>
+
     <div class="surface-card overflow-hidden">
         <div class="overflow-x-auto">
-            <table>
+            <table data-mobile-card-table>
                 <thead class="bg-slate-50">
                     <tr>
                         <th>Kode</th>
@@ -40,7 +65,7 @@
                 </thead>
                 <tbody>
                     {% for matkul in matkul_list %}
-                    <tr class="hover:bg-slate-50/70">
+                    <tr class="hover:bg-slate-50/70" data-matkul-row data-class="{{ matkul.kelas }}" data-status="{% if matkul.aktif %}aktif{% else %}nonaktif{% endif %}">
                         <td class="font-semibold text-slate-600">{{ matkul.kode }}</td>
                         <td class="font-semibold text-slate-600">{{ matkul.kode_mk|default:"-" }}</td>
                         <td class="font-semibold text-slate-900">{{ matkul.nama }}</td>
@@ -77,6 +102,9 @@
                         <td colspan="9" class="py-12 text-center text-slate-500">Belum ada pilihan matkul.</td>
                     </tr>
                     {% endfor %}
+                    <tr class="hidden" data-matkul-empty>
+                        <td colspan="9" class="py-12 text-center text-slate-500">Tidak ada matkul yang cocok dengan pencarian atau filter.</td>
+                    </tr>
                 </tbody>
             </table>
         </div>
@@ -85,5 +113,47 @@
 {% endblock %}
 
 {% block extra_script %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const filters = document.querySelector('[data-matkul-filters]');
+        if (!filters) return;
+        const search = filters.querySelector('[data-matkul-search]');
+        const classFilter = filters.querySelector('[data-matkul-class]');
+        const statusFilter = filters.querySelector('[data-matkul-status]');
+        const count = filters.querySelector('[data-matkul-count]');
+        const reset = filters.querySelector('[data-matkul-reset]');
+        const rows = Array.from(document.querySelectorAll('[data-matkul-row]'));
+        const empty = document.querySelector('[data-matkul-empty]');
+
+        Array.from(new Set(rows.map(function (row) { return row.dataset.class; }).filter(Boolean)))
+            .sort(function (a, b) { return a.localeCompare(b, 'id'); })
+            .forEach(function (kelas) { classFilter.add(new Option(kelas, kelas)); });
+
+        function applyFilters() {
+            const query = search.value.trim().toLocaleLowerCase('id');
+            let visible = 0;
+            rows.forEach(function (row) {
+                const matches = (!query || row.textContent.toLocaleLowerCase('id').includes(query))
+                    && (!classFilter.value || row.dataset.class === classFilter.value)
+                    && (!statusFilter.value || row.dataset.status === statusFilter.value);
+                row.classList.toggle('hidden', !matches);
+                if (matches) visible += 1;
+            });
+            empty?.classList.toggle('hidden', visible > 0 || rows.length === 0);
+            count.textContent = `${visible} dari ${rows.length} matkul ditampilkan`;
+        }
+
+        search.addEventListener('input', applyFilters);
+        classFilter.addEventListener('change', applyFilters);
+        statusFilter.addEventListener('change', applyFilters);
+        reset.addEventListener('click', function () {
+            search.value = '';
+            classFilter.value = '';
+            statusFilter.value = '';
+            applyFilters();
+            search.focus();
+        });
+    });
+</script>
 {% include "components/confirmation_modal.html" with title="Konfirmasi Hapus Mata Kuliah" confirm_label="Hapus" confirm_icon="trash-2" %}
 {% endblock %}

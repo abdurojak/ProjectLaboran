@@ -136,6 +136,9 @@ class AslebViewTests(TestCase):
         self.assertContains(response, 'data-asleb-desktop-list')
         self.assertContains(response, 'data-asleb-responsive-list')
         self.assertContains(response, 'data-asleb-responsive-card')
+        self.assertContains(response, 'class="asleb-compact-table"')
+        self.assertContains(response, '<th>Kontak &amp; Studi</th>', html=False)
+        self.assertContains(response, 'table-layout: fixed')
         self.assertContains(response, '@media (max-width: 1279px), (hover: none) and (pointer: coarse)')
 
     def test_laboran_can_set_manual_aslab_level_and_honor_uses_it(self):
@@ -253,6 +256,16 @@ class AslebViewTests(TestCase):
         })
         self.assertEqual(response.context['paginator'].count, 0)
         self.assertEqual(response.context['mobile_page'].paginator.count, 0)
+
+    def test_filter_riwayat_memperbarui_hasil_tanpa_reload_halaman(self):
+        response = self.client.get(reverse('asleb:absensi_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="absensi-filter-results"')
+        self.assertContains(response, 'id="absensi-filter-form" method="get" data-no-global-loading="true"')
+        self.assertContains(response, "event.preventDefault();")
+        self.assertContains(response, 'results.replaceChildren(')
+        self.assertContains(response, "history.pushState(null, '', url)")
 
     def test_absensi_form_memakai_layout_responsif(self):
         PengaturanAbsensiAsleb.get_solo().__class__.objects.update_or_create(pk=1, defaults={'dibuka': True})
@@ -833,6 +846,9 @@ class AslebViewTests(TestCase):
         form_response = self.client.get(reverse('asleb:absensi_create'))
         self.assertEqual(form_response.status_code, 200)
         self.assertContains(form_response, 'Absensi susulan resmi dari Laboran')
+        self.assertContains(form_response, 'data-web-photo-camera')
+        self.assertContains(form_response, 'data-web-photo-capture')
+        self.assertContains(form_response, 'navigator.mediaDevices.getUserMedia')
 
         submit_response = self.client.post(reverse('asleb:absensi_create'), {
             'modul_praktikum': modul.pk,

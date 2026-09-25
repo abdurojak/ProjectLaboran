@@ -131,6 +131,33 @@ class PengajuanPerpanjangan(models.Model):
         return f'{self.transaksi.kode_pinjam} - {self.get_status_display()}'
 
 
+class PenyesuaianSkorKredit(models.Model):
+    pengguna = models.ForeignKey(
+        Pengguna,
+        on_delete=models.CASCADE,
+        related_name='penyesuaian_skor_kredit',
+    )
+    skor_sebelum = models.PositiveSmallIntegerField()
+    skor_baru = models.PositiveSmallIntegerField()
+    nilai_penyesuaian = models.SmallIntegerField()
+    tautan_konten = models.URLField(blank=True)
+    catatan = models.CharField(max_length=300)
+    diubah_oleh = models.ForeignKey(
+        Pengguna,
+        on_delete=models.PROTECT,
+        related_name='perubahan_skor_kredit_dibuat',
+    )
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-dibuat_pada', '-pk']
+        verbose_name = 'Penyesuaian Skor Kredit'
+        verbose_name_plural = 'Penyesuaian Skor Kredit'
+
+    def __str__(self):
+        return f'{self.pengguna.nim_nik}: {self.skor_sebelum} menjadi {self.skor_baru}'
+
+
 class PengingatPeminjaman(models.Model):
     JENIS_CHOICES = [
         ('jatuh_tempo', 'Jatuh tempo'),

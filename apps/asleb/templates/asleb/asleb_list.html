@@ -42,19 +42,16 @@
         </div>
     </form>
 
-    <div class="surface-card overflow-hidden" data-asleb-desktop-list>
-        <div class="overflow-x-auto">
-            <table>
+    <div class="surface-card min-w-0 overflow-hidden" data-asleb-desktop-list>
+        <div class="min-w-0">
+            <table class="asleb-compact-table">
+                <colgroup><col style="width:22%"><col style="width:17%"><col style="width:32%"><col style="width:12%"><col style="width:17%"></colgroup>
                 <thead class="bg-slate-50">
                     <tr>
-                        <th>Nama</th>
-                        <th>NIM</th>
-                        <th>No HP</th>
-                        <th>Program Studi</th>
-                        <th>Matkul</th>
-                        <th>Semester</th>
-                        <th>Level</th>
-                        <th>Status</th>
+                        <th>Aslab</th>
+                        <th>Kontak &amp; Studi</th>
+                        <th>Mata Kuliah</th>
+                        <th>Level &amp; Status</th>
                         <th>Aksi</th>
                     </tr>
                 </thead>
@@ -63,34 +60,34 @@
                     <tr class="hover:bg-slate-50/70">
                         <td>
                             <div class="font-semibold text-slate-900">{{ asleb.nama }}</div>
-                            <div class="text-xs text-slate-500">{{ asleb.email|default:"Email belum diisi" }}</div>
+                            <div class="mt-1 text-xs text-slate-500">NIM {{ asleb.nim }}</div>
+                            <div class="mt-1 break-all text-xs text-slate-500">{{ asleb.email|default:"Email belum diisi" }}</div>
                         </td>
-                        <td>{{ asleb.nim }}</td>
-                        <td>{{ asleb.no_hp }}</td>
-                        <td>{{ asleb.program_studi }}</td>
+                        <td>
+                            <div>{{ asleb.no_hp }}</div>
+                            <div class="mt-1">{{ asleb.program_studi }}</div>
+                            <div class="mt-1 text-xs text-slate-500">Semester {{ asleb.semester }}</div>
+                        </td>
                         <td>{{ asleb.matkul|default:"-" }}</td>
-                        <td>{{ asleb.semester }}</td>
                         <td>
                             <span class="inline-flex rounded-full px-3 py-1 text-xs font-bold {% if asleb.level_efektif == 'senior' %}bg-violet-100 text-violet-700{% else %}bg-sky-100 text-sky-700{% endif %}">
                                 {{ asleb.level_efektif_display }}
                             </span>
                             <div class="mt-1 text-[11px] text-slate-500">{{ asleb.get_level_mode_display }}</div>
-                        </td>
-                        <td>
-                            <span class="{% if asleb.status == 'aktif' %}bg-emerald-100 text-emerald-700{% else %}bg-slate-100 text-slate-600{% endif %} inline-flex rounded-full px-3 py-1 text-xs font-bold">
+                            <span class="{% if asleb.status == 'aktif' %}bg-emerald-100 text-emerald-700{% else %}bg-slate-100 text-slate-600{% endif %} mt-2 inline-flex rounded-full px-3 py-1 text-xs font-bold">
                                 {{ asleb.get_status_display }}
                             </span>
                         </td>
                         <td>
-                            <div class="flex flex-wrap gap-3 text-sm font-semibold">
-                                <a class="inline-flex items-center gap-1 text-brand-700 hover:text-brand-800" href="{% url 'asleb:asleb_detail' asleb.pk %}">
-                                    <i data-lucide="eye" class="h-4 w-4"></i><span>Detail</span>
+                            <div class="grid gap-2 text-sm font-semibold">
+                                <a class="inline-flex items-start gap-1 text-brand-700 hover:text-brand-800" href="{% url 'asleb:asleb_detail' asleb.pk %}">
+                                    <i data-lucide="eye" class="mt-0.5 h-4 w-4 shrink-0"></i><span>Detail</span>
                                 </a>
                                 {% if can_end_asleb and asleb.status == 'aktif' %}
                                     {% if asleb.active_assignments %}
                                         {% for assignment in asleb.active_assignments %}
-                                        <a class="inline-flex items-center gap-1 text-orange-600 hover:text-orange-700" href="{% url 'pendaftaran_asleb:replacement_end' assignment.pk %}">
-                                            <i data-lucide="user-round-x" class="h-4 w-4"></i>
+                                        <a class="inline-flex items-start gap-1 text-orange-600 hover:text-orange-700" href="{% url 'pendaftaran_asleb:replacement_end' assignment.pk %}">
+                                            <i data-lucide="user-round-x" class="mt-0.5 h-4 w-4 shrink-0"></i>
                                             <span>Ganti/Akhiri Masa Tugas{% if asleb.active_assignments|length > 1 %} · {{ assignment.slot.matkul.kode }}{% endif %}</span>
                                         </a>
                                         {% endfor %}
@@ -105,7 +102,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="9" class="py-12 text-center text-slate-500">Belum ada data aslab.</td>
+                        <td colspan="5" class="py-12 text-center text-slate-500">Belum ada data aslab.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -187,6 +184,19 @@
 
 {% block extra_head %}
 <style>
+    .asleb-compact-table {
+        width: 100%;
+        table-layout: fixed;
+    }
+
+    .asleb-compact-table th,
+    .asleb-compact-table td {
+        min-width: 0;
+        overflow-wrap: anywhere;
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+    }
+
     [data-asleb-desktop-list] {
         display: block !important;
     }

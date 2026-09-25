@@ -1,4 +1,5 @@
 from datetime import date, time, timedelta
+from dataclasses import replace
 
 from django.core import mail
 from django.core.management import call_command
@@ -16,7 +17,14 @@ from apps.inventaris.models import (
 )
 from apps.pengguna.models import Pengguna
 from apps.kalender.models import KegiatanKalender
-from .models import PengajuanPerpanjangan, PengingatPeminjaman, PeminjamanAlat, PeminjamanTransaksi
+from .forms import PengajuanPerpanjanganForm
+from .models import (
+    PenyesuaianSkorKredit,
+    PengajuanPerpanjangan,
+    PengingatPeminjaman,
+    PeminjamanAlat,
+    PeminjamanTransaksi,
+)
 from .services import get_credit_profile
 
 
@@ -1558,6 +1566,18 @@ class PeminjamanPolicyTests(TestCase):
             gender='perempuan',
             role='asisten_lab',
         )
+        self.laboran = Pengguna.objects.create(
+            nama_pengguna='Laboran Skor',
+            nim_nik='LAB-SCORE',
+            email='laboran-score@example.com',
+            password='rahasia123',
+            no_hp='081234567802',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='laboran',
+        )
         self.lokasi = Lokasi.objects.create(nama_lokasi='Gudang Kebijakan')
         self.barang = Barang.objects.create(
             nama='Kamera Kebijakan',
@@ -1653,6 +1673,67 @@ class PeminjamanPolicyTests(TestCase):
         self.assertEqual(profile.max_loan_days, 1)
         self.assertTrue(profile.has_late_history)
 
+    def test_skor_kredit_pulih_sepuluh_poin_setiap_pengembalian_tepat_waktu_berikutnya(self):
+        late = PeminjamanTransaksi.objects.create(
+            nama_peminjam=self.mahasiswa.nama_pengguna,
+            nim=self.mahasiswa.nim_nik,
+            tanggal_pinjam=date(2026, 1, 1),
+            tanggal_kembali=date(2026, 1, 7),
+            tanggal_dikembalikan=date(2026, 1, 9),
+        )
+        for index, (borrowed, due) in enumerate([
+            (date(2026, 2, 1), date(2026, 2, 7)),
+            (date(2026, 3, 1), date(2026, 3, 7)),
+        ], start=1):
+            transaction = PeminjamanTransaksi.objects.create(
+                nama_peminjam=self.mahasiswa.nama_pengguna,
+                nim=self.mahasiswa.nim_nik,
+                tanggal_pinjam=borrowed,
+                tanggal_kembali=due,
+                tanggal_dikembalikan=due,
+            )
+            barang = Barang.objects.create(
+                nama=f'Barang Tepat Waktu {index}', kode_barang=f'ONTIME-{index}',
+                jumlah=1, lokasi=self.lokasi,
+            )
+            PeminjamanAlat.objects.create(
+                transaksi=transaction, barang=barang,
+                nama_peminjam=self.mahasiswa.nama_pengguna, nim=self.mahasiswa.nim_nik,
+                tanggal_pinjam=borrowed, tanggal_kembali=due, status='dikembalikan',
+            )
+        barang_late = Barang.objects.create(
+            nama='Barang Terlambat Pulih', kode_barang='LATE-RECOVERY', jumlah=1, lokasi=self.lokasi,
+        )
+        PeminjamanAlat.objects.create(
+            transaksi=late, barang=barang_late,
+            nama_peminjam=self.mahasiswa.nama_pengguna, nim=self.mahasiswa.nim_nik,
+            tanggal_pinjam=late.tanggal_pinjam, tanggal_kembali=late.tanggal_kembali,
+            status='dikembalikan',
+        )
+
+        profile = get_credit_profile(self.mahasiswa.nim_nik, today=date(2026, 4, 1))
+
+        self.assertEqual(profile.score, 89)
+        self.assertEqual(profile.recovery_points, 20)
+        self.assertEqual(profile.max_loan_days, 7)
+
+    def test_perpanjangan_disetujui_tidak_mengurangi_skor_selama_kembali_tepat_waktu(self):
+        transaksi, loan = self.create_active_transaction()
+        transaksi.tanggal_kembali = transaksi.tanggal_kembali + timedelta(days=7)
+        transaksi.tanggal_dikembalikan = transaksi.tanggal_kembali
+        transaksi.save(update_fields=['tanggal_kembali', 'tanggal_dikembalikan'])
+        loan.tanggal_kembali = transaksi.tanggal_kembali
+        loan.status = 'dikembalikan'
+        loan.save(update_fields=['tanggal_kembali', 'status'])
+
+        profile = get_credit_profile(
+            self.mahasiswa.nim_nik,
+            today=transaksi.tanggal_kembali + timedelta(days=1),
+        )
+
+        self.assertEqual(profile.score, 100)
+        self.assertEqual(profile.late_transactions, 0)
+
     def test_peminjaman_aktif_terlambat_memblokir_pengajuan_baru(self):
         self.create_active_transaction(due=timezone.localdate() - timedelta(days=1))
         barang_baru = Barang.objects.create(
@@ -1665,6 +1746,71 @@ class PeminjamanPolicyTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Masih ada peminjaman terlambat')
         self.assertEqual(PeminjamanAlat.objects.filter(nim=self.mahasiswa.nim_nik).count(), 1)
+
+    def test_skor_di_bawah_empat_puluh_memblokir_peminjaman(self):
+        PenyesuaianSkorKredit.objects.create(
+            pengguna=self.mahasiswa,
+            skor_sebelum=100,
+            skor_baru=39,
+            nilai_penyesuaian=-61,
+            catatan='Penyesuaian awal untuk pengujian.',
+            diubah_oleh=self.laboran,
+        )
+
+        response = self.submit_loan(date(2026, 10, 1), date(2026, 10, 2))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Skor kredit di bawah 40')
+        self.assertFalse(PeminjamanAlat.objects.filter(nim=self.mahasiswa.nim_nik).exists())
+
+    def test_laboran_dapat_menaikkan_skor_setelah_verifikasi_konten(self):
+        PenyesuaianSkorKredit.objects.create(
+            pengguna=self.mahasiswa,
+            skor_sebelum=100,
+            skor_baru=30,
+            nilai_penyesuaian=-70,
+            catatan='Penyesuaian awal untuk pengujian.',
+            diubah_oleh=self.laboran,
+        )
+        self.login(self.laboran)
+
+        response = self.client.post(
+            reverse('peminjaman:credit_score_adjust', args=[self.mahasiswa.pk]),
+            {
+                'skor_baru': '55',
+                'tautan_konten': 'https://example.com/konten-edukasi',
+                'catatan': 'Konten edukasi sudah diverifikasi Laboran.',
+            },
+        )
+
+        self.assertRedirects(response, reverse('pengguna:detail', args=[self.mahasiswa.pk]))
+        adjustment = PenyesuaianSkorKredit.objects.filter(pengguna=self.mahasiswa).first()
+        self.assertEqual(adjustment.skor_sebelum, 30)
+        self.assertEqual(adjustment.skor_baru, 55)
+        self.assertEqual(adjustment.nilai_penyesuaian, 25)
+        self.assertEqual(adjustment.diubah_oleh, self.laboran)
+        self.assertEqual(get_credit_profile(self.mahasiswa.nim_nik).score, 55)
+
+    def test_kenaikan_skor_wajib_menyertakan_tautan_konten(self):
+        PenyesuaianSkorKredit.objects.create(
+            pengguna=self.mahasiswa,
+            skor_sebelum=100,
+            skor_baru=30,
+            nilai_penyesuaian=-70,
+            catatan='Penyesuaian awal untuk pengujian.',
+            diubah_oleh=self.laboran,
+        )
+        self.login(self.laboran)
+
+        response = self.client.post(
+            reverse('peminjaman:credit_score_adjust', args=[self.mahasiswa.pk]),
+            {'skor_baru': '55', 'tautan_konten': '', 'catatan': 'Sudah dicek.'},
+            follow=True,
+        )
+
+        self.assertContains(response, 'Tautan konten wajib diisi')
+        self.assertEqual(PenyesuaianSkorKredit.objects.filter(pengguna=self.mahasiswa).count(), 1)
+        self.assertEqual(get_credit_profile(self.mahasiswa.nim_nik).score, 30)
 
     def test_asisten_lab_menyetujui_perpanjangan_dan_memperbarui_transaksi(self):
         transaksi, loan = self.create_active_transaction()
@@ -1705,6 +1851,56 @@ class PeminjamanPolicyTests(TestCase):
         self.assertEqual(loan.tanggal_kembali, date(2026, 10, 7))
         self.assertEqual(extension.ditinjau_oleh, self.asisten)
         self.assertEqual(len(mail.outbox), 2)
+
+    def test_perpanjangan_selalu_maksimal_tujuh_hari_meski_skor_kredit_membatasi_peminjaman_awal(self):
+        transaksi, loan = self.create_active_transaction()
+        profile = replace(get_credit_profile(self.mahasiswa.nim_nik), max_loan_days=1)
+        form = PengajuanPerpanjanganForm(
+            transaksi=transaksi,
+            credit_profile=profile,
+        )
+
+        self.assertEqual(
+            form.fields['tanggal_kembali_diminta'].widget.attrs['max'],
+            (transaksi.tanggal_kembali + timedelta(days=7)).isoformat(),
+        )
+
+    def test_perpanjangan_dapat_diajukan_berulang_setelah_disetujui(self):
+        transaksi, loan = self.create_active_transaction()
+        first_due = transaksi.tanggal_kembali
+        payload = {
+            'tanggal_kembali_diminta': (first_due + timedelta(days=7)).isoformat(),
+            'alasan': 'Peralatan masih diperlukan untuk menyelesaikan pengujian.',
+            'kondisi_barang': 'baik',
+            'keterangan_kondisi': '',
+            'pernyataan_jujur': 'on',
+        }
+        self.client.post(reverse('peminjaman:peminjaman_extension_request', args=[loan.pk]), payload)
+        first = PengajuanPerpanjangan.objects.get(transaksi=transaksi)
+        self.login(self.asisten)
+        self.client.post(
+            reverse('peminjaman:peminjaman_extension_review', args=[first.pk]),
+            {'action': 'approve'},
+        )
+
+        transaksi.refresh_from_db()
+        loan.refresh_from_db()
+        self.login(self.mahasiswa)
+        second_due = transaksi.tanggal_kembali + timedelta(days=7)
+        response = self.client.post(
+            reverse('peminjaman:peminjaman_extension_request', args=[loan.pk]),
+            {**payload, 'tanggal_kembali_diminta': second_due.isoformat()},
+        )
+
+        self.assertRedirects(response, reverse('peminjaman:peminjaman_detail', args=[loan.pk]))
+        self.assertEqual(
+            PengajuanPerpanjangan.objects.filter(transaksi=transaksi, status='diajukan').count(),
+            1,
+        )
+        self.assertEqual(
+            PengajuanPerpanjangan.objects.filter(transaksi=transaksi).count(),
+            2,
+        )
 
     def test_asisten_lab_tidak_boleh_menyetujui_perpanjangan_sendiri(self):
         self.mahasiswa.role = 'asisten_lab'

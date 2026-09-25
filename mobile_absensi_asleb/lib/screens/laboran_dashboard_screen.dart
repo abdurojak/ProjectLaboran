@@ -5,6 +5,7 @@ import '../providers/auth_provider.dart';
 import '../providers/laboran_provider.dart';
 import '../widgets/labhub_loading.dart';
 import '../utils/app_theme.dart';
+import 'laboran_lost_item_screen.dart';
 
 class LaboranDashboardScreen extends StatefulWidget {
   const LaboranDashboardScreen({super.key});
@@ -126,6 +127,36 @@ class _LaboranDashboardScreenState extends State<LaboranDashboardScreen> {
                 ],
               ),
             const SizedBox(height: 22),
+            Card(
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFFFFF3CD),
+                  child: Icon(
+                    Icons.find_in_page_outlined,
+                    color: AppTheme.amber,
+                  ),
+                ),
+                title: const Text(
+                  'Input Barang Hilang',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+                subtitle: const Text(
+                  'Catat barang yang ditemukan dan umumkan kepada mahasiswa.',
+                ),
+                trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 18),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const LaboranLostItemScreen(),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(20),

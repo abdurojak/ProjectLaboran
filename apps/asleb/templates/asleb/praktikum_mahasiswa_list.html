@@ -601,7 +601,7 @@
             </form>
         </div>
         <div class="overflow-x-auto">
-            <table class="min-w-[1100px]" data-rekap-table>
+            <table class="min-w-[1100px]" data-rekap-table data-mobile-card-table>
                 <thead>
                     <tr>
                         <th>No</th><th>NIM</th><th>Nama Mahasiswa</th><th>Kelas</th><th>Mata Kuliah</th>
@@ -691,7 +691,7 @@
                         </div>
 
                         <div class="min-h-0 flex-1 overflow-auto">
-                            <table class="min-w-[920px]">
+                            <table class="min-w-[920px]" data-mobile-card-table>
                                 <thead>
                                     <tr>
                                         <th class="w-12">{% if item.can_manage_peserta %}<input type="checkbox" data-select-all aria-label="Pilih semua peserta">{% endif %}</th>
