@@ -3,10 +3,11 @@ from decimal import Decimal
 from math import asin, cos, radians, sin, sqrt
 
 from django.conf import settings
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.asleb.models import AbsensiMasukAsleb, Asleb
-from apps.asleb.services import get_active_asleb_matkul_ids
+from apps.asleb.services import get_active_asleb_for_pengguna, get_active_asleb_matkul_ids
 from apps.jadwal.models import JadwalPraktikum
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, RiwayatAsleb
 
@@ -15,17 +16,26 @@ WEEKDAY_KEYS = ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu']
 
 
 def get_active_asleb(pengguna):
-    return Asleb.objects.filter(nim=pengguna.nim_nik, status='aktif').select_related('periode_aktif').first()
+    return get_active_asleb_for_pengguna(pengguna)
+
+
+def get_asleb_courses(asleb):
+    assigned_ids = get_active_asleb_matkul_ids(asleb)
+    if assigned_ids:
+        # Penugasan aktif adalah sumber utama. Flag aktif pada master mata kuliah
+        # dapat tertinggal saat data semester diperbarui, sehingga tidak boleh
+        # menghilangkan jadwal yang masih resmi ditugaskan kepada Aslab.
+        return list(
+            MataKuliahAsleb.objects.filter(pk__in=assigned_ids)
+            .order_by('nama', 'kelas', 'pk')
+        )
+    return []
 
 
 def get_asleb_course_labels(asleb):
-    assigned_ids = get_active_asleb_matkul_ids(asleb)
-    if assigned_ids:
-        return [
-            str(course) for course in MataKuliahAsleb.objects.filter(
-                pk__in=assigned_ids, aktif=True,
-            ).order_by('nama', 'kelas', 'pk')
-        ]
+    assigned_courses = get_asleb_courses(asleb)
+    if assigned_courses:
+        return [str(course) for course in assigned_courses]
 
     registrations = PendaftaranAsleb.objects.filter(
         nim=asleb.nim,
@@ -48,13 +58,30 @@ def get_asleb_course_labels(asleb):
 
 
 def get_owned_schedules(asleb):
-    labels = get_asleb_course_labels(asleb)
-    if not labels:
+    courses = get_asleb_courses(asleb)
+    if not courses:
+        labels = get_asleb_course_labels(asleb)
+        if not labels:
+            return JadwalPraktikum.objects.none()
+        return JadwalPraktikum.objects.filter(
+            mata_kuliah__in=labels,
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        ).select_related('ruangan', 'ruangan_tambahan')
+
+    schedule_match = Q()
+    for course in courses:
+        schedule_match |= Q(mata_kuliah=str(course))
+        if course.nama and course.kelas:
+            schedule_match |= Q(
+                mata_kuliah__istartswith=f'{course.nama} - ',
+                kelas__iexact=course.kelas.strip(),
+            )
+    if not schedule_match:
         return JadwalPraktikum.objects.none()
     return JadwalPraktikum.objects.filter(
-        mata_kuliah__in=labels,
+        schedule_match,
         status=JadwalPraktikum.STATUS_DITERIMA,
-    ).select_related('ruangan', 'ruangan_tambahan')
+    ).select_related('ruangan', 'ruangan_tambahan').distinct()
 
 
 def aware_schedule_datetime(date_value, time_value):

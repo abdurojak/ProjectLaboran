@@ -30,6 +30,7 @@ from .services import adjust_return_date, get_credit_profile, update_peminjaman_
 
 
 MANAGER_ROLES = {LABORAN_ROLE}
+EXTENSION_REVIEWER_ROLES = {LABORAN_ROLE}
 BULK_STATUS_CHOICES = {'dipinjam', 'hilang', 'rusak', 'selesai'}
 BULK_STATUS_UI_CHOICES = [
     ('dipinjam', 'Dipinjam'),
@@ -355,15 +356,15 @@ def request_extension(request, pk):
         extension.save()
 
     send_extension_request_notifications(extension)
-    messages.success(request, 'Pengajuan perpanjangan dikirim kepada Asisten Lab.')
+    messages.success(request, 'Pengajuan perpanjangan dikirim kepada Laboran.')
     return redirect('peminjaman:peminjaman_detail', pk=anchor.pk)
 
 
 @require_POST
 def review_extension(request, pk):
     pengguna = getattr(request, 'current_pengguna', None)
-    if not pengguna or pengguna.role != 'asisten_lab':
-        messages.warning(request, 'Hanya Asisten Lab yang dapat meninjau perpanjangan.')
+    if not pengguna or pengguna.role not in EXTENSION_REVIEWER_ROLES:
+        messages.warning(request, 'Hanya Laboran yang dapat meninjau perpanjangan.')
         return redirect('peminjaman:peminjaman_list')
 
     action = request.POST.get('action', '').strip()
@@ -381,7 +382,7 @@ def review_extension(request, pk):
         transaksi = PeminjamanTransaksi.objects.select_for_update().get(pk=extension.transaksi_id)
         anchor = transaksi.detail.order_by('pk').first()
         if extension.diajukan_oleh_id == pengguna.pk or transaksi.nim == pengguna.nim_nik:
-            messages.error(request, 'Asisten Lab tidak boleh menyetujui perpanjangan miliknya sendiri.')
+            messages.error(request, 'Peninjau tidak boleh menyetujui perpanjangan miliknya sendiri.')
             return redirect('peminjaman:peminjaman_detail', pk=anchor.pk)
         if extension.status != 'diajukan':
             messages.info(request, 'Pengajuan perpanjangan ini sudah diproses.')
@@ -549,7 +550,7 @@ class PeminjamanAlatListView(ListView):
             context['catalog_products'] = self.get_catalog_products()
             context['today'] = timezone.localdate()
             context['credit_profile'] = get_credit_profile(current_pengguna.nim_nik)
-        if current_pengguna and current_pengguna.role == 'asisten_lab':
+        if current_pengguna and current_pengguna.role in EXTENSION_REVIEWER_ROLES:
             pending_extensions = list(
                 PengajuanPerpanjangan.objects.filter(status='diajukan')
                 .exclude(diajukan_oleh=current_pengguna)
@@ -722,7 +723,7 @@ class PeminjamanAlatDetailView(DetailView):
         )
         context['can_review_extension'] = bool(
             pengguna
-            and pengguna.role == 'asisten_lab'
+            and pengguna.role in EXTENSION_REVIEWER_ROLES
             and pending_extension
             and pending_extension.diajukan_oleh_id != pengguna.pk
             and self.object.nim != pengguna.nim_nik

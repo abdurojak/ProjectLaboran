@@ -123,7 +123,7 @@ def send_peminjaman_approved_notification(peminjaman):
 
 def send_extension_request_notifications(extension):
     recipients = list(
-        Pengguna.objects.filter(role='asisten_lab')
+        Pengguna.objects.filter(role='laboran')
         .exclude(pk=extension.diajukan_oleh_id)
         .exclude(email='')
         .values_list('email', flat=True)
@@ -151,7 +151,7 @@ def send_extension_request_notifications(extension):
             f'\n\nTinjau pengajuan: {action_url}'
         ),
         title='Perpanjangan perlu ditinjau',
-        greeting='Halo Asisten Lab,',
+        greeting='Halo Laboran,',
         intro='Ada pengajuan perpanjangan peminjaman alat yang memerlukan persetujuan.',
         details=[
             {'label': 'Kode', 'value': extension.transaksi.kode_pinjam},

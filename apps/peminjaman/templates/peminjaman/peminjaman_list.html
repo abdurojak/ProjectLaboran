@@ -229,6 +229,26 @@
         {% endif %}
     </div>
 
+    {% if pending_extensions %}
+    <section class="surface-card overflow-hidden">
+        <div class="border-b border-slate-100 px-5 py-4">
+            <p class="text-xs font-black uppercase tracking-[0.18em] text-cyan-700">Persetujuan Peminjaman</p>
+            <h3 class="mt-1 text-xl font-black text-slate-900">Pengajuan Perpanjangan</h3>
+        </div>
+        <div class="divide-y divide-slate-100">
+            {% for extension in pending_extensions %}
+            <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+                <div>
+                    <p class="font-black text-slate-900">{{ extension.transaksi.kode_pinjam }} · {{ extension.transaksi.nama_peminjam }}</p>
+                    <p class="mt-1 text-sm text-slate-500">{{ extension.tanggal_kembali_sebelumnya|date:"d M Y" }} menjadi {{ extension.tanggal_kembali_diminta|date:"d M Y" }}</p>
+                </div>
+                {% if extension.anchor_pk %}<a href="{% url 'peminjaman:peminjaman_detail' extension.anchor_pk %}" class="btn-secondary">Tinjau</a>{% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
     {% if is_borrower %}
     <section class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
         <div class="surface-card flex flex-wrap items-center gap-4 p-5">
@@ -251,26 +271,6 @@
             Masa normal maksimal 7 hari. Tanggal kembali yang jatuh pada hari libur diundur otomatis ke hari operasional berikutnya.
         </div>
     </section>
-
-    {% if pending_extensions %}
-    <section class="surface-card overflow-hidden">
-        <div class="border-b border-slate-100 px-5 py-4">
-            <p class="text-xs font-black uppercase tracking-[0.18em] text-cyan-700">Tugas Asisten Lab</p>
-            <h3 class="mt-1 text-xl font-black text-slate-900">Pengajuan Perpanjangan</h3>
-        </div>
-        <div class="divide-y divide-slate-100">
-            {% for extension in pending_extensions %}
-            <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
-                <div>
-                    <p class="font-black text-slate-900">{{ extension.transaksi.kode_pinjam }} · {{ extension.transaksi.nama_peminjam }}</p>
-                    <p class="mt-1 text-sm text-slate-500">{{ extension.tanggal_kembali_sebelumnya|date:"d M Y" }} menjadi {{ extension.tanggal_kembali_diminta|date:"d M Y" }}</p>
-                </div>
-                {% if extension.anchor_pk %}<a href="{% url 'peminjaman:peminjaman_detail' extension.anchor_pk %}" class="btn-secondary">Tinjau</a>{% endif %}
-            </div>
-            {% endfor %}
-        </div>
-    </section>
-    {% endif %}
 
     <section class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]" data-loan-shop data-credit-can-submit="{{ credit_profile.can_submit|yesno:'true,false' }}" data-max-loan-days="{{ credit_profile.max_loan_days }}">
         <div class="surface-card min-w-0 p-5 md:p-6">

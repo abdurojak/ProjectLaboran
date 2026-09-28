@@ -354,7 +354,8 @@ class MobileAbsensiApiTests(TestCase):
 
     def test_jadwal_dua_penugasan_aktif_muncul_untuk_absensi(self):
         web_course = MataKuliahAsleb.objects.create(
-            kode='WEB-MOBILE', nama='Pemrograman Web', dosen='Dosen Web', kelas='TIF-02',
+            kode='WEB-MOBILE', nama='Pemrograman Web', dosen='Dosen Web Lama', kelas='TIF-02',
+            aktif=False,
         )
         for course in (self.matkul, web_course):
             slot = AslabSlot.objects.create(periode=self.period, matkul=course, nomor=1)
@@ -363,8 +364,9 @@ class MobileAbsensiApiTests(TestCase):
                 status=AslabAssignment.STATUS_ACTIVE,
             )
         web_schedule = JadwalPraktikum.objects.create(
-            mata_kuliah=str(web_course), kelas=web_course.kelas, ruangan=self.room,
-            pengampu=web_course.dosen, hari='senin', waktu_mulai=time(10, 0),
+            mata_kuliah='Pemrograman Web - Dosen Web Baru - TIF-02',
+            kelas=web_course.kelas, ruangan=self.room,
+            pengampu='Dosen Web Baru', hari='senin', waktu_mulai=time(10, 0),
             waktu_selesai=time(12, 0), status=JadwalPraktikum.STATUS_DITERIMA,
         )
         self.authenticate()

@@ -1812,7 +1812,7 @@ class PeminjamanPolicyTests(TestCase):
         self.assertEqual(PenyesuaianSkorKredit.objects.filter(pengguna=self.mahasiswa).count(), 1)
         self.assertEqual(get_credit_profile(self.mahasiswa.nim_nik).score, 30)
 
-    def test_asisten_lab_menyetujui_perpanjangan_dan_memperbarui_transaksi(self):
+    def test_asisten_lab_tidak_dapat_meninjau_pengajuan_perpanjangan(self):
         transaksi, loan = self.create_active_transaction()
         response = self.client.post(
             reverse('peminjaman:peminjaman_extension_request', args=[loan.pk]),
@@ -1833,13 +1833,47 @@ class PeminjamanPolicyTests(TestCase):
         self.login(self.asisten)
         list_response = self.client.get(reverse('peminjaman:peminjaman_list'))
         detail_response = self.client.get(reverse('peminjaman:peminjaman_detail', args=[loan.pk]))
-        self.assertContains(list_response, 'Pengajuan Perpanjangan')
-        self.assertContains(detail_response, 'data-extension-review-action="approve"')
-        self.assertContains(detail_response, 'data-extension-review-action-input')
-        self.assertContains(detail_response, 'actionInput.value = button.dataset.extensionReviewAction')
+        self.assertNotContains(list_response, 'Pengajuan Perpanjangan')
+        self.assertNotContains(detail_response, 'data-extension-review-action="approve"')
         response = self.client.post(
             reverse('peminjaman:peminjaman_extension_review', args=[extension.pk]),
             {'action': 'approve', 'catatan_peninjau': 'Disetujui untuk penyelesaian praktikum.'},
+            follow=True,
+        )
+
+        self.assertContains(response, 'Hanya Laboran yang dapat meninjau perpanjangan')
+        extension.refresh_from_db()
+        transaksi.refresh_from_db()
+        loan.refresh_from_db()
+        self.assertEqual(extension.status, 'diajukan')
+        self.assertEqual(transaksi.tanggal_kembali, date(2026, 10, 5))
+        self.assertEqual(loan.tanggal_kembali, date(2026, 10, 5))
+        self.assertIsNone(extension.ditinjau_oleh)
+        self.assertEqual(mail.outbox[0].to, [self.laboran.email])
+
+    def test_laboran_melihat_dan_menyetujui_pengajuan_perpanjangan(self):
+        transaksi, loan = self.create_active_transaction()
+        extension = PengajuanPerpanjangan.objects.create(
+            transaksi=transaksi,
+            diajukan_oleh=self.mahasiswa,
+            tanggal_kembali_sebelumnya=transaksi.tanggal_kembali,
+            tanggal_kembali_diminta=date(2026, 10, 10),
+            alasan='Peralatan masih diperlukan untuk menyelesaikan pengujian.',
+            kondisi_barang='baik',
+            pernyataan_jujur=True,
+        )
+        self.login(self.laboran)
+
+        list_response = self.client.get(reverse('peminjaman:peminjaman_list'))
+        detail_response = self.client.get(reverse('peminjaman:peminjaman_detail', args=[loan.pk]))
+
+        self.assertContains(list_response, 'Pengajuan Perpanjangan')
+        self.assertContains(list_response, transaksi.kode_pinjam)
+        self.assertContains(detail_response, 'data-extension-review-action="approve"')
+
+        response = self.client.post(
+            reverse('peminjaman:peminjaman_extension_review', args=[extension.pk]),
+            {'action': 'approve', 'catatan_peninjau': 'Disetujui oleh Laboran.'},
         )
 
         self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
@@ -1847,10 +1881,9 @@ class PeminjamanPolicyTests(TestCase):
         transaksi.refresh_from_db()
         loan.refresh_from_db()
         self.assertEqual(extension.status, 'disetujui')
-        self.assertEqual(transaksi.tanggal_kembali, date(2026, 10, 7))
-        self.assertEqual(loan.tanggal_kembali, date(2026, 10, 7))
-        self.assertEqual(extension.ditinjau_oleh, self.asisten)
-        self.assertEqual(len(mail.outbox), 2)
+        self.assertEqual(extension.ditinjau_oleh, self.laboran)
+        self.assertEqual(transaksi.tanggal_kembali, date(2026, 10, 10))
+        self.assertEqual(loan.tanggal_kembali, date(2026, 10, 10))
 
     def test_perpanjangan_selalu_maksimal_tujuh_hari_meski_skor_kredit_membatasi_peminjaman_awal(self):
         transaksi, loan = self.create_active_transaction()
@@ -1877,7 +1910,7 @@ class PeminjamanPolicyTests(TestCase):
         }
         self.client.post(reverse('peminjaman:peminjaman_extension_request', args=[loan.pk]), payload)
         first = PengajuanPerpanjangan.objects.get(transaksi=transaksi)
-        self.login(self.asisten)
+        self.login(self.laboran)
         self.client.post(
             reverse('peminjaman:peminjaman_extension_review', args=[first.pk]),
             {'action': 'approve'},
@@ -1922,7 +1955,7 @@ class PeminjamanPolicyTests(TestCase):
 
         extension.refresh_from_db()
         self.assertEqual(extension.status, 'diajukan')
-        self.assertContains(response, 'tidak boleh menyetujui perpanjangan miliknya sendiri')
+        self.assertContains(response, 'Hanya Laboran yang dapat meninjau perpanjangan')
 
     def test_mahasiswa_tidak_boleh_meninjau_perpanjangan(self):
         transaksi, loan = self.create_active_transaction()
@@ -1995,7 +2028,7 @@ class PeminjamanPolicyTests(TestCase):
         self.assertContains(response, 'Jelaskan masalah atau kerusakan barang minimal 10 karakter')
         self.assertFalse(PengajuanPerpanjangan.objects.filter(transaksi=transaksi).exists())
 
-    def test_kondisi_barang_perpanjangan_terlihat_oleh_asisten_dan_dikirim_via_email(self):
+    def test_kondisi_barang_perpanjangan_terlihat_oleh_laboran_dan_dikirim_via_email(self):
         transaksi, loan = self.create_active_transaction()
         response = self.client.post(
             reverse('peminjaman:peminjaman_extension_request', args=[loan.pk]),
@@ -2015,7 +2048,7 @@ class PeminjamanPolicyTests(TestCase):
         self.assertIn('Tidak baik / ada masalah', mail.outbox[0].body)
         self.assertIn('Terdapat lecet kecil', mail.outbox[0].body)
 
-        self.login(self.asisten)
+        self.login(self.laboran)
         detail_response = self.client.get(reverse('peminjaman:peminjaman_detail', args=[loan.pk]))
         self.assertContains(detail_response, 'Kondisi barang: Tidak baik / ada masalah')
         self.assertContains(detail_response, 'Pernyataan kejujuran telah disetujui')
