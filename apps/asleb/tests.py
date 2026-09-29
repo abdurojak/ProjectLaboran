@@ -362,6 +362,22 @@ class AslebViewTests(TestCase):
         self.assertTrue(form.fields['bukti_video'].required)
         self.assertIn('video/webm,video/mp4', form.fields['bukti_video'].widget.attrs.get('accept', ''))
 
+    @patch('apps.asleb.views.ENABLE_CAMERA_LOCATION_CAPTURE', True)
+    def test_form_absensi_tetap_menyediakan_pilihan_galeri_saat_mode_kamera_aktif(self):
+        self.login_asisten_for_matkul()
+        schedule = self.create_active_schedule()
+        day_keys = [key for key, _ in JadwalPraktikum.HARI_CHOICES]
+        schedule.hari = day_keys[timezone.localdate().weekday()]
+        schedule.save(update_fields=['hari'])
+        PengaturanAbsensiAsleb.objects.update_or_create(pk=1, defaults={'dibuka': True})
+
+        response = self.client.get(reverse('asleb:absensi_create'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Pilih Foto dari Galeri')
+        self.assertContains(response, 'Pilih Video dari Galeri')
+        self.assertContains(response, 'data-camera-capture')
+
     def test_daftar_absensi_aman_jika_bukti_video_kosong(self):
         modul = ModulPraktikum.objects.create(
             matkul=self.matkul,

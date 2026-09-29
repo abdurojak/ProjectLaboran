@@ -273,7 +273,7 @@ class AbsensiAslebForm(forms.ModelForm):
     def clean_bukti_foto(self):
         photo = self.cleaned_data['bukti_foto']
         if not self._has_allowed_content_type(photo, ['image/jpeg', 'image/png']):
-            raise forms.ValidationError('Bukti foto harus diambil dari kamera dalam format gambar.')
+            raise forms.ValidationError('Bukti foto harus berupa gambar JPG atau PNG.')
         if photo.size > 5 * 1024 * 1024:
             raise forms.ValidationError('Ukuran bukti foto maksimal 5 MB.')
         return photo
@@ -281,7 +281,7 @@ class AbsensiAslebForm(forms.ModelForm):
     def clean_bukti_video(self):
         video = self.cleaned_data['bukti_video']
         if not self._has_allowed_content_type(video, ['video/webm', 'video/mp4']):
-            raise forms.ValidationError('Bukti video harus direkam langsung dari kamera.')
+            raise forms.ValidationError('Bukti video harus berupa video WebM atau MP4.')
         if video.size > 20 * 1024 * 1024:
             raise forms.ValidationError('Ukuran bukti video maksimal 20 MB.')
         return video
