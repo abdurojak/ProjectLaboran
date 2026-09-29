@@ -2607,18 +2607,14 @@ def manual_attendance_schedule_options(request):
         return JsonResponse({'detail': 'Akses ditolak.'}, status=403)
 
     asleb = get_object_or_404(Asleb, pk=request.GET.get('asleb'), status='aktif')
-    from apps.pendaftaran_asleb.models import MataKuliahAsleb
-
-    matkul_labels = list(
-        MataKuliahAsleb.objects.filter(
-            pk__in=get_active_asleb_matkul_ids(asleb),
-        ).values_list('nama', 'dosen', 'kelas')
-    )
-    labels = {f'{nama} - {dosen} - {kelas}' for nama, dosen, kelas in matkul_labels}
-    schedules = JadwalPraktikum.objects.filter(
-        mata_kuliah__in=labels,
+    schedule_candidates = JadwalPraktikum.objects.filter(
         status=JadwalPraktikum.STATUS_DITERIMA,
     ).select_related('ruangan', 'ruangan_tambahan').order_by('mata_kuliah', 'kelas', 'hari', 'waktu_mulai')
+    schedules = [
+        schedule
+        for schedule in schedule_candidates
+        if get_asleb_matkul_for_schedule(asleb, schedule)
+    ]
     return JsonResponse({
         'schedules': [
             {

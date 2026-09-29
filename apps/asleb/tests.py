@@ -943,6 +943,34 @@ class AslebViewTests(TestCase):
         self.assertContains(page_response, 'Pilih Aslab terlebih dahulu')
         self.assertContains(page_response, reverse('asleb:absensi_manual_schedules'))
 
+    def test_pilihan_jadwal_susulan_mencocokkan_matkul_dan_kelas_saat_gelar_dosen_berbeda(self):
+        assignment = self.create_active_assignment()
+        self.matkul.nama = 'Kecerdasan Buatan'
+        self.matkul.dosen = 'Anung B. Ariwibowo, M.Kom'
+        self.matkul.kelas = 'SI-02'
+        self.matkul.save(update_fields=['nama', 'dosen', 'kelas'])
+        assignment.slot.matkul = self.matkul
+        assignment.slot.save(update_fields=['matkul'])
+        schedule = JadwalPraktikum.objects.create(
+            mata_kuliah='Kecerdasan Buatan - Anung B. Ariwibowo, S.Kom., M.Kom - SI-02',
+            kelas='SI-02',
+            ruangan=self.test_room,
+            pengampu='Anung B. Ariwibowo, S.Kom., M.Kom',
+            hari='kamis',
+            waktu_mulai='10:00',
+            waktu_selesai='12:00',
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+
+        response = self.client.get(
+            reverse('asleb:absensi_manual_schedules'),
+            {'asleb': self.asleb.pk},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual({item['id'] for item in response.json()['schedules']}, {schedule.pk})
+
     def test_asleb_search_filters_data(self):
         response = self.client.get(reverse('asleb:asleb_list'), {'q': '2301001'})
 
