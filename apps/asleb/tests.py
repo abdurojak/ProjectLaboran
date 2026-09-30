@@ -665,6 +665,43 @@ class AslebViewTests(TestCase):
         self.assertIn(schedule, get_available_absensi_schedules(self.asleb, schedule_time))
         self.assertEqual(get_asleb_matkul_for_schedule(self.asleb, schedule), self.matkul)
 
+    def test_form_absensi_menerima_modul_saat_gelar_dosen_jadwal_berbeda(self):
+        self.matkul.nama = 'Kecerdasan Buatan'
+        self.matkul.dosen = 'Anung B. Ariwibowo, M.Kom'
+        self.matkul.kelas = 'SI-02'
+        self.matkul.save(update_fields=['nama', 'dosen', 'kelas'])
+        self.create_active_assignment()
+        module = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=2,
+            judul='Kecerdasan Buatan Modul 2',
+            file=SimpleUploadedFile('ai-2.pdf', b'%PDF-1.4', content_type='application/pdf'),
+        )
+        schedule = JadwalPraktikum.objects.create(
+            mata_kuliah='Kecerdasan Buatan - Anung B. Ariwibowo, S.Kom., M.Kom - SI-02',
+            kelas='SI-02',
+            ruangan=self.test_room,
+            pengampu='Anung B. Ariwibowo, S.Kom., M.Kom',
+            hari='kamis',
+            waktu_mulai='10:00',
+            waktu_selesai='12:00',
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+        form = AbsensiAslebForm(
+            data={
+                'modul_praktikum': module.pk,
+                'pekerjaan': 'Mengajar praktikum AI',
+            },
+            files={
+                'bukti_foto': self.make_camera_photo('ai-2.png'),
+                'bukti_video': SimpleUploadedFile('ai-2.mp4', b'video', content_type='video/mp4'),
+            },
+            asleb=self.asleb,
+            jadwal=schedule,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+
     def test_absensi_dapat_memilih_dua_praktikum_pada_hari_yang_sama(self):
         assignment = self.create_active_assignment()
         other_matkul = MataKuliahAsleb.objects.create(

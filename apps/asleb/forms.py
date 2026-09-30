@@ -289,7 +289,7 @@ class AbsensiAslebForm(forms.ModelForm):
     def clean_modul_praktikum(self):
         modul = self.cleaned_data['modul_praktikum']
         active_matkul = get_asleb_matkul_for_schedule(self.asleb, self.jadwal)
-        if modul.matkul != active_matkul or self.jadwal.mata_kuliah != str(modul.matkul):
+        if modul.matkul != active_matkul:
             raise forms.ValidationError('Modul tidak sesuai dengan mata kuliah pada jadwal aktif.')
         duplicate_qs = AbsensiAsleb.objects.filter(
             asleb=self.asleb,
