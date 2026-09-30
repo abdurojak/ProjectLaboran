@@ -9,6 +9,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Count, Q, Sum
 from django.core.exceptions import SuspiciousFileOperation
 from django.http import FileResponse, Http404
+from django.urls import reverse
 from django.utils._os import safe_join
 from django.utils import timezone
 from rest_framework import status
@@ -18,7 +19,13 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.asleb.models import AbsensiMasukAsleb, ModulPraktikum, PengaturanAbsensiAsleb
+from apps.asleb.models import (
+    AbsensiAsleb,
+    AbsensiMasukAsleb,
+    IzinAbsensiManualAsleb,
+    ModulPraktikum,
+    PengaturanAbsensiAsleb,
+)
 from apps.asleb.services import get_active_asleb_period
 from apps.asleb.views import sync_honor_from_mobile_absensi
 from apps.asleb.models import HonorAsleb
@@ -59,6 +66,7 @@ from .serializers import (
     ProfileSerializer,
     RefreshSerializer,
     ScheduleSerializer,
+    WebAttendanceHistorySerializer,
     absolute_file_url,
     validate_inventory_photo,
 )
@@ -75,6 +83,20 @@ from .services import (
 
 def api_error(message, code, http_status=status.HTTP_400_BAD_REQUEST, **extra):
     return Response({'detail': message, 'code': code, **extra}, status=http_status)
+
+
+class AppVersionView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response({
+            'latest_version': settings.MOBILE_APK_VERSION,
+            'minimum_build': settings.MOBILE_APK_MIN_BUILD,
+            'update_required': True,
+            'download_url': request.build_absolute_uri(reverse('dashboard:android_app_download')),
+            'message': 'Versi terbaru LabHub tersedia. Perbarui aplikasi untuk melanjutkan.',
+        })
 
 
 class MobileMediaView(APIView):
@@ -128,7 +150,18 @@ def attendance_context(asleb, schedules, date_value=None):
         tanggal_absensi=date_value,
     )
     attendance_by_schedule = {item.jadwal_id: item for item in attendance}
-    status_by_schedule = {}
+    web_attendance_schedule_ids = set(
+        AbsensiAsleb.objects.filter(
+            asleb=asleb,
+            jadwal__in=schedules,
+            tanggal_praktikum=date_value,
+        ).values_list('jadwal_id', flat=True)
+    )
+    status_by_schedule = {
+        schedule_id: AbsensiMasukAsleb.STATUS_SUDAH_ABSEN
+        for schedule_id in web_attendance_schedule_ids
+        if schedule_id not in attendance_by_schedule
+    }
     local_now = timezone.localtime()
     today_key = WEEKDAY_KEYS[date_value.weekday()]
     for schedule in schedules:
@@ -142,6 +175,20 @@ def attendance_context(asleb, schedules, date_value=None):
         'attendance_by_schedule': attendance_by_schedule,
         'status_by_schedule': status_by_schedule,
     }
+
+
+def get_mobile_manual_attendance_permission(asleb, schedule=None, *, for_update=False):
+    queryset = IzinAbsensiManualAsleb.objects.filter(
+        asleb=asleb,
+        digunakan_pada__isnull=True,
+        dibatalkan_pada__isnull=True,
+        berlaku_sampai__gt=timezone.now(),
+    )
+    if schedule is not None:
+        queryset = queryset.filter(jadwal=schedule)
+    if for_update:
+        queryset = queryset.select_for_update()
+    return queryset.order_by('-dibuat_pada').first()
 
 
 class LoginView(APIView):
@@ -335,8 +382,15 @@ class ScheduleDetailView(APIView):
             return api_error('Jadwal tidak ditemukan atau bukan milik Anda.', 'schedule_not_owned', status.HTTP_404_NOT_FOUND)
         context = attendance_context(asleb, [schedule])
         context['request'] = request
+        manual_permission = get_mobile_manual_attendance_permission(asleb, schedule)
         valid, reason, _ = validate_schedule_time(schedule)
-        already_checked_in = schedule.pk in context['attendance_by_schedule']
+        if manual_permission:
+            valid = True
+            reason = ''
+        already_checked_in = (
+            schedule.pk in context['attendance_by_schedule']
+            or context['status_by_schedule'].get(schedule.pk) == AbsensiMasukAsleb.STATUS_SUDAH_ABSEN
+        )
         available_modules = list(get_available_modules(asleb, schedule))
         return Response({
             'schedule': ScheduleSerializer(schedule, context=context).data,
@@ -348,13 +402,15 @@ class ScheduleDetailView(APIView):
                 valid
                 and not already_checked_in
                 and bool(available_modules)
-                and PengaturanAbsensiAsleb.get_solo().dibuka
+                and (PengaturanAbsensiAsleb.get_solo().dibuka or manual_permission is not None)
             ),
             'check_in_message': (
                 'Anda sudah melakukan absensi masuk untuk jadwal ini.'
                 if already_checked_in
                 else 'Tidak ada modul yang belum diabsen untuk mata kuliah ini.'
                 if not available_modules
+                else 'Absensi susulan resmi dari Laboran tersedia.'
+                if manual_permission
                 else reason or 'Absensi masuk tersedia.'
             ),
         })
@@ -369,9 +425,6 @@ class CheckInView(APIView):
         serializer = CheckInSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         asleb = get_active_asleb(request.user)
-        if not PengaturanAbsensiAsleb.get_solo().dibuka:
-            return api_error('Absensi Asisten Lab sedang ditutup oleh pengelola.', 'attendance_closed')
-
         schedule = get_owned_schedules(asleb).select_for_update().filter(
             pk=serializer.validated_data['jadwal_id']
         ).first()
@@ -395,11 +448,35 @@ class CheckInView(APIView):
                 return api_error('Modul ini sudah pernah diabsen dan tidak dapat dipilih lagi.', 'module_already_used')
             return api_error('Modul tidak tersedia atau tidak sesuai dengan mata kuliah jadwal.', 'invalid_module')
 
-        today = timezone.localdate()
-        if AbsensiMasukAsleb.objects.filter(asleb=asleb, jadwal=schedule, tanggal_absensi=today).exists():
+        manual_permission = get_mobile_manual_attendance_permission(
+            asleb, schedule, for_update=True,
+        )
+        if not PengaturanAbsensiAsleb.get_solo().dibuka and not manual_permission:
+            return api_error('Absensi Asisten Lab sedang ditutup oleh pengelola.', 'attendance_closed')
+
+        attendance_date = (
+            manual_permission.tanggal_praktikum
+            if manual_permission else timezone.localdate()
+        )
+        if AbsensiMasukAsleb.objects.filter(
+            asleb=asleb, jadwal=schedule, tanggal_absensi=attendance_date,
+        ).exists():
             return api_error('Anda sudah melakukan absensi masuk untuk jadwal ini.', 'duplicate_attendance')
+        if AbsensiAsleb.objects.filter(
+            asleb=asleb,
+            jadwal=schedule,
+            tanggal_praktikum=attendance_date,
+        ).exists():
+            return api_error(
+                'Anda sudah melakukan absensi untuk jadwal ini melalui web.',
+                'duplicate_attendance',
+            )
 
         valid_time, reason, attendance_status = validate_schedule_time(schedule)
+        if manual_permission:
+            valid_time = True
+            reason = ''
+            attendance_status = AbsensiMasukAsleb.STATUS_SUDAH_ABSEN
         if not valid_time:
             return api_error(reason, 'invalid_schedule_time')
 
@@ -409,13 +486,16 @@ class CheckInView(APIView):
                 jadwal=schedule,
                 periode=period,
                 modul_praktikum=module,
-                tanggal_absensi=today,
+                tanggal_absensi=attendance_date,
                 waktu_masuk=timezone.now(),
                 status=attendance_status,
                 foto_absensi=serializer.validated_data['foto_absensi'],
                 video_absensi=serializer.validated_data.get('video_absensi') or '',
             )
             sync_honor_from_mobile_absensi(attendance)
+            if manual_permission:
+                manual_permission.digunakan_pada = timezone.now()
+                manual_permission.save(update_fields=['digunakan_pada'])
         except IntegrityError:
             return api_error('Anda sudah melakukan absensi masuk untuk jadwal ini.', 'duplicate_attendance')
         return Response(
@@ -429,11 +509,20 @@ class AttendanceHistoryView(APIView):
 
     def get(self, request):
         asleb = get_active_asleb(request.user)
-        queryset = AbsensiMasukAsleb.objects.filter(asleb=asleb).select_related(
+        mobile_history = AbsensiMasukAsleb.objects.filter(asleb=asleb).select_related(
             'jadwal', 'jadwal__ruangan', 'jadwal__ruangan_tambahan', 'modul_praktikum'
         )
+        web_history = AbsensiAsleb.objects.filter(asleb=asleb).select_related(
+            'jadwal', 'jadwal__ruangan', 'jadwal__ruangan_tambahan',
+            'modul_praktikum', 'modul_praktikum__matkul',
+        )
+        results = [
+            *AttendanceSerializer(mobile_history, many=True, context={'request': request}).data,
+            *WebAttendanceHistorySerializer(web_history, many=True, context={'request': request}).data,
+        ]
+        results.sort(key=lambda item: str(item.get('waktu_masuk') or ''), reverse=True)
         return Response({
-            'results': AttendanceSerializer(queryset, many=True, context={'request': request}).data,
+            'results': results,
         })
 
 

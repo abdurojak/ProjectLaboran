@@ -3,6 +3,7 @@
 {% block title %}Nilai & Absensi Mahasiswa{% endblock %}
 
 {% block content %}
+<div class="fixed right-4 top-24 z-[90] hidden max-w-sm rounded-2xl bg-emerald-600 px-5 py-4 text-sm font-black text-white shadow-2xl" role="status" aria-live="polite" data-participant-action-toast></div>
 <style>
     .praktikum-shell {
         display: grid;
@@ -581,7 +582,7 @@
                 <h3 class="mt-2 text-xl font-black text-slate-900">{% if rekap_matkul %}{{ rekap_matkul.nama }} - {{ rekap_matkul.kelas }}{% else %}Belum ada mata kuliah{% endif %}</h3>
                 <p class="mt-1 text-sm text-slate-500">Semua modul digabung dalam satu tabel rekap per mata kuliah.</p>
             </div>
-            <form class="flex flex-wrap gap-2" method="get">
+            <form class="flex flex-wrap gap-2" method="get" data-rekap-filter-form data-no-global-loading="true">
                 {% if selected_kelas %}
                 <input type="hidden" name="kelas" value="{{ selected_kelas }}">
                 {% endif %}
@@ -596,8 +597,8 @@
                     <option value="{{ item.pk }}" {% if rekap_matkul and item.pk == rekap_matkul.pk %}selected{% endif %}>{{ item.nama }} - {{ item.kelas }}</option>
                     {% endfor %}
                 </select>
-                <input type="search" data-rekap-search placeholder="Cari NIM atau nama..." class="min-w-64">
-                <button class="btn-secondary gap-2" type="submit"><i data-lucide="filter" class="h-4 w-4"></i>Terapkan</button>
+                <input type="search" data-rekap-search placeholder="Cari NIM atau nama..." class="min-w-64" autocomplete="off">
+                <span class="inline-flex items-center px-2 text-xs font-bold text-slate-500" data-rekap-result-count></span>
             </form>
         </div>
         <div class="overflow-x-auto">
@@ -846,6 +847,7 @@
                     'X-Requested-With': 'XMLHttpRequest',
                     'Accept': 'application/json',
                 },
+                credentials: 'same-origin',
             });
             const data = await response.json().catch(() => ({ ok: false, message: 'Respons server tidak valid.' }));
             if (!response.ok || !data.ok) {
@@ -864,6 +866,12 @@
             if (modal) refreshParticipantCounter(modal);
             applyFilters(form);
             showInlineMessage(form, data.message || 'Peserta berhasil dihapus.');
+            const pageToast = document.querySelector('[data-participant-action-toast]');
+            if (pageToast) {
+                pageToast.textContent = data.message || 'Peserta berhasil dihapus.';
+                pageToast.classList.remove('hidden');
+                window.setTimeout(() => pageToast.classList.add('hidden'), 5000);
+            }
         };
 
         confirmModal?.querySelector('[data-confirm-accept]')?.addEventListener('click', async () => {
@@ -995,14 +1003,33 @@
     document.addEventListener('DOMContentLoaded', function () {
         const searchInput = document.querySelector('[data-rekap-search]');
         const rows = Array.from(document.querySelectorAll('[data-rekap-row]'));
-        if (searchInput) {
-            searchInput.addEventListener('input', function () {
-                const keyword = searchInput.value.trim().toLowerCase();
-                rows.forEach(function (row) {
-                    row.classList.toggle('hidden', keyword && !row.textContent.toLowerCase().includes(keyword));
-                });
+        const rekapForm = document.querySelector('[data-rekap-filter-form]');
+        const resultCount = document.querySelector('[data-rekap-result-count]');
+        const applyRekapSearch = function () {
+            const keyword = (searchInput?.value || '').trim().toLowerCase();
+            let visible = 0;
+            rows.forEach(function (row) {
+                const matches = !keyword || row.textContent.toLowerCase().includes(keyword);
+                row.classList.toggle('hidden', !matches);
+                if (matches) visible += 1;
             });
+            if (resultCount) resultCount.textContent = visible + ' peserta';
+        };
+        if (searchInput) {
+            searchInput.addEventListener('input', applyRekapSearch);
+            applyRekapSearch();
         }
+        rekapForm?.addEventListener('submit', function (event) {
+            event.preventDefault();
+            applyRekapSearch();
+        });
+        rekapForm?.querySelectorAll('select').forEach(function (select) {
+            select.addEventListener('change', function () {
+                const url = new URL(window.location.href);
+                url.search = new URLSearchParams(new FormData(rekapForm)).toString();
+                window.location.href = url;
+            });
+        });
 
         const matkulSearch = document.querySelector('[data-matkul-nav-search]');
         const matkulFilterForm = document.querySelector('[data-matkul-nav-filter-form]');

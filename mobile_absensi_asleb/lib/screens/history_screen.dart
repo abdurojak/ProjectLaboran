@@ -93,6 +93,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                 StatusBadge(status: item.status),
                               ],
                             ),
+                            const SizedBox(height: 7),
+                            Text(
+                              item.source == 'web' ? 'Dikirim dari Web' : 'Dikirim dari Aplikasi',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
                             const SizedBox(height: 10),
                             Text(
                               '${DateFormat('d MMM yyyy', 'id_ID').format(item.waktuMasuk.toLocal())} • ${DateFormat('HH:mm').format(item.waktuMasuk.toLocal())}',

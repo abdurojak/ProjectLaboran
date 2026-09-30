@@ -179,22 +179,33 @@ SIDEBAR_LINKS = [
                 'url': 'asleb:honor_list',
                 'namespace': 'asleb',
                 'url_names': {
-                    'honor_list', 'honor_create', 'honor_auto_assign_transfers',
+                    'honor_list', 'honor_export_excel', 'honor_create', 'honor_auto_assign_transfers',
                     'honor_confirm_transfer', 'honor_update', 'honor_delete',
                     'surat_honor_list', 'surat_honor_generate', 'surat_honor_download',
                 },
-                'roles': {LABORAN_ROLE},
+                'roles': {LABORAN_ROLE, ASISTEN_LAB_ROLE},
             },
         ],
     },
     {'title': 'Ruangan', 'icon': 'door-open', 'url': 'ruangan:ruangan_list', 'namespace': 'ruangan', 'roles': {LABORAN_ROLE, ASISTEN_LAB_ROLE, MAHASISWA_ROLE}},
+    {
+        'title': 'Pengguna', 'icon': 'users-round', 'url': 'pengguna:manage_list',
+        'namespace': 'pengguna',
+        'url_names': {'manage_list', 'create', 'update', 'delete', 'change_password'},
+        'roles': {ADMIN_ROLE, LABORAN_ROLE},
+    },
+    {
+        'title': 'Jaringan', 'icon': 'contact-round', 'url': 'pengguna:list',
+        'namespace': 'pengguna', 'url_names': {'list', 'detail'},
+        'roles': {ADMIN_ROLE, LABORAN_ROLE, ASISTEN_LAB_ROLE, MAHASISWA_ROLE},
+    },
     {'title': 'Surat Laboran', 'icon': 'mails', 'url': 'surat:list', 'namespace': 'surat', 'roles': {LABORAN_ROLE}},
     {'title': 'Bug & Error List', 'icon': 'bug', 'url': 'core:bug_error_list', 'namespace': 'core', 'url_names': {'bug_error_list'}, 'roles': {ADMIN_ROLE, LABORAN_ROLE}},
     {'title': 'Pengaturan', 'icon': 'settings', 'url': 'core:settings', 'namespace': 'core', 'url_names': {'settings'}},
 ]
 
-MAHASISWA_VISIBLE_NAMESPACES = {'core', 'dashboard', 'kalender', 'peminjaman', 'jadwal', 'asleb', 'ruangan'}
-ASISTEN_LAB_HIDDEN_NAMESPACES = {'inventaris', 'barang_tertinggal', 'asleb', 'pendaftaran_asleb', 'pengguna'}
+MAHASISWA_VISIBLE_NAMESPACES = {'core', 'dashboard', 'kalender', 'peminjaman', 'jadwal', 'asleb', 'ruangan', 'pengguna'}
+ASISTEN_LAB_HIDDEN_NAMESPACES = {'inventaris', 'barang_tertinggal', 'asleb', 'pendaftaran_asleb'}
 ADMIN_VISIBLE_NAMESPACES = {'core', 'dashboard', 'kalender', 'pengguna'}
 
 PUBLIC_PAGE_META = {

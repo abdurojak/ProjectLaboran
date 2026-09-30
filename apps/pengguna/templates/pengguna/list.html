@@ -1,72 +1,19 @@
 {% extends "base.html" %}
-
-{% block title %}Pengguna{% endblock %}
+{% block title %}Jaringan Pengguna{% endblock %}
 
 {% block extra_head %}
 <style>
-    .pengguna-card {
-        min-width: 0;
-        background:
-            linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(241, 245, 249, 0.88));
-        border-color: rgba(203, 213, 225, 0.9);
-        color: #0f172a;
-        box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
-    }
-    .pengguna-avatar {
-        width: 3.5rem;
-        height: 3.5rem;
-    }
-    .pengguna-card-title {
-        color: #0f172a !important;
-    }
-    .pengguna-card-muted {
-        color: #475569 !important;
-    }
-    .pengguna-card-soft {
-        background: rgba(241, 245, 249, 0.95) !important;
-        color: #64748b !important;
-    }
-    .pengguna-card .pengguna-card-icon {
-        color: #0f766e !important;
-    }
-    .theme-dark .pengguna-card,
-    [data-theme="dark"] .pengguna-card,
-    body.dark .pengguna-card {
-        background:
-            linear-gradient(135deg, rgba(15, 23, 42, 0.88), rgba(8, 47, 73, 0.72)) !important;
-        border-color: rgba(125, 211, 252, 0.2) !important;
-        color: #e2e8f0 !important;
-        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.26);
-    }
-    .theme-dark .pengguna-card-title,
-    [data-theme="dark"] .pengguna-card-title,
-    body.dark .pengguna-card-title {
-        color: #f8fafc !important;
-    }
-    .theme-dark .pengguna-card-muted,
-    [data-theme="dark"] .pengguna-card-muted,
-    body.dark .pengguna-card-muted {
-        color: #cbd5e1 !important;
-    }
-    .theme-dark .pengguna-card-soft,
-    [data-theme="dark"] .pengguna-card-soft,
-    body.dark .pengguna-card-soft {
-        background: rgba(15, 23, 42, 0.72) !important;
-        color: #cbd5e1 !important;
-    }
-    @media (max-width: 767px) {
-        .pengguna-actions,
-        .pengguna-actions a,
-        .pengguna-actions button,
-        .pengguna-header-actions,
-        .pengguna-header-actions a {
-            width: 100%;
-        }
-        .pengguna-actions a,
-        .pengguna-actions button,
-        .pengguna-header-actions a {
-            justify-content: center;
-        }
+    .network-search-shell { box-shadow: 0 16px 40px rgba(15, 118, 110, .08); }
+    .network-card { min-width: 0; overflow: hidden; border: 1px solid rgba(203, 213, 225, .9); border-radius: 1.5rem; background: rgba(255,255,255,.96); box-shadow: 0 14px 36px rgba(15,23,42,.08); transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
+    .network-card:hover { transform: translateY(-3px); border-color: rgba(13,148,136,.35); box-shadow: 0 20px 45px rgba(15,23,42,.12); }
+    .network-cover { height: 7.5rem; background: linear-gradient(135deg, #065f46 0%, #0f766e 55%, #34d399 100%); }
+    .network-avatar { position: relative; z-index: 2; width: 6.25rem; height: 6.25rem; margin-top: -3.25rem; border: 5px solid white; box-shadow: 0 8px 24px rgba(15,23,42,.18); }
+    .theme-dark .network-card, [data-theme="dark"] .network-card, body.dark .network-card { background: rgba(15,23,42,.94); border-color: rgba(125,211,252,.2); }
+    .theme-dark .network-avatar, [data-theme="dark"] .network-avatar, body.dark .network-avatar { border-color: #0f172a; }
+    @media (max-width: 639px) {
+        .network-cover { height: 5.5rem; }
+        .network-avatar { width: 5rem; height: 5rem; margin-top: -2.6rem; border-width: 4px; }
+        .network-card { border-radius: 1.1rem; }
     }
 </style>
 {% endblock %}
@@ -75,238 +22,121 @@
 <section class="min-w-0 space-y-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="max-w-3xl">
-            <p class="text-sm font-bold uppercase tracking-[0.2em] text-brand-700">Pengguna</p>
-            <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">Pengguna</h2>
-            <p class="mt-2 text-sm text-slate-500">
-                Kelola data mahasiswa, laboran, dan asisten lab tanpa tabel lebar.
-            </p>
+            <p class="text-sm font-bold uppercase tracking-[0.2em] text-brand-700">Jaringan LabHub</p>
+            <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">Jaringan Pengguna</h2>
+            <p class="mt-2 text-sm text-slate-500">Temukan dan kenali seluruh pengguna LabHub dalam satu jaringan.</p>
         </div>
-        {% if can_manage_users %}
-        <div class="pengguna-header-actions flex w-full flex-wrap gap-3 sm:w-auto">
-            <a class="btn-primary gap-2" href="{% url 'pengguna:create' %}">
-                <i data-lucide="user-plus" class="h-4 w-4"></i>
-                <span>Tambah Pengguna</span>
-            </a>
-        </div>
-        {% endif %}
+        {% if can_manage_users %}<a class="btn-primary w-full justify-center gap-2 sm:w-auto" href="{% url 'pengguna:create' %}"><i data-lucide="user-plus" class="h-4 w-4"></i><span>Tambah Pengguna</span></a>{% endif %}
     </div>
 
-    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {% for group in grouped_users %}
-        <article class="surface-card p-5" data-user-summary="{{ group.role }}">
-            <div class="flex items-start justify-between gap-4">
-                <div>
-                    <div class="text-sm font-semibold text-slate-500">{{ group.title }}</div>
-                    <div class="mt-2 text-3xl font-black tracking-tight text-brand-700" data-user-summary-count>{{ group.count }}</div>
-                </div>
-                <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-700">
-                    {% if group.role == 'mahasiswa' %}
-                    <i data-lucide="graduation-cap" class="h-5 w-5"></i>
-                    {% elif group.role == 'laboran' %}
-                    <i data-lucide="briefcase-business" class="h-5 w-5"></i>
-                    {% else %}
-                    <i data-lucide="flask-conical" class="h-5 w-5"></i>
-                    {% endif %}
-                </span>
-            </div>
-        </article>
-        {% endfor %}
-    </div>
-
-    <section class="surface-card p-5 md:p-6" aria-labelledby="user-filter-title">
-        <div class="flex flex-wrap items-start justify-between gap-3">
+    <section class="network-search-shell surface-card p-4 sm:p-5" aria-labelledby="user-filter-title">
+        <h3 id="user-filter-title" class="sr-only">Cari pengguna</h3>
+        <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_260px_auto] md:items-end">
             <div>
-                <p class="text-xs font-black uppercase tracking-[0.18em] text-brand-700">Pencarian</p>
-                <h3 id="user-filter-title" class="mt-1 text-xl font-black text-slate-900">Cari Pengguna</h3>
-                <p class="mt-1 text-sm text-slate-500">Cari berdasarkan nama, NIM/NIK, kode pengguna, fakultas, atau program studi.</p>
-            </div>
-            <button type="button" class="btn-secondary gap-2" data-user-filter-reset>
-                <i data-lucide="rotate-ccw" class="h-4 w-4"></i>
-                Reset Filter
-            </button>
-        </div>
-        <div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1.5fr)_minmax(180px,0.7fr)_minmax(220px,0.8fr)]">
-            <div>
-                <label for="user-search">Kata kunci</label>
-                <div class="relative">
-                    <i data-lucide="search" class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"></i>
-                    <input id="user-search" type="search" class="pl-11" placeholder="Contoh: Andi, NIM, atau kode pengguna" autocomplete="off" data-user-search>
-                </div>
-            </div>
-            <div>
-                <label for="user-role-filter">Role</label>
-                <select id="user-role-filter" data-user-role-filter>
-                    <option value="">Semua role</option>
-                    {% for group in grouped_users %}<option value="{{ group.role }}">{{ group.title }}</option>{% endfor %}
-                </select>
+                <label for="user-search">Cari pengguna</label>
+                <div class="relative"><i data-lucide="search" class="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"></i><input id="user-search" type="search" class="pl-12" placeholder="Cari nama, NIM/NIK, atau program studi" autocomplete="off" data-user-search></div>
             </div>
             <div>
                 <label for="user-prodi-filter">Program studi</label>
-                <select id="user-prodi-filter" data-user-prodi-filter>
-                    <option value="">Semua program studi</option>
-                    {% for prodi in prodi_options %}<option value="{{ prodi|lower }}">{{ prodi }}</option>{% endfor %}
-                </select>
+                <select id="user-prodi-filter" data-user-prodi-filter><option value="">Semua program studi</option>{% for prodi in prodi_options %}<option value="{{ prodi|lower }}">{{ prodi }}</option>{% endfor %}</select>
             </div>
+            <button type="button" class="btn-secondary justify-center gap-2" data-user-filter-reset><i data-lucide="rotate-ccw" class="h-4 w-4"></i><span>Reset</span></button>
         </div>
-        <p class="mt-4 text-sm font-semibold text-slate-500" data-user-result-summary aria-live="polite"></p>
     </section>
 
-    {% for group in grouped_users %}
-    <div class="surface-card overflow-hidden" data-user-group="{{ group.role }}">
-        <div class="border-b border-slate-200 bg-slate-50/80 px-5 py-4">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                    <h3 class="text-xl font-black text-slate-900">{{ group.title }}</h3>
-                    <p class="mt-1 text-sm text-slate-500"><span data-user-group-count>{{ group.count }}</span> akun ditampilkan.</p>
-                </div>
-                <span class="inline-flex rounded-full bg-brand-50 px-3 py-1 text-xs font-black text-brand-700">{{ group.title }}</span>
+    <div><h3 class="text-xl font-black text-slate-900 sm:text-2xl">Temukan Pengguna LabHub</h3><p class="mt-1 text-sm text-slate-500" data-user-result-summary aria-live="polite"></p></div>
+
+    <div class="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3 2xl:grid-cols-4" data-user-list>
+        {% for pengguna in pengguna_list %}
+        <article class="network-card flex flex-col" data-user-card data-prodi="{{ pengguna.prodi|lower }}" data-search="{{ pengguna.nama_pengguna|lower }} {{ pengguna.nim_nik|lower }} {{ pengguna.kode_pengguna|lower }} {{ pengguna.fakultas|lower }} {{ pengguna.prodi|lower }}">
+            <div class="network-cover relative overflow-hidden">
+                {% if pengguna.cover_image %}<img src="{{ pengguna.cover_image.url }}" alt="Sampul profil {{ pengguna.nama_pengguna }}" class="h-full w-full object-cover">{% endif %}
             </div>
-        </div>
-
-        <div class="grid gap-4 p-4 lg:grid-cols-2 2xl:grid-cols-3">
-            {% for pengguna in group.users %}
-            <article class="pengguna-card rounded-[24px] border p-4" data-user-card data-role="{{ pengguna.role }}" data-prodi="{{ pengguna.prodi|lower }}" data-search="{{ pengguna.nama_pengguna|lower }} {{ pengguna.nim_nik|lower }} {{ pengguna.kode_pengguna|lower }} {{ pengguna.fakultas|lower }} {{ pengguna.prodi|lower }}">
-                <div class="flex min-w-0 items-start gap-4">
-                    {% if pengguna.foto %}
-                    <img src="{{ pengguna.foto.url }}" alt="{{ pengguna.nama_pengguna }}" class="pengguna-avatar shrink-0 rounded-2xl object-cover ring-1 ring-slate-200">
-                    {% else %}
-                    <div class="pengguna-avatar pengguna-card-soft flex shrink-0 items-center justify-center rounded-2xl">
-                        <i data-lucide="user-round" class="h-5 w-5"></i>
-                    </div>
-                    {% endif %}
-
-                    <div class="min-w-0 flex-1">
-                        <div class="flex flex-wrap items-center gap-2">
-                            <h4 class="pengguna-card-title min-w-0 truncate text-lg font-black">{{ pengguna.nama_pengguna }}</h4>
-                            <span class="inline-flex shrink-0 rounded-full bg-brand-100 px-3 py-1 text-xs font-bold text-brand-800">
-                                {{ pengguna.get_role_display }}
-                            </span>
-                        </div>
-                        <div class="pengguna-card-muted mt-1 text-sm">{{ pengguna.kode_pengguna }} &middot; {{ pengguna.nim_nik }}</div>
-                        <div class="pengguna-card-muted mt-3 grid gap-2 text-sm">
-                            {% if can_view_private_contacts %}
-                            <div class="flex min-w-0 items-center gap-2">
-                                <i data-lucide="mail" class="pengguna-card-icon h-4 w-4 shrink-0"></i>
-                                <span class="min-w-0 truncate">{{ pengguna.email }}</span>
-                            </div>
-                            <div class="flex min-w-0 items-center gap-2">
-                                <i data-lucide="phone" class="pengguna-card-icon h-4 w-4 shrink-0"></i>
-                                <span class="min-w-0 truncate">{{ pengguna.no_hp }}</span>
-                            </div>
-                            {% endif %}
-                            <div class="flex min-w-0 items-center gap-2">
-                                <i data-lucide="school" class="pengguna-card-icon h-4 w-4 shrink-0"></i>
-                                <span class="min-w-0 truncate">{{ pengguna.fakultas }} / {{ pengguna.prodi }}</span>
-                            </div>
-                        </div>
-                    </div>
+            <div class="flex flex-1 flex-col px-3 pb-4 text-center sm:px-5 sm:pb-5">
+                {% if pengguna.foto %}<img src="{{ pengguna.foto.url }}" alt="{{ pengguna.nama_pengguna }}" class="network-avatar mx-auto shrink-0 rounded-full object-cover">{% else %}<div class="network-avatar mx-auto flex shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400"><i data-lucide="user-round" class="h-8 w-8"></i></div>{% endif %}
+                <h4 class="mt-3 line-clamp-2 text-base font-black leading-tight text-slate-900 sm:text-xl">{{ pengguna.nama_pengguna }}</h4>
+                <p class="mt-2 line-clamp-3 min-h-[3.75rem] text-xs leading-5 text-slate-500 sm:text-sm sm:leading-6">{% if pengguna.ringkasan_profesional %}{{ pengguna.ringkasan_profesional|truncatechars:100 }}{% elif pengguna.prodi %}{{ pengguna.prodi }} di Universitas Trisakti{% else %}Pengguna LabHub Universitas Trisakti{% endif %}</p>
+                <p class="mt-2 truncate text-[11px] font-semibold text-slate-400 sm:text-xs">{{ pengguna.kode_pengguna }} · {{ pengguna.nim_nik }}{% if pengguna.prodi %} · {{ pengguna.prodi }}{% endif %}</p>
+                <div class="mt-3 flex items-center justify-center gap-2 text-[11px] font-semibold text-slate-500 sm:text-xs">
+                    <i data-lucide="users" class="h-3.5 w-3.5"></i>
+                    <span data-follower-count>{{ pengguna.jumlah_pengikut }}</span> pengikut
                 </div>
-
-                <div class="pengguna-actions mt-4 flex flex-wrap gap-3 text-sm font-semibold">
-                    <a class="inline-flex items-center gap-1 text-brand-700 hover:text-brand-800" href="{% url 'pengguna:detail' pengguna.pk %}">
-                        <i data-lucide="eye" class="h-4 w-4"></i>
-                        <span>Detail</span>
-                    </a>
-                    {% if can_manage_users %}
-                    <a class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700" href="{% url 'pengguna:update' pengguna.pk %}">
-                        <i data-lucide="pencil" class="h-4 w-4"></i>
-                        <span>Edit</span>
-                    </a>
-                    <form method="post" action="{% url 'pengguna:delete' pengguna.pk %}" data-confirm-message="Yakin ingin menghapus pengguna {{ pengguna.nama_pengguna }}?" class="inline">
+                <div class="mt-auto pt-4">
+                    <form method="post" action="{% url 'pengguna:toggle_connection' pengguna.pk %}" data-connect-form>
                         {% csrf_token %}
-                        <button type="submit" class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700">
-                            <i data-lucide="trash-2" class="h-4 w-4"></i>
-                            <span>Hapus</span>
+                        <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-full border-2 border-brand-600 px-3 py-2 text-xs font-black text-brand-700 transition hover:bg-brand-50 disabled:cursor-wait disabled:opacity-60 sm:text-sm" data-connect-button data-connected="{% if pengguna.is_connected %}true{% else %}false{% endif %}">
+                            <i data-lucide="{% if pengguna.is_connected %}user-check{% else %}user-plus{% endif %}" class="h-4 w-4"></i>
+                            <span>{% if pengguna.is_connected %}Terhubung{% else %}Hubungkan{% endif %}</span>
                         </button>
                     </form>
-                    {% endif %}
+                    <a class="mt-2 inline-flex w-full items-center justify-center px-3 py-1.5 text-xs font-bold text-slate-500 transition hover:text-brand-700" href="{% url 'pengguna:detail' pengguna.pk %}">Lihat profil</a>
+                    {% if can_manage_users %}<div class="mt-3 flex items-center justify-center gap-4 text-xs font-bold"><a class="inline-flex items-center gap-1 text-amber-600" href="{% url 'pengguna:update' pengguna.pk %}"><i data-lucide="pencil" class="h-3.5 w-3.5"></i>Edit</a><form method="post" action="{% url 'pengguna:delete' pengguna.pk %}" data-confirm-message="Yakin ingin menghapus pengguna {{ pengguna.nama_pengguna }}?">{% csrf_token %}<button type="submit" class="inline-flex items-center gap-1 text-rose-600"><i data-lucide="trash-2" class="h-3.5 w-3.5"></i>Hapus</button></form></div>{% endif %}
                 </div>
-            </article>
-            {% empty %}
-            <div class="rounded-[24px] border border-dashed border-slate-200 bg-white p-8 text-center text-sm text-slate-500 lg:col-span-2 2xl:col-span-3">
-                Belum ada akun {{ group.title|lower }}.
             </div>
-            {% endfor %}
-        </div>
+        </article>
+        {% empty %}<div class="surface-card col-span-full p-10 text-center text-slate-500">Belum ada data pengguna.</div>{% endfor %}
     </div>
-    {% empty %}
-    <div class="surface-card p-10 text-center text-slate-500">
-        Belum ada data pengguna.
-    </div>
-    {% endfor %}
-    <div class="surface-card hidden p-10 text-center" data-user-empty>
-        <span class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400"><i data-lucide="user-search" class="h-6 w-6"></i></span>
-        <h3 class="mt-4 text-lg font-black text-slate-900">Pengguna tidak ditemukan</h3>
-        <p class="mt-2 text-sm text-slate-500">Coba ubah kata kunci atau reset filter yang aktif.</p>
-    </div>
+
+    <div class="surface-card hidden p-10 text-center" data-user-empty><span class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400"><i data-lucide="user-search" class="h-6 w-6"></i></span><h3 class="mt-4 text-lg font-black text-slate-900">Pengguna tidak ditemukan</h3><p class="mt-2 text-sm text-slate-500">Coba ubah kata kunci atau reset filter yang aktif.</p></div>
 </section>
 {% endblock %}
 
 {% block extra_script %}
 {% include "components/confirmation_modal.html" with title="Konfirmasi Hapus Pengguna" confirm_label="Lanjutkan" confirm_icon="arrow-right" %}
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const searchInput = document.querySelector('[data-user-search]');
-        const roleFilter = document.querySelector('[data-user-role-filter]');
-        const prodiFilter = document.querySelector('[data-user-prodi-filter]');
-        const resetButton = document.querySelector('[data-user-filter-reset]');
-        const cards = Array.from(document.querySelectorAll('[data-user-card]'));
-        const groups = Array.from(document.querySelectorAll('[data-user-group]'));
-        const emptyState = document.querySelector('[data-user-empty]');
-        const resultSummary = document.querySelector('[data-user-result-summary]');
-
-        function normalize(value) {
-            return (value || '').toLocaleLowerCase('id-ID').trim();
-        }
-
-        function applyUserFilters() {
-            const query = normalize(searchInput.value);
-            const selectedRole = roleFilter.value;
-            const selectedProdi = normalize(prodiFilter.value);
-            let totalVisible = 0;
-
-            cards.forEach(function (card) {
-                const matchesSearch = !query || normalize(card.dataset.search).includes(query);
-                const matchesRole = !selectedRole || card.dataset.role === selectedRole;
-                const matchesProdi = !selectedProdi || normalize(card.dataset.prodi) === selectedProdi;
-                const visible = matchesSearch && matchesRole && matchesProdi;
-                card.classList.toggle('hidden', !visible);
-                if (visible) totalVisible += 1;
-            });
-
-            groups.forEach(function (group) {
-                const visibleCards = group.querySelectorAll('[data-user-card]:not(.hidden)').length;
-                group.classList.toggle('hidden', visibleCards === 0);
-                const count = group.querySelector('[data-user-group-count]');
-                if (count) count.textContent = visibleCards;
-            });
-
-            document.querySelectorAll('[data-user-summary]').forEach(function (summary) {
-                const role = summary.dataset.userSummary;
-                const visibleCount = cards.filter(function (card) {
-                    return card.dataset.role === role && !card.classList.contains('hidden');
-                }).length;
-                summary.classList.toggle('hidden', Boolean(selectedRole) && role !== selectedRole);
-                const count = summary.querySelector('[data-user-summary-count]');
-                if (count) count.textContent = visibleCount;
-            });
-
-            emptyState.classList.toggle('hidden', totalVisible !== 0);
-            resultSummary.textContent = totalVisible + ' pengguna ditemukan.';
-        }
-
-        [searchInput, roleFilter, prodiFilter].forEach(function (control) {
-            control.addEventListener('input', applyUserFilters);
-            control.addEventListener('change', applyUserFilters);
+document.addEventListener('DOMContentLoaded', function () {
+    const searchInput = document.querySelector('[data-user-search]');
+    const prodiFilter = document.querySelector('[data-user-prodi-filter]');
+    const resetButton = document.querySelector('[data-user-filter-reset]');
+    const cards = Array.from(document.querySelectorAll('[data-user-card]'));
+    const emptyState = document.querySelector('[data-user-empty]');
+    const resultSummary = document.querySelector('[data-user-result-summary]');
+    function normalize(value) { return (value || '').toLocaleLowerCase('id-ID').trim(); }
+    function applyUserFilters() {
+        const query = normalize(searchInput.value);
+        const selectedProdi = normalize(prodiFilter.value);
+        let totalVisible = 0;
+        cards.forEach(function (card) {
+            const visible = (!query || normalize(card.dataset.search).includes(query)) && (!selectedProdi || normalize(card.dataset.prodi) === selectedProdi);
+            card.classList.toggle('hidden', !visible);
+            if (visible) totalVisible += 1;
         });
-        resetButton.addEventListener('click', function () {
-            searchInput.value = '';
-            roleFilter.value = '';
-            prodiFilter.value = '';
-            applyUserFilters();
-            searchInput.focus();
+        emptyState.classList.toggle('hidden', totalVisible !== 0);
+        resultSummary.textContent = totalVisible + ' pengguna ditemukan.';
+    }
+    [searchInput, prodiFilter].forEach(function (control) { control.addEventListener('input', applyUserFilters); control.addEventListener('change', applyUserFilters); });
+    resetButton.addEventListener('click', function () { searchInput.value = ''; prodiFilter.value = ''; applyUserFilters(); searchInput.focus(); });
+    applyUserFilters();
+
+    document.querySelectorAll('[data-connect-form]').forEach(function (form) {
+        form.addEventListener('submit', async function (event) {
+            event.preventDefault();
+            const button = form.querySelector('[data-connect-button]');
+            button.disabled = true;
+            try {
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    headers: {'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json'},
+                    body: new FormData(form),
+                    credentials: 'same-origin'
+                });
+                const payload = await response.json();
+                if (!response.ok || !payload.ok) throw new Error(payload.message || 'Koneksi belum dapat diperbarui.');
+                button.dataset.connected = payload.connected ? 'true' : 'false';
+                button.querySelector('span').textContent = payload.connected ? 'Terhubung' : 'Hubungkan';
+                const icon = button.querySelector('svg');
+                if (icon) icon.setAttribute('data-lucide', payload.connected ? 'user-check' : 'user-plus');
+                const card = form.closest('[data-user-card]');
+                const count = card ? card.querySelector('[data-follower-count]') : null;
+                if (count) count.textContent = payload.follower_count;
+                if (window.lucide) window.lucide.createIcons();
+            } catch (error) {
+                window.alert(error.message);
+            } finally {
+                button.disabled = false;
+            }
         });
-        applyUserFilters();
     });
+});
 </script>
 {% endblock %}

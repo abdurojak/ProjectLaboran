@@ -1,4 +1,6 @@
 from datetime import date, time
+from io import BytesIO
+import zipfile
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
@@ -87,6 +89,21 @@ class JadwalViewTests(TestCase):
         self.assertContains(response, 'Senin')
         self.assertContains(response, 'Sabtu')
         self.assertNotContains(response, 'Minggu')
+        self.assertContains(response, 'Ekspor Jadwal')
+
+    def test_export_jadwal_excel_memuat_jadwal_mingguan(self):
+        response = self.client.get(reverse('jadwal:jadwal_export_excel'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response['Content-Type'],
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        with zipfile.ZipFile(BytesIO(response.content)) as workbook:
+            worksheet = workbook.read('xl/worksheets/sheet1.xml').decode()
+        self.assertIn('Praktikum Basis Data', worksheet)
+        self.assertIn('Kamis', worksheet)
+        self.assertIn('Lab Rekayasa Data', worksheet)
 
     def test_event_lab_only_appears_on_selected_date_without_changing_recurring_schedule(self):
         event = KegiatanKalender.objects.create(

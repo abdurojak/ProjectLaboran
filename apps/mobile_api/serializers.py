@@ -6,7 +6,7 @@ from PIL import Image, UnidentifiedImageError
 from mutagen.mp4 import MP4, MP4StreamInfoError
 from rest_framework import serializers
 
-from apps.asleb.models import AbsensiMasukAsleb
+from apps.asleb.models import AbsensiAsleb, AbsensiMasukAsleb
 from apps.jadwal.models import JadwalPraktikum
 from apps.inventaris.models import Lokasi
 from apps.barang_tertinggal.models import BarangTertinggal
@@ -120,6 +120,7 @@ class ScheduleSerializer(serializers.ModelSerializer):
 
 
 class AttendanceSerializer(serializers.ModelSerializer):
+    source = serializers.SerializerMethodField()
     mata_kuliah = serializers.SerializerMethodField()
     kelas = serializers.SerializerMethodField()
     laboratorium = serializers.SerializerMethodField()
@@ -136,8 +137,11 @@ class AttendanceSerializer(serializers.ModelSerializer):
             'id', 'tanggal_absensi', 'waktu_masuk', 'mata_kuliah', 'kelas',
             'laboratorium', 'status', 'status_display', 'latitude', 'longitude',
             'jarak_lokasi_meter', 'akurasi_gps_meter', 'foto_url', 'video_url',
-            'modul_praktikum_id', 'modul_nomor', 'modul_judul',
+            'modul_praktikum_id', 'modul_nomor', 'modul_judul', 'source',
         ]
+
+    def get_source(self, obj):
+        return 'aplikasi'
 
     def get_laboratorium(self, obj):
         return obj.jadwal.get_display_ruangan_nama() if obj.jadwal_id else 'Jadwal sudah dihapus'
@@ -153,6 +157,63 @@ class AttendanceSerializer(serializers.ModelSerializer):
 
     def get_video_url(self, obj):
         return absolute_file_url(self.context['request'], obj.video_absensi)
+
+
+class WebAttendanceHistorySerializer(serializers.ModelSerializer):
+    tanggal_absensi = serializers.DateField(source='tanggal_praktikum', read_only=True)
+    waktu_masuk = serializers.DateTimeField(source='dibuat_pada', read_only=True)
+    mata_kuliah = serializers.SerializerMethodField()
+    kelas = serializers.SerializerMethodField()
+    laboratorium = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+    status_display = serializers.SerializerMethodField()
+    akurasi_gps_meter = serializers.SerializerMethodField()
+    foto_url = serializers.SerializerMethodField()
+    video_url = serializers.SerializerMethodField()
+    source = serializers.SerializerMethodField()
+    modul_praktikum_id = serializers.IntegerField(read_only=True)
+    modul_nomor = serializers.IntegerField(source='modul_praktikum.nomor', read_only=True)
+    modul_judul = serializers.CharField(source='modul_praktikum.judul', read_only=True)
+
+    class Meta:
+        model = AbsensiAsleb
+        fields = [
+            'id', 'tanggal_absensi', 'waktu_masuk', 'mata_kuliah', 'kelas',
+            'laboratorium', 'status', 'status_display', 'latitude', 'longitude',
+            'jarak_lokasi_meter', 'akurasi_gps_meter', 'foto_url', 'video_url',
+            'modul_praktikum_id', 'modul_nomor', 'modul_judul', 'source',
+        ]
+
+    def get_mata_kuliah(self, obj):
+        if obj.jadwal_id:
+            return obj.jadwal.mata_kuliah
+        if obj.modul_praktikum_id:
+            return obj.modul_praktikum.matkul.nama
+        return obj.materi_praktikum or f'Modul {obj.modul}'
+
+    def get_kelas(self, obj):
+        return obj.jadwal.kelas if obj.jadwal_id else '-'
+
+    def get_laboratorium(self, obj):
+        return obj.jadwal.get_display_ruangan_nama() if obj.jadwal_id else 'Jadwal sudah dihapus'
+
+    def get_status(self, obj):
+        return AbsensiMasukAsleb.STATUS_SUDAH_ABSEN
+
+    def get_status_display(self, obj):
+        return 'Sudah Absen'
+
+    def get_akurasi_gps_meter(self, obj):
+        return None
+
+    def get_foto_url(self, obj):
+        return absolute_file_url(self.context['request'], obj.bukti_foto)
+
+    def get_video_url(self, obj):
+        return absolute_file_url(self.context['request'], obj.bukti_video)
+
+    def get_source(self, obj):
+        return 'web'
 
 
 class CheckInSerializer(serializers.Serializer):

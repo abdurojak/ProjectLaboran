@@ -1,6 +1,6 @@
 import shutil
 import tempfile
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from io import BytesIO
 from unittest.mock import patch
 
@@ -16,6 +16,7 @@ from apps.asleb.models import (
     AbsensiMasukAsleb,
     Asleb,
     HonorAsleb,
+    IzinAbsensiManualAsleb,
     ModulPraktikum,
     PengaturanAbsensiAsleb,
 )
@@ -142,6 +143,15 @@ class MobileAbsensiApiTests(TestCase):
         }
         payload.update(overrides)
         return payload
+
+    @override_settings(MOBILE_APK_VERSION='1.0.5', MOBILE_APK_MIN_BUILD=6)
+    def test_konfigurasi_versi_aplikasi_dapat_diakses_tanpa_login(self):
+        response = self.client.get(reverse('mobile_api:app_version'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['latest_version'], '1.0.5')
+        self.assertEqual(response.data['minimum_build'], 6)
+        self.assertIn(reverse('dashboard:android_app_download'), response.data['download_url'])
 
     def test_laboran_dapat_input_barang_hilang_dari_mobile(self):
         self.authenticate_laboran()
@@ -742,12 +752,89 @@ class MobileAbsensiApiTests(TestCase):
             reverse('mobile_api:check_in'), self.check_in_payload(), format='multipart'
         )
 
-        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertEqual(response.data['code'], 'duplicate_attendance')
+        self.assertIn('melalui web', response.data['detail'])
+        self.assertFalse(AbsensiMasukAsleb.objects.exists())
         honor = HonorAsleb.objects.get(
             asleb=self.asleb,
             bulan=timezone.localdate().replace(day=1),
         )
         self.assertEqual(honor.total_pertemuan, 1)
+
+    @patch('apps.mobile_api.views.validate_schedule_time', return_value=(False, 'Bukan hari jadwal.', None))
+    def test_izin_susulan_web_dapat_dipakai_sekali_melalui_mobile(self, _mock_time):
+        attendance_date = date(2030, 1, 7)
+        permission = IzinAbsensiManualAsleb.objects.create(
+            asleb=self.asleb,
+            jadwal=self.schedule,
+            tanggal_praktikum=attendance_date,
+            berlaku_sampai=timezone.now() + timedelta(hours=2),
+            alasan='Aslab terlambat melakukan absensi.',
+            dibuka_oleh=self.laboran,
+        )
+        PengaturanAbsensiAsleb.objects.filter(pk=1).update(dibuka=False)
+        self.authenticate()
+
+        detail = self.client.get(reverse('mobile_api:schedule_detail', args=[self.schedule.pk]))
+        self.assertEqual(detail.status_code, 200)
+        self.assertTrue(detail.data['can_check_in'])
+        self.assertIn('susulan resmi', detail.data['check_in_message'])
+
+        response = self.client.post(
+            reverse('mobile_api:check_in'), self.check_in_payload(), format='multipart'
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        attendance = AbsensiMasukAsleb.objects.get()
+        self.assertEqual(attendance.tanggal_absensi, attendance_date)
+        permission.refresh_from_db()
+        self.assertIsNotNone(permission.digunakan_pada)
+
+        duplicate = self.client.post(
+            reverse('mobile_api:check_in'), self.check_in_payload(), format='multipart'
+        )
+        self.assertEqual(duplicate.status_code, 400)
+        self.assertEqual(AbsensiMasukAsleb.objects.count(), 1)
+
+    def test_riwayat_aplikasi_memuat_absensi_dari_web_dan_mobile(self):
+        web_attendance = AbsensiAsleb.objects.create(
+            asleb=self.asleb,
+            jadwal=self.schedule,
+            tanggal_praktikum=timezone.localdate(),
+            modul=1,
+            materi_praktikum='Materi dari web',
+            file_modul='absensi_asleb/modul/riwayat-web.pdf',
+            bukti_foto=valid_photo('riwayat-web.png'),
+            bukti_video='absensi_asleb/video/riwayat-web.mp4',
+        )
+        other_schedule = JadwalPraktikum.objects.create(
+            mata_kuliah=self.schedule.mata_kuliah,
+            kelas='IF-02',
+            ruangan=self.room,
+            pengampu='Dosen',
+            hari=self.schedule.hari,
+            waktu_mulai=time(10),
+            waktu_selesai=time(12),
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+        mobile_attendance = AbsensiMasukAsleb.objects.create(
+            asleb=self.asleb,
+            jadwal=other_schedule,
+            tanggal_absensi=timezone.localdate(),
+            foto_absensi=valid_photo('riwayat-mobile.png'),
+        )
+
+        self.authenticate()
+        response = self.client.get(reverse('mobile_api:attendance_history'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data['results']), 2)
+        by_source = {item['source']: item for item in response.data['results']}
+        self.assertEqual(by_source['web']['id'], web_attendance.pk)
+        self.assertEqual(by_source['web']['mata_kuliah'], self.schedule.mata_kuliah)
+        self.assertIn('/api/mobile/v1/media/', by_source['web']['foto_url'])
+        self.assertEqual(by_source['aplikasi']['id'], mobile_attendance.pk)
 
     @patch('apps.mobile_api.views.validate_schedule_time', return_value=(True, '', 'sudah_absen'))
     def test_jadwal_orang_lain_tidak_dapat_diabsen(self, _mock_time):

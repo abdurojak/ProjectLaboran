@@ -368,6 +368,48 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertRedirects(response, reverse('pendaftaran_asleb:pendaftaran_list'))
         self.assertFalse(PengaturanPendaftaranAsleb.get_solo().dibuka)
 
+    def test_jadwal_otomatis_mengaktifkan_status_dan_mempertahankan_tanggal(self):
+        today = timezone.localdate()
+        period = PeriodeAsleb.get_for_date(today)
+        start = today + timedelta(days=2)
+        end = today + timedelta(days=10)
+
+        response = self.client.post(
+            reverse('pendaftaran_asleb:periode_schedule_update', args=[period.pk]),
+            {
+                'pendaftaran_mulai': start.isoformat(),
+                'pendaftaran_selesai': end.isoformat(),
+            },
+        )
+
+        self.assertRedirects(response, reverse('pendaftaran_asleb:pendaftaran_list'))
+        period.refresh_from_db()
+        self.assertEqual(period.pendaftaran_mulai, start)
+        self.assertEqual(period.pendaftaran_selesai, end)
+        self.assertTrue(PengaturanPendaftaranAsleb.get_solo().dibuka)
+        self.assertFalse(is_registration_open())
+
+        page = self.client.get(reverse('pendaftaran_asleb:pendaftaran_list'))
+        self.assertContains(page, 'Status: Dijadwalkan')
+        self.assertContains(page, 'Batalkan Jadwal')
+        self.assertNotContains(page, 'Buka Pendaftaran 30 Hari')
+
+    def test_toggle_pada_jadwal_masa_depan_membatalkan_bukan_membuka_sekarang(self):
+        today = timezone.localdate()
+        period = PeriodeAsleb.get_for_date(today)
+        period.pendaftaran_mulai = today + timedelta(days=2)
+        period.pendaftaran_selesai = today + timedelta(days=10)
+        period.save(update_fields=['pendaftaran_mulai', 'pendaftaran_selesai', 'diperbarui_pada'])
+        PengaturanPendaftaranAsleb.objects.filter(pk=1).update(dibuka=True)
+
+        response = self.client.post(reverse('pendaftaran_asleb:pendaftaran_toggle_status'))
+
+        self.assertRedirects(response, reverse('pendaftaran_asleb:pendaftaran_list'))
+        period.refresh_from_db()
+        self.assertFalse(PengaturanPendaftaranAsleb.get_solo().dibuka)
+        self.assertLess(period.pendaftaran_selesai, today)
+        self.assertFalse(is_registration_open())
+
     @patch('apps.pendaftaran_asleb.views.send_branded_email', return_value=1)
     def test_email_pembukaan_memuat_batas_matkul_yang_benar(self, send_email):
         Pengguna.objects.create(

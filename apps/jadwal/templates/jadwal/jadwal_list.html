@@ -145,12 +145,18 @@
             <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Jadwal Praktikum</h2>
             <p class="mt-2 text-sm text-slate-500">Pilih hari untuk melihat pemakaian ruangan praktikum berdasarkan rentang waktu.</p>
         </div>
+        <div class="flex w-full flex-wrap gap-3 sm:w-auto">
+        <a class="btn-secondary flex-1 justify-center gap-2 sm:flex-none" href="{% url 'jadwal:jadwal_export_excel' %}" data-no-global-loading="true" data-no-page-transition="true">
+            <i data-lucide="file-spreadsheet" class="h-4 w-4 text-emerald-700"></i>
+            <span>Ekspor Jadwal</span>
+        </a>
         {% if current_pengguna.role == 'asisten_lab' %}
-        <a class="btn-primary bg-blue-700 hover:bg-blue-800 shadow-blue-900/15" href="{% url 'jadwal:jadwal_create' %}">
+        <a class="btn-primary flex-1 justify-center bg-blue-700 hover:bg-blue-800 shadow-blue-900/15 sm:flex-none" href="{% url 'jadwal:jadwal_create' %}">
             <i data-lucide="plus" class="h-4 w-4"></i>
             <span>Tambah Jadwal</span>
         </a>
         {% endif %}
+        </div>
     </div>
 
     <div class="flex flex-wrap gap-2">

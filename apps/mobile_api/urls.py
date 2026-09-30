@@ -2,6 +2,7 @@ from django.urls import path
 
 from .views import (
     AttendanceHistoryView,
+    AppVersionView,
     AslebAdminChatView,
     ChatbotView,
     CheckInView,
@@ -27,6 +28,7 @@ from .views import (
 app_name = 'mobile_api'
 
 urlpatterns = [
+    path('app/version/', AppVersionView.as_view(), name='app_version'),
     path('auth/login/', LoginView.as_view(), name='login'),
     path('auth/refresh/', RefreshTokenView.as_view(), name='refresh'),
     path('auth/logout/', LogoutView.as_view(), name='logout'),

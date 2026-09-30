@@ -256,8 +256,8 @@
                     </p>
                 </div>
             </div>
-            <div class="mt-5 inline-flex rounded-full px-4 py-2 text-sm font-bold {% if pendaftaran_dibuka %}bg-emerald-100 text-emerald-700{% else %}bg-slate-100 text-slate-600{% endif %}">
-                {% if pendaftaran_dibuka %}Status: Dibuka{% else %}Status: Ditutup Otomatis{% endif %}
+            <div class="mt-5 inline-flex rounded-full px-4 py-2 text-sm font-bold {% if pendaftaran_dibuka %}bg-emerald-100 text-emerald-700{% elif pendaftaran_dijadwalkan %}bg-blue-100 text-blue-700{% else %}bg-slate-100 text-slate-600{% endif %}">
+                {% if pendaftaran_dibuka %}Status: Dibuka sampai {{ periode_aktif.pendaftaran_selesai|date:"d M Y" }}{% elif pendaftaran_dijadwalkan %}Status: Dijadwalkan {{ periode_aktif.pendaftaran_mulai|date:"d M Y" }} - {{ periode_aktif.pendaftaran_selesai|date:"d M Y" }}{% else %}Status: Ditutup{% endif %}
             </div>
             {% if pendaftaran_dibuka %}
             <details class="group mt-5">
@@ -291,9 +291,9 @@
             <input id="public-registration-url" class="registration-admin-copy-input" type="text" value="{{ public_registration_url }}" readonly>
             <form method="post" action="{% url 'pendaftaran_asleb:pendaftaran_toggle_status' %}" class="mt-4">
                 {% csrf_token %}
-                <button type="submit" class="{% if pendaftaran_dibuka %}border-rose-200 text-rose-700 hover:bg-rose-50{% else %}border-emerald-200 text-emerald-700 hover:bg-emerald-50{% endif %} inline-flex items-center gap-2 rounded-2xl border bg-white px-4 py-3 text-sm font-bold transition">
-                    <i data-lucide="{% if pendaftaran_dibuka %}lock{% else %}unlock{% endif %}" class="h-4 w-4"></i>
-                    <span>{% if pendaftaran_dibuka %}Tutup Sekarang{% else %}Buka Pendaftaran 30 Hari{% endif %}</span>
+                <button type="submit" class="{% if pendaftaran_diaktifkan %}border-rose-200 text-rose-700 hover:bg-rose-50{% else %}border-emerald-200 text-emerald-700 hover:bg-emerald-50{% endif %} inline-flex items-center gap-2 rounded-2xl border bg-white px-4 py-3 text-sm font-bold transition">
+                    <i data-lucide="{% if pendaftaran_diaktifkan %}lock{% else %}unlock{% endif %}" class="h-4 w-4"></i>
+                    <span>{% if pendaftaran_dibuka %}Tutup Sekarang{% elif pendaftaran_dijadwalkan %}Batalkan Jadwal {{ periode_aktif.pendaftaran_mulai|date:"d M" }}–{{ periode_aktif.pendaftaran_selesai|date:"d M Y" }}{% else %}Aktifkan Jadwal Pendaftaran{% endif %}</span>
                 </button>
             </form>
             <details class="group mt-5 overflow-hidden rounded-3xl border border-slate-200 bg-slate-50/70">

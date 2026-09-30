@@ -368,8 +368,10 @@ class PenggunaLoginRequiredMiddleware:
         if path in self.MAHASISWA_ALLOWED_PENGGUNA_PATHS:
             return True
 
+        if resolved.url_name in {'list', 'detail'}:
+            return True
+
         return resolved.url_name in {
-            'detail',
             'update_profile',
             'change_password',
             'experience_create',
@@ -382,8 +384,10 @@ class PenggunaLoginRequiredMiddleware:
         if path in self.MAHASISWA_ALLOWED_PENGGUNA_PATHS:
             return True
 
+        if resolved.url_name in {'list', 'detail'}:
+            return True
+
         return resolved.url_name in {
-            'detail',
             'update_profile',
             'change_password',
             'experience_create',

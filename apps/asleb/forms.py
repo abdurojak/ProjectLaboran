@@ -328,6 +328,16 @@ class AbsensiAslebForm(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
         attendance_date = self.attendance_date
+
+        if AbsensiMasukAsleb.objects.filter(
+            asleb=self.asleb,
+            jadwal=self.jadwal,
+            tanggal_absensi=attendance_date,
+        ).exists():
+            raise forms.ValidationError(
+                'Anda sudah melakukan absensi untuk jadwal ini melalui aplikasi mobile.'
+            )
+
         latitude = self._read_decimal(cleaned_data.get('latitude'))
         longitude = self._read_decimal(cleaned_data.get('longitude'))
         accuracy = self._read_float(cleaned_data.get('gps_accuracy'))

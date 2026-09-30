@@ -181,6 +181,28 @@ class AslebViewTests(TestCase):
         self.assertEqual(self.asleb.level_manual, '')
         self.assertEqual(self.asleb.level_efektif, self.asleb.level_otomatis)
 
+    def test_perubahan_level_menghitung_ulang_honor_aktif_untuk_web_dan_api(self):
+        honor = HonorAsleb.objects.create(
+            asleb=self.asleb,
+            bulan=date(2026, 9, 1),
+            jumlah=Decimal('0'),
+            total_pertemuan=3,
+            metode_transfer='bank_lain',
+            status='diproses',
+        )
+        self.assertEqual(honor.honor_sebelum_potongan, Decimal('147000'))
+
+        response = self.client.post(
+            reverse('asleb:asleb_update_level', args=[self.asleb.pk]),
+            {'level_mode': 'manual', 'level_manual': 'senior'},
+        )
+
+        self.assertRedirects(response, reverse('asleb:asleb_detail', args=[self.asleb.pk]))
+        honor.refresh_from_db()
+        self.assertEqual(honor.level, 'senior')
+        self.assertEqual(honor.honor_sebelum_potongan, Decimal('168000'))
+        self.assertEqual(honor.jumlah, Decimal('165500'))
+
     def test_non_laboran_cannot_change_manual_aslab_level(self):
         self.pengguna.role = 'admin'
         self.pengguna.save(update_fields=['role'])
@@ -377,6 +399,94 @@ class AslebViewTests(TestCase):
         self.assertContains(response, 'Pilih Foto dari Galeri')
         self.assertContains(response, 'Pilih Video dari Galeri')
         self.assertContains(response, 'data-camera-capture')
+
+    def test_absensi_web_ditolak_jika_jadwal_sudah_diabsen_melalui_mobile(self):
+        jadwal = self.create_active_schedule()
+        modul = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=10,
+            judul='Modul Lintas Platform',
+            file=SimpleUploadedFile('modul-10.pdf', b'%PDF-1.4', content_type='application/pdf'),
+        )
+        AbsensiMasukAsleb.objects.create(
+            asleb=self.asleb,
+            jadwal=jadwal,
+            tanggal_absensi=timezone.localdate(),
+            foto_absensi=self.make_camera_photo('foto-mobile.png'),
+        )
+
+        form = AbsensiAslebForm(
+            data={
+                'modul_praktikum': modul.pk,
+                'pekerjaan': 'Membantu praktikum',
+            },
+            files={
+                'bukti_foto': self.make_camera_photo('foto-web.png'),
+                'bukti_video': SimpleUploadedFile('video-web.mp4', b'video', content_type='video/mp4'),
+            },
+            asleb=self.asleb,
+            jadwal=jadwal,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('sudah melakukan absensi', str(form.non_field_errors()))
+        self.assertFalse(AbsensiAsleb.objects.filter(asleb=self.asleb, jadwal=jadwal).exists())
+
+    def test_laboran_dapat_menghapus_absensi_web_dan_honor_dihitung_ulang(self):
+        jadwal = self.create_active_schedule()
+        attendance = AbsensiAsleb.objects.create(
+            asleb=self.asleb,
+            jadwal=jadwal,
+            tanggal_praktikum=timezone.localdate(),
+            modul=1,
+            materi_praktikum='Bukti tidak jelas',
+            bukti_foto=self.make_camera_photo('hapus-web.png'),
+        )
+        from .views import sync_honor_from_absensi
+        sync_honor_from_absensi(attendance)
+
+        response = self.client.post(reverse('asleb:absensi_web_delete', args=[attendance.pk]))
+
+        self.assertRedirects(response, reverse('asleb:absensi_list'))
+        self.assertFalse(AbsensiAsleb.objects.filter(pk=attendance.pk).exists())
+        honor = HonorAsleb.objects.get(asleb=self.asleb, bulan=timezone.localdate().replace(day=1))
+        self.assertEqual(honor.total_pertemuan, 0)
+
+    def test_laboran_dapat_menghapus_absensi_mobile_dan_honor_dihitung_ulang(self):
+        attendance = AbsensiMasukAsleb.objects.create(
+            asleb=self.asleb,
+            jadwal=self.create_active_schedule(),
+            tanggal_absensi=timezone.localdate(),
+            foto_absensi=self.make_camera_photo('hapus-mobile.png'),
+        )
+        from .views import sync_honor_from_mobile_absensi
+        sync_honor_from_mobile_absensi(attendance)
+
+        response = self.client.post(reverse('asleb:absensi_mobile_delete', args=[attendance.pk]))
+
+        self.assertRedirects(response, reverse('asleb:absensi_list'))
+        self.assertFalse(AbsensiMasukAsleb.objects.filter(pk=attendance.pk).exists())
+        honor = HonorAsleb.objects.get(asleb=self.asleb, bulan=timezone.localdate().replace(day=1))
+        self.assertEqual(honor.total_pertemuan, 0)
+
+    def test_hapus_absensi_ajax_mengembalikan_json_tanpa_redirect(self):
+        attendance = AbsensiAsleb.objects.create(
+            asleb=self.asleb,
+            jadwal=self.create_active_schedule(),
+            tanggal_praktikum=timezone.localdate(),
+            modul=1,
+            materi_praktikum='Bukti tidak jelas',
+        )
+
+        response = self.client.post(
+            reverse('asleb:absensi_web_delete', args=[attendance.pk]),
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+            HTTP_ACCEPT='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['success'])
+        self.assertFalse(AbsensiAsleb.objects.filter(pk=attendance.pk).exists())
 
     def test_daftar_absensi_aman_jika_bukti_video_kosong(self):
         modul = ModulPraktikum.objects.create(
@@ -1578,6 +1688,23 @@ class AslebViewTests(TestCase):
         self.assertFalse(PesertaPraktikum.objects.filter(pk=peserta_tanpa_nilai.pk).exists())
         self.assertTrue(HasilPraktikumMahasiswa.objects.filter(peserta=peserta_dengan_nilai).exists())
 
+    def test_hapus_semua_peserta_ajax_memberi_respons_json(self):
+        self.login_asisten_for_matkul()
+        peserta = PesertaPraktikum.objects.create(
+            matkul=self.matkul, nim='0640020101', nama='Mahasiswa AJAX'
+        )
+
+        response = self.client.post(
+            reverse('asleb:praktikum_peserta_delete_all', args=[self.matkul.pk]),
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+            HTTP_ACCEPT='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['ok'])
+        self.assertTrue(response.json()['deleted_all'])
+        self.assertFalse(PesertaPraktikum.objects.filter(pk=peserta.pk).exists())
+
     def test_input_nilai_menghitung_rata_rata_realtime_dan_laporan(self):
         peserta = PesertaPraktikum.objects.create(matkul=self.matkul, nim='0640020099', nama='Mahasiswa Nilai')
         modul = ModulPraktikum.objects.create(
@@ -2082,6 +2209,100 @@ class AslebViewTests(TestCase):
         self.assertEqual(active_links, ['Asisten Laboratorium'])
         asleb_group = next(link for link in response.context['sidebar_links'] if link['title'] == 'Asisten Laboratorium')
         self.assertEqual([child['title'] for child in asleb_group['children'] if child['active']], ['Rekap Honorarium'])
+
+    def test_asisten_lab_melihat_menu_rekap_honorarium_pribadi(self):
+        self.login_asisten_for_matkul()
+
+        response = self.client.get(reverse('asleb:honor_list'))
+
+        self.assertEqual(response.status_code, 200)
+        asleb_group = next(
+            link for link in response.context['sidebar_links']
+            if link['title'] == 'Asisten Laboratorium'
+        )
+        self.assertIn('Rekap Honorarium', [child['title'] for child in asleb_group['children']])
+
+    def test_ringkasan_honor_global_dan_transfer_per_laboran(self):
+        laboran_lain = Pengguna.objects.create(
+            nama_pengguna='Laboran Dua', nim_nik='LAB-TF-02',
+            email='laboran-tf-02@example.com', password='rahasia123',
+            no_hp='081200000002', alamat='Jakarta', fakultas='Teknologi Industri',
+            prodi='Informatika', gender='laki_laki', role='laboran', is_verified=True,
+        )
+        asleb_lain = Asleb.objects.create(
+            nama='Aslab Kedua', nim='2301002', no_hp='081234567891',
+            email='aslab-kedua@example.com', program_studi='Informatika',
+            matkul='Basis Data', semester=4, tanggal_bergabung=date(2026, 6, 22),
+        )
+        HonorAsleb.objects.create(
+            asleb=self.asleb, bulan=date(2026, 4, 1), total_pertemuan=3,
+            assigned_laboran=self.pengguna,
+        )
+        HonorAsleb.objects.create(
+            asleb=asleb_lain, bulan=date(2026, 4, 1), total_pertemuan=3,
+            assigned_laboran=laboran_lain,
+        )
+
+        response = self.client.get(reverse('asleb:honor_list'), {'bulan': '2026-04'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(list(response.context['honor_list']).__len__(), 1)
+        self.assertEqual(response.context['total_honor'], 'Rp 294.000')
+        summary = {
+            item['laboran'].pk: item
+            for item in response.context['laboran_transfer_summary']
+        }
+        self.assertEqual(summary[self.pengguna.pk]['total'], 'Rp 147.000')
+        self.assertEqual(summary[laboran_lain.pk]['total'], 'Rp 147.000')
+        self.assertEqual(summary[self.pengguna.pk]['count'], 1)
+        self.assertEqual(summary[laboran_lain.pk]['count'], 1)
+
+    def test_export_excel_honor_memuat_seluruh_aslab_bukan_hanya_tugas_laboran_login(self):
+        laboran_lain = Pengguna.objects.create(
+            nama_pengguna='Laboran Ekspor Dua', nim_nik='LAB-EXPORT-02',
+            email='laboran-export-02@example.com', password='rahasia123',
+            no_hp='081200000102', alamat='Jakarta', fakultas='Teknologi Industri',
+            prodi='Informatika', gender='laki_laki', role='laboran', is_verified=True,
+        )
+        asleb_lain = Asleb.objects.create(
+            nama='Aslab Ekspor Kedua', nim='2301102', no_hp='081234567991',
+            email='aslab-export-kedua@example.com', program_studi='Informatika',
+            matkul='Basis Data', semester=4, tanggal_bergabung=date(2026, 6, 22),
+        )
+        HonorAsleb.objects.create(
+            asleb=self.asleb, bulan=date(2026, 4, 1), jumlah_praktikum=1,
+            total_pertemuan=3, assigned_laboran=self.pengguna,
+        )
+        HonorAsleb.objects.create(
+            asleb=asleb_lain, bulan=date(2026, 4, 1), jumlah_praktikum=2,
+            total_pertemuan=4, assigned_laboran=laboran_lain,
+        )
+
+        response = self.client.get(reverse('asleb:honor_export_excel'), {'bulan': '2026-04'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response['Content-Type'],
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        self.assertIn('rekap-honorarium-aslab-2026-04.xlsx', response['Content-Disposition'])
+        with zipfile.ZipFile(BytesIO(response.content)) as workbook:
+            worksheet = workbook.read('xl/worksheets/sheet1.xml').decode()
+        for header in (
+            'No', 'Nama', 'NIM', 'Jumlah Praktikum', 'Status Junior/Senior',
+            'Total Pertemuan', 'Total Jam Terealisasi', 'Total Akhir (Max 60)',
+            'Honor/Jam', 'Total Honor', 'PIC Transfer',
+        ):
+            self.assertIn(header, worksheet)
+        self.assertIn(self.asleb.nama, worksheet)
+        self.assertIn(asleb_lain.nama, worksheet)
+        self.assertIn(self.pengguna.nama_pengguna, worksheet)
+        self.assertIn(laboran_lain.nama_pengguna, worksheet)
+
+        page_response = self.client.get(reverse('asleb:honor_list'), {'bulan': '2026-04'})
+        self.assertContains(page_response, 'Ekspor Excel')
+        self.assertContains(page_response, 'data-no-global-loading="true"')
+        self.assertContains(page_response, 'bulan=2026-04')
 
     def test_konfirmasi_transfer_honor_menyimpan_bukti_dan_status_dibayar(self):
         asisten_user = Pengguna.objects.create(

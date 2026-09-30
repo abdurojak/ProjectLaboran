@@ -72,7 +72,18 @@ class ApiService {
   Future<String?>? _activeRefresh;
 
   bool _isAuthenticationPath(String path) =>
-      path.endsWith('auth/login/') || path.endsWith('auth/refresh/');
+      path.endsWith('auth/login/') ||
+      path.endsWith('auth/refresh/') ||
+      path.endsWith('app/version/');
+
+  Future<Map<String, dynamic>> appVersion() async {
+    try {
+      final response = await dio.get('app/version/');
+      return Map<String, dynamic>.from(response.data as Map);
+    } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
+  }
 
   bool _isTokenExpiring(String token) {
     try {

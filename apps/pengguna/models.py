@@ -112,6 +112,31 @@ class Pengguna(models.Model):
         return f'{self.kode_pengguna or "USR"} - {self.nama_pengguna}'
 
 
+class KoneksiPengguna(models.Model):
+    pengikut = models.ForeignKey(
+        Pengguna, on_delete=models.CASCADE, related_name='koneksi_diikuti'
+    )
+    mengikuti = models.ForeignKey(
+        Pengguna, on_delete=models.CASCADE, related_name='koneksi_pengikut'
+    )
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['pengikut', 'mengikuti'], name='unique_koneksi_pengguna'
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(pengikut=models.F('mengikuti')),
+                name='koneksi_pengguna_bukan_diri_sendiri',
+            ),
+        ]
+        ordering = ['-dibuat_pada']
+
+    def __str__(self):
+        return f'{self.pengikut} mengikuti {self.mengikuti}'
+
+
 class PengalamanPengguna(models.Model):
     KATEGORI_CHOICES = [
         ('pengalaman', 'Pengalaman'),

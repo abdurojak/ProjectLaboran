@@ -34,6 +34,7 @@ def env_path(name, default):
 
 MOBILE_APK_NAME = 'LabHub-1.0.5-modul-absensi.apk'
 MOBILE_APK_VERSION = '1.0.5'
+MOBILE_APK_MIN_BUILD = int(os.getenv('MOBILE_APK_MIN_BUILD', '6'))
 MOBILE_APK_PATH = env_path('MOBILE_APK_PATH', BASE_DIR / MOBILE_APK_NAME)
 
 

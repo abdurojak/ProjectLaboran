@@ -140,18 +140,17 @@ class PenggunaViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Pengguna')
         self.assertNotContains(response, self.pengguna.kode_pengguna)
-        self.assertContains(response, 'Mahasiswa')
-        self.assertContains(response, 'Laboran')
-        self.assertContains(response, 'Asisten Lab')
         self.assertContains(response, mahasiswa.nama_pengguna)
         self.assertContains(response, laboran.nama_pengguna)
         self.assertContains(response, asisten.nama_pengguna)
         self.assertContains(response, 'data-confirmation-modal')
         self.assertContains(response, 'data-user-search')
-        self.assertContains(response, 'data-user-role-filter')
+        self.assertNotContains(response, 'data-user-role-filter')
         self.assertContains(response, 'data-user-prodi-filter')
         self.assertContains(response, 'data-user-filter-reset')
-        self.assertEqual(response.content.decode().count('data-user-card data-role='), 3)
+        self.assertContains(response, 'data-user-list')
+        self.assertNotContains(response, 'data-user-group')
+        self.assertEqual(response.content.decode().count('data-user-card data-prodi='), 3)
         self.assertContains(response, 'applyUserFilters()')
         self.assertContains(response, '<option value="informatika">Informatika</option>', html=False)
 
@@ -173,7 +172,7 @@ class PenggunaViewTests(TestCase):
         self.assertNotIn(target.email, body)
         self.assertNotIn(target.no_hp, body)
 
-    def test_laboran_hanya_melihat_mahasiswa_dan_asisten_lab_di_menu_pengguna(self):
+    def test_laboran_melihat_semua_role_operasional_di_jaringan_pengguna(self):
         laboran = Pengguna.objects.create(
             nama_pengguna='Lala Laboran',
             nim_nik='3302001',
@@ -219,8 +218,9 @@ class PenggunaViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, mahasiswa.nama_pengguna)
         self.assertContains(response, asisten.nama_pengguna)
-        self.assertNotContains(response, laboran.kode_pengguna)
-        self.assertNotContains(response, '<h3 class="text-xl font-black text-slate-900">Laboran</h3>', html=False)
+        self.assertContains(response, laboran.kode_pengguna)
+        self.assertContains(response, 'data-user-list')
+        self.assertNotContains(response, 'data-user-group')
         self.assertNotContains(response, 'Tambah Pengguna')
 
     def test_laboran_tidak_bisa_mengelola_pengguna_via_url_langsung(self):
@@ -416,11 +416,20 @@ class PenggunaViewTests(TestCase):
 
         response = self.client.get(reverse('pengguna:detail', args=[target.pk]))
 
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 200)
         response_body = response.content.decode()
         self.assertNotIn(target.email, response_body)
         self.assertNotIn(target.no_hp, response_body)
         self.assertNotIn(target.alamat, response_body)
+        self.assertNotContains(response, 'Edit Profil')
+        self.assertNotContains(response, 'Download CV')
+        self.assertNotContains(response, 'Informasi Kontak')
+        self.assertNotContains(response, 'Skor Kredit')
+
+        directory_response = self.client.get(reverse('pengguna:list'))
+        self.assertEqual(directory_response.status_code, 200)
+        self.assertContains(directory_response, target.nama_pengguna)
+        self.assertContains(directory_response, 'Jaringan Pengguna')
 
     def test_laboran_dapat_melihat_kontak_pribadi_profil(self):
         laboran = Pengguna.objects.create(
@@ -1820,7 +1829,7 @@ class PenggunaAuthTests(TestCase):
         self.assertContains(kalender_response, 'Kalender Kegiatan')
         self.assertContains(ruangan_response, 'Daftar Lab')
         self.assertNotContains(allowed_response, f'href="{reverse("inventaris:barang_list")}"')
-        self.assertNotContains(allowed_response, f'href="{reverse("pengguna:list")}"')
+        self.assertContains(allowed_response, f'href="{reverse("pengguna:list")}"')
         self.assertRedirects(blocked_response, reverse('dashboard:home'))
 
     def test_mahasiswa_bisa_membuat_kegiatan_pribadi_tapi_tidak_mengelola_kegiatan_lain(self):
@@ -1857,7 +1866,7 @@ class PenggunaAuthTests(TestCase):
         self.assertNotContains(response, f'href="{reverse("asleb:asleb_list")}"')
         self.assertNotContains(response, f'href="{reverse("pendaftaran_asleb:pendaftaran_list")}"')
         self.assertNotContains(response, f'href="{reverse("asleb:honor_list")}"')
-        self.assertNotContains(response, f'href="{reverse("pengguna:list")}"')
+        self.assertContains(response, f'href="{reverse("pengguna:list")}"')
 
     def test_asisten_lab_tidak_bisa_membuka_menu_admin_asleb_langsung(self):
         self.pengguna.role = 'asisten_lab'
@@ -1871,13 +1880,14 @@ class PenggunaAuthTests(TestCase):
             reverse('barang_tertinggal:list'),
             reverse('asleb:asleb_list'),
             reverse('pendaftaran_asleb:pendaftaran_list'),
-            reverse('pengguna:list'),
         ]
 
         for url in blocked_urls:
             with self.subTest(url=url):
                 response = self.client.get(url)
                 self.assertRedirects(response, reverse('dashboard:home'))
+
+        self.assertEqual(self.client.get(reverse('pengguna:list')).status_code, 200)
 
     def test_asisten_lab_bisa_membuat_kegiatan_pribadi_tapi_tidak_mengelola_kegiatan_lain(self):
         self.pengguna.role = 'asisten_lab'

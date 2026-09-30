@@ -56,7 +56,7 @@
             {% csrf_token %}
             <div><label for="manual-asleb">Aslab</label><select id="manual-asleb" name="asleb_id" required><option value="">Pilih Aslab</option>{% for item in manual_permission_asleb_list %}<option value="{{ item.pk }}">{{ item.nama }} · {{ item.nim }}</option>{% endfor %}</select></div>
             <div><label for="manual-jadwal">Jadwal/Kelas yang Diampu</label><select id="manual-jadwal" name="jadwal_id" required disabled><option value="">Pilih Aslab terlebih dahulu</option></select><p class="mt-1 text-xs font-semibold text-slate-500" id="manual-jadwal-hint">Jadwal akan muncul otomatis sesuai penugasan Aslab.</p></div>
-            <div><label for="manual-date">Tanggal yang terlewat</label><input id="manual-date" name="tanggal_praktikum" type="date" max="{% now 'Y-m-d' %}" required></div>
+            <div><label for="manual-date">Tanggal praktikum yang belum absen</label><select id="manual-date" name="tanggal_praktikum" required disabled><option value="">Pilih jadwal terlebih dahulu</option></select><p class="mt-1 text-xs font-semibold text-slate-500" id="manual-date-hint">Hanya tanggal jadwal yang belum memiliki absensi.</p></div>
             <div><label for="manual-duration">Berlaku</label><select id="manual-duration" name="durasi_jam"><option value="1">1 jam</option><option value="2" selected>2 jam</option><option value="4">4 jam</option><option value="8">8 jam</option><option value="12">12 jam</option><option value="24">24 jam</option></select></div>
             <div><label for="manual-reason">Alasan</label><input id="manual-reason" name="alasan" maxlength="300" placeholder="Contoh: kendala jaringan" required></div>
             <button class="btn-primary justify-center gap-2 md:col-span-2 xl:col-span-5" type="submit"><i data-lucide="unlock" class="h-4 w-4"></i>Buka Absensi Susulan</button>
@@ -226,6 +226,7 @@
                         <th>Modul Praktikum</th>
                         <th>Bukti Foto</th>
                         <th>Bukti Video</th>
+                        {% if current_pengguna.role == 'laboran' %}<th>Aksi</th>{% endif %}
                     </tr>
                 </thead>
                 <tbody>
@@ -258,10 +259,11 @@
                         </td>
                         <td>{% if absensi.bukti_foto %}<a class="inline-flex whitespace-nowrap font-semibold text-brand-700 hover:text-brand-800" href="{{ absensi.bukti_foto.url }}" target="_blank" rel="noreferrer">Lihat foto</a>{% else %}<span class="text-slate-400">-</span>{% endif %}</td>
                         <td>{% if absensi.bukti_video %}<a class="inline-flex whitespace-nowrap font-semibold text-brand-700 hover:text-brand-800" href="{{ absensi.bukti_video.url }}" target="_blank" rel="noreferrer">Lihat video</a>{% else %}<span class="text-slate-400">-</span>{% endif %}</td>
+                        {% if current_pengguna.role == 'laboran' %}<td><form method="post" action="{% url 'asleb:absensi_web_delete' absensi.pk %}" data-attendance-delete data-confirm-message="Hapus absensi {{ absensi.asleb.nama }} tanggal {{ absensi.tanggal_praktikum|date:'d M Y' }}? Data bukti dan perhitungan honor akan diperbarui.">{% csrf_token %}<button type="submit" class="inline-flex items-center gap-1 font-black text-rose-700 hover:text-rose-800"><i data-lucide="trash-2" class="h-4 w-4"></i>Hapus</button></form></td>{% endif %}
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="8" class="py-12 text-center text-slate-500">Belum ada absensi aslab.</td>
+                        <td colspan="{% if current_pengguna.role == 'laboran' %}9{% else %}8{% endif %}" class="py-12 text-center text-slate-500">Belum ada absensi aslab.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -290,17 +292,18 @@
             <span class="rounded-full bg-cyan-50 px-4 py-2 text-xs font-black text-cyan-700">{{ mobile_page.paginator.count }} data</span>
         </div>
         <div class="-mx-2 max-w-full overflow-x-auto px-2 pb-2">
-            <table class="min-w-[980px]" data-mobile-card-table>
+            <table class="min-w-[860px]" data-mobile-card-table>
                 <thead class="bg-slate-50">
                     <tr>
                         <th>Nama</th>
                         <th>NIM</th>
-                        <th>Jadwal</th>
-                        <th>Tanggal</th>
-                        <th>Jam Masuk</th>
-                        <th>Status</th>
+                        <th>Tanggal Praktikum</th>
+                        <th>Modul</th>
+                        <th>Materi</th>
+                        <th>Modul Praktikum</th>
                         <th>Bukti Foto</th>
                         <th>Bukti Video</th>
+                        {% if current_pengguna.role == 'laboran' %}<th>Aksi</th>{% endif %}
                     </tr>
                 </thead>
                 <tbody>
@@ -308,27 +311,17 @@
                     <tr class="hover:bg-slate-50/70">
                         <td class="font-semibold text-slate-900">{{ absensi.asleb.nama }}</td>
                         <td>{{ absensi.asleb.nim }}</td>
-                        <td>
-                            {% if absensi.jadwal %}
-                            <div class="font-semibold text-slate-900">{{ absensi.jadwal.mata_kuliah }}</div>
-                            <div class="text-xs text-slate-500">{{ absensi.jadwal.kelas }} - {{ absensi.jadwal.get_display_ruangan_nama }}</div>
-                            {% else %}
-                            <span class="text-slate-400">Jadwal sudah dihapus</span>
-                            {% endif %}
-                        </td>
                         <td>{{ absensi.tanggal_absensi|date:"d M Y" }}</td>
-                        <td>{{ absensi.waktu_masuk|date:"H:i" }}</td>
-                        <td>
-                            <span class="inline-flex rounded-full {% if absensi.status == 'terlambat' %}bg-amber-50 text-amber-700{% else %}bg-emerald-50 text-emerald-700{% endif %} px-3 py-1 text-xs font-black">
-                                {{ absensi.get_status_display }}
-                            </span>
-                        </td>
+                        <td><span class="text-slate-400">-</span></td>
+                        <td>{% if absensi.jadwal %}<div class="font-semibold text-slate-900">{{ absensi.jadwal.mata_kuliah }}</div><div class="text-xs text-slate-500">{{ absensi.jadwal.kelas }} · {{ absensi.jadwal.get_display_ruangan_nama }} · {{ absensi.waktu_masuk|date:"H:i" }}</div>{% else %}<span class="text-slate-400">Jadwal sudah dihapus</span>{% endif %}</td>
+                        <td><span class="text-slate-400">Absensi melalui aplikasi</span></td>
                         <td>{% if absensi.foto_absensi %}<a class="inline-flex whitespace-nowrap font-semibold text-brand-700 hover:text-brand-800" href="{{ absensi.foto_absensi.url }}" target="_blank" rel="noreferrer">Lihat foto</a>{% else %}<span class="text-slate-400">-</span>{% endif %}</td>
                         <td>{% if absensi.video_absensi %}<a class="inline-flex whitespace-nowrap font-semibold text-brand-700 hover:text-brand-800" href="{{ absensi.video_absensi.url }}" target="_blank" rel="noreferrer">Lihat video</a>{% else %}<span class="text-slate-400">-</span>{% endif %}</td>
+                        {% if current_pengguna.role == 'laboran' %}<td><form method="post" action="{% url 'asleb:absensi_mobile_delete' absensi.pk %}" data-attendance-delete data-confirm-message="Hapus absensi mobile {{ absensi.asleb.nama }} tanggal {{ absensi.tanggal_absensi|date:'d M Y' }}? Data bukti dan perhitungan honor akan diperbarui.">{% csrf_token %}<button type="submit" class="inline-flex items-center gap-1 font-black text-rose-700 hover:text-rose-800"><i data-lucide="trash-2" class="h-4 w-4"></i>Hapus</button></form></td>{% endif %}
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="8" class="py-12 text-center text-slate-500">Belum ada absensi masuk dari aplikasi mobile.</td>
+                        <td colspan="{% if current_pengguna.role == 'laboran' %}9{% else %}8{% endif %}" class="py-12 text-center text-slate-500">Belum ada absensi masuk dari aplikasi mobile.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -406,6 +399,8 @@
         const manualAsleb = document.getElementById('manual-asleb');
         const manualSchedule = document.getElementById('manual-jadwal');
         const manualScheduleHint = document.getElementById('manual-jadwal-hint');
+        const manualDate = document.getElementById('manual-date');
+        const manualDateHint = document.getElementById('manual-date-hint');
         const manualScheduleUrl = "{% url 'asleb:absensi_manual_schedules' %}";
         const moduleCatalogSearch = document.getElementById('module-catalog-search');
         const moduleEmpty = document.querySelector('[data-module-empty]');
@@ -456,6 +451,33 @@
             if (!link || !results.contains(link)) return;
             event.preventDefault();
             updateAttendance(new URL(link.href, window.location.origin));
+        });
+
+        results?.addEventListener('submit', async function (event) {
+            const deleteForm = event.target.closest('form[data-attendance-delete]');
+            if (!deleteForm) return;
+            event.preventDefault();
+            const submitButton = deleteForm.querySelector('button[type="submit"]');
+            if (submitButton) submitButton.disabled = true;
+            filterStatus.textContent = 'Menghapus riwayat absensi...';
+            filterStatus.className = 'text-sm font-semibold text-slate-600';
+            try {
+                const response = await fetch(deleteForm.action, {
+                    method: 'POST',
+                    body: new FormData(deleteForm),
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+                    credentials: 'same-origin',
+                });
+                const data = await response.json();
+                if (!response.ok || !data.success) throw new Error(data.message || 'Riwayat absensi gagal dihapus.');
+                await updateAttendance(new URL(window.location.href), false);
+                filterStatus.textContent = data.message;
+                filterStatus.className = 'text-sm font-semibold text-emerald-700';
+            } catch (error) {
+                filterStatus.textContent = error.message || 'Riwayat absensi gagal dihapus. Coba lagi.';
+                filterStatus.className = 'text-sm font-semibold text-rose-700';
+                if (submitButton) submitButton.disabled = false;
+            }
         });
 
         form?.querySelector('a[href]')?.addEventListener('click', function (event) {
@@ -512,6 +534,8 @@
         manualAsleb?.addEventListener('change', async function () {
             manualSchedule.disabled = true;
             manualSchedule.replaceChildren(new Option('Memuat jadwal...', ''));
+            manualDate.disabled = true;
+            manualDate.replaceChildren(new Option('Pilih jadwal terlebih dahulu', ''));
             manualScheduleHint.textContent = 'Memeriksa mata kuliah dan kelas yang diampu Aslab.';
             if (!manualAsleb.value) {
                 manualSchedule.replaceChildren(new Option('Pilih Aslab terlebih dahulu', ''));
@@ -528,6 +552,7 @@
                 data.schedules.forEach((schedule) => {
                     const option = new Option(schedule.label, schedule.id);
                     option.dataset.day = schedule.day;
+                    option.dataset.missingDates = JSON.stringify(schedule.missing_dates || []);
                     manualSchedule.add(option);
                 });
                 manualSchedule.disabled = data.schedules.length === 0;
@@ -538,6 +563,18 @@
                 manualSchedule.replaceChildren(new Option('Gagal memuat jadwal', ''));
                 manualScheduleHint.textContent = error.message;
             }
+        });
+
+        manualSchedule?.addEventListener('change', function () {
+            manualDate.replaceChildren(new Option('Pilih tanggal yang belum absen', ''));
+            const selected = manualSchedule.selectedOptions[0];
+            let dates = [];
+            try { dates = JSON.parse(selected?.dataset.missingDates || '[]'); } catch (error) { dates = []; }
+            dates.forEach(function (item) { manualDate.add(new Option(item.label, item.value)); });
+            manualDate.disabled = dates.length === 0;
+            manualDateHint.textContent = dates.length
+                ? `${dates.length} tanggal praktikum belum memiliki absensi.`
+                : 'Semua tanggal praktikum untuk jadwal ini sudah memiliki absensi.';
         });
 
         const previewModal = document.querySelector('[data-inline-preview-modal]');

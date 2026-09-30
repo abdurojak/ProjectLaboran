@@ -376,14 +376,13 @@ class SettingsView(TemplateView):
                 'icon': 'message-circle-question',
             })
 
-        if pengguna.role in {ADMIN_ROLE, LABORAN_ROLE}:
-            cards.append({
-                'title': 'Pengguna',
-                'description': 'Lihat akun dan data pengguna sistem.',
-                'url': 'pengguna:list',
-                'args': [],
-                'icon': 'users',
-            })
+        cards.append({
+            'title': 'Jaringan Pengguna',
+            'description': 'Temukan dan lihat profil profesional pengguna LabHub.',
+            'url': 'pengguna:list',
+            'args': [],
+            'icon': 'users',
+        })
 
         if pengguna.role == LABORAN_ROLE:
             cards.extend([

@@ -16,6 +16,7 @@ class AttendanceRecord {
     this.modulPraktikumId,
     this.modulNomor,
     this.modulJudul,
+    required this.source,
     this.videoUrl,
   });
 
@@ -35,6 +36,7 @@ class AttendanceRecord {
   final int? modulPraktikumId;
   final int? modulNomor;
   final String? modulJudul;
+  final String source;
   final String? videoUrl;
 
   String get modulLabel => modulNomor == null
@@ -59,6 +61,7 @@ class AttendanceRecord {
         modulPraktikumId: json['modul_praktikum_id'] as int?,
         modulNomor: json['modul_nomor'] as int?,
         modulJudul: json['modul_judul'] as String?,
+        source: json['source'] as String? ?? 'aplikasi',
         videoUrl: json['video_url'] as String?,
       );
 }

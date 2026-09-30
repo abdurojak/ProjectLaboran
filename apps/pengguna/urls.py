@@ -10,6 +10,7 @@ from .views import (
     PenggunaDeleteView,
     PenggunaDetailView,
     PenggunaListView,
+    PenggunaManageListView,
     PenggunaLoginView,
     PenggunaLogoutView,
     PenggunaRegisterView,
@@ -24,6 +25,7 @@ from .views import (
     SchoolSearchView,
     delete_pengalaman,
     download_cv,
+    toggle_connection,
 )
 
 app_name = 'pengguna'
@@ -36,6 +38,8 @@ urlpatterns = [
     path('reset-password/', ResetPasswordView.as_view(), name='reset_password'),
     path('logout/', PenggunaLogoutView.as_view(), name='logout'),
     path('', PenggunaListView.as_view(), name='list'),
+    path('kelola/', PenggunaManageListView.as_view(), name='manage_list'),
+    path('<int:pk>/hubungkan/', toggle_connection, name='toggle_connection'),
     path('master-akademik/', MasterAkademikView.as_view(), name='master_akademik'),
     path('master-akademik/fakultas/tambah/', FakultasCreateView.as_view(), name='fakultas_create'),
     path('master-akademik/fakultas/<int:pk>/edit/', FakultasUpdateView.as_view(), name='fakultas_update'),

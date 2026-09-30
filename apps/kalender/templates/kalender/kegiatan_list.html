@@ -138,6 +138,54 @@
         min-width: 0;
         overflow-wrap: anywhere;
     }
+    .calendar-agenda-card {
+        min-width: 0;
+        overflow: hidden;
+        height: fit-content;
+        align-self: start;
+    }
+    .calendar-agenda-panel {
+        min-height: 0;
+    }
+    .calendar-agenda-list {
+        min-height: 0;
+    }
+    .calendar-agenda-content {
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+    .calendar-agenda-title {
+        overflow-wrap: anywhere;
+        word-break: normal;
+    }
+    .calendar-notification-badge {
+        flex: 0 0 auto;
+        white-space: nowrap;
+        align-self: flex-start;
+    }
+    @media (min-width: 1024px) {
+        .calendar-side-info {
+            display: none;
+        }
+        .calendar-agenda-panel {
+            display: flex;
+            max-height: min(54rem, calc(100vh - 8rem));
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .calendar-sidebar {
+            align-self: start;
+        }
+        .calendar-sidebar > .calendar-agenda-panel {
+            margin-top: 0 !important;
+        }
+        .calendar-agenda-list {
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            padding-right: 0.35rem;
+            scrollbar-gutter: stable;
+        }
+    }
     html[data-theme="dark"] .calendar-page {
         --calendar-blue: #60a5fa;
         --calendar-teal: #5eead4;
@@ -323,8 +371,8 @@
         </div>
     </div>
 
-    <div class="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,360px)]">
-        <div class="surface-card calendar-shell p-4 md:p-6">
+    <div class="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(340px,380px)]">
+        <div class="surface-card calendar-shell self-start p-4 md:p-6">
             <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
                 <div class="min-w-0">
                     <h3 class="text-xl font-bold text-slate-900">Tampilan Kalender</h3>
@@ -338,14 +386,14 @@
                 </div>
             </div>
             <div class="calendar-scroll">
-                <div id="fullcalendar" class="min-h-[560px] md:min-h-[720px]"></div>
+                <div id="fullcalendar"></div>
             </div>
         </div>
 
-        <aside class="min-w-0 space-y-6">
+        <aside class="calendar-sidebar min-w-0 space-y-6">
 
             {% if not request.current_pengguna or request.current_pengguna.role == 'admin' or request.current_pengguna.role == 'laboran' %}
-            <div class="calendar-side-card surface-card p-5 md:p-6">
+            <div class="calendar-side-info calendar-side-card surface-card p-5 md:p-6">
                 <div class="flex items-start gap-4">
                     <span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-50 text-orange-600">
                         <i data-lucide="calendar-heart" class="h-6 w-6"></i>
@@ -357,7 +405,7 @@
                 </div>
             </div>
 
-            <div class="calendar-side-card surface-card p-5 md:p-6">
+            <div class="calendar-side-info calendar-side-card surface-card p-5 md:p-6">
                 <div class="flex items-start gap-4">
                     <span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
                         <i data-lucide="school" class="h-6 w-6"></i>
@@ -369,7 +417,7 @@
                 </div>
             </div>
 
-            <div class="calendar-side-card surface-card p-5 md:p-6">
+            <div class="calendar-side-info calendar-side-card surface-card p-5 md:p-6">
                 <div class="flex items-start gap-4">
                     <span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
                         <i data-lucide="bell-ring" class="h-6 w-6"></i>
@@ -383,7 +431,7 @@
             {% endif %}
 
             {% if request.current_pengguna and request.current_pengguna.role == 'mahasiswa' %}
-            <div class="calendar-side-card surface-card p-5 md:p-6">
+            <div class="calendar-side-info calendar-side-card surface-card p-5 md:p-6">
                 <div class="flex items-start gap-4">
                     <span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
                         <i data-lucide="lock-keyhole" class="h-6 w-6"></i>
@@ -396,23 +444,23 @@
             </div>
             {% endif %}
 
-            <div class="calendar-side-card surface-card p-5 md:p-6">
+            <div class="calendar-agenda-panel calendar-side-card surface-card p-5 md:p-6">
                 <div class="mb-4 flex items-center justify-between gap-3">
                     <div>
                         <h3 class="text-xl font-bold text-slate-900">Agenda Terdekat</h3>
                         <p class="mt-1 text-sm text-slate-500">Lima kegiatan terdekat untuk pengecekan cepat.</p>
                     </div>
                 </div>
-                <div class="space-y-4">
+                <div class="calendar-agenda-list space-y-4">
                     {% for kegiatan in upcoming_kegiatan %}
-                    <a href="{% url 'kalender:kegiatan_detail' kegiatan.pk %}" class="block min-w-0 rounded-[24px] border border-slate-200 bg-slate-50/80 p-4">
+                    <a href="{% url 'kalender:kegiatan_detail' kegiatan.pk %}" class="calendar-agenda-card block rounded-[24px] border border-slate-200 bg-slate-50/80 p-4 transition hover:border-blue-200 hover:bg-blue-50/40">
                         <div class="flex items-start justify-between gap-3">
-                            <div>
-                                <div class="font-bold text-slate-900">{{ kegiatan.judul }}</div>
+                            <div class="calendar-agenda-content">
+                                <div class="calendar-agenda-title font-bold leading-6 text-slate-900">{{ kegiatan.judul }}</div>
                                 <div class="mt-1 text-sm text-slate-500">{{ kegiatan.tanggal|date:"d M Y" }} · {{ kegiatan.waktu_mulai|time:"H:i" }}</div>
                             </div>
                             {% if kegiatan.tampilkan_notifikasi %}
-                            <span class="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">Notif</span>
+                            <span class="calendar-notification-badge inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">Notif</span>
                             {% endif %}
                         </div>
                         <div class="mt-3 text-sm leading-7 text-slate-500">{{ kegiatan.lokasi|default:"Lokasi belum diisi." }}</div>

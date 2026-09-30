@@ -20,7 +20,7 @@ from django.utils.http import content_disposition_header
 from django.utils.text import slugify
 from django.utils.dateparse import parse_date
 from django.utils import timezone
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView
 
@@ -277,10 +277,15 @@ def update_asleb_level(request, pk):
         'level_mode', 'level_manual', 'level_diatur_oleh',
         'level_diatur_pada', 'diperbarui_pada',
     ])
+    recalculated = 0
+    for honor in HonorAsleb.objects.select_for_update().filter(asleb=asleb).exclude(status='dibayar'):
+        honor.save()
+        recalculated += 1
     messages.success(
         request,
         f'Level {asleb.nama} sekarang {asleb.level_efektif_display} '
-        f'({asleb.get_level_mode_display().lower()}).',
+        f'({asleb.get_level_mode_display().lower()}). '
+        f'{recalculated} rekap honor aktif dihitung ulang.',
     )
     return redirect('asleb:asleb_detail', pk=asleb.pk)
 
@@ -333,19 +338,53 @@ def asleb_has_operational_history(asleb):
     ).exists()
 
 
+def filter_honor_queryset(request, queryset, *, report_errors=True):
+    search = request.GET.get('q', '').strip()
+    bulan = request.GET.get('bulan', '').strip()
+    status = request.GET.get('status', '').strip()
+
+    if search:
+        queryset = queryset.filter(
+            Q(asleb__nama__icontains=search) |
+            Q(asleb__nim__icontains=search) |
+            Q(asleb__matkul__icontains=search) |
+            Q(pic_transfer__icontains=search) |
+            Q(assigned_laboran__nama_pengguna__icontains=search)
+        )
+
+    if bulan:
+        try:
+            year, month = bulan.split('-')
+            queryset = queryset.filter(bulan__month=month, bulan__year=year)
+        except ValueError:
+            if report_errors:
+                messages.error(request, 'Format bulan tidak valid.')
+            queryset = queryset.none()
+
+    if status:
+        queryset = queryset.filter(status=status)
+    return queryset
+
+
 class HonorAslebListView(HonorAccessMixin, ListView):
     model = HonorAsleb
     template_name = 'asleb/honor_list.html'
     context_object_name = 'honor_list'
+
+    def _apply_request_filters(self, queryset, *, report_errors=True):
+        return filter_honor_queryset(self.request, queryset, report_errors=report_errors)
+
+    def get_global_filtered_queryset(self):
+        return self._apply_request_filters(
+            HonorAsleb.objects.select_related('asleb', 'assigned_laboran'),
+            report_errors=False,
+        )
 
     def get_queryset(self):
         queryset = with_replacement_hold_state(
             HonorAsleb.objects.select_related('asleb', 'assigned_laboran')
         )
         pengguna = getattr(self.request, 'current_pengguna', None)
-        search = self.request.GET.get('q', '').strip()
-        bulan = self.request.GET.get('bulan', '').strip()
-        status = self.request.GET.get('status', '').strip()
 
         if pengguna and pengguna.role == LABORAN_ROLE:
             queryset = queryset.filter(assigned_laboran=pengguna)
@@ -353,42 +392,30 @@ class HonorAslebListView(HonorAccessMixin, ListView):
             queryset = queryset.filter(asleb__nim=pengguna.nim_nik)
         elif pengguna:
             queryset = queryset.none()
-
-        if search:
-            queryset = queryset.filter(
-                Q(asleb__nama__icontains=search) |
-                Q(asleb__nim__icontains=search) |
-                Q(asleb__matkul__icontains=search) |
-                Q(pic_transfer__icontains=search) |
-                Q(assigned_laboran__nama_pengguna__icontains=search)
-            )
-
-        if bulan:
-            try:
-                year, month = bulan.split('-')
-                queryset = queryset.filter(bulan__month=month, bulan__year=year)
-            except ValueError:
-                messages.error(self.request, 'Format bulan tidak valid.')
-                queryset = queryset.none()
-
-        if status:
-            queryset = queryset.filter(status=status)
-
-        return queryset
+        return self._apply_request_filters(queryset)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         bulan_ini = timezone.localdate().replace(day=1)
         selected_bulan = self.request.GET.get('bulan', bulan_ini.strftime('%Y-%m'))
-        total_honor = self.get_queryset().aggregate(total=Sum('jumlah'))['total'] or 0
+        global_honor_qs = self.get_global_filtered_queryset()
+        total_honor = global_honor_qs.aggregate(total=Sum('jumlah'))['total'] or 0
         pengguna = getattr(self.request, 'current_pengguna', None)
-        base_honor_qs = HonorAsleb.objects.all()
-        if pengguna and pengguna.role == LABORAN_ROLE:
-            base_honor_qs = base_honor_qs.filter(assigned_laboran=pengguna)
-        elif pengguna and pengguna.role == ASISTEN_LAB_ROLE:
-            base_honor_qs = base_honor_qs.filter(asleb__nim=pengguna.nim_nik)
-        elif pengguna:
-            base_honor_qs = base_honor_qs.none()
+        transfer_totals = {
+            row['assigned_laboran_id']: row
+            for row in global_honor_qs.filter(assigned_laboran__isnull=False)
+            .values('assigned_laboran_id')
+            .annotate(total=Sum('jumlah'), count=Count('id'))
+        }
+        laboran_transfer_summary = []
+        for laboran in Pengguna.objects.filter(role=LABORAN_ROLE, is_verified=True).order_by('nama_pengguna', 'pk'):
+            transfer = transfer_totals.get(laboran.pk, {})
+            total = transfer.get('total') or 0
+            laboran_transfer_summary.append({
+                'laboran': laboran,
+                'count': transfer.get('count', 0),
+                'total': f'Rp {total:,.0f}'.replace(',', '.'),
+            })
 
         context['search_query'] = self.request.GET.get('q', '').strip()
         context['selected_bulan'] = selected_bulan
@@ -396,7 +423,8 @@ class HonorAslebListView(HonorAccessMixin, ListView):
         context['status_choices'] = HonorAsleb.STATUS_CHOICES
         context['total_honor'] = f'Rp {total_honor:,.0f}'.replace(',', '.')
         context['laboran_count'] = Pengguna.objects.filter(role='laboran', is_verified=True).count()
-        context['unassigned_honor_count'] = base_honor_qs.filter(assigned_laboran__isnull=True).count()
+        context['unassigned_honor_count'] = global_honor_qs.filter(assigned_laboran__isnull=True).count()
+        context['laboran_transfer_summary'] = laboran_transfer_summary
         context['is_admin'] = False
         context['is_laboran'] = bool(pengguna and pengguna.role == LABORAN_ROLE)
         context['is_asisten_lab'] = bool(pengguna and pengguna.role == ASISTEN_LAB_ROLE)
@@ -420,6 +448,62 @@ def update_transfer_fees(request):
     else:
         messages.error(request, 'Biaya admin tidak valid. Gunakan angka nol atau lebih besar.')
     return redirect('asleb:honor_list')
+
+
+@require_GET
+def export_honor_asleb_excel(request):
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not can_manage_lab_operations(pengguna):
+        messages.error(request, 'Hanya laboran yang dapat mengekspor rekap honorarium keseluruhan.')
+        return redirect('asleb:honor_list')
+
+    honor_qs = filter_honor_queryset(
+        request,
+        HonorAsleb.objects.select_related('asleb', 'assigned_laboran').order_by(
+            'bulan', 'asleb__nama', 'asleb__nim'
+        ),
+        report_errors=False,
+    )
+    rows = [[
+        'No',
+        'Nama',
+        'NIM',
+        'Jumlah Praktikum',
+        'Status Junior/Senior',
+        'Total Pertemuan',
+        'Total Jam Terealisasi',
+        'Total Akhir (Max 60)',
+        'Honor/Jam',
+        'Total Honor',
+        'PIC Transfer',
+    ]]
+    for number, honor in enumerate(honor_qs, start=1):
+        pic_transfer = honor.pic_transfer
+        if not pic_transfer and honor.assigned_laboran_id:
+            pic_transfer = honor.assigned_laboran.nama_pengguna
+        rows.append([
+            number,
+            honor.asleb.nama,
+            honor.asleb.nim,
+            honor.jumlah_praktikum,
+            honor.get_level_display(),
+            honor.total_pertemuan,
+            honor.total_jam_terealisasi,
+            honor.total_akhir,
+            honor.honor_per_jam,
+            honor.total_honor,
+            pic_transfer or '-',
+        ])
+
+    workbook = build_simple_xlsx(rows, sheet_name='Rekap Honorarium')
+    selected_month = request.GET.get('bulan', '').strip()
+    suffix = selected_month if selected_month else timezone.localdate().isoformat()
+    response = HttpResponse(
+        workbook,
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = f'attachment; filename="rekap-honorarium-aslab-{suffix}.xlsx"'
+    return response
 
 
 class HonorAslebCreateView(HonorAdminRequiredMixin, CreateView):
@@ -750,6 +834,86 @@ class AbsensiAslebListView(ListView):
             .order_by('-diperbarui_pada', '-pk')
             .first()
         )
+
+
+def _delete_attendance_files_on_commit(attendance, field_names):
+    files = []
+    for field_name in field_names:
+        field_file = getattr(attendance, field_name, None)
+        if field_file and field_file.name:
+            files.append((field_file.storage, field_file.name))
+
+    def cleanup():
+        for storage, name in files:
+            if storage.exists(name):
+                storage.delete(name)
+
+    transaction.on_commit(cleanup)
+
+
+def _attendance_delete_response(request, *, success, message, status=200):
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({'success': success, 'message': message}, status=status)
+    messages.success(request, message) if success else messages.error(request, message)
+    return redirect('asleb:absensi_list')
+
+
+@require_POST
+@transaction.atomic
+def delete_web_attendance(request, pk):
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not pengguna or pengguna.role != LABORAN_ROLE:
+        return _attendance_delete_response(
+            request,
+            success=False,
+            message='Hanya Laboran yang dapat menghapus absensi Aslab.',
+            status=403,
+        )
+
+    attendance = get_object_or_404(
+        AbsensiAsleb.objects.select_for_update().select_related('asleb'),
+        pk=pk,
+    )
+    asleb = attendance.asleb
+    bulan = attendance.tanggal_praktikum.replace(day=1)
+    label = f'{asleb.nama} · {attendance.tanggal_praktikum:%d-%m-%Y}'
+    _delete_attendance_files_on_commit(attendance, ('bukti_foto', 'bukti_video'))
+    attendance.delete()
+    _sync_honor_attendance(asleb, bulan)
+    return _attendance_delete_response(
+        request,
+        success=True,
+        message=f'Absensi web {label} berhasil dihapus dan honor dihitung ulang.',
+    )
+
+
+@require_POST
+@transaction.atomic
+def delete_mobile_attendance(request, pk):
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not pengguna or pengguna.role != LABORAN_ROLE:
+        return _attendance_delete_response(
+            request,
+            success=False,
+            message='Hanya Laboran yang dapat menghapus absensi Aslab.',
+            status=403,
+        )
+
+    attendance = get_object_or_404(
+        AbsensiMasukAsleb.objects.select_for_update().select_related('asleb'),
+        pk=pk,
+    )
+    asleb = attendance.asleb
+    bulan = attendance.tanggal_absensi.replace(day=1)
+    label = f'{asleb.nama} · {attendance.tanggal_absensi:%d-%m-%Y}'
+    _delete_attendance_files_on_commit(attendance, ('foto_absensi', 'video_absensi'))
+    attendance.delete()
+    _sync_honor_attendance(asleb, bulan)
+    return _attendance_delete_response(
+        request,
+        success=True,
+        message=f'Absensi mobile {label} berhasil dihapus dan honor dihitung ulang.',
+    )
 
 
 class RiwayatAbsensiAslebView(TemplateView):
@@ -2398,9 +2562,12 @@ def build_simple_xlsx(rows, sheet_name='Sheet1'):
         cells = []
         for col_index, value in enumerate(row, start=1):
             coordinate = f'{col_name(col_index)}{row_index}'
-            safe_value = escape(str(value or ''))
             style = ' s="1"' if row_index == 1 else ' s="2"'
-            cells.append(f'<c r="{coordinate}"{style} t="inlineStr"><is><t>{safe_value}</t></is></c>')
+            if row_index > 1 and isinstance(value, (int, float, Decimal)) and not isinstance(value, bool):
+                cells.append(f'<c r="{coordinate}"{style}><v>{value}</v></c>')
+            else:
+                safe_value = escape(str('' if value is None else value))
+                cells.append(f'<c r="{coordinate}"{style} t="inlineStr"><is><t>{safe_value}</t></is></c>')
         sheet_rows.append(f'<row r="{row_index}">{"".join(cells)}</row>')
 
     last_col = col_name(len(rows[0])) if rows and rows[0] else 'A'
@@ -2601,6 +2768,39 @@ def toggle_absensi_status(request):
     return redirect('asleb:absensi_list')
 
 
+def get_missing_attendance_dates(asleb, schedule):
+    today = timezone.localdate()
+    period = asleb.periode_aktif
+    matching_assignment_dates = [
+        assignment.mulai_pada
+        for assignment in AslabAssignment.objects.filter(
+            asleb=asleb,
+            status=AslabAssignment.STATUS_ACTIVE,
+        ).select_related('slot__matkul')
+        if matkul_matches_schedule(assignment.slot.matkul, schedule)
+    ]
+    start = min(matching_assignment_dates) if matching_assignment_dates else (asleb.tanggal_bergabung or today)
+    if period:
+        start = max(start, period.mulai)
+    day_keys = [key for key, _ in JadwalPraktikum.HARI_CHOICES]
+    try:
+        target_weekday = day_keys.index(schedule.hari)
+    except ValueError:
+        return []
+    cursor = start + timedelta(days=(target_weekday - start.weekday()) % 7)
+    candidate_dates = []
+    while cursor <= today:
+        candidate_dates.append(cursor)
+        cursor += timedelta(days=7)
+    web_dates = set(AbsensiAsleb.objects.filter(
+        asleb=asleb, jadwal=schedule, tanggal_praktikum__in=candidate_dates,
+    ).values_list('tanggal_praktikum', flat=True))
+    mobile_dates = set(AbsensiMasukAsleb.objects.filter(
+        asleb=asleb, jadwal=schedule, tanggal_absensi__in=candidate_dates,
+    ).values_list('tanggal_absensi', flat=True))
+    return [value for value in candidate_dates if value not in web_dates | mobile_dates]
+
+
 def manual_attendance_schedule_options(request):
     pengguna = getattr(request, 'current_pengguna', None)
     if not can_manage_lab_operations(pengguna):
@@ -2625,6 +2825,13 @@ def manual_attendance_schedule_options(request):
                     f'{schedule.get_display_ruangan_nama()}'
                 ),
                 'day': schedule.hari,
+                'missing_dates': [
+                    {
+                        'value': value.isoformat(),
+                        'label': value.strftime('%d-%m-%Y'),
+                    }
+                    for value in reversed(get_missing_attendance_dates(asleb, schedule))
+                ],
             }
             for schedule in schedules
         ],
@@ -2661,6 +2868,8 @@ def grant_manual_attendance_permission(request):
         errors.append('Tanggal yang dipilih tidak sesuai dengan hari pada jadwal praktikum.')
     if not get_asleb_matkul_for_schedule(asleb, jadwal):
         errors.append('Jadwal tersebut tidak termasuk mata kuliah yang diampu Aslab ini.')
+    elif attendance_date and attendance_date not in get_missing_attendance_dates(asleb, jadwal):
+        errors.append('Tanggal tersebut bukan jadwal yang terlewat atau absensinya sudah tersimpan.')
     if not reason:
         errors.append('Alasan pembukaan absensi susulan wajib diisi.')
     if duration_hours not in {1, 2, 4, 8, 12, 24}:

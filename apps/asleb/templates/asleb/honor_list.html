@@ -66,6 +66,10 @@
         </div>
         <div class="honor-page-actions flex w-full flex-wrap gap-3 lg:w-auto lg:justify-end">
             {% if is_admin or is_laboran %}
+            <a class="btn-primary bg-emerald-700 hover:bg-emerald-800 shadow-emerald-900/20" href="{% url 'asleb:honor_export_excel' %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}" data-no-global-loading="true" data-no-page-transition="true">
+                <i data-lucide="file-spreadsheet" class="h-4 w-4"></i>
+                <span>Ekspor Excel</span>
+            </a>
             <a class="btn-secondary" href="{% url 'asleb:surat_honor_list' %}">
                 <i data-lucide="archive" class="h-4 w-4"></i>
                 <span>Arsip Surat</span>
@@ -99,8 +103,8 @@
         <article class="surface-card honor-stat p-5">
             <div class="relative z-10 flex items-start justify-between gap-4">
                 <div>
-                    <div class="text-sm font-semibold text-slate-500">Total Honor Terfilter</div>
-                    <div class="mt-2 text-2xl font-black tracking-tight text-violet-700 sm:text-3xl">{{ total_honor }}</div>
+                    <div class="text-sm font-semibold text-slate-500">Total Honor Seluruh Aslab</div>
+                    <div class="mt-2 whitespace-nowrap text-2xl font-black tracking-tight text-violet-700">{{ total_honor }}</div>
                 </div>
                 <span class="honor-stat-icon"><i data-lucide="wallet-cards" class="h-5 w-5"></i></span>
             </div>
@@ -135,6 +139,29 @@
                 <span class="honor-stat-icon shrink-0"><i data-lucide="badge-dollar-sign" class="h-5 w-5"></i></span>
             </div>
         </article>
+    </div>
+
+    <div class="surface-card overflow-hidden">
+        <div class="border-b border-slate-200 bg-slate-50/80 px-5 py-4">
+            <h3 class="text-lg font-black text-slate-900">Jumlah Transfer per Laboran</h3>
+            <p class="mt-1 text-sm text-slate-500">Pembagian seluruh honor Aslab sesuai filter yang sedang dipilih.</p>
+        </div>
+        <div class="grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-4">
+            {% for item in laboran_transfer_summary %}
+            <article class="rounded-[22px] border border-slate-200 bg-white/80 p-4 shadow-sm">
+                <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                        <div class="truncate font-black text-slate-900">{{ item.laboran.nama_pengguna }}</div>
+                        <div class="mt-1 text-xs font-semibold text-slate-500">{{ item.count }} honor Aslab</div>
+                        <div class="mt-3 text-xl font-black text-violet-700">{{ item.total }}</div>
+                    </div>
+                    <span class="honor-stat-icon shrink-0"><i data-lucide="send" class="h-5 w-5"></i></span>
+                </div>
+            </article>
+            {% empty %}
+            <div class="rounded-[22px] border border-dashed border-slate-300 p-5 text-sm text-slate-500 sm:col-span-2 xl:col-span-4">Belum ada laboran aktif untuk pembagian transfer honor.</div>
+            {% endfor %}
+        </div>
     </div>
     {% endif %}
 

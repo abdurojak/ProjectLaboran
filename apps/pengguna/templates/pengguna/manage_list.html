@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Kelola Pengguna{% endblock %}
+{% block content %}
+<section class="min-w-0 space-y-6">
+    <header><p class="text-sm font-black uppercase tracking-[0.2em] text-brand-700">Kontrol Akun</p><h2 class="mt-2 text-3xl font-black text-slate-900">Kelola Pengguna</h2><p class="mt-2 text-sm text-slate-500">Data akun Laboran, Asisten Lab, dan Mahasiswa. Menu ini terpisah dari Jaringan.</p></header>
+    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <a href="?q={{ search_query|urlencode }}" class="surface-card p-4 {% if not selected_role %}ring-2 ring-brand-500{% endif %}"><p class="text-xs font-black uppercase text-slate-500">Semua</p><p class="mt-2 text-2xl font-black text-slate-900">{{ role_counts.all }}</p></a>
+        <a href="?role=laboran&q={{ search_query|urlencode }}" class="surface-card p-4 {% if selected_role == 'laboran' %}ring-2 ring-brand-500{% endif %}"><p class="text-xs font-black uppercase text-slate-500">Laboran</p><p class="mt-2 text-2xl font-black text-slate-900">{{ role_counts.laboran }}</p></a>
+        <a href="?role=asisten_lab&q={{ search_query|urlencode }}" class="surface-card p-4 {% if selected_role == 'asisten_lab' %}ring-2 ring-brand-500{% endif %}"><p class="text-xs font-black uppercase text-slate-500">Asisten Lab</p><p class="mt-2 text-2xl font-black text-slate-900">{{ role_counts.asisten_lab }}</p></a>
+        <a href="?role=mahasiswa&q={{ search_query|urlencode }}" class="surface-card p-4 {% if selected_role == 'mahasiswa' %}ring-2 ring-brand-500{% endif %}"><p class="text-xs font-black uppercase text-slate-500">Mahasiswa</p><p class="mt-2 text-2xl font-black text-slate-900">{{ role_counts.mahasiswa }}</p></a>
+    </div>
+    <form method="get" class="surface-card flex flex-col gap-3 p-4 sm:flex-row" data-no-global-loading="true">
+        {% if selected_role %}<input type="hidden" name="role" value="{{ selected_role }}">{% endif %}
+        <input type="search" name="q" value="{{ search_query }}" placeholder="Cari nama, NIM/NIK, email, atau program studi" class="min-w-0 flex-1">
+        <button class="btn-primary justify-center" type="submit"><i data-lucide="search" class="h-4 w-4"></i>Cari</button>
+        <a class="btn-secondary justify-center" href="{% url 'pengguna:manage_list' %}">Reset</a>
+    </form>
+    <div class="surface-card min-w-0 overflow-hidden">
+        <div class="overflow-x-auto"><table class="min-w-[980px]"><thead class="bg-slate-50"><tr><th>Pengguna</th><th>NIM/NIK</th><th>Email</th><th>Program Studi</th><th>Role</th><th>Status</th><th>Aksi</th></tr></thead><tbody>
+        {% for item in pengguna_list %}<tr class="hover:bg-slate-50/70"><td><div class="flex items-center gap-3">{% if item.foto %}<img src="{{ item.foto.url }}" class="h-10 w-10 rounded-full object-cover" alt="">{% else %}<span class="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100"><i data-lucide="user" class="h-4 w-4"></i></span>{% endif %}<strong>{{ item.nama_pengguna }}</strong></div></td><td>{{ item.nim_nik }}</td><td>{{ item.email }}</td><td>{{ item.prodi }}</td><td><span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-black">{{ item.get_role_display }}</span></td><td>{% if item.is_verified %}<span class="font-bold text-emerald-700">Terverifikasi</span>{% else %}<span class="font-bold text-amber-700">Belum verifikasi</span>{% endif %}</td><td><div class="flex gap-3"><a class="font-black text-brand-700" href="{% url 'pengguna:detail' item.pk %}">Detail</a><a class="font-black text-amber-700" href="{% url 'pengguna:update' item.pk %}">Edit</a></div></td></tr>{% empty %}<tr><td colspan="7" class="py-12 text-center text-slate-500">Pengguna tidak ditemukan.</td></tr>{% endfor %}
+        </tbody></table></div>
+    </div>
+</section>
+{% endblock %}

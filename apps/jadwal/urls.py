@@ -8,6 +8,7 @@ from .views import (
     JadwalPraktikumUpdateView,
     process_schedule_change_request,
     available_rooms,
+    export_jadwal_praktikum_excel,
 )
 
 app_name = 'jadwal'
@@ -16,6 +17,7 @@ urlpatterns = [
     path('', JadwalPraktikumListView.as_view(), name='jadwal_list'),
     path('tambah/', JadwalPraktikumCreateView.as_view(), name='jadwal_create'),
     path('ruangan-tersedia/', available_rooms, name='ruangan_tersedia'),
+    path('ekspor-excel/', export_jadwal_praktikum_excel, name='jadwal_export_excel'),
     path('<int:pk>/', JadwalPraktikumDetailView.as_view(), name='jadwal_detail'),
     path('<int:pk>/edit/', JadwalPraktikumUpdateView.as_view(), name='jadwal_update'),
     path('<int:pk>/hapus/', JadwalPraktikumDeleteView.as_view(), name='jadwal_delete'),

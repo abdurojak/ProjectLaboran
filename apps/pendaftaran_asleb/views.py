@@ -57,7 +57,6 @@ from .selection import (
     accepted_course_ids, academic_semester_from_nim,
 )
 from .services import (
-    close_current_registration,
     delete_matkul_with_related_data,
     get_asleb_experience,
     get_effective_asleb_period_count,
@@ -65,7 +64,6 @@ from .services import (
     get_period_registration_count,
     get_recorded_asleb_period_count,
     is_registration_open,
-    open_current_registration,
     end_asleb_period,
     sync_expired_asleb_periods,
     sync_regular_aslab_assignment,
@@ -140,7 +138,14 @@ class PendaftaranAslebListView(LaboranPendaftaranRequiredMixin, ListView):
         context['periode_aktif'] = current_period
         context['periode_form'] = PeriodeAslebForm(instance=current_period)
         context['pendaftaran_dibuka'] = is_registration_open()
-        context['pengaturan_pendaftaran'] = PengaturanPendaftaranAsleb.get_solo()
+        registration_setting = PengaturanPendaftaranAsleb.get_solo()
+        context['pengaturan_pendaftaran'] = registration_setting
+        today = timezone.localdate()
+        context['pendaftaran_dijadwalkan'] = bool(
+            registration_setting.dibuka
+            and today < current_period.pendaftaran_mulai
+        )
+        context['pendaftaran_diaktifkan'] = registration_setting.dibuka
         pengguna = getattr(self.request, 'current_pengguna', None)
         context['is_super_admin'] = bool(pengguna and pengguna.role == LABORAN_ROLE)
         context['akhiri_periode_form'] = AkhiriPeriodeAslebForm()
@@ -861,12 +866,20 @@ def toggle_pendaftaran_status(request):
     if not require_laboran_operation(request, 'Hanya laboran yang dapat membuka atau menutup pendaftaran aslab.'):
         return redirect('pendaftaran_asleb:pendaftaran_list')
     pengaturan = PengaturanPendaftaranAsleb.get_solo()
-    currently_open = is_registration_open()
-    if currently_open:
-        close_current_registration()
+    current_period = get_current_period()
+    period_can_be_closed = not current_period.diakhiri_pada and current_period.selesai >= timezone.localdate()
+    if pengaturan.dibuka and period_can_be_closed:
+        pengaturan.dibuka = False
     else:
-        open_current_registration()
-    pengaturan.dibuka = not currently_open
+        today = timezone.localdate()
+        if current_period.pendaftaran_selesai < today:
+            messages.error(
+                request,
+                'Jadwal pendaftaran sudah berakhir. Isi tanggal mulai dan tanggal selesai, '
+                'lalu tekan Simpan Jadwal Otomatis.',
+            )
+            return redirect('pendaftaran_asleb:pendaftaran_list')
+        pengaturan.dibuka = True
     pengaturan.save(update_fields=['dibuka', 'diperbarui_pada'])
 
     actually_open = is_registration_open()
@@ -876,7 +889,7 @@ def toggle_pendaftaran_status(request):
         messages.error(request, 'Pendaftaran gagal dibuka karena rentang periode tidak valid. Atur masa tugas terlebih dahulu.')
         return redirect('pendaftaran_asleb:pendaftaran_list')
 
-    status = 'dibuka selama 30 hari atau sampai periode berakhir' if actually_open else 'ditutup'
+    status = 'dibuka sampai batas tanggal pendaftaran' if actually_open else 'ditutup'
     notified_count = notify_pendaftaran_dibuka() if actually_open else 0
 
     if notified_count:
@@ -1057,8 +1070,20 @@ def update_periode_schedule(request, pk):
     period = get_object_or_404(PeriodeAsleb, pk=pk)
     form = PeriodeAslebForm(request.POST, instance=period)
     if form.is_valid():
-        form.save()
-        messages.success(request, f'Jadwal pendaftaran periode {period.nama} berhasil diperbarui.')
+        period = form.save()
+        today = timezone.localdate()
+        setting = PengaturanPendaftaranAsleb.get_solo()
+        PengaturanPendaftaranAsleb.objects.filter(pk=setting.pk).update(
+            dibuka=period.pendaftaran_selesai >= today,
+            diperbarui_pada=timezone.now(),
+        )
+        if period.pendaftaran_mulai > today:
+            status = f'dijadwalkan mulai {period.pendaftaran_mulai:%d-%m-%Y}'
+        elif period.pendaftaran_selesai >= today:
+            status = f'dibuka sampai {period.pendaftaran_selesai:%d-%m-%Y}'
+        else:
+            status = 'ditutup karena jadwal telah berakhir'
+        messages.success(request, f'Jadwal pendaftaran periode {period.nama} berhasil diperbarui dan {status}.')
     else:
         messages.error(request, 'Jadwal periode tidak valid. Pastikan tanggal berada dalam periode enam bulan.')
     return redirect('pendaftaran_asleb:pendaftaran_list')

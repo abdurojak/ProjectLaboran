@@ -8,7 +8,7 @@ from django.contrib import messages
 from django.contrib.auth.hashers import check_password, make_password
 from django.conf import settings
 from django.core.cache import cache
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
@@ -42,7 +42,7 @@ from .forms import (
     VerificationCodeForm,
 )
 from .cv import build_cv_pdf
-from .models import Fakultas, PengalamanPengguna, Pengguna, Prodi, School
+from .models import Fakultas, KoneksiPengguna, PengalamanPengguna, Pengguna, Prodi, School
 
 
 OTP_SESSION_KEY = 'pengguna_otp'
@@ -80,6 +80,15 @@ class AdminPenggunaRequiredMixin:
         pengguna = getattr(request, 'current_pengguna', None)
         if not pengguna or pengguna.role != 'admin':
             messages.error(request, 'Hanya admin yang bisa menambah, mengubah, atau menghapus pengguna.')
+            return redirect('pengguna:list')
+        return super().dispatch(request, *args, **kwargs)
+
+
+class UserManagementRequiredMixin:
+    def dispatch(self, request, *args, **kwargs):
+        pengguna = getattr(request, 'current_pengguna', None)
+        if not pengguna or pengguna.role not in {'admin', 'laboran'}:
+            messages.error(request, 'Menu pengguna hanya tersedia untuk Admin dan Laboran.')
             return redirect('pengguna:list')
         return super().dispatch(request, *args, **kwargs)
 
@@ -255,41 +264,18 @@ class PenggunaListView(ListView):
     template_name = 'pengguna/list.html'
     context_object_name = 'pengguna_list'
 
-    ROLE_GROUPS = [
-        ('Mahasiswa', 'mahasiswa'),
-        ('Laboran', 'laboran'),
-        ('Asisten Lab', 'asisten_lab'),
-    ]
-
     def get_queryset(self):
-        queryset = Pengguna.objects.exclude(role='admin').order_by('role', 'nama_pengguna')
         pengguna = getattr(self.request, 'current_pengguna', None)
-
-        if pengguna and pengguna.role == 'laboran':
-            return queryset.filter(role__in=['mahasiswa', 'asisten_lab'])
-
-        return queryset
+        queryset = Pengguna.objects.exclude(role='admin')
+        if pengguna:
+            queryset = queryset.exclude(pk=pengguna.pk)
+        return queryset.annotate(
+            jumlah_pengikut=Count('koneksi_pengikut', distinct=True),
+        ).order_by('nama_pengguna')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         pengguna = getattr(self.request, 'current_pengguna', None)
-        visible_roles = ['mahasiswa', 'laboran', 'asisten_lab']
-        if pengguna and pengguna.role == 'laboran':
-            visible_roles = ['mahasiswa', 'asisten_lab']
-
-        grouped_users = []
-        for title, role in self.ROLE_GROUPS:
-            if role not in visible_roles:
-                continue
-            users = [item for item in context['pengguna_list'] if item.role == role]
-            grouped_users.append({
-                'title': title,
-                'role': role,
-                'users': users,
-                'count': len(users),
-            })
-
-        context['grouped_users'] = grouped_users
         context['prodi_options'] = sorted({
             item.prodi.strip()
             for item in context['pengguna_list']
@@ -299,13 +285,88 @@ class PenggunaListView(ListView):
         context['can_view_private_contacts'] = bool(
             pengguna and pengguna.role == 'laboran'
         )
+        connected_ids = set()
+        if pengguna:
+            connected_ids = set(KoneksiPengguna.objects.filter(
+                pengikut=pengguna,
+                mengikuti__role__in={'laboran', 'asisten_lab', 'mahasiswa'},
+            ).values_list('mengikuti_id', flat=True))
+        for item in context['pengguna_list']:
+            item.is_connected = item.pk in connected_ids
         return context
+
+
+class PenggunaManageListView(UserManagementRequiredMixin, ListView):
+    model = Pengguna
+    template_name = 'pengguna/manage_list.html'
+    context_object_name = 'pengguna_list'
+
+    def get_queryset(self):
+        queryset = Pengguna.objects.exclude(role='admin').order_by('nama_pengguna')
+        role = self.request.GET.get('role', '').strip()
+        query = self.request.GET.get('q', '').strip()
+        if role in {'laboran', 'asisten_lab', 'mahasiswa'}:
+            queryset = queryset.filter(role=role)
+        if query:
+            queryset = queryset.filter(
+                Q(nama_pengguna__icontains=query)
+                | Q(nim_nik__icontains=query)
+                | Q(email__icontains=query)
+                | Q(prodi__icontains=query)
+            )
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['selected_role'] = self.request.GET.get('role', '').strip()
+        context['search_query'] = self.request.GET.get('q', '').strip()
+        base = Pengguna.objects.exclude(role='admin')
+        context['role_counts'] = {
+            'all': base.count(),
+            'laboran': base.filter(role='laboran').count(),
+            'asisten_lab': base.filter(role='asisten_lab').count(),
+            'mahasiswa': base.filter(role='mahasiswa').count(),
+        }
+        return context
+
+
+@require_POST
+def toggle_connection(request, pk):
+    pengguna = getattr(request, 'current_pengguna', None)
+    target = get_object_or_404(Pengguna, pk=pk)
+    if not pengguna:
+        return JsonResponse({'ok': False, 'message': 'Silakan login terlebih dahulu.'}, status=401)
+    if target.role == 'admin':
+        return JsonResponse({'ok': False, 'message': 'Profil tidak tersedia.'}, status=404)
+    if target.pk == pengguna.pk:
+        return JsonResponse({'ok': False, 'message': 'Tidak dapat mengikuti akun sendiri.'}, status=400)
+
+    connection, created = KoneksiPengguna.objects.get_or_create(
+        pengikut=pengguna,
+        mengikuti=target,
+    )
+    connected = created
+    if not created:
+        connection.delete()
+        connected = False
+    follower_count = KoneksiPengguna.objects.filter(mengikuti=target).count()
+    return JsonResponse({
+        'ok': True,
+        'connected': connected,
+        'follower_count': follower_count,
+        'message': 'Berhasil terhubung.' if connected else 'Koneksi dibatalkan.',
+    })
 
 
 class PenggunaDetailView(DetailView):
     model = Pengguna
     template_name = 'pengguna/detail.html'
     context_object_name = 'pengguna'
+
+    def get_queryset(self):
+        # Akun admin tidak menjadi bagian direktori/profil publik, termasuk
+        # ketika URL profilnya ditebak secara langsung.
+        return super().get_queryset().exclude(role='admin')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -324,7 +385,21 @@ class PenggunaDetailView(DetailView):
                 or current_pengguna.pk == self.object.pk
             )
         )
-        if self.object.role in {'mahasiswa', 'asisten_lab'}:
+        context['can_download_cv'] = bool(
+            current_pengguna
+            and (
+                current_pengguna.role in {'admin', 'laboran'}
+                or current_pengguna.pk == self.object.pk
+            )
+        )
+        can_view_credit_profile = bool(
+            current_pengguna
+            and (
+                current_pengguna.role in {'admin', 'laboran'}
+                or current_pengguna.pk == self.object.pk
+            )
+        )
+        if self.object.role in {'mahasiswa', 'asisten_lab'} and can_view_credit_profile:
             context['credit_profile'] = get_credit_profile(self.object.nim_nik)
             context['credit_adjustments'] = self.object.penyesuaian_skor_kredit.select_related(
                 'diubah_oleh'
@@ -334,6 +409,18 @@ class PenggunaDetailView(DetailView):
             and current_pengguna.role == 'laboran'
             and self.object.role in {'mahasiswa', 'asisten_lab'}
         )
+        context['followers'] = (
+            Pengguna.objects.filter(
+                koneksi_diikuti__mengikuti=self.object,
+            ).exclude(role='admin').order_by('nama_pengguna')
+        )
+        context['following'] = (
+            Pengguna.objects.filter(
+                koneksi_pengikut__pengikut=self.object,
+            ).exclude(role='admin').order_by('nama_pengguna')
+        )
+        context['followers_count'] = context['followers'].count()
+        context['following_count'] = context['following'].count()
         context['profile_form'] = PenggunaProfileForm(
             instance=self.object,
             current_pengguna=current_pengguna,
@@ -374,12 +461,16 @@ class PenggunaCreateView(AdminPenggunaRequiredMixin, CreateView):
     success_url = reverse_lazy('pengguna:list')
 
 
-class PenggunaUpdateView(AdminPenggunaRequiredMixin, UpdateView):
+class PenggunaUpdateView(UserManagementRequiredMixin, UpdateView):
     model = Pengguna
     form_class = PenggunaForm
     template_name = 'pengguna/form.html'
     context_object_name = 'pengguna'
-    success_url = reverse_lazy('pengguna:list')
+    success_url = reverse_lazy('pengguna:manage_list')
+
+    def get_queryset(self):
+        # Menu Pengguna mengelola Laboran, Asisten Lab, dan Mahasiswa saja.
+        return super().get_queryset().exclude(role='admin')
 
 
 class PenggunaDeleteView(AdminPenggunaRequiredMixin, PostOnlyDeleteMixin, DeleteView):

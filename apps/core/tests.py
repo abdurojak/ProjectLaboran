@@ -982,7 +982,7 @@ class BantuanTests(TestCase):
         self.assertEqual(response.status_code, 200)
         card_titles = [card['title'] for card in response.context['settings_cards']]
         self.assertNotIn('Pendaftaran Aslab', card_titles)
-        self.assertIn('Pengguna', card_titles)
+        self.assertIn('Jaringan Pengguna', card_titles)
 
     def test_tampilan_disimpan_otomatis_ke_akun_tanpa_tombol_simpan(self):
         response = self.client.get(reverse('core:settings'))
