@@ -126,6 +126,9 @@ class AttendanceSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     foto_url = serializers.SerializerMethodField()
     video_url = serializers.SerializerMethodField()
+    modul_praktikum_id = serializers.IntegerField(read_only=True)
+    modul_nomor = serializers.IntegerField(source='modul_praktikum.nomor', read_only=True)
+    modul_judul = serializers.CharField(source='modul_praktikum.judul', read_only=True)
 
     class Meta:
         model = AbsensiMasukAsleb
@@ -133,6 +136,7 @@ class AttendanceSerializer(serializers.ModelSerializer):
             'id', 'tanggal_absensi', 'waktu_masuk', 'mata_kuliah', 'kelas',
             'laboratorium', 'status', 'status_display', 'latitude', 'longitude',
             'jarak_lokasi_meter', 'akurasi_gps_meter', 'foto_url', 'video_url',
+            'modul_praktikum_id', 'modul_nomor', 'modul_judul',
         ]
 
     def get_laboratorium(self, obj):
@@ -153,6 +157,7 @@ class AttendanceSerializer(serializers.ModelSerializer):
 
 class CheckInSerializer(serializers.Serializer):
     jadwal_id = serializers.IntegerField(min_value=1)
+    modul_praktikum_id = serializers.IntegerField(min_value=1)
     foto_absensi = serializers.ImageField()
     video_absensi = serializers.FileField(required=False, allow_null=True)
 

@@ -13,6 +13,9 @@ class AttendanceRecord {
     required this.jarak,
     required this.akurasi,
     required this.fotoUrl,
+    this.modulPraktikumId,
+    this.modulNomor,
+    this.modulJudul,
     this.videoUrl,
   });
 
@@ -29,7 +32,14 @@ class AttendanceRecord {
   final String jarak;
   final String akurasi;
   final String fotoUrl;
+  final int? modulPraktikumId;
+  final int? modulNomor;
+  final String? modulJudul;
   final String? videoUrl;
+
+  String get modulLabel => modulNomor == null
+      ? 'Modul belum tercatat'
+      : 'Modul $modulNomor${modulJudul?.isNotEmpty == true ? ' - $modulJudul' : ''}';
 
   factory AttendanceRecord.fromJson(Map<String, dynamic> json) =>
       AttendanceRecord(
@@ -46,6 +56,9 @@ class AttendanceRecord {
         jarak: json['jarak_lokasi_meter']?.toString() ?? '-',
         akurasi: json['akurasi_gps_meter']?.toString() ?? '-',
         fotoUrl: json['foto_url'] as String? ?? '',
+        modulPraktikumId: json['modul_praktikum_id'] as int?,
+        modulNomor: json['modul_nomor'] as int?,
+        modulJudul: json['modul_judul'] as String?,
         videoUrl: json['video_url'] as String?,
       );
 }

@@ -602,6 +602,20 @@ class AbsensiMasukAsleb(models.Model):
         blank=True,
         null=True,
     )
+    periode = models.ForeignKey(
+        'pendaftaran_asleb.PeriodeAsleb',
+        on_delete=models.SET_NULL,
+        related_name='absensi_masuk_asleb',
+        blank=True,
+        null=True,
+    )
+    modul_praktikum = models.ForeignKey(
+        ModulPraktikum,
+        on_delete=models.SET_NULL,
+        related_name='absensi_masuk_mobile',
+        blank=True,
+        null=True,
+    )
     tanggal_absensi = models.DateField(default=timezone.localdate)
     waktu_masuk = models.DateTimeField(default=timezone.now)
     latitude = models.DecimalField(max_digits=10, decimal_places=7, blank=True, null=True)
@@ -620,6 +634,10 @@ class AbsensiMasukAsleb(models.Model):
             models.UniqueConstraint(
                 fields=['asleb', 'jadwal', 'tanggal_absensi'],
                 name='unique_absensi_masuk_asleb_jadwal_tanggal',
+            ),
+            models.UniqueConstraint(
+                fields=['asleb', 'periode', 'modul_praktikum'],
+                name='unique_absensi_masuk_asleb_periode_modul',
             ),
         ]
         verbose_name = 'Absensi Masuk Aslab'

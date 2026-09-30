@@ -18,7 +18,8 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.asleb.models import AbsensiMasukAsleb, PengaturanAbsensiAsleb
+from apps.asleb.models import AbsensiMasukAsleb, ModulPraktikum, PengaturanAbsensiAsleb
+from apps.asleb.services import get_active_asleb_period
 from apps.asleb.views import sync_honor_from_mobile_absensi
 from apps.asleb.models import HonorAsleb
 from apps.barang_tertinggal.notifications import publish_barang_tertinggal_news
@@ -66,6 +67,7 @@ from .services import (
     get_active_asleb,
     get_asleb_course_labels,
     get_checkin_window,
+    get_available_modules,
     get_owned_schedules,
     validate_schedule_time,
 )
@@ -335,12 +337,25 @@ class ScheduleDetailView(APIView):
         context['request'] = request
         valid, reason, _ = validate_schedule_time(schedule)
         already_checked_in = schedule.pk in context['attendance_by_schedule']
+        available_modules = list(get_available_modules(asleb, schedule))
         return Response({
             'schedule': ScheduleSerializer(schedule, context=context).data,
-            'can_check_in': valid and not already_checked_in and PengaturanAbsensiAsleb.get_solo().dibuka,
+            'available_modules': [
+                {'id': module.pk, 'nomor': module.nomor, 'judul': module.judul}
+                for module in available_modules
+            ],
+            'can_check_in': (
+                valid
+                and not already_checked_in
+                and bool(available_modules)
+                and PengaturanAbsensiAsleb.get_solo().dibuka
+            ),
             'check_in_message': (
                 'Anda sudah melakukan absensi masuk untuk jadwal ini.'
-                if already_checked_in else reason or 'Absensi masuk tersedia.'
+                if already_checked_in
+                else 'Tidak ada modul yang belum diabsen untuk mata kuliah ini.'
+                if not available_modules
+                else reason or 'Absensi masuk tersedia.'
             ),
         })
 
@@ -363,6 +378,23 @@ class CheckInView(APIView):
         if not schedule:
             return api_error('Jadwal bukan milik Asisten Lab yang sedang login.', 'schedule_not_owned', status.HTTP_403_FORBIDDEN)
 
+        period = get_active_asleb_period(asleb)
+        module = (
+            get_available_modules(asleb, schedule)
+            .select_for_update()
+            .filter(pk=serializer.validated_data['modul_praktikum_id'])
+            .first()
+        )
+        if not module:
+            requested_module = ModulPraktikum.objects.filter(
+                pk=serializer.validated_data['modul_praktikum_id']
+            ).first()
+            if requested_module and AbsensiMasukAsleb.objects.filter(
+                asleb=asleb, periode=period, modul_praktikum=requested_module
+            ).exists():
+                return api_error('Modul ini sudah pernah diabsen dan tidak dapat dipilih lagi.', 'module_already_used')
+            return api_error('Modul tidak tersedia atau tidak sesuai dengan mata kuliah jadwal.', 'invalid_module')
+
         today = timezone.localdate()
         if AbsensiMasukAsleb.objects.filter(asleb=asleb, jadwal=schedule, tanggal_absensi=today).exists():
             return api_error('Anda sudah melakukan absensi masuk untuk jadwal ini.', 'duplicate_attendance')
@@ -375,6 +407,8 @@ class CheckInView(APIView):
             attendance = AbsensiMasukAsleb.objects.create(
                 asleb=asleb,
                 jadwal=schedule,
+                periode=period,
+                modul_praktikum=module,
                 tanggal_absensi=today,
                 waktu_masuk=timezone.now(),
                 status=attendance_status,
@@ -396,7 +430,7 @@ class AttendanceHistoryView(APIView):
     def get(self, request):
         asleb = get_active_asleb(request.user)
         queryset = AbsensiMasukAsleb.objects.filter(asleb=asleb).select_related(
-            'jadwal', 'jadwal__ruangan', 'jadwal__ruangan_tambahan'
+            'jadwal', 'jadwal__ruangan', 'jadwal__ruangan_tambahan', 'modul_praktikum'
         )
         return Response({
             'results': AttendanceSerializer(queryset, many=True, context={'request': request}).data,

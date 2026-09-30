@@ -24,7 +24,43 @@ class _CheckInScreenState extends State<CheckInScreen> {
   XFile? video;
   VideoPlayerController? videoController;
   bool submitting = false;
+  bool loadingModules = true;
+  List<PraktikumModule> modules = [];
+  PraktikumModule? selectedModule;
   String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    loadModules();
+  }
+
+  Future<void> loadModules() async {
+    try {
+      final detail = await context
+          .read<AttendanceProvider>()
+          .loadScheduleDetail(widget.schedule.id);
+      final available = (detail['available_modules'] as List? ?? [])
+          .map(
+            (item) => PraktikumModule.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList();
+      if (!mounted) return;
+      setState(() {
+        modules = available;
+        selectedModule = available.length == 1 ? available.first : null;
+        loadingModules = false;
+      });
+    } on ApiException catch (exception) {
+      if (!mounted) return;
+      setState(() {
+        loadingModules = false;
+        error = exception.message;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -58,6 +94,10 @@ class _CheckInScreenState extends State<CheckInScreen> {
 
   Future<void> submit() async {
     final provider = context.read<AttendanceProvider>();
+    if (selectedModule == null) {
+      setState(() => error = 'Pilih modul praktikum terlebih dahulu.');
+      return;
+    }
     if (photo == null) {
       setState(() => error = 'Ambil foto selfie terlebih dahulu.');
       return;
@@ -69,6 +109,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
     try {
       await provider.checkIn(
         schedule: widget.schedule,
+        module: selectedModule!,
         photo: photo!,
         video: video,
       );
@@ -127,6 +168,44 @@ class _CheckInScreenState extends State<CheckInScreen> {
           const SizedBox(height: 18),
           const _SectionTitle(
             number: '1',
+            title: 'Pilih modul',
+            subtitle: 'Modul yang sudah diabsen tidak akan muncul lagi.',
+          ),
+          const SizedBox(height: 10),
+          if (loadingModules)
+            const Center(child: CircularProgressIndicator())
+          else if (modules.isEmpty)
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Tidak ada modul yang tersedia untuk mata kuliah ini.',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            )
+          else
+            DropdownButtonFormField<PraktikumModule>(
+              initialValue: selectedModule,
+              decoration: const InputDecoration(
+                labelText: 'Modul praktikum',
+                prefixIcon: Icon(Icons.menu_book_outlined),
+              ),
+              items: modules
+                  .map(
+                    (module) => DropdownMenuItem(
+                      value: module,
+                      child: Text(module.label),
+                    ),
+                  )
+                  .toList(),
+              onChanged: submitting
+                  ? null
+                  : (value) => setState(() => selectedModule = value),
+            ),
+          const SizedBox(height: 22),
+          const _SectionTitle(
+            number: '2',
             title: 'Ambil selfie',
             subtitle: 'Foto wajib diambil langsung dari kamera.',
           ),
@@ -179,7 +258,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
           ),
           const SizedBox(height: 22),
           const _SectionTitle(
-            number: '2',
+            number: '3',
             title: 'Rekam video',
             subtitle: 'Opsional, maksimal 15 detik dan direkam dari kamera.',
           ),
@@ -284,7 +363,9 @@ class _CheckInScreenState extends State<CheckInScreen> {
           ],
           const SizedBox(height: 24),
           FilledButton.icon(
-            onPressed: submitting ? null : submit,
+            onPressed: submitting || loadingModules || modules.isEmpty
+                ? null
+                : submit,
             icon: submitting
                 ? const SizedBox(
                     width: 18,

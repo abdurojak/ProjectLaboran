@@ -6,8 +6,13 @@ from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 
-from apps.asleb.models import AbsensiMasukAsleb, Asleb
-from apps.asleb.services import get_active_asleb_for_pengguna, get_active_asleb_matkul_ids
+from apps.asleb.models import AbsensiAsleb, AbsensiMasukAsleb, Asleb, ModulPraktikum
+from apps.asleb.services import (
+    get_active_asleb_for_pengguna,
+    get_active_asleb_matkul_ids,
+    get_active_asleb_period,
+    get_asleb_matkul_for_schedule,
+)
 from apps.jadwal.models import JadwalPraktikum
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, RiwayatAsleb
 
@@ -82,6 +87,29 @@ def get_owned_schedules(asleb):
         schedule_match,
         status=JadwalPraktikum.STATUS_DITERIMA,
     ).select_related('ruangan', 'ruangan_tambahan').distinct()
+
+
+def get_available_modules(asleb, schedule):
+    period = get_active_asleb_period(asleb)
+    course = get_asleb_matkul_for_schedule(asleb, schedule)
+    if period is None or course is None:
+        return ModulPraktikum.objects.none()
+
+    used_ids = set(
+        AbsensiAsleb.objects.filter(
+            asleb=asleb,
+            periode=period,
+            modul_praktikum__isnull=False,
+        ).values_list('modul_praktikum_id', flat=True)
+    )
+    used_ids.update(
+        AbsensiMasukAsleb.objects.filter(
+            asleb=asleb,
+            periode=period,
+            modul_praktikum__isnull=False,
+        ).values_list('modul_praktikum_id', flat=True)
+    )
+    return ModulPraktikum.objects.filter(matkul=course).exclude(pk__in=used_ids).order_by('nomor', 'pk')
 
 
 def aware_schedule_datetime(date_value, time_value):

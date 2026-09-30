@@ -41,3 +41,24 @@ class PraktikumSchedule {
             : DateTime.tryParse(json['waktu_absensi'] as String),
       );
 }
+
+class PraktikumModule {
+  const PraktikumModule({
+    required this.id,
+    required this.nomor,
+    required this.judul,
+  });
+
+  final int id;
+  final int nomor;
+  final String judul;
+
+  String get label => 'Modul $nomor - $judul';
+
+  factory PraktikumModule.fromJson(Map<String, dynamic> json) =>
+      PraktikumModule(
+        id: json['id'] as int,
+        nomor: json['nomor'] as int,
+        judul: json['judul'] as String? ?? '-',
+      );
+}

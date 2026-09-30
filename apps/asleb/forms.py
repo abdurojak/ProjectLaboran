@@ -16,6 +16,7 @@ from apps.pengguna.models import Pengguna
 
 from .models import (
     AbsensiAsleb,
+    AbsensiMasukAsleb,
     Asleb,
     HasilPraktikumMahasiswa,
     HonorAsleb,
@@ -258,9 +259,18 @@ class AbsensiAslebForm(forms.ModelForm):
             periode=self.periode,
             modul_praktikum__isnull=False,
         ).values_list('modul_praktikum_id', flat=True)
+        mobile_used_modules = AbsensiMasukAsleb.objects.filter(
+            asleb=self.asleb,
+            periode=self.periode,
+            modul_praktikum__isnull=False,
+        ).values_list('modul_praktikum_id', flat=True)
         queryset = ModulPraktikum.objects.none()
         if matkul:
-            queryset = ModulPraktikum.objects.filter(matkul=matkul).exclude(pk__in=used_modules)
+            queryset = (
+                ModulPraktikum.objects.filter(matkul=matkul)
+                .exclude(pk__in=used_modules)
+                .exclude(pk__in=mobile_used_modules)
+            )
         self.fields['modul_praktikum'].queryset = queryset
         self.fields['bukti_foto'].required = True
         self.fields['bukti_video'].required = True
@@ -299,6 +309,12 @@ class AbsensiAslebForm(forms.ModelForm):
             duplicate_qs = duplicate_qs.exclude(pk=self.instance.pk)
         if duplicate_qs.filter(modul_praktikum=modul).exists():
             raise forms.ValidationError('Modul ini sudah pernah diabsen dan tidak dapat dipilih lagi.')
+        if AbsensiMasukAsleb.objects.filter(
+            asleb=self.asleb,
+            periode=self.periode,
+            modul_praktikum=modul,
+        ).exists():
+            raise forms.ValidationError('Modul ini sudah pernah diabsen melalui aplikasi mobile.')
         if duplicate_qs.filter(
             modul_praktikum__isnull=True,
             modul=modul.nomor,

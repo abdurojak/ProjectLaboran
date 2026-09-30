@@ -80,7 +80,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               children: [
                                 Expanded(
                                   child: Text(
-                                    item.mataKuliah,
+                                    item.modulLabel,
                                     style: TextStyle(
                                       fontWeight: FontWeight.w900,
                                       fontSize: 16,
@@ -105,7 +105,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              '${item.kelas} • ${item.laboratorium}',
+                              '${item.mataKuliah} • ${item.kelas} • ${item.laboratorium}',
                               style: TextStyle(
                                 color: Theme.of(
                                   context,
@@ -163,11 +163,19 @@ class _HistoryDetailState extends State<_HistoryDetail> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              record.mataKuliah,
+              record.modulLabel,
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w900,
                 color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '${record.mataKuliah} • ${record.kelas}',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 8),

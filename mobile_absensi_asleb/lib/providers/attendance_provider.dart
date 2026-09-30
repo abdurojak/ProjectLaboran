@@ -53,11 +53,13 @@ class AttendanceProvider extends ChangeNotifier {
 
   Future<AttendanceRecord> checkIn({
     required PraktikumSchedule schedule,
+    required PraktikumModule module,
     required XFile photo,
     XFile? video,
   }) async {
     final record = await api.checkIn(
       scheduleId: schedule.id,
+      moduleId: module.id,
       photo: photo,
       video: video,
     );

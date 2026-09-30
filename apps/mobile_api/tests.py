@@ -97,6 +97,24 @@ class MobileAbsensiApiTests(TestCase):
             pengampu=self.matkul.dosen, hari='senin', waktu_mulai=time(8, 0),
             waktu_selesai=time(10, 0), status=JadwalPraktikum.STATUS_DITERIMA,
         )
+        self.module = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=8,
+            judul='Pengenalan Flutter',
+            file=SimpleUploadedFile(
+                'modul-mobile-8.pdf', b'%PDF-1.4\n%%EOF', content_type='application/pdf'
+            ),
+            diunggah_oleh=self.laboran,
+        )
+        self.second_module = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=9,
+            judul='State Management',
+            file=SimpleUploadedFile(
+                'modul-mobile-9.pdf', b'%PDF-1.4\n%%EOF', content_type='application/pdf'
+            ),
+            diunggah_oleh=self.laboran,
+        )
         PengaturanAbsensiAsleb.objects.update_or_create(pk=1, defaults={'dibuka': True})
 
     def authenticate(self):
@@ -119,6 +137,7 @@ class MobileAbsensiApiTests(TestCase):
     def check_in_payload(self, **overrides):
         payload = {
             'jadwal_id': self.schedule.pk,
+            'modul_praktikum_id': self.module.pk,
             'foto_absensi': valid_photo(),
         }
         payload.update(overrides)
@@ -369,6 +388,15 @@ class MobileAbsensiApiTests(TestCase):
             pengampu='Dosen Web Baru', hari='senin', waktu_mulai=time(10, 0),
             waktu_selesai=time(12, 0), status=JadwalPraktikum.STATUS_DITERIMA,
         )
+        web_module = ModulPraktikum.objects.create(
+            matkul=web_course,
+            nomor=1,
+            judul='Dasar Web',
+            file=SimpleUploadedFile(
+                'modul-web.pdf', b'%PDF-1.4\n%%EOF', content_type='application/pdf'
+            ),
+            diunggah_oleh=self.laboran,
+        )
         self.authenticate()
 
         response = self.client.get(reverse('mobile_api:schedule_list'))
@@ -379,7 +407,10 @@ class MobileAbsensiApiTests(TestCase):
         with patch('apps.mobile_api.views.validate_schedule_time', return_value=(True, '', 'sudah_absen')):
             check_in = self.client.post(
                 reverse('mobile_api:check_in'),
-                self.check_in_payload(jadwal_id=web_schedule.pk),
+                self.check_in_payload(
+                    jadwal_id=web_schedule.pk,
+                    modul_praktikum_id=web_module.pk,
+                ),
                 format='multipart',
             )
         self.assertEqual(check_in.status_code, 201, check_in.data)
@@ -636,6 +667,8 @@ class MobileAbsensiApiTests(TestCase):
         self.assertFalse(attendance.video_absensi)
         self.assertIsNone(attendance.latitude)
         self.assertIsNone(attendance.longitude)
+        self.assertEqual(attendance.modul_praktikum, self.module)
+        self.assertEqual(attendance.periode, self.period)
         self.assertTrue(HonorAsleb.objects.filter(asleb=self.asleb, total_pertemuan=1).exists())
 
         duplicate = self.client.post(
@@ -643,6 +676,42 @@ class MobileAbsensiApiTests(TestCase):
         )
         self.assertEqual(duplicate.status_code, 400)
         self.assertEqual(AbsensiMasukAsleb.objects.count(), 1)
+
+    @patch('apps.mobile_api.views.validate_schedule_time', return_value=(True, '', 'sudah_absen'))
+    def test_riwayat_mobile_menampilkan_modul_yang_diabsen(self, _mock_time):
+        self.authenticate()
+        check_in = self.client.post(
+            reverse('mobile_api:check_in'), self.check_in_payload(), format='multipart'
+        )
+        self.assertEqual(check_in.status_code, 201, check_in.data)
+
+        response = self.client.get(reverse('mobile_api:attendance_history'))
+
+        self.assertEqual(response.status_code, 200, response.data)
+        record = response.data['results'][0]
+        self.assertEqual(record['modul_praktikum_id'], self.module.pk)
+        self.assertEqual(record['modul_nomor'], 8)
+        self.assertEqual(record['modul_judul'], 'Pengenalan Flutter')
+
+    @patch('apps.mobile_api.views.validate_schedule_time', return_value=(True, '', 'sudah_absen'))
+    def test_modul_yang_sudah_diabsen_hilang_dari_pilihan_mobile(self, _mock_time):
+        self.authenticate()
+        before = self.client.get(reverse('mobile_api:schedule_detail', args=[self.schedule.pk]))
+        self.assertEqual(
+            [item['id'] for item in before.data['available_modules']],
+            [self.module.pk, self.second_module.pk],
+        )
+
+        check_in = self.client.post(
+            reverse('mobile_api:check_in'), self.check_in_payload(), format='multipart'
+        )
+        self.assertEqual(check_in.status_code, 201, check_in.data)
+
+        after = self.client.get(reverse('mobile_api:schedule_detail', args=[self.schedule.pk]))
+        self.assertEqual(
+            [item['id'] for item in after.data['available_modules']],
+            [self.second_module.pk],
+        )
 
     @patch('apps.mobile_api.views.validate_schedule_time', return_value=(True, '', 'sudah_absen'))
     def test_absensi_web_dan_mobile_jadwal_yang_sama_tidak_menggandakan_honor(self, _mock_time):
