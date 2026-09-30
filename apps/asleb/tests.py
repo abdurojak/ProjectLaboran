@@ -52,7 +52,7 @@ from .models import (
     SuratHonorAsleb,
     TugasLaporanPraktikum,
 )
-from .services import get_asleb_matkul_for_schedule
+from .services import get_asleb_matkul_for_schedule, get_asleb_schedule_queryset
 from .views import (
     get_active_absensi_schedule,
     get_available_absensi_schedules,
@@ -774,6 +774,52 @@ class AslebViewTests(TestCase):
 
         self.assertIn(schedule, get_available_absensi_schedules(self.asleb, schedule_time))
         self.assertEqual(get_asleb_matkul_for_schedule(self.asleb, schedule), self.matkul)
+
+    def test_semua_fitur_jadwal_memakai_dua_penugasan_aktif(self):
+        first_assignment = self.create_active_assignment()
+        second_matkul = MataKuliahAsleb.objects.create(
+            kode='WEB_MONICA_REGRESSION',
+            nama='Pemrograman Web',
+            dosen='Yunia Ningish, M.Kom',
+            kelas='SI-01',
+        )
+        AslabAssignment.objects.create(
+            slot=AslabSlot.objects.create(
+                periode=first_assignment.slot.periode,
+                matkul=second_matkul,
+                nomor=1,
+            ),
+            asleb=self.asleb,
+            mulai_pada=first_assignment.mulai_pada,
+            status=AslabAssignment.STATUS_ACTIVE,
+        )
+        first_schedule = self.create_active_schedule()
+        second_schedule = JadwalPraktikum.objects.create(
+            mata_kuliah='Pemrograman Web - Yunia Ningish, S.Kom., M.Kom - SI-01',
+            kelas='SI-01',
+            ruangan=self.test_room,
+            pengampu='Yunia Ningish, S.Kom., M.Kom',
+            hari='kamis',
+            waktu_mulai='13:00',
+            waktu_selesai='15:00',
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+
+        owned_ids = set(get_asleb_schedule_queryset(
+            self.asleb,
+            statuses=[JadwalPraktikum.STATUS_DITERIMA],
+        ).values_list('pk', flat=True))
+        response = self.client.get(
+            reverse('asleb:absensi_manual_schedules'),
+            {'asleb': self.asleb.pk},
+        )
+
+        self.assertEqual(owned_ids, {first_schedule.pk, second_schedule.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            {item['id'] for item in response.json()['schedules']},
+            {first_schedule.pk, second_schedule.pk},
+        )
 
     def test_form_absensi_menerima_modul_saat_gelar_dosen_jadwal_berbeda(self):
         self.matkul.nama = 'Kecerdasan Buatan'

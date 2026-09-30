@@ -18,7 +18,10 @@ from django.views.generic import CreateView, DeleteView, DetailView, ListView, U
 
 from apps.core.views import PostOnlyDeleteMixin
 from apps.core.permissions import ADMIN_ROLE, ASISTEN_LAB_ROLE, LABORAN_ROLE
-from apps.asleb.services import get_active_asleb_matkul_labels
+from apps.asleb.services import (
+    get_active_asleb_for_pengguna,
+    get_asleb_schedule_queryset,
+)
 from apps.kalender.realtime import send_schedule_change_request_update, send_schedule_update
 from apps.pendaftaran_asleb.models import MataKuliahAsleb
 from apps.ruangan.models import GrupRuanganGabungan, RuanganLab
@@ -158,17 +161,17 @@ def build_schedule_grid_xlsx(schedules, rooms):
     return output.getvalue()
 
 
-def get_aslab_matkul_labels(pengguna):
-    return get_active_asleb_matkul_labels(pengguna)
-
-
 def can_manage_jadwal(pengguna, jadwal):
     if not pengguna:
         return False
     if pengguna.role == LABORAN_ROLE:
         return True
     if pengguna.role == ASISTEN_LAB_ROLE:
-        return jadwal.mata_kuliah in get_aslab_matkul_labels(pengguna)
+        asleb = get_active_asleb_for_pengguna(pengguna)
+        return bool(
+            asleb
+            and get_asleb_schedule_queryset(asleb).filter(pk=jadwal.pk).exists()
+        )
     return False
 
 
@@ -286,15 +289,14 @@ class JadwalPraktikumListView(ListView):
         if not pengguna or pengguna.role != 'asisten_lab':
             return JadwalPraktikum.objects.none()
 
-        labels = get_aslab_matkul_labels(pengguna)
-        if not labels:
+        asleb = get_active_asleb_for_pengguna(pengguna)
+        if not asleb:
             return JadwalPraktikum.objects.none()
 
         return (
-            JadwalPraktikum.objects.select_related('ruangan', 'ruangan_tambahan')
-            .filter(
-                mata_kuliah__in=labels,
-                status__in=[JadwalPraktikum.STATUS_DIAJUKAN, JadwalPraktikum.STATUS_DITERIMA],
+            get_asleb_schedule_queryset(
+                asleb,
+                statuses=[JadwalPraktikum.STATUS_DIAJUKAN, JadwalPraktikum.STATUS_DITERIMA],
             )
             .order_by('hari', 'waktu_mulai', 'ruangan__nama', 'mata_kuliah')
         )
@@ -472,7 +474,10 @@ class JadwalPraktikumUpdateView(JadwalMutationAccessMixin, UpdateView):
         queryset = super().get_queryset()
         pengguna = getattr(self.request, 'current_pengguna', None)
         if pengguna and pengguna.role == ASISTEN_LAB_ROLE:
-            return queryset.filter(mata_kuliah__in=get_aslab_matkul_labels(pengguna))
+            asleb = get_active_asleb_for_pengguna(pengguna)
+            if not asleb:
+                return queryset.none()
+            return queryset.filter(pk__in=get_asleb_schedule_queryset(asleb).values('pk'))
         if pengguna and pengguna.role == LABORAN_ROLE:
             return queryset
         return queryset.none()

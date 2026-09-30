@@ -4,6 +4,7 @@ from django.conf import settings
 from django.urls import reverse
 
 from apps.core.emails import send_branded_email
+from apps.asleb.services import matkul_matches_schedule
 from apps.pendaftaran_asleb.models import PendaftaranAsleb, RiwayatAsleb
 
 
@@ -14,10 +15,10 @@ def send_jadwal_status_notification(jadwal):
     recipients = sorted({
         item.email
         for item in registrations
-        if str(item.matkul) == jadwal.mata_kuliah
+        if matkul_matches_schedule(item.matkul, jadwal)
     })
     history = RiwayatAsleb.objects.select_related('matkul').exclude(email='')
-    recipients.extend(item.email for item in history if str(item.matkul) == jadwal.mata_kuliah)
+    recipients.extend(item.email for item in history if matkul_matches_schedule(item.matkul, jadwal))
     recipients = sorted(set(recipients))
     if not recipients:
         return 0

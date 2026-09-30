@@ -145,6 +145,37 @@ def matkul_matches_schedule(matkul, jadwal):
     return schedule_label == course_name or schedule_label.startswith(f'{course_name} - ')
 
 
+def get_asleb_schedule_queryset(asleb, *, statuses=None):
+    """Return every schedule owned by an Aslab's active assignments.
+
+    Schedule rows still keep a denormalized course label.  Building the
+    matching query here prevents individual web/mobile features from falling
+    back to the legacy single ``Asleb.matkul`` value or exact lecturer text.
+    """
+    from django.db.models import Q
+
+    from apps.jadwal.models import JadwalPraktikum
+    from apps.pendaftaran_asleb.models import MataKuliahAsleb
+
+    course_ids = get_active_asleb_matkul_ids(asleb)
+    courses = MataKuliahAsleb.objects.filter(pk__in=course_ids)
+    schedule_match = Q(pk__in=[])
+    for course in courses:
+        schedule_match |= Q(mata_kuliah=str(course))
+        course_name = (course.nama or '').strip()
+        course_class = (course.kelas or '').strip()
+        if course_name and course_class:
+            schedule_match |= Q(
+                mata_kuliah__istartswith=f'{course_name} - ',
+                kelas__iexact=course_class,
+            )
+
+    queryset = JadwalPraktikum.objects.filter(schedule_match)
+    if statuses is not None:
+        queryset = queryset.filter(status__in=statuses)
+    return queryset.select_related('ruangan', 'ruangan_tambahan').distinct()
+
+
 def get_asleb_matkul_for_schedule(asleb, jadwal):
     """Resolve the assigned course represented by a schedule label."""
     if not jadwal:

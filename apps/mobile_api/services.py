@@ -3,7 +3,6 @@ from decimal import Decimal
 from math import asin, cos, radians, sin, sqrt
 
 from django.conf import settings
-from django.db.models import Q
 from django.utils import timezone
 
 from apps.asleb.models import AbsensiAsleb, AbsensiMasukAsleb, Asleb, ModulPraktikum
@@ -12,6 +11,7 @@ from apps.asleb.services import (
     get_active_asleb_matkul_ids,
     get_active_asleb_period,
     get_asleb_matkul_for_schedule,
+    get_asleb_schedule_queryset,
 )
 from apps.jadwal.models import JadwalPraktikum
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, RiwayatAsleb
@@ -63,30 +63,10 @@ def get_asleb_course_labels(asleb):
 
 
 def get_owned_schedules(asleb):
-    courses = get_asleb_courses(asleb)
-    if not courses:
-        labels = get_asleb_course_labels(asleb)
-        if not labels:
-            return JadwalPraktikum.objects.none()
-        return JadwalPraktikum.objects.filter(
-            mata_kuliah__in=labels,
-            status=JadwalPraktikum.STATUS_DITERIMA,
-        ).select_related('ruangan', 'ruangan_tambahan')
-
-    schedule_match = Q()
-    for course in courses:
-        schedule_match |= Q(mata_kuliah=str(course))
-        if course.nama and course.kelas:
-            schedule_match |= Q(
-                mata_kuliah__istartswith=f'{course.nama} - ',
-                kelas__iexact=course.kelas.strip(),
-            )
-    if not schedule_match:
-        return JadwalPraktikum.objects.none()
-    return JadwalPraktikum.objects.filter(
-        schedule_match,
-        status=JadwalPraktikum.STATUS_DITERIMA,
-    ).select_related('ruangan', 'ruangan_tambahan').distinct()
+    return get_asleb_schedule_queryset(
+        asleb,
+        statuses=[JadwalPraktikum.STATUS_DITERIMA],
+    )
 
 
 def get_available_modules(asleb, schedule):

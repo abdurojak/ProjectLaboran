@@ -73,6 +73,7 @@ from .models import (
 from .notifications import send_honor_paid_email
 from .services import (
     get_active_asleb_matkul_ids,
+    get_asleb_schedule_queryset,
     get_asleb_matkul_for_schedule,
     matkul_matches_schedule,
 )
@@ -2807,14 +2808,10 @@ def manual_attendance_schedule_options(request):
         return JsonResponse({'detail': 'Akses ditolak.'}, status=403)
 
     asleb = get_object_or_404(Asleb, pk=request.GET.get('asleb'), status='aktif')
-    schedule_candidates = JadwalPraktikum.objects.filter(
-        status=JadwalPraktikum.STATUS_DITERIMA,
-    ).select_related('ruangan', 'ruangan_tambahan').order_by('mata_kuliah', 'kelas', 'hari', 'waktu_mulai')
-    schedules = [
-        schedule
-        for schedule in schedule_candidates
-        if get_asleb_matkul_for_schedule(asleb, schedule)
-    ]
+    schedules = get_asleb_schedule_queryset(
+        asleb,
+        statuses=[JadwalPraktikum.STATUS_DITERIMA],
+    ).order_by('mata_kuliah', 'kelas', 'hari', 'waktu_mulai')
     return JsonResponse({
         'schedules': [
             {
