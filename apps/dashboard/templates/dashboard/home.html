@@ -646,6 +646,7 @@
                     <thead class="bg-slate-50">
                         <tr class="{% if peminjaman.is_overdue %}bg-rose-50/80{% endif %}">
                             <th>Bulan</th>
+                            <th>Mata Kuliah</th>
                             <th>Total Honor</th>
                             <th>Status</th>
                             <th>Tanggal TF</th>
@@ -656,6 +657,15 @@
                         {% for honor in riwayat_honor_saya %}
                         <tr>
                             <td class="font-semibold text-slate-900">{{ honor.bulan|date:"F Y" }}</td>
+                            <td>
+                                {% if honor.matkul_labels %}
+                                <div class="grid gap-1">
+                                    {% for matkul_label in honor.matkul_labels %}<span>{{ matkul_label }}</span>{% endfor %}
+                                </div>
+                                {% else %}
+                                <span class="text-slate-400">Mata kuliah belum diisi</span>
+                                {% endif %}
+                            </td>
                             <td class="font-black text-violet-700">{{ honor.jumlah_rupiah }}</td>
                             <td>{{ honor.get_status_display }}</td>
                             <td>{{ honor.tanggal_transfer|date:"d M Y"|default:"-" }}</td>
@@ -669,7 +679,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="5" class="py-10 text-center text-slate-500">Belum ada riwayat honor.</td>
+                            <td colspan="6" class="py-10 text-center text-slate-500">Belum ada riwayat honor.</td>
                         </tr>
                         {% endfor %}
                     </tbody>

@@ -92,6 +92,7 @@ class PenggunaLoginRequiredMiddleware:
         '/pendaftaran-asleb/daftar/',
         '/pendaftaran-asleb/berhasil/',
         '/pendaftaran-asleb/qr/',
+        '/aplikasi-android/',
         '/static/',
     )
 

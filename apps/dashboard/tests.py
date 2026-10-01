@@ -12,7 +12,14 @@ from apps.inventaris.models import Barang
 from apps.jadwal.models import JadwalPraktikum
 from apps.kalender.models import KegiatanKalender, Notifikasi
 from apps.peminjaman.models import PeminjamanAlat, PeminjamanTransaksi
-from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb, PengaturanPendaftaranAsleb
+from apps.pendaftaran_asleb.models import (
+    AslabAssignment,
+    AslabSlot,
+    MataKuliahAsleb,
+    PendaftaranAsleb,
+    PengaturanPendaftaranAsleb,
+    PeriodeAsleb,
+)
 from apps.pendaftaran_asleb.utils import get_public_registration_url
 from apps.pengguna.models import Pengguna
 from apps.ruangan.models import RuanganLab
@@ -86,6 +93,17 @@ class DashboardViewTests(TestCase):
                 self.assertEqual(response['Content-Type'], 'application/vnd.android.package-archive')
                 self.assertIn('attachment', response['Content-Disposition'])
                 self.assertEqual(b''.join(response.streaming_content), b'test-apk')
+
+    def test_unduhan_android_dapat_diakses_tanpa_login_untuk_update_wajib(self):
+        self.client.session.flush()
+        with TemporaryDirectory() as directory:
+            apk_path = Path(directory) / 'LabHub-test.apk'
+            apk_path.write_bytes(b'test-apk-public')
+            with override_settings(MOBILE_APK_PATH=apk_path):
+                response = self.client.get(reverse('dashboard:android_app_download'))
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(b''.join(response.streaming_content), b'test-apk-public')
+                self.assertIn('no-store', response['Cache-Control'])
 
     def test_unduhan_android_tidak_tersedia_jika_file_hilang(self):
         with override_settings(MOBILE_APK_PATH=Path('missing-labhub.apk')):
@@ -954,6 +972,74 @@ class DashboardViewTests(TestCase):
         self.assertNotContains(response, reverse('inventaris:barang_list'))
         self.assertNotContains(response, f'href="{reverse("asleb:asleb_list")}"')
         self.assertNotContains(response, reverse('pendaftaran_asleb:pendaftaran_list'))
+
+    def test_riwayat_honor_asisten_menampilkan_semua_matkul_aktif(self):
+        today = timezone.localdate()
+        asisten = Pengguna.objects.create(
+            nama_pengguna='Asisten Dua Matkul',
+            nim_nik='20260009',
+            email='dua.matkul@trisakti.ac.id',
+            password='rahasia123',
+            no_hp='',
+            alamat='Jakarta',
+            fakultas='Teknologi Industri',
+            prodi='Informatika',
+            gender='laki_laki',
+            role='asisten_lab',
+        )
+        periode = PeriodeAsleb.get_for_date(today)
+        data_asleb = Asleb.objects.create(
+            nama=asisten.nama_pengguna,
+            nim=asisten.nim_nik,
+            no_hp='',
+            email=asisten.email,
+            program_studi=asisten.prodi,
+            matkul='Nilai lama satu mata kuliah',
+            semester=4,
+            tanggal_bergabung=today,
+            periode_aktif=periode,
+        )
+        matkul_pertama = MataKuliahAsleb.objects.create(
+            kode='DASH-DUA-01',
+            nama='Pemrograman Web',
+            dosen='Dosen Pertama',
+            kelas='SI-01',
+        )
+        matkul_kedua = MataKuliahAsleb.objects.create(
+            kode='DASH-DUA-02',
+            nama='Pemrograman Mobile',
+            dosen='Dosen Kedua',
+            kelas='SI-02',
+        )
+        for matkul in (matkul_pertama, matkul_kedua):
+            slot = AslabSlot.objects.create(periode=periode, matkul=matkul, nomor=1)
+            AslabAssignment.objects.create(
+                slot=slot,
+                asleb=data_asleb,
+                mulai_pada=periode.mulai,
+                status=AslabAssignment.STATUS_ACTIVE,
+            )
+        HonorAsleb.objects.create(
+            asleb=data_asleb,
+            bulan=today.replace(day=1),
+            jumlah_praktikum=2,
+            total_pertemuan=4,
+            status='diproses',
+        )
+        session = self.client.session
+        session['pengguna_id'] = asisten.pk
+        session.save()
+
+        response = self.client.get(reverse('dashboard:home'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, str(matkul_pertama))
+        self.assertContains(response, str(matkul_kedua))
+        honor = list(response.context['riwayat_honor_saya'])[0]
+        self.assertEqual(
+            honor.matkul_labels,
+            sorted([str(matkul_pertama), str(matkul_kedua)]),
+        )
 
     def test_dashboard_asisten_lab_honor_dibayar_reset_saldo_bulan_ini(self):
         asisten = Pengguna.objects.create(

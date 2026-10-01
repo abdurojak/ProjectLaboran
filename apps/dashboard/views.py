@@ -188,6 +188,11 @@ class DashboardView(TemplateView):
                     'tone': tone,
                 })
             awal_bulan = timezone.localdate().replace(day=1)
+            honor_matkul_labels = (
+                get_active_asleb_matkul_labels(pengguna)
+                if is_asisten_lab
+                else []
+            )
             honor_bulan_ini_qs = HonorAsleb.objects.filter(
                 asleb__nim=pengguna.nim_nik,
                 bulan__year=awal_bulan.year,
@@ -196,6 +201,11 @@ class DashboardView(TemplateView):
             honor_bulan_ini = honor_bulan_ini_qs.first()
             honor_bulan_ini_total = honor_bulan_ini_qs.aggregate(total=Sum('jumlah'))['total'] or 0
             if honor_bulan_ini:
+                honor_bulan_ini.matkul_labels = honor_matkul_labels or (
+                    [honor_bulan_ini.asleb.matkul]
+                    if honor_bulan_ini.asleb.matkul
+                    else []
+                )
                 honor_bulan_ini.bukti_pendukung_list = list(
                     AbsensiAsleb.objects.filter(
                         asleb=honor_bulan_ini.asleb,
@@ -207,6 +217,9 @@ class DashboardView(TemplateView):
                 asleb__nim=pengguna.nim_nik,
             ).select_related('asleb')[:6]
             for honor in riwayat_honor_saya:
+                honor.matkul_labels = honor_matkul_labels or (
+                    [honor.asleb.matkul] if honor.asleb.matkul else []
+                )
                 honor.bukti_pendukung_list = list(
                     AbsensiAsleb.objects.filter(
                         asleb=honor.asleb,
