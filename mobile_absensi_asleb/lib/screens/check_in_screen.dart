@@ -68,18 +68,18 @@ class _CheckInScreenState extends State<CheckInScreen> {
     super.dispose();
   }
 
-  Future<void> capturePhoto() async {
+  Future<void> pickPhoto(ImageSource source) async {
     final result = await picker.pickImage(
-      source: ImageSource.camera,
+      source: source,
       imageQuality: 78,
       maxWidth: 1600,
     );
     if (result != null) setState(() => photo = result);
   }
 
-  Future<void> captureVideo() async {
+  Future<void> pickVideo(ImageSource source) async {
     final result = await picker.pickVideo(
-      source: ImageSource.camera,
+      source: source,
       maxDuration: const Duration(seconds: 15),
     );
     if (result == null) return;
@@ -206,12 +206,12 @@ class _CheckInScreenState extends State<CheckInScreen> {
           const SizedBox(height: 22),
           const _SectionTitle(
             number: '2',
-            title: 'Ambil selfie',
-            subtitle: 'Foto wajib diambil langsung dari kamera.',
+            title: 'Foto bukti',
+            subtitle: 'Ambil langsung dari kamera atau pilih dari galeri.',
           ),
           const SizedBox(height: 10),
           InkWell(
-            onTap: capturePhoto,
+            onTap: () => pickPhoto(ImageSource.camera),
             borderRadius: BorderRadius.circular(22),
             child: Container(
               height: 230,
@@ -247,7 +247,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                           right: 10,
                           bottom: 10,
                           child: FilledButton.tonalIcon(
-                            onPressed: capturePhoto,
+                            onPressed: () => pickPhoto(ImageSource.camera),
                             icon: const Icon(Icons.refresh),
                             label: const Text('Ulangi'),
                           ),
@@ -256,11 +256,31 @@ class _CheckInScreenState extends State<CheckInScreen> {
                     ),
             ),
           ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => pickPhoto(ImageSource.camera),
+                  icon: const Icon(Icons.photo_camera_outlined),
+                  label: const Text('Kamera'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => pickPhoto(ImageSource.gallery),
+                  icon: const Icon(Icons.photo_library_outlined),
+                  label: const Text('Galeri'),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 22),
           const _SectionTitle(
             number: '3',
-            title: 'Rekam video',
-            subtitle: 'Opsional, maksimal 15 detik dan direkam dari kamera.',
+            title: 'Video bukti',
+            subtitle: 'Opsional, maksimal 15 detik dari kamera atau galeri.',
           ),
           const SizedBox(height: 10),
           if (videoController?.value.isInitialized == true)
@@ -288,19 +308,27 @@ class _CheckInScreenState extends State<CheckInScreen> {
                   ],
                 ),
               ),
-            )
-          else
-            OutlinedButton.icon(
-              onPressed: captureVideo,
-              icon: const Icon(Icons.videocam_outlined),
-              label: const Text('Rekam video bukti'),
             ),
-          if (video != null)
-            TextButton.icon(
-              onPressed: captureVideo,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Rekam ulang video'),
-            ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => pickVideo(ImageSource.camera),
+                  icon: const Icon(Icons.videocam_outlined),
+                  label: Text(video == null ? 'Kamera' : 'Rekam ulang'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => pickVideo(ImageSource.gallery),
+                  icon: const Icon(Icons.video_library_outlined),
+                  label: Text(video == null ? 'Galeri' : 'Ganti video'),
+                ),
+              ),
+            ],
+          ),
           /* Lokasi dihapus dari alur absensi.
           const SizedBox(height: 22),
           const _SectionTitle(

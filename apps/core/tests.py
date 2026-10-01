@@ -662,7 +662,9 @@ class BantuanTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, '<h3 class="mt-5 text-lg font-black tracking-tight text-slate-900">Bantuan</h3>', html=False)
         self.assertContains(response, 'Chat Bantuan Masuk')
-        self.assertIn('Bug & Error List', [card['title'] for card in response.context['settings_cards']])
+        card_titles = [card['title'] for card in response.context['settings_cards']]
+        self.assertIn('Bug & Error List', card_titles)
+        self.assertIn('Kelola Pengguna', card_titles)
 
     def test_admin_dapat_membuka_bug_error_list(self):
         admin = Pengguna.objects.create(
@@ -982,7 +984,14 @@ class BantuanTests(TestCase):
         self.assertEqual(response.status_code, 200)
         card_titles = [card['title'] for card in response.context['settings_cards']]
         self.assertNotIn('Pendaftaran Aslab', card_titles)
-        self.assertIn('Jaringan Pengguna', card_titles)
+        self.assertNotIn('Jaringan Pengguna', card_titles)
+        self.assertIn('Kelola Pengguna', card_titles)
+        settings_link = next(link for link in response.context['sidebar_links'] if link['title'] == 'Pengaturan')
+        self.assertNotIn('children', settings_link)
+
+        manage_response = self.client.get(reverse('pengguna:manage_list'))
+        active_links = [link['title'] for link in manage_response.context['sidebar_links'] if link['active']]
+        self.assertEqual(active_links, ['Pengaturan'])
 
     def test_tampilan_disimpan_otomatis_ke_akun_tanpa_tombol_simpan(self):
         response = self.client.get(reverse('core:settings'))

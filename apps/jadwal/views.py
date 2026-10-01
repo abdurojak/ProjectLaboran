@@ -1,8 +1,6 @@
 from datetime import date, datetime, time, timedelta
-from html import escape
 from io import BytesIO
 from math import ceil
-import zipfile
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
@@ -49,12 +47,9 @@ def export_jadwal_praktikum_excel(request):
 
 
 def build_schedule_grid_xlsx(schedules, rooms):
-    def col_name(index):
-        value = ''
-        while index:
-            index, remainder = divmod(index - 1, 26)
-            value = chr(65 + remainder) + value
-        return value
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
 
     slots = []
     cursor = datetime.combine(date.today(), time(7, 30))
@@ -64,29 +59,47 @@ def build_schedule_grid_xlsx(schedules, rooms):
         slots.append((cursor.time(), next_cursor.time()))
         cursor = next_cursor
 
-    worksheets = []
-    for sheet_index, (day_key, day_label) in enumerate(JadwalPraktikum.HARI_CHOICES, start=1):
+    workbook = Workbook()
+    header_fill = PatternFill('solid', fgColor='CCFBF1')
+    schedule_fill = PatternFill('solid', fgColor='E6FFFB')
+    header_font = Font(name='Calibri', size=11, bold=True, color='0F766E')
+    body_font = Font(name='Calibri', size=11, color='334155')
+    schedule_font = Font(name='Calibri', size=11, bold=True, color='0F172A')
+    thin_side = Side(style='thin', color='CBD5E1')
+    grid_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+
+    for sheet_index, (day_key, day_label) in enumerate(JadwalPraktikum.HARI_CHOICES):
+        worksheet = workbook.active if sheet_index == 0 else workbook.create_sheet()
+        worksheet.title = day_label
+        worksheet.freeze_panes = 'C2'
+        worksheet.sheet_view.showGridLines = False
+        worksheet.page_setup.orientation = 'landscape'
+        worksheet.page_setup.fitToWidth = 1
+        worksheet.page_setup.fitToHeight = 0
+
         day_schedules = [item for item in schedules if item.hari == day_key]
         headers = ['Dari', 'Sampai'] + [
             f'{room.nama} ({"Tak terbatas" if room.kapasitas_tak_terbatas else room.kapasitas})'
             for room in rooms
         ]
-        rows = [headers]
-        for slot_start, slot_end in slots:
-            row = [slot_start.strftime('%H:%M'), slot_end.strftime('%H:%M')]
-            for room in rooms:
-                starting = next((item for item in day_schedules if (
-                    item.waktu_mulai == slot_start
-                    and room.pk in {item.ruangan_id, item.ruangan_tambahan_id}
-                )), None)
-                row.append(
-                    f'{starting.mata_kuliah}\n{starting.pengampu or "-"}\n{starting.kelas or "-"}\n'
-                    f'{starting.waktu_mulai:%H:%M}–{starting.waktu_selesai:%H:%M}'
-                    if starting else ''
-                )
-            rows.append(row)
+        worksheet.append(headers)
+        worksheet.row_dimensions[1].height = 30
+        for cell in worksheet[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.border = grid_border
+            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-        merges = []
+        for row_index, (slot_start, slot_end) in enumerate(slots, start=2):
+            worksheet.cell(row=row_index, column=1, value=slot_start.strftime('%H:%M'))
+            worksheet.cell(row=row_index, column=2, value=slot_end.strftime('%H:%M'))
+            worksheet.row_dimensions[row_index].height = 32
+            for column_index in range(1, len(headers) + 1):
+                cell = worksheet.cell(row=row_index, column=column_index)
+                cell.font = body_font
+                cell.border = grid_border
+                cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
         for item in day_schedules:
             start_index = next((i for i, pair in enumerate(slots, start=2) if pair[0] == item.waktu_mulai), None)
             if start_index is None:
@@ -98,66 +111,34 @@ def build_schedule_grid_xlsx(schedules, rooms):
             end_index = min(start_index + span - 1, len(slots) + 1)
             for room_id in {item.ruangan_id, item.ruangan_tambahan_id} - {None}:
                 room_position = next((i for i, room in enumerate(rooms, start=3) if room.pk == room_id), None)
-                if room_position and end_index > start_index:
-                    column = col_name(room_position)
-                    merges.append(f'{column}{start_index}:{column}{end_index}')
-
-        column_xml = '<col min="1" max="2" width="12" customWidth="1"/>' + ''.join(
-            f'<col min="{index}" max="{index}" width="34" customWidth="1"/>'
-            for index in range(3, len(headers) + 1)
-        )
-        row_xml = []
-        for row_index, row in enumerate(rows, start=1):
-            cells = []
-            for column_index, value in enumerate(row, start=1):
-                coordinate = f'{col_name(column_index)}{row_index}'
-                style = 1 if row_index == 1 else (2 if column_index <= 2 else 3)
-                cells.append(
-                    f'<c r="{coordinate}" s="{style}" t="inlineStr"><is><t xml:space="preserve">'
-                    f'{escape(str(value))}</t></is></c>'
+                if not room_position:
+                    continue
+                cell = worksheet.cell(row=start_index, column=room_position)
+                cell.value = (
+                    f'{item.mata_kuliah}\n{item.pengampu or "-"}\n{item.kelas or "-"}\n'
+                    f'{item.waktu_mulai:%H:%M}-{item.waktu_selesai:%H:%M}'
                 )
-            height = '28' if row_index == 1 else '32'
-            row_xml.append(f'<row r="{row_index}" ht="{height}" customHeight="1">{"".join(cells)}</row>')
-        merge_xml = (
-            f'<mergeCells count="{len(merges)}">' + ''.join(f'<mergeCell ref="{ref}"/>' for ref in merges) + '</mergeCells>'
-            if merges else ''
-        )
-        worksheets.append(f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <sheetViews><sheetView workbookViewId="0"><pane ySplit="1" xSplit="2" topLeftCell="C2" activePane="bottomRight" state="frozen"/></sheetView></sheetViews>
-  <sheetFormatPr defaultRowHeight="20"/><cols>{column_xml}</cols><sheetData>{''.join(row_xml)}</sheetData>{merge_xml}
-  <autoFilter ref="A1:{col_name(len(headers))}1"/><pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/>
-</worksheet>''')
+                cell.fill = schedule_fill
+                cell.font = schedule_font
+                cell.border = grid_border
+                cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                if end_index > start_index:
+                    worksheet.merge_cells(
+                        start_row=start_index,
+                        start_column=room_position,
+                        end_row=end_index,
+                        end_column=room_position,
+                    )
+                    cell.border = grid_border
 
-    sheet_tags = ''.join(
-        f'<sheet name="{escape(label)}" sheetId="{index}" r:id="rId{index}"/>'
-        for index, (_, label) in enumerate(JadwalPraktikum.HARI_CHOICES, start=1)
-    )
-    rel_tags = ''.join(
-        f'<Relationship Id="rId{index}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet{index}.xml"/>'
-        for index in range(1, len(worksheets) + 1)
-    )
-    override_tags = ''.join(
-        f'<Override PartName="/xl/worksheets/sheet{index}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
-        for index in range(1, len(worksheets) + 1)
-    )
-    styles = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><color rgb="FF0F766E"/><sz val="11"/><name val="Calibri"/></font></fonts>
-<fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFCCFBF1"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE6FFFB"/></patternFill></fill></fills>
-<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFCBD5E1"/></left><right style="thin"><color rgb="FFCBD5E1"/></right><top style="thin"><color rgb="FFCBD5E1"/></top><bottom style="thin"><color rgb="FFCBD5E1"/></bottom><diagonal/></border></borders>
-<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-<cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/><xf fontId="1" fillId="2" borderId="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf fontId="0" fillId="0" borderId="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf fontId="1" fillId="3" borderId="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf></cellXfs>
-<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>'''
+        worksheet.column_dimensions['A'].width = 12
+        worksheet.column_dimensions['B'].width = 12
+        for column_index in range(3, len(headers) + 1):
+            worksheet.column_dimensions[get_column_letter(column_index)].width = 34
+        worksheet.auto_filter.ref = f'A1:{get_column_letter(len(headers))}{len(slots) + 1}'
+
     output = BytesIO()
-    with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr('[Content_Types].xml', f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>{override_tags}<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>''')
-        archive.writestr('_rels/.rels', '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>''')
-        archive.writestr('xl/workbook.xml', f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>{sheet_tags}</sheets></workbook>''')
-        archive.writestr('xl/_rels/workbook.xml.rels', f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">{rel_tags}<Relationship Id="rId{len(worksheets)+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>''')
-        archive.writestr('xl/styles.xml', styles)
-        for index, worksheet in enumerate(worksheets, start=1):
-            archive.writestr(f'xl/worksheets/sheet{index}.xml', worksheet)
+    workbook.save(output)
     return output.getvalue()
 
 

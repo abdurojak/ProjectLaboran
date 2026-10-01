@@ -1,24 +1,86 @@
 {% extends "base.html" %}
 {% block title %}Kelola Pengguna{% endblock %}
 {% block content %}
-<section class="min-w-0 space-y-6">
-    <header><p class="text-sm font-black uppercase tracking-[0.2em] text-brand-700">Kontrol Akun</p><h2 class="mt-2 text-3xl font-black text-slate-900">Kelola Pengguna</h2><p class="mt-2 text-sm text-slate-500">Data akun Laboran, Asisten Lab, dan Mahasiswa. Menu ini terpisah dari Jaringan.</p></header>
-    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <a href="?q={{ search_query|urlencode }}" class="surface-card p-4 {% if not selected_role %}ring-2 ring-brand-500{% endif %}"><p class="text-xs font-black uppercase text-slate-500">Semua</p><p class="mt-2 text-2xl font-black text-slate-900">{{ role_counts.all }}</p></a>
-        <a href="?role=laboran&q={{ search_query|urlencode }}" class="surface-card p-4 {% if selected_role == 'laboran' %}ring-2 ring-brand-500{% endif %}"><p class="text-xs font-black uppercase text-slate-500">Laboran</p><p class="mt-2 text-2xl font-black text-slate-900">{{ role_counts.laboran }}</p></a>
-        <a href="?role=asisten_lab&q={{ search_query|urlencode }}" class="surface-card p-4 {% if selected_role == 'asisten_lab' %}ring-2 ring-brand-500{% endif %}"><p class="text-xs font-black uppercase text-slate-500">Asisten Lab</p><p class="mt-2 text-2xl font-black text-slate-900">{{ role_counts.asisten_lab }}</p></a>
-        <a href="?role=mahasiswa&q={{ search_query|urlencode }}" class="surface-card p-4 {% if selected_role == 'mahasiswa' %}ring-2 ring-brand-500{% endif %}"><p class="text-xs font-black uppercase text-slate-500">Mahasiswa</p><p class="mt-2 text-2xl font-black text-slate-900">{{ role_counts.mahasiswa }}</p></a>
+<section class="min-w-0 space-y-6" data-user-management data-initial-role="{{ selected_role }}" data-initial-query="{{ search_query }}">
+    <div class="min-w-0 bg-transparent">
+        <p class="text-sm font-black uppercase tracking-[0.2em] text-brand-700">Kontrol Akun</p>
+        <h2 class="mt-2 text-3xl font-black text-slate-900">Kelola Pengguna</h2>
+        <p class="mt-2 text-sm text-slate-500">Data akun Aslab, Mahasiswa, dan Laboran. Menu ini terpisah dari Jaringan.</p>
     </div>
-    <form method="get" class="surface-card flex flex-col gap-3 p-4 sm:flex-row" data-no-global-loading="true">
-        {% if selected_role %}<input type="hidden" name="role" value="{{ selected_role }}">{% endif %}
-        <input type="search" name="q" value="{{ search_query }}" placeholder="Cari nama, NIM/NIK, email, atau program studi" class="min-w-0 flex-1">
-        <button class="btn-primary justify-center" type="submit"><i data-lucide="search" class="h-4 w-4"></i>Cari</button>
-        <a class="btn-secondary justify-center" href="{% url 'pengguna:manage_list' %}">Reset</a>
+
+    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" role="group" aria-label="Filter kategori pengguna">
+        <button type="button" class="surface-card p-4 text-left transition" data-role-filter=""><p class="text-xs font-black uppercase text-slate-500">Semua</p><p class="mt-2 text-2xl font-black text-slate-900">{{ role_counts.all }}</p></button>
+        <button type="button" class="surface-card p-4 text-left transition" data-role-filter="asisten_lab"><p class="text-xs font-black uppercase text-slate-500">Aslab</p><p class="mt-2 text-2xl font-black text-slate-900">{{ role_counts.asisten_lab }}</p></button>
+        <button type="button" class="surface-card p-4 text-left transition" data-role-filter="mahasiswa"><p class="text-xs font-black uppercase text-slate-500">Mahasiswa</p><p class="mt-2 text-2xl font-black text-slate-900">{{ role_counts.mahasiswa }}</p></button>
+        <button type="button" class="surface-card p-4 text-left transition" data-role-filter="laboran"><p class="text-xs font-black uppercase text-slate-500">Laboran</p><p class="mt-2 text-2xl font-black text-slate-900">{{ role_counts.laboran }}</p></button>
+    </div>
+
+    <form class="surface-card flex flex-col gap-3 p-4 sm:flex-row" data-user-filter-form data-no-global-loading="true">
+        <input type="search" value="{{ search_query }}" placeholder="Cari nama, NIM/NIK, email, atau program studi" class="min-w-0 flex-1" data-user-search autocomplete="off">
+        <button class="btn-secondary justify-center" type="button" data-user-filter-reset><i data-lucide="rotate-ccw" class="h-4 w-4"></i>Reset</button>
     </form>
+
+    <p class="text-sm font-semibold text-slate-500" aria-live="polite" data-user-result-count></p>
     <div class="surface-card min-w-0 overflow-hidden">
-        <div class="overflow-x-auto"><table class="min-w-[980px]"><thead class="bg-slate-50"><tr><th>Pengguna</th><th>NIM/NIK</th><th>Email</th><th>Program Studi</th><th>Role</th><th>Status</th><th>Aksi</th></tr></thead><tbody>
-        {% for item in pengguna_list %}<tr class="hover:bg-slate-50/70"><td><div class="flex items-center gap-3">{% if item.foto %}<img src="{{ item.foto.url }}" class="h-10 w-10 rounded-full object-cover" alt="">{% else %}<span class="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100"><i data-lucide="user" class="h-4 w-4"></i></span>{% endif %}<strong>{{ item.nama_pengguna }}</strong></div></td><td>{{ item.nim_nik }}</td><td>{{ item.email }}</td><td>{{ item.prodi }}</td><td><span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-black">{{ item.get_role_display }}</span></td><td>{% if item.is_verified %}<span class="font-bold text-emerald-700">Terverifikasi</span>{% else %}<span class="font-bold text-amber-700">Belum verifikasi</span>{% endif %}</td><td><div class="flex gap-3"><a class="font-black text-brand-700" href="{% url 'pengguna:detail' item.pk %}">Detail</a><a class="font-black text-amber-700" href="{% url 'pengguna:update' item.pk %}">Edit</a></div></td></tr>{% empty %}<tr><td colspan="7" class="py-12 text-center text-slate-500">Pengguna tidak ditemukan.</td></tr>{% endfor %}
-        </tbody></table></div>
+        <div class="overflow-x-auto">
+            <table class="min-w-[1040px] table-fixed">
+                <thead class="bg-slate-50"><tr><th class="w-[24%]">Pengguna</th><th class="w-[12%]">NIM/NIK</th><th class="w-[22%]">Email</th><th class="w-[14%]">Program Studi</th><th class="w-[12%]">Role</th><th class="w-[10%]">Status</th><th class="w-[10%]">Aksi</th></tr></thead>
+                <tbody>
+                    {% for item in pengguna_list %}
+                    <tr class="hover:bg-slate-50/70" data-user-row data-role="{{ item.role }}" data-search="{{ item.nama_pengguna|lower }} {{ item.nim_nik|lower }} {{ item.email|lower }} {{ item.prodi|lower }} {{ item.get_role_display|lower }}">
+                        <td><div class="flex min-w-0 items-center gap-3">{% if item.foto %}<img src="{{ item.foto.url }}" class="h-10 w-10 shrink-0 rounded-full object-cover" alt="">{% else %}<span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100"><i data-lucide="user" class="h-4 w-4"></i></span>{% endif %}<strong class="truncate">{{ item.nama_pengguna }}</strong></div></td>
+                        <td class="break-words">{{ item.nim_nik }}</td><td class="break-words">{{ item.email }}</td><td>{{ item.prodi }}</td>
+                        <td><span class="inline-flex whitespace-nowrap rounded-full bg-slate-100 px-3 py-1 text-xs font-black">{% if item.role == 'asisten_lab' %}Aslab{% else %}{{ item.get_role_display }}{% endif %}</span></td>
+                        <td>{% if item.is_verified %}<span class="whitespace-nowrap font-bold text-emerald-700">Terverifikasi</span>{% else %}<span class="whitespace-nowrap font-bold text-amber-700">Belum verifikasi</span>{% endif %}</td>
+                        <td><div class="flex flex-nowrap gap-3"><a class="whitespace-nowrap font-black text-brand-700" href="{% url 'pengguna:detail' item.pk %}">Detail</a><a class="whitespace-nowrap font-black text-amber-700" href="{% url 'pengguna:update' item.pk %}">Edit</a></div></td>
+                    </tr>
+                    {% endfor %}
+                    <tr class="hidden" data-user-empty><td colspan="7" class="py-12 text-center text-slate-500">Pengguna tidak ditemukan.</td></tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 </section>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const root = document.querySelector('[data-user-management]');
+    if (!root) return;
+    const rows = Array.from(root.querySelectorAll('[data-user-row]'));
+    const roleButtons = Array.from(root.querySelectorAll('[data-role-filter]'));
+    const searchInput = root.querySelector('[data-user-search]');
+    const emptyRow = root.querySelector('[data-user-empty]');
+    const resultCount = root.querySelector('[data-user-result-count]');
+    let selectedRole = root.dataset.initialRole || '';
+
+    function normalize(value) { return (value || '').toLocaleLowerCase('id-ID').trim(); }
+    function applyFilters() {
+        const query = normalize(searchInput?.value);
+        let visible = 0;
+        rows.forEach(function (row) {
+            const show = (!selectedRole || row.dataset.role === selectedRole) && (!query || normalize(row.dataset.search).includes(query));
+            row.classList.toggle('hidden', !show);
+            if (show) visible += 1;
+        });
+        roleButtons.forEach(function (button) {
+            const active = button.dataset.roleFilter === selectedRole;
+            button.classList.toggle('ring-2', active);
+            button.classList.toggle('ring-brand-500', active);
+        });
+        emptyRow?.classList.toggle('hidden', visible !== 0);
+        if (resultCount) resultCount.textContent = `${visible} pengguna ditampilkan`;
+        const params = new URLSearchParams();
+        if (selectedRole) params.set('role', selectedRole);
+        if (query) params.set('q', searchInput.value.trim());
+        history.replaceState(null, '', `${location.pathname}${params.size ? `?${params}` : ''}`);
+    }
+    roleButtons.forEach(function (button) { button.addEventListener('click', function () { selectedRole = button.dataset.roleFilter || ''; applyFilters(); }); });
+    searchInput?.addEventListener('input', applyFilters);
+    root.querySelector('[data-user-filter-form]')?.addEventListener('submit', function (event) { event.preventDefault(); applyFilters(); });
+    root.querySelector('[data-user-filter-reset]')?.addEventListener('click', function () { selectedRole = ''; if (searchInput) searchInput.value = ''; applyFilters(); });
+    applyFilters();
+});
+</script>
 {% endblock %}

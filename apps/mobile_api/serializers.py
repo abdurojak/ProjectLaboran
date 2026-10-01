@@ -242,14 +242,18 @@ class CheckInSerializer(serializers.Serializer):
             return video
         extension = Path(video.name).suffix.lower()
         content_type = (getattr(video, 'content_type', '') or '').lower()
-        if extension != '.mp4' or content_type != 'video/mp4':
-            raise serializers.ValidationError('Video harus berformat MP4.')
+        allowed_video_types = {
+            '.mp4': {'video/mp4'},
+            '.mov': {'video/quicktime', 'video/mov', 'video/x-quicktime'},
+        }
+        if extension not in allowed_video_types or content_type not in allowed_video_types[extension]:
+            raise serializers.ValidationError('Video harus berformat MP4 atau MOV.')
         if video.size > settings.ABSENSI_MAX_VIDEO_SIZE_MB * 1024 * 1024:
             raise serializers.ValidationError(f'Ukuran video maksimal {settings.ABSENSI_MAX_VIDEO_SIZE_MB} MB.')
         try:
             duration = MP4(video.file).info.length
         except (MP4StreamInfoError, OSError, ValueError, AttributeError) as exc:
-            raise serializers.ValidationError('Isi file video MP4 tidak valid.') from exc
+            raise serializers.ValidationError('Isi file video MP4 atau MOV tidak valid.') from exc
         finally:
             video.seek(0)
         if duration > settings.ABSENSI_MAX_VIDEO_DURATION_SECONDS + 0.5:

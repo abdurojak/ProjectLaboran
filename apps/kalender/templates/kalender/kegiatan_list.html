@@ -146,6 +146,9 @@
     }
     .calendar-agenda-panel {
         min-height: 0;
+        background: transparent !important;
+        border: 0 !important;
+        box-shadow: none !important;
     }
     .calendar-agenda-list {
         min-height: 0;
@@ -169,21 +172,26 @@
         }
         .calendar-agenda-panel {
             display: flex;
-            max-height: min(54rem, calc(100vh - 8rem));
+            height: 100%;
             flex-direction: column;
-            overflow: hidden;
+            overflow: visible;
         }
         .calendar-sidebar {
-            align-self: start;
+            height: 100%;
+            min-width: 0;
+            align-self: stretch;
         }
         .calendar-sidebar > .calendar-agenda-panel {
             margin-top: 0 !important;
         }
         .calendar-agenda-list {
-            overflow-y: auto;
-            overscroll-behavior: contain;
-            padding-right: 0.35rem;
-            scrollbar-gutter: stable;
+            display: grid;
+            flex: 1 1 auto;
+            grid-auto-rows: minmax(0, 1fr);
+            overflow: visible;
+        }
+        .calendar-agenda-list > .calendar-agenda-card {
+            height: 100%;
         }
     }
     html[data-theme="dark"] .calendar-page {
@@ -352,7 +360,7 @@
 {% endblock %}
 
 {% block content %}
-<section class="calendar-page min-w-0 max-w-full space-y-6 overflow-hidden">
+<section class="calendar-page min-w-0 max-w-full space-y-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="min-w-0">
             <p class="text-sm font-bold uppercase tracking-[0.2em] text-blue-700">Kalender</p>
@@ -371,7 +379,7 @@
         </div>
     </div>
 
-    <div class="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(340px,380px)]">
+    <div class="grid min-w-0 items-stretch gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(340px,380px)]">
         <div class="surface-card calendar-shell self-start p-4 md:p-6">
             <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
                 <div class="min-w-0">
@@ -444,14 +452,14 @@
             </div>
             {% endif %}
 
-            <div class="calendar-agenda-panel calendar-side-card surface-card p-5 md:p-6">
-                <div class="mb-4 flex items-center justify-between gap-3">
+            <div class="calendar-agenda-panel calendar-side-card">
+                <div class="surface-card mb-4 flex items-center justify-between gap-3 p-5 md:p-6">
                     <div>
                         <h3 class="text-xl font-bold text-slate-900">Agenda Terdekat</h3>
                         <p class="mt-1 text-sm text-slate-500">Lima kegiatan terdekat untuk pengecekan cepat.</p>
                     </div>
                 </div>
-                <div class="calendar-agenda-list space-y-4">
+                <div class="calendar-agenda-list gap-4">
                     {% for kegiatan in upcoming_kegiatan %}
                     <a href="{% url 'kalender:kegiatan_detail' kegiatan.pk %}" class="calendar-agenda-card block rounded-[24px] border border-slate-200 bg-slate-50/80 p-4 transition hover:border-blue-200 hover:bg-blue-50/40">
                         <div class="flex items-start justify-between gap-3">

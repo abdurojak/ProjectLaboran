@@ -302,19 +302,9 @@ class PenggunaManageListView(UserManagementRequiredMixin, ListView):
     context_object_name = 'pengguna_list'
 
     def get_queryset(self):
-        queryset = Pengguna.objects.exclude(role='admin').order_by('nama_pengguna')
-        role = self.request.GET.get('role', '').strip()
-        query = self.request.GET.get('q', '').strip()
-        if role in {'laboran', 'asisten_lab', 'mahasiswa'}:
-            queryset = queryset.filter(role=role)
-        if query:
-            queryset = queryset.filter(
-                Q(nama_pengguna__icontains=query)
-                | Q(nim_nik__icontains=query)
-                | Q(email__icontains=query)
-                | Q(prodi__icontains=query)
-            )
-        return queryset
+        # Muat sekali agar pencarian dan kategori berubah langsung di browser
+        # tanpa request baru atau reload halaman.
+        return Pengguna.objects.exclude(role='admin').order_by('nama_pengguna')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

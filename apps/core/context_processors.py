@@ -189,19 +189,24 @@ SIDEBAR_LINKS = [
     },
     {'title': 'Ruangan', 'icon': 'door-open', 'url': 'ruangan:ruangan_list', 'namespace': 'ruangan', 'roles': {LABORAN_ROLE, ASISTEN_LAB_ROLE, MAHASISWA_ROLE}},
     {
-        'title': 'Pengguna', 'icon': 'users-round', 'url': 'pengguna:manage_list',
-        'namespace': 'pengguna',
-        'url_names': {'manage_list', 'create', 'update', 'delete', 'change_password'},
-        'roles': {ADMIN_ROLE, LABORAN_ROLE},
-    },
-    {
         'title': 'Jaringan', 'icon': 'contact-round', 'url': 'pengguna:list',
         'namespace': 'pengguna', 'url_names': {'list', 'detail'},
         'roles': {ADMIN_ROLE, LABORAN_ROLE, ASISTEN_LAB_ROLE, MAHASISWA_ROLE},
     },
     {'title': 'Surat Laboran', 'icon': 'mails', 'url': 'surat:list', 'namespace': 'surat', 'roles': {LABORAN_ROLE}},
     {'title': 'Bug & Error List', 'icon': 'bug', 'url': 'core:bug_error_list', 'namespace': 'core', 'url_names': {'bug_error_list'}, 'roles': {ADMIN_ROLE, LABORAN_ROLE}},
-    {'title': 'Pengaturan', 'icon': 'settings', 'url': 'core:settings', 'namespace': 'core', 'url_names': {'settings'}},
+    {
+        'title': 'Pengaturan', 'icon': 'settings', 'url': 'core:settings',
+        'namespace': 'core', 'url_names': {'settings'},
+        'active_routes': {
+            ('core', 'settings'),
+            ('pengguna', 'manage_list'),
+            ('pengguna', 'create'),
+            ('pengguna', 'update'),
+            ('pengguna', 'delete'),
+            ('pengguna', 'change_password'),
+        },
+    },
 ]
 
 MAHASISWA_VISIBLE_NAMESPACES = {'core', 'dashboard', 'kalender', 'peminjaman', 'jadwal', 'asleb', 'ruangan', 'pengguna'}
@@ -218,6 +223,8 @@ PUBLIC_PAGE_META = {
 
 
 def _set_active(item, current_namespace, current_url_name):
+    if item.get('active_routes'):
+        return (current_namespace, current_url_name) in item['active_routes']
     url_names = item.get('url_names')
     if url_names:
         active_namespace = item.get('active_namespace', item['namespace'])

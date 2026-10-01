@@ -415,10 +415,13 @@ class ApiService {
         ),
       };
       if (video != null) {
+        final videoType = video.name.toLowerCase().endsWith('.mov')
+            ? DioMediaType('video', 'quicktime')
+            : DioMediaType('video', 'mp4');
         data['video_absensi'] = await MultipartFile.fromFile(
           video.path,
           filename: video.name,
-          contentType: DioMediaType('video', 'mp4'),
+          contentType: videoType,
         );
       }
       final response = await dio.post(

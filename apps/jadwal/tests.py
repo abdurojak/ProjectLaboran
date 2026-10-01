@@ -1,6 +1,7 @@
 from datetime import date, time
 from io import BytesIO
-import zipfile
+
+from openpyxl import load_workbook
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
@@ -99,11 +100,17 @@ class JadwalViewTests(TestCase):
             response['Content-Type'],
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         )
-        with zipfile.ZipFile(BytesIO(response.content)) as workbook:
-            worksheet = workbook.read('xl/worksheets/sheet1.xml').decode()
-        self.assertIn('Praktikum Basis Data', worksheet)
-        self.assertIn('Kamis', worksheet)
-        self.assertIn('Lab Rekayasa Data', worksheet)
+        workbook = load_workbook(BytesIO(response.content), data_only=True)
+        self.assertEqual(workbook.sheetnames, ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'])
+        worksheet = workbook['Kamis']
+        values = [
+            str(cell.value)
+            for row in worksheet.iter_rows()
+            for cell in row
+            if cell.value is not None
+        ]
+        self.assertTrue(any('Praktikum Basis Data' in value for value in values))
+        self.assertTrue(any('Lab Rekayasa Data' in value for value in values))
 
     def test_event_lab_only_appears_on_selected_date_without_changing_recurring_schedule(self):
         event = KegiatanKalender.objects.create(

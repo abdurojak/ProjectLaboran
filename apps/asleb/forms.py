@@ -35,7 +35,6 @@ from .services import (
 
 
 ENABLE_CAMERA_LOCATION_CAPTURE = False
-MAX_DAILY_MODULE_ATTENDANCE = 2
 
 
 def validate_document_upload(uploaded, allowed_extensions=None):
@@ -240,7 +239,9 @@ class AbsensiAslebForm(forms.ModelForm):
         widgets = {
             'pekerjaan': forms.Textarea(attrs={'rows': 4}),
             'bukti_foto': forms.FileInput(attrs={'class': 'hidden', 'accept': 'image/jpeg,image/png'}),
-            'bukti_video': forms.FileInput(attrs={'class': 'hidden', 'accept': 'video/webm,video/mp4'}),
+            'bukti_video': forms.FileInput(
+                attrs={'class': 'hidden', 'accept': 'video/webm,video/mp4,video/quicktime,.mov'}
+            ),
         }
 
     def __init__(self, *args, **kwargs):
@@ -290,8 +291,11 @@ class AbsensiAslebForm(forms.ModelForm):
 
     def clean_bukti_video(self):
         video = self.cleaned_data['bukti_video']
-        if not self._has_allowed_content_type(video, ['video/webm', 'video/mp4']):
-            raise forms.ValidationError('Bukti video harus berupa video WebM atau MP4.')
+        if not self._has_allowed_content_type(
+            video,
+            ['video/webm', 'video/mp4', 'video/quicktime', 'video/mov', 'video/x-quicktime'],
+        ):
+            raise forms.ValidationError('Bukti video harus berupa video WebM, MP4, atau MOV.')
         if video.size > 20 * 1024 * 1024:
             raise forms.ValidationError('Ukuran bukti video maksimal 20 MB.')
         return video
@@ -341,17 +345,6 @@ class AbsensiAslebForm(forms.ModelForm):
         latitude = self._read_decimal(cleaned_data.get('latitude'))
         longitude = self._read_decimal(cleaned_data.get('longitude'))
         accuracy = self._read_float(cleaned_data.get('gps_accuracy'))
-
-        daily_attendance = AbsensiAsleb.objects.filter(
-            asleb=self.asleb,
-            tanggal_praktikum=attendance_date,
-        ) if self.asleb else AbsensiAsleb.objects.none()
-        if self.instance and self.instance.pk:
-            daily_attendance = daily_attendance.exclude(pk=self.instance.pk)
-        if daily_attendance.count() >= MAX_DAILY_MODULE_ATTENDANCE:
-            raise forms.ValidationError(
-                f'Anda sudah melakukan absensi maksimal {MAX_DAILY_MODULE_ATTENDANCE} modul untuk tanggal praktikum ini.'
-            )
 
         if not ENABLE_CAMERA_LOCATION_CAPTURE:
             cleaned_data['latitude'] = None

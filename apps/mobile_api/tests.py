@@ -144,6 +144,24 @@ class MobileAbsensiApiTests(TestCase):
         payload.update(overrides)
         return payload
 
+    @patch('apps.mobile_api.serializers.MP4')
+    @patch('apps.mobile_api.views.validate_schedule_time', return_value=(True, '', 'sudah_absen'))
+    def test_absensi_mobile_menerima_video_mov(self, _mock_time, mock_mp4):
+        mock_mp4.return_value.info.length = 10
+        self.authenticate()
+        response = self.client.post(
+            reverse('mobile_api:check_in'),
+            self.check_in_payload(
+                video_absensi=SimpleUploadedFile(
+                    'bukti.mov', b'video-mov', content_type='video/quicktime'
+                )
+            ),
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertTrue(AbsensiMasukAsleb.objects.get().video_absensi.name.endswith('.mov'))
+
     @override_settings(MOBILE_APK_VERSION='1.0.5', MOBILE_APK_MIN_BUILD=6)
     def test_konfigurasi_versi_aplikasi_dapat_diakses_tanpa_login(self):
         response = self.client.get(reverse('mobile_api:app_version'))

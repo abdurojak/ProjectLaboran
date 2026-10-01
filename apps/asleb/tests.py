@@ -382,7 +382,17 @@ class AslebViewTests(TestCase):
         self.assertIn('image/jpeg,image/png', form.fields['bukti_foto'].widget.attrs.get('accept', ''))
         self.assertEqual(form.fields['bukti_video'].label, 'Upload Bukti Video')
         self.assertTrue(form.fields['bukti_video'].required)
-        self.assertIn('video/webm,video/mp4', form.fields['bukti_video'].widget.attrs.get('accept', ''))
+        video_accept = form.fields['bukti_video'].widget.attrs.get('accept', '')
+        self.assertIn('video/webm,video/mp4', video_accept)
+        self.assertIn('video/quicktime', video_accept)
+        self.assertIn('.mov', video_accept)
+
+    def test_form_absensi_menerima_video_mov(self):
+        video = SimpleUploadedFile('bukti.mov', b'video-mov', content_type='video/quicktime')
+        form = AbsensiAslebForm(asleb=self.asleb, jadwal=self.create_active_schedule())
+        form.cleaned_data = {'bukti_video': video}
+
+        self.assertEqual(form.clean_bukti_video(), video)
 
     @patch('apps.asleb.views.ENABLE_CAMERA_LOCATION_CAPTURE', True)
     def test_form_absensi_tetap_menyediakan_pilihan_galeri_saat_mode_kamera_aktif(self):
@@ -3008,7 +3018,7 @@ class AslebViewTests(TestCase):
 
         self.assertTrue(form.is_valid(), form.errors)
 
-    def test_absensi_mengizinkan_maksimal_dua_modul_di_hari_yang_sama(self):
+    def test_absensi_mengizinkan_lebih_dari_dua_modul_di_hari_yang_sama(self):
         PendaftaranAsleb.objects.create(
             nama=self.asleb.nama,
             nim=self.asleb.nim,
@@ -3099,8 +3109,7 @@ class AslebViewTests(TestCase):
             jadwal=jadwal_diubah,
         )
 
-        self.assertFalse(third_form.is_valid())
-        self.assertIn('maksimal 2 modul', str(third_form.non_field_errors()))
+        self.assertTrue(third_form.is_valid(), third_form.errors)
 
     def test_pengingat_email_maksimal_tiga_kali(self):
         PendaftaranAsleb.objects.create(
