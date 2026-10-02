@@ -47,6 +47,14 @@ class MataKuliahAsleb(models.Model):
     sks = models.PositiveSmallIntegerField('SKS', default=0, blank=True)
     dosen = models.CharField(max_length=200)
     kelas = models.CharField(max_length=50)
+    laboratorium = models.ForeignKey(
+        'ruangan.RuanganLab',
+        on_delete=models.SET_NULL,
+        related_name='mata_kuliah_aslab',
+        blank=True,
+        null=True,
+        help_text='Laboratorium pengelola mata kuliah untuk rekap dan surat honor Aslab.',
+    )
     maksimal_aslab = models.PositiveSmallIntegerField(
         'Maksimal Aslab',
         default=2,

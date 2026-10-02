@@ -1,7 +1,10 @@
 from collections import OrderedDict
+from dataclasses import dataclass
+from datetime import timedelta
 from io import BytesIO
 
 from django.conf import settings
+from django.db.models import Q
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4
@@ -28,12 +31,26 @@ MONTH_NAMES = [
 
 
 LAB_SIGNATURES = OrderedDict([
-    ('Laboratorium Sistem Informasi dan Rekayasa Perangkat Lunak', 'Drs. Syaifudin, M.Si., Ph.D.'),
-    ('Laboratorium Sains Data dan Analitik', 'Dian Pratiwi, ST, MTI.'),
-    ('Laboratorium Rekayasa Data', 'Is Mardianto, S.S, M.Kom.'),
-    ('Laboratorium Pemrograman', 'Anung B. Ariwibowo, M.Kom.'),
+    ('Laboratorium Pemrograman', 'Anung B. Ariwibowo, S.Kom., M.Kom.'),
+    ('Laboratorium Rekayasa Data', 'Is Mardianto, S.Si., M.Kom.'),
+    ('Laboratorium Sains Data dan Analitik', 'Dian Pratiwi, S.T., MTI'),
     ('Laboratorium Sistem dan Keamanan Informasi', 'Ir. Gatot Budi Santoso, M.Kom.'),
+    ('Laboratorium Sistem Informasi dan Rekayasa Perangkat Lunak', 'Drs. Syaifudin, M.Si., Ph.D.'),
 ])
+
+LAB_NAMES_BY_ROOM_CODE = {
+    'LAB-RPL': 'Laboratorium Sistem Informasi dan Rekayasa Perangkat Lunak',
+    'LAB-SDA': 'Laboratorium Sains Data dan Analitik',
+    'LAB-RD': 'Laboratorium Rekayasa Data',
+    'LAB-PRG': 'Laboratorium Pemrograman',
+    'LAB-SKI': 'Laboratorium Sistem dan Keamanan Informasi',
+}
+
+
+@dataclass(frozen=True)
+class HonorLabRow:
+    honor: object
+    matkul_labels: tuple[str, ...]
 
 
 LAB_KEYWORDS = [
@@ -81,18 +98,93 @@ def date_label(date_value):
 
 
 def classify_laboratorium(matkul):
-    normalized = (matkul or '').lower()
+    laboratorium = getattr(matkul, 'laboratorium', None)
+    if laboratorium:
+        canonical_name = LAB_NAMES_BY_ROOM_CODE.get(laboratorium.kode)
+        if canonical_name:
+            return canonical_name
+    normalized = str(matkul or '').lower()
     for lab_name, keywords in LAB_KEYWORDS:
         if any(keyword in normalized for keyword in keywords):
             return lab_name
     return 'Laboratorium Pemrograman'
 
 
-def group_honors_by_laboratorium(honors):
+def get_honor_courses(honor, bulan):
+    from apps.pendaftaran_asleb.models import AslabAssignment, MataKuliahAsleb, RiwayatAsleb
+
+    month_start = bulan.replace(day=1)
+    next_month = (
+        month_start.replace(year=month_start.year + 1, month=1)
+        if month_start.month == 12
+        else month_start.replace(month=month_start.month + 1)
+    )
+    month_end = next_month - timedelta(days=1)
+    courses = list(
+        MataKuliahAsleb.objects.filter(
+            aslab_slots__assignments__asleb=honor.asleb,
+            aslab_slots__assignments__mulai_pada__lte=month_end,
+        )
+        .filter(
+            Q(aslab_slots__assignments__berakhir_pada__isnull=True)
+            | Q(aslab_slots__assignments__berakhir_pada__gte=month_start)
+        )
+        .filter(aslab_slots__assignments__status__in=[
+            AslabAssignment.STATUS_ACTIVE,
+            AslabAssignment.STATUS_RESIGNED,
+            AslabAssignment.STATUS_TERMINATED,
+            AslabAssignment.STATUS_REPLACED,
+            AslabAssignment.STATUS_COMPLETED,
+        ])
+        .select_related('laboratorium')
+        .distinct()
+        .order_by('nama', 'kelas', 'pk')
+    )
+    if courses:
+        return courses
+
+    history_course_ids = RiwayatAsleb.objects.filter(
+        nim=honor.asleb.nim,
+        periode__mulai__lte=month_end,
+        periode__selesai__gte=month_start,
+        matkul__isnull=False,
+    ).values_list('matkul_id', flat=True)
+    courses = list(
+        MataKuliahAsleb.objects.filter(pk__in=history_course_ids)
+        .select_related('laboratorium')
+        .order_by('nama', 'kelas', 'pk')
+    )
+    if courses:
+        return courses
+
+    legacy_label = (honor.asleb.matkul or '').strip()
+    if not legacy_label:
+        return []
+    return list(
+        MataKuliahAsleb.objects.filter(
+            Q(nama__iexact=legacy_label) | Q(kode__iexact=legacy_label)
+        ).select_related('laboratorium').order_by('nama', 'kelas', 'pk')
+    )
+
+
+def group_honors_by_laboratorium(honors, bulan):
     grouped = OrderedDict((lab_name, []) for lab_name in LAB_SIGNATURES)
     for honor in honors:
-        lab_name = classify_laboratorium(honor.asleb.matkul)
-        grouped.setdefault(lab_name, []).append(honor)
+        courses = get_honor_courses(honor, bulan)
+        if not courses:
+            legacy_label = honor.asleb.matkul or '-'
+            lab_name = classify_laboratorium(legacy_label)
+            grouped.setdefault(lab_name, []).append(HonorLabRow(honor, (legacy_label,)))
+            continue
+
+        labels_by_lab = OrderedDict()
+        for course in courses:
+            lab_name = classify_laboratorium(course)
+            labels = labels_by_lab.setdefault(lab_name, [])
+            if course.nama not in labels:
+                labels.append(course.nama)
+        for lab_name, labels in labels_by_lab.items():
+            grouped.setdefault(lab_name, []).append(HonorLabRow(honor, tuple(labels)))
     return OrderedDict((lab_name, items) for lab_name, items in grouped.items() if items)
 
 
@@ -157,19 +249,17 @@ def generate_surat_honor_pdf(honors, nomor_surat, tanggal_surat, bulan, perihal)
     styles = build_styles()
     story = []
     honors = list(honors)
-    combined_title = 'Seluruh Asisten Laboratorium'
-    grouped = OrderedDict([(combined_title, honors)]) if honors else OrderedDict()
+    grouped = group_honors_by_laboratorium(honors, bulan)
     bulan_label = month_year_label(bulan)
 
     story.extend(build_cover_letter(styles, grouped, nomor_surat, tanggal_surat, bulan_label, perihal))
-    if honors:
+    for lab_name, lab_honors in grouped.items():
         story.append(PageBreak())
         story.extend(build_lampiran_page(
             styles,
-            combined_title,
-            honors,
+            lab_name,
+            lab_honors,
             bulan_label,
-            combined=True,
         ))
 
     if not grouped:
@@ -319,12 +409,18 @@ def build_lampiran_page(styles, lab_name, honors, bulan_label, combined=False):
         paragraph('STATUS', styles['TableHeader']),
         paragraph('JUMLAH JAM', styles['TableHeader']),
     ]]
-    for index, honor in enumerate(honors, start=1):
+    for index, item in enumerate(honors, start=1):
+        honor = item.honor if isinstance(item, HonorLabRow) else item
+        matkul_labels = (
+            item.matkul_labels
+            if isinstance(item, HonorLabRow)
+            else (honor.asleb.matkul or '-',)
+        )
         data.append([
             str(index),
             paragraph(honor.asleb.nama, styles['TableCell']),
             paragraph(honor.asleb.nim, styles['TableCell']),
-            paragraph(honor.asleb.matkul or '-', styles['TableCell']),
+            paragraph('<br/>'.join(matkul_labels), styles['TableCell']),
             paragraph(honor.get_level_display(), styles['TableCell']),
             str(honor.total_akhir),
         ])

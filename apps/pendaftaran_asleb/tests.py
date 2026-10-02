@@ -88,14 +88,20 @@ class PendaftaranAslebViewTests(TestCase):
         session.save()
         self.laboran = pengguna
 
+        self.laboratorium = RuanganLab.objects.get(kode='LAB-PRG')
+
         self.matkul, _ = MataKuliahAsleb.objects.get_or_create(
             kode='SDA_TIF01_ABDUL',
             defaults={
                 'nama': 'Struktur Data dan Algoritma',
                 'dosen': 'Abdul Rois',
                 'kelas': 'TIF-01',
+                'laboratorium': self.laboratorium,
             },
         )
+        if self.matkul.laboratorium_id != self.laboratorium.pk:
+            self.matkul.laboratorium = self.laboratorium
+            self.matkul.save(update_fields=['laboratorium'])
         self.pendaftaran = PendaftaranAsleb.objects.create(
             nama='Rizki Pratama',
             nim='2401001',
@@ -235,6 +241,7 @@ class PendaftaranAslebViewTests(TestCase):
                 'sks': self.matkul.sks,
                 'dosen': self.matkul.dosen,
                 'kelas': self.matkul.kelas,
+                'laboratorium': self.laboratorium.pk,
                 'maksimal_aslab': 2,
                 'aktif': 'on',
             },
@@ -1327,6 +1334,7 @@ class PendaftaranAslebViewTests(TestCase):
             'kode': self.matkul.kode, 'kode_mk': self.matkul.kode_mk,
             'nama': self.matkul.nama, 'sks': self.matkul.sks,
             'dosen': self.matkul.dosen, 'kelas': 'TIF-01-BARU',
+            'laboratorium': self.laboratorium.pk,
             'maksimal_aslab': self.matkul.maksimal_aslab, 'aktif': 'on',
         })
 
@@ -1344,6 +1352,7 @@ class PendaftaranAslebViewTests(TestCase):
             'nama': 'Testing Mata Kuliah',
             'dosen': 'Dosen Penguji',
             'kelas': 'TIF-01',
+            'laboratorium': self.laboratorium.pk,
             'maksimal_aslab': 2,
             'aktif': 'on',
         })

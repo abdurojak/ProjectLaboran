@@ -129,8 +129,8 @@ class AslabAssignmentAdmin(admin.ModelAdmin):
 
 @admin.register(MataKuliahAsleb)
 class MataKuliahAslebAdmin(admin.ModelAdmin):
-    list_display = ('kode', 'kode_mk', 'nama', 'sks', 'dosen', 'kelas', 'maksimal_aslab', 'aktif')
-    list_filter = ('aktif', 'nama', 'kelas')
+    list_display = ('kode', 'kode_mk', 'nama', 'sks', 'dosen', 'kelas', 'laboratorium', 'maksimal_aslab', 'aktif')
+    list_filter = ('aktif', 'laboratorium', 'nama', 'kelas')
     search_fields = ('kode', 'kode_mk', 'nama', 'dosen', 'kelas')
 
 

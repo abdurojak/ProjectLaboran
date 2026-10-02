@@ -6,6 +6,8 @@ from django import forms
 from django.core.files.base import ContentFile
 from django.db.models import Count, F, Q
 
+from apps.ruangan.models import RuanganLab
+
 from .models import (
     AslabAssignment,
     KoreksiPengalamanAsleb,
@@ -409,10 +411,12 @@ class AkhiriPeriodeAslebForm(forms.Form):
 
 
 class MataKuliahAslebForm(forms.ModelForm):
+    LAB_CODES = ('LAB-PRG', 'LAB-RD', 'LAB-SDA', 'LAB-SKI', 'LAB-RPL')
+
     class Meta:
         model = MataKuliahAsleb
         fields = [
-            'kode', 'kode_mk', 'nama', 'sks', 'dosen', 'kelas',
+            'kode', 'kode_mk', 'nama', 'sks', 'dosen', 'kelas', 'laboratorium',
             'maksimal_aslab', 'aktif',
         ]
         widgets = {
@@ -424,6 +428,15 @@ class MataKuliahAslebForm(forms.ModelForm):
             'kelas': forms.TextInput(attrs={'placeholder': 'Contoh: TIF-01'}),
             'maksimal_aslab': forms.NumberInput(attrs={'min': 1, 'max': 5}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['laboratorium'].queryset = RuanganLab.objects.filter(
+            kode__in=self.LAB_CODES,
+            aktif=True,
+        ).order_by('nama')
+        self.fields['laboratorium'].required = True
+        self.fields['laboratorium'].empty_label = 'Pilih laboratorium pengelola'
 
     def clean_maksimal_aslab(self):
         capacity = self.cleaned_data['maksimal_aslab']

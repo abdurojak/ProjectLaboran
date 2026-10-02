@@ -2457,7 +2457,30 @@ class AslebViewTests(TestCase):
 
     @patch('apps.asleb.surat_honor.SimpleDocTemplate.build')
     @patch('apps.asleb.surat_honor.build_lampiran_page', return_value=[])
-    def test_pdf_surat_memakai_satu_lampiran_gabungan(self, lampiran_mock, _build_mock):
+    def test_pdf_surat_memisahkan_lampiran_sesuai_lab_dan_semua_matkul_aslab(self, lampiran_mock, _build_mock):
+        lab_pemrograman = RuanganLab.objects.get(kode='LAB-PRG')
+        lab_rpl = RuanganLab.objects.get(kode='LAB-RPL')
+        self.matkul.laboratorium = lab_pemrograman
+        self.matkul.save(update_fields=['laboratorium'])
+        assignment = self.create_active_assignment()
+        pemrograman_web = MataKuliahAsleb.objects.create(
+            kode='PW_TEST_SURAT',
+            kode_mk='IKG6305',
+            nama='Pemrograman Web',
+            dosen='Yunia Ningish, M.Kom',
+            kelas='SI-01',
+            laboratorium=lab_rpl,
+        )
+        AslabAssignment.objects.create(
+            slot=AslabSlot.objects.create(
+                periode=assignment.slot.periode,
+                matkul=pemrograman_web,
+                nomor=1,
+            ),
+            asleb=self.asleb,
+            mulai_pada=assignment.slot.periode.mulai,
+            status=AslabAssignment.STATUS_ACTIVE,
+        )
         honor = HonorAsleb.objects.create(
             asleb=self.asleb,
             bulan=date(2026, 10, 1),
@@ -2474,11 +2497,18 @@ class AslebViewTests(TestCase):
             perihal='Honor Oktober',
         )
 
-        lampiran_mock.assert_called_once()
-        args, kwargs = lampiran_mock.call_args
-        self.assertEqual(args[1], 'Seluruh Asisten Laboratorium')
-        self.assertEqual(args[2], [honor])
-        self.assertTrue(kwargs['combined'])
+        self.assertEqual(lampiran_mock.call_count, 2)
+        calls_by_lab = {call.args[1]: call.args[2] for call in lampiran_mock.call_args_list}
+        self.assertSetEqual(set(calls_by_lab), {
+            'Laboratorium Pemrograman',
+            'Laboratorium Sistem Informasi dan Rekayasa Perangkat Lunak',
+        })
+        programming_row = calls_by_lab['Laboratorium Pemrograman'][0]
+        rpl_row = calls_by_lab['Laboratorium Sistem Informasi dan Rekayasa Perangkat Lunak'][0]
+        self.assertEqual(programming_row.honor, honor)
+        self.assertEqual(programming_row.matkul_labels, (self.matkul.nama,))
+        self.assertEqual(rpl_row.honor, honor)
+        self.assertEqual(rpl_row.matkul_labels, (pemrograman_web.nama,))
 
     @patch('apps.asleb.views.generate_surat_honor_pdf', return_value=b'%PDF-1.4\n%%EOF')
     def test_honor_ditahan_visible_tetapi_tidak_dapat_dibayar_atau_masuk_surat(self, _pdf):

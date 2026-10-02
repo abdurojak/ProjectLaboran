@@ -58,6 +58,7 @@
                         <th>SKS</th>
                         <th>Dosen</th>
                         <th>Kelas</th>
+                        <th>Laboratorium</th>
                         <th>Kuota Aslab</th>
                         <th>Status</th>
                         <th>Aksi</th>
@@ -72,6 +73,7 @@
                         <td>{{ matkul.sks|default:"-" }}</td>
                         <td>{{ matkul.dosen }}</td>
                         <td>{{ matkul.kelas }}</td>
+                        <td>{{ matkul.laboratorium.nama|default:"Belum ditentukan" }}</td>
                         <td>
                             <span class="inline-flex rounded-full bg-teal-50 px-3 py-1 text-xs font-black text-teal-700">
                                 {{ matkul.aslab_terisi }}/{{ matkul.maksimal_aslab }} terisi
@@ -99,7 +101,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="9" class="py-12 text-center text-slate-500">Belum ada pilihan matkul.</td>
+                        <td colspan="10" class="py-12 text-center text-slate-500">Belum ada pilihan matkul.</td>
                     </tr>
                     {% endfor %}
                     <tr class="hidden" data-matkul-empty>
