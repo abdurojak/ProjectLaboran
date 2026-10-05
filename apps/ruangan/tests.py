@@ -87,7 +87,7 @@ class RuanganViewTests(TestCase):
         self.assertContains(response, 'Kapasitas 12 mahasiswa')
         self.assertEqual(response.context['jumlah_ruangan'], 1)
 
-    def test_ruangan_page_menampilkan_grup_ruangan_gabungan(self):
+    def test_ruangan_page_menyembunyikan_grup_ruangan_gabungan(self):
         lab_rpl = RuanganLab.objects.get(kode='LAB-RPL')
         lab_ski = RuanganLab.objects.create(
             nama='Lab Sistem Keamanan Informasi',
@@ -105,9 +105,9 @@ class RuanganViewTests(TestCase):
         response = self.client.get(reverse('ruangan:ruangan_list'))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Grup Ruangan Gabungan')
-        self.assertContains(response, 'Lab RPL dan Lab SKI')
-        self.assertContains(response, 'Kapasitas gabungan 38 mahasiswa')
+        self.assertNotContains(response, 'Grup Ruangan Gabungan')
+        self.assertNotContains(response, 'Lab RPL dan Lab SKI')
+        self.assertNotContains(response, 'Kapasitas gabungan 38 mahasiswa')
 
     def test_laboran_dapat_upload_foto_lab(self):
         ruangan = RuanganLab.objects.get(kode='LAB-RPL')

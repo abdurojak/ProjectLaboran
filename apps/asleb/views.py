@@ -5,6 +5,7 @@ from datetime import timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from io import BytesIO
 from html import escape
+from pathlib import Path
 
 from django.contrib import messages
 from django.core.paginator import Paginator
@@ -26,6 +27,7 @@ from django.views.generic import CreateView, DeleteView, DetailView, FormView, L
 
 from apps.core.views import PostOnlyDeleteMixin
 from apps.core.permissions import ASISTEN_LAB_ROLE, LABORAN_ROLE, MAHASISWA_ROLE, can_manage_lab_operations
+from apps.core.rar import build_rar4
 from apps.jadwal.models import JadwalPraktikum
 from apps.kalender.realtime import send_attendance_update, send_data_refresh, send_honor_update
 from apps.pengguna.models import Pengguna
@@ -511,6 +513,57 @@ def export_honor_asleb_excel(request):
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     )
     response['Content-Disposition'] = f'attachment; filename="rekap-honorarium-aslab-{suffix}.xlsx"'
+    return response
+
+
+@require_GET
+def download_all_paid_honor_proofs(request):
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not pengguna or pengguna.role != LABORAN_ROLE:
+        messages.error(request, 'Hanya Laboran yang dapat mengunduh seluruh bukti transfer honor.')
+        return redirect('asleb:honor_list')
+
+    selected_month = request.GET.get('bulan', '').strip()
+    try:
+        year, month = (int(part) for part in selected_month.split('-', 1))
+        if month < 1 or month > 12:
+            raise ValueError
+    except (TypeError, ValueError):
+        messages.error(request, 'Pilih bulan bukti transfer yang ingin diunduh.')
+        return redirect('asleb:honor_list')
+
+    honors = HonorAsleb.objects.select_related('asleb').filter(
+        status='dibayar',
+        bulan__year=year,
+        bulan__month=month,
+    ).exclude(bukti_transfer='').order_by('bulan', 'asleb__nama', 'pk')
+    archive_files = []
+    used_names = set()
+    for honor in honors:
+        try:
+            with honor.bukti_transfer.open('rb') as proof_file:
+                content = proof_file.read()
+        except (OSError, ValueError):
+            continue
+        extension = Path(honor.bukti_transfer.name).suffix.lower() or '.bin'
+        base_name = slugify(f'{honor.asleb.nama}-{honor.asleb.nim}') or f'aslab-{honor.asleb_id}'
+        archive_name = f'{honor.bulan:%Y-%m}/{base_name}{extension}'
+        if archive_name in used_names:
+            archive_name = f'{honor.bulan:%Y-%m}/{base_name}-{honor.pk}{extension}'
+        used_names.add(archive_name)
+        archive_files.append((archive_name, content, honor.diperbarui_pada))
+
+    if not archive_files:
+        messages.warning(request, f'Belum ada bukti transfer honor untuk periode {selected_month}.')
+        return redirect('asleb:honor_list')
+
+    archive = build_rar4(archive_files)
+    response = HttpResponse(archive, content_type='application/vnd.rar')
+    response['Content-Disposition'] = content_disposition_header(
+        True,
+        f'bukti-transfer-honor-aslab-{selected_month}.rar',
+    )
+    response['Content-Length'] = len(archive)
     return response
 
 

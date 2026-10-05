@@ -6,7 +6,7 @@ from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 from apps.core.permissions import LABORAN_ROLE
 
 from .forms import FotoRuanganLabForm, RuanganLabForm
-from .models import FotoRuanganLab, GrupRuanganGabungan, RuanganLab
+from .models import FotoRuanganLab, RuanganLab
 
 
 class LaboranRuanganRequiredMixin:
@@ -33,11 +33,6 @@ class RuanganListView(ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['jumlah_ruangan'] = context['ruangan_list'].count()
-        context['grup_gabungan_list'] = (
-            GrupRuanganGabungan.objects.filter(aktif=True)
-            .prefetch_related('ruangan')
-            .order_by('nama')
-        )
         return context
 
 

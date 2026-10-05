@@ -70,6 +70,16 @@
                 <i data-lucide="file-spreadsheet" class="h-4 w-4"></i>
                 <span>Ekspor Excel</span>
             </a>
+            {% if is_laboran %}
+            <form method="get" action="{% url 'asleb:honor_proofs_download_all' %}" class="flex min-w-0 flex-col gap-2 sm:flex-row" data-no-global-loading="true">
+                <label for="id_bulan_bukti_rar" class="sr-only">Bulan bukti transfer</label>
+                <input id="id_bulan_bukti_rar" name="bulan" type="month" value="{{ selected_bulan }}" required class="min-w-0 sm:w-40">
+                <button type="submit" class="btn-secondary whitespace-nowrap" data-no-page-transition="true">
+                    <i data-lucide="archive-restore" class="h-4 w-4"></i>
+                    <span>Download Bukti RAR</span>
+                </button>
+            </form>
+            {% endif %}
             <a class="btn-secondary" href="{% url 'asleb:surat_honor_list' %}">
                 <i data-lucide="archive" class="h-4 w-4"></i>
                 <span>Arsip Surat</span>

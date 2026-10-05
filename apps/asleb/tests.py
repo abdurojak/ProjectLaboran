@@ -2464,6 +2464,21 @@ class AslebViewTests(TestCase):
         self.assertIn('Sudah Ditransfer', mail.outbox[0].subject)
         self.assertIn('Rp 147.000', mail.outbox[0].body)
         self.assertIn('30 April 2026', mail.outbox[0].body)
+        self.assertEqual(len(mail.outbox[0].attachments), 1)
+        self.assertEqual(mail.outbox[0].attachments[0][0], 'bukti-tf.pdf')
+        self.assertTrue(bytes(mail.outbox[0].attachments[0][1]).startswith(b'%PDF-1.4'))
+
+        archive_response = self.client.get(
+            reverse('asleb:honor_proofs_download_all'),
+            {'bulan': '2026-04'},
+        )
+        self.assertEqual(archive_response.status_code, 200)
+        self.assertEqual(archive_response['Content-Type'], 'application/vnd.rar')
+        self.assertIn('.rar', archive_response['Content-Disposition'])
+        self.assertIn('2026-04', archive_response['Content-Disposition'])
+        self.assertTrue(archive_response.content.startswith(b'Rar!\x1a\x07\x00'))
+        self.assertIn(b'2026-04/siti-nurhaliza-2301001.pdf', archive_response.content)
+        self.assertIn(b'%PDF-1.4', archive_response.content)
 
         with self.captureOnCommitCallbacks(execute=True):
             self.client.post(reverse('asleb:honor_confirm_transfer', args=[honor.pk]), {

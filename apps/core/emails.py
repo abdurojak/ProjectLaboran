@@ -17,6 +17,7 @@ def send_branded_email(
     action_label=None,
     highlight=None,
     note=None,
+    attachments=None,
     fail_silently=False,
 ):
     recipients = [email for email in recipients if email]
@@ -43,4 +44,6 @@ def send_branded_email(
         to=recipients,
     )
     email.attach_alternative(html_body, 'text/html')
+    for filename, content, mimetype in attachments or []:
+        email.attach(filename, content, mimetype)
     return email.send(fail_silently=fail_silently)

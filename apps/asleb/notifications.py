@@ -1,3 +1,5 @@
+import mimetypes
+from pathlib import Path
 from urllib.parse import urljoin
 
 from django.conf import settings
@@ -50,6 +52,17 @@ def send_honor_paid_email(honor_id):
         f'PIC transfer: {honor.pic_transfer}\n\n'
         f'Lihat rincian honor: {action_url}'
     )
+    attachments = []
+    if honor.bukti_transfer:
+        try:
+            with honor.bukti_transfer.open('rb') as proof_file:
+                proof_content = proof_file.read()
+            proof_name = Path(honor.bukti_transfer.name).name
+            proof_type = mimetypes.guess_type(proof_name)[0] or 'application/octet-stream'
+            attachments.append((proof_name, proof_content, proof_type))
+        except (OSError, ValueError):
+            # Email tetap dikirim jika storage bukti sedang tidak tersedia.
+            pass
     return send_branded_email(
         subject=f'Honor Asisten Lab {period_label} Sudah Ditransfer',
         recipients=recipients,
@@ -71,5 +84,6 @@ def send_honor_paid_email(honor_id):
         action_label='Lihat Rincian Honor',
         highlight=honor.jumlah_rupiah,
         note='Simpan bukti pembayaran yang tersedia pada halaman rincian honor. Hubungi laboran jika dana belum diterima.',
+        attachments=attachments,
         fail_silently=True,
     )
