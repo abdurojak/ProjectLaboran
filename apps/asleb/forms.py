@@ -195,9 +195,9 @@ class KonfirmasiTransferHonorForm(forms.ModelForm):
 
 class SuratHonorAslebGenerateForm(forms.Form):
     bulan = forms.DateField(
-        widget=forms.DateInput(attrs={'type': 'month'}),
+        widget=forms.Select(),
         input_formats=['%Y-%m', '%Y-%m-%d'],
-        help_text='Pilih bulan honor yang akan dibuatkan surat.',
+        help_text='Pilih periode honor yang akan dibuatkan surat.',
     )
     nomor_surat = forms.CharField(
         max_length=120,
@@ -209,6 +209,19 @@ class SuratHonorAslebGenerateForm(forms.Form):
         initial=SuratHonorAsleb._meta.get_field('perihal').default,
         widget=forms.TextInput(attrs={'placeholder': 'Perihal surat'}),
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        month_names = (
+            '', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+            'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+        )
+        cursor = timezone.localdate().replace(day=1)
+        choices = []
+        for _ in range(24):
+            choices.append((cursor.strftime('%Y-%m'), f'{month_names[cursor.month]} {cursor.year}'))
+            cursor = (cursor - timedelta(days=1)).replace(day=1)
+        self.fields['bulan'].widget.choices = choices
 
     def clean_bulan(self):
         bulan = self.cleaned_data['bulan']

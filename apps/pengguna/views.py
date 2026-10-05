@@ -539,11 +539,16 @@ class PenggunaChangePasswordView(View):
         if not current or (current.role != 'admin' and current.pk != pengguna.pk):
             messages.error(request, 'Anda tidak memiliki akses untuk mengganti password akun ini.')
             return redirect('dashboard:home')
-        form = ChangePasswordForm(request.POST)
+        form = ChangePasswordForm(request.POST, current_password_hash=pengguna.password)
 
         if form.is_valid():
             pengguna.password = make_password(form.cleaned_data['password'])
-            pengguna.save(update_fields=['password', 'diperbarui_pada'])
+            pengguna.must_change_password = bool(
+                pengguna.role == 'laboran' and current.pk != pengguna.pk
+            )
+            pengguna.save(update_fields=['password', 'must_change_password', 'diperbarui_pada'])
+            if current.pk == pengguna.pk:
+                request.session.pop('password_change_required', None)
             messages.success(request, 'Password pengguna berhasil diganti.')
         else:
             for field_errors in form.errors.values():
@@ -551,6 +556,37 @@ class PenggunaChangePasswordView(View):
                     messages.error(request, error)
 
         return redirect('pengguna:detail', pk=pk)
+
+
+class LaboranForcePasswordChangeView(FormView):
+    template_name = 'pengguna/force_password_change.html'
+    form_class = ChangePasswordForm
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        pengguna = getattr(self.request, 'current_pengguna', None)
+        kwargs['current_password_hash'] = pengguna.password if pengguna else None
+        kwargs['same_password_message'] = 'Password baru tidak boleh sama dengan password lama/default.'
+        return kwargs
+
+    def dispatch(self, request, *args, **kwargs):
+        pengguna = getattr(request, 'current_pengguna', None)
+        if not pengguna:
+            return redirect('pengguna:login')
+        if pengguna.role != 'laboran' or not pengguna.must_change_password:
+            request.session.pop('password_change_required', None)
+            return redirect('dashboard:home')
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        pengguna = self.request.current_pengguna
+        password = form.cleaned_data['password']
+        pengguna.password = make_password(password)
+        pengguna.must_change_password = False
+        pengguna.save(update_fields=['password', 'must_change_password', 'diperbarui_pada'])
+        self.request.session.pop('password_change_required', None)
+        messages.success(self.request, 'Password berhasil diperbarui. Sekarang Anda dapat menggunakan LabHub.')
+        return redirect('dashboard:home')
 
 
 class PenggunaUpdateProfileView(View):
@@ -787,6 +823,10 @@ class PenggunaLoginView(FormView):
         cache.delete(login_attempt_cache_key(self.request))
         self.request.session.cycle_key()
         self.request.session['pengguna_id'] = pengguna.pk
+        if pengguna.role == 'laboran' and pengguna.must_change_password:
+            self.request.session['password_change_required'] = True
+            messages.warning(self.request, 'Password masih menggunakan password sementara. Buat password baru untuk melanjutkan.')
+            return redirect('pengguna:force_password_change')
         messages.success(self.request, f'Selamat datang, {pengguna.nama_pengguna}.')
         next_url = self.request.GET.get('next')
         if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={self.request.get_host()}):

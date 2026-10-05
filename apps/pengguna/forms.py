@@ -8,6 +8,9 @@ from .models import Fakultas, PengalamanPengguna, Pengguna, Prodi, School
 from .utils import validate_human_face_photo
 
 
+ALLOWED_PRODI = ('Informatika', 'Sistem Informasi')
+
+
 def active_name_choices(model, empty_label):
     try:
         choices = list(model.objects.filter(aktif=True).values_list('nama', 'nama'))
@@ -19,7 +22,14 @@ def active_name_choices(model, empty_label):
 
 def apply_fakultas_prodi_choices(form):
     form.fields['fakultas'].widget = forms.Select(choices=active_name_choices(Fakultas, 'Pilih fakultas'))
-    form.fields['prodi'].widget = forms.Select(choices=active_name_choices(Prodi, 'Pilih prodi'))
+    form.fields['prodi'].widget = forms.Select(choices=[('', 'Pilih prodi'), *((name, name) for name in ALLOWED_PRODI)])
+
+
+def apply_prodi_from_nim(cleaned_data):
+    inferred = Pengguna.infer_prodi_from_nim(cleaned_data.get('nim_nik'))
+    if inferred:
+        cleaned_data['prodi'] = inferred
+    return cleaned_data
 
 
 def add_password_validator_errors(form, password):
@@ -77,6 +87,7 @@ class PenggunaForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
+        apply_prodi_from_nim(cleaned_data)
         add_password_validator_errors(self, cleaned_data.get('password'))
         return cleaned_data
 
@@ -90,6 +101,11 @@ class PenggunaForm(forms.ModelForm):
 
         if hapus_foto:
             instance.foto = None
+
+        # Password Laboran dibuat/direset oleh pengelola hanya bersifat
+        # sementara. Laboran menetapkan password pribadinya saat login baru.
+        if instance.role == 'laboran' and (not instance.pk or password):
+            instance.must_change_password = True
 
         if commit:
             instance.save()
@@ -114,6 +130,12 @@ class ProdiForm(forms.ModelForm):
         widgets = {
             'nama': forms.TextInput(attrs={'placeholder': 'Contoh: Informatika'}),
         }
+
+    def clean_nama(self):
+        nama = self.cleaned_data['nama'].strip()
+        if nama not in ALLOWED_PRODI:
+            raise forms.ValidationError('Prodi hanya boleh Informatika atau Sistem Informasi.')
+        return nama
 
 
 class PenggunaAppearanceForm(forms.ModelForm):
@@ -209,6 +231,9 @@ class PenggunaProfileForm(forms.ModelForm):
         if no_hp and not no_hp.isdigit():
             raise forms.ValidationError('No HP hanya boleh berisi angka.')
         return no_hp
+
+    def clean(self):
+        return apply_prodi_from_nim(super().clean())
 
     def save(self, commit=True):
         instance = super().save(commit=False)
@@ -431,6 +456,13 @@ class ChangePasswordForm(forms.Form):
     password = forms.CharField(label='Password baru', widget=forms.PasswordInput)
     password_confirmation = forms.CharField(label='Konfirmasi password baru', widget=forms.PasswordInput)
 
+    def __init__(self, *args, current_password_hash=None, same_password_message=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.current_password_hash = current_password_hash
+        self.same_password_message = same_password_message or (
+            'Password baru tidak boleh sama dengan password yang sedang digunakan.'
+        )
+
     def clean(self):
         cleaned_data = super().clean()
         password = cleaned_data.get('password')
@@ -438,6 +470,9 @@ class ChangePasswordForm(forms.Form):
 
         if password and password_confirmation and password != password_confirmation:
             self.add_error('password_confirmation', 'Konfirmasi password tidak sama.')
+
+        if password and self.current_password_hash and check_password(password, self.current_password_hash):
+            self.add_error('password', self.same_password_message)
 
         add_password_validator_errors(self, password)
         return cleaned_data
@@ -580,6 +615,7 @@ class RegisterPenggunaForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
+        apply_prodi_from_nim(cleaned_data)
         password = cleaned_data.get('password')
         password_confirmation = cleaned_data.get('password_confirmation')
         nim_nik = cleaned_data.get('nim_nik')

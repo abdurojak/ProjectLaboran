@@ -2583,11 +2583,22 @@
                 });
             }
 
+            function resetGlobalLoading() {
+                if (!globalLoading) return;
+                loadingCount = 0;
+                initialLoadingActive = false;
+                window.clearTimeout(loadingTimer);
+                delete globalLoading.dataset.initialLoading;
+                globalLoading.classList.remove('is-visible');
+                globalLoading.setAttribute('aria-hidden', 'true');
+            }
+
             if (document.readyState === 'complete') {
                 hideInitialLoadingWhenReady();
             } else {
                 window.addEventListener('load', hideInitialLoadingWhenReady, {once: true});
             }
+            window.addEventListener('pageshow', resetGlobalLoading);
 
             document.body.addEventListener('htmx:beforeRequest', showGlobalLoading);
             document.body.addEventListener('htmx:afterRequest', hideGlobalLoading);

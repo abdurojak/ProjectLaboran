@@ -68,6 +68,17 @@
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const hapusFotoInput = document.getElementById('id_hapus_foto');
+        const nimInput = document.getElementById('id_nim_nik');
+        const prodiInput = document.getElementById('id_prodi');
+        if (nimInput && prodiInput) {
+            const updateProdiFromNim = function () {
+                const prefix = (nimInput.value || '').slice(0, 3);
+                const prodiByPrefix = {'064': 'Informatika', '065': 'Sistem Informasi'};
+                if (prodiByPrefix[prefix]) prodiInput.value = prodiByPrefix[prefix];
+            };
+            nimInput.addEventListener('input', updateProdiFromNim);
+            updateProdiFromNim();
+        }
 
         document.querySelectorAll('[data-file-upload]').forEach(function (component) {
             const fileInput = component.querySelector('input[type="file"]');

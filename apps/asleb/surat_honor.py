@@ -408,6 +408,7 @@ def build_lampiran_page(styles, lab_name, honors, bulan_label, combined=False):
         paragraph('MATA KULIAH', styles['TableHeader']),
         paragraph('STATUS', styles['TableHeader']),
         paragraph('JUMLAH JAM', styles['TableHeader']),
+        paragraph('TOTAL HONOR', styles['TableHeader']),
     ]]
     for index, item in enumerate(honors, start=1):
         honor = item.honor if isinstance(item, HonorLabRow) else item
@@ -423,9 +424,10 @@ def build_lampiran_page(styles, lab_name, honors, bulan_label, combined=False):
             paragraph('<br/>'.join(matkul_labels), styles['TableCell']),
             paragraph(honor.get_level_display(), styles['TableCell']),
             str(honor.total_akhir),
+            paragraph(honor.jumlah_rupiah, styles['TableCell']),
         ])
 
-    table = Table(data, colWidths=[1.0 * cm, 5.4 * cm, 2.8 * cm, 4.2 * cm, 2.2 * cm, 2.0 * cm])
+    table = Table(data, colWidths=[0.8 * cm, 4.2 * cm, 2.5 * cm, 3.5 * cm, 1.7 * cm, 1.6 * cm, 2.7 * cm])
     table.setStyle(TableStyle([
         ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),

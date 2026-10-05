@@ -64,6 +64,7 @@ from .surat_honor import (
     build_lampiran_page,
     build_styles,
     generate_surat_honor_pdf,
+    month_year_label,
 )
 
 
@@ -1032,7 +1033,7 @@ class AslebViewTests(TestCase):
         self.assertRedirects(response, reverse('asleb:absensi_list'))
         self.assertTrue(PengaturanAbsensiAsleb.get_solo().dibuka)
 
-    @patch('apps.asleb.views.timezone.localdate', return_value=date(2026, 7, 9))
+    @patch('apps.asleb.views.timezone.localdate', return_value=date(2026, 8, 2))
     def test_laboran_dapat_membuka_absensi_susulan_satu_kali_untuk_aslab(self, _localdate):
         aslab_user = self.login_asisten_for_matkul()
         jadwal = self.create_active_schedule()
@@ -1079,6 +1080,9 @@ class AslebViewTests(TestCase):
         self.assertRedirects(submit_response, reverse('asleb:absensi_list'))
         attendance = AbsensiAsleb.objects.get(izin_manual=permission)
         self.assertEqual(attendance.tanggal_praktikum, date(2026, 7, 6))
+        july_honor = HonorAsleb.objects.get(asleb=self.asleb, bulan=date(2026, 7, 1))
+        self.assertEqual(july_honor.total_pertemuan, 1)
+        self.assertFalse(HonorAsleb.objects.filter(asleb=self.asleb, bulan=date(2026, 8, 1)).exists())
         permission.refresh_from_db()
         self.assertIsNotNone(permission.digunakan_pada)
         self.assertRedirects(
@@ -2266,6 +2270,61 @@ class AslebViewTests(TestCase):
         asleb_group = next(link for link in response.context['sidebar_links'] if link['title'] == 'Asisten Laboratorium')
         self.assertEqual([child['title'] for child in asleb_group['children'] if child['active']], ['Rekap Honorarium'])
 
+    def test_honor_list_tanpa_parameter_hanya_menghitung_bulan_aktif(self):
+        current_month = timezone.localdate().replace(day=1)
+        previous_month = (current_month - timedelta(days=1)).replace(day=1)
+        current_honor = HonorAsleb.objects.create(
+            asleb=self.asleb,
+            bulan=current_month,
+            total_pertemuan=1,
+            status='diproses',
+        )
+        HonorAsleb.objects.create(
+            asleb=self.asleb,
+            bulan=previous_month,
+            total_pertemuan=2,
+            status='diproses',
+        )
+
+        response = self.client.get(reverse('asleb:honor_list'))
+
+        self.assertEqual(response.context['total_honor'], current_honor.jumlah_rupiah)
+        self.assertEqual(response.context['selected_bulan'], current_month.strftime('%Y-%m'))
+        self.assertContains(response, f'Total Honor Seluruh Aslab · {month_year_label(current_month)}')
+
+    def test_generate_surat_menyediakan_pilihan_bulan_dan_default_bulan_sebelumnya(self):
+        current_month = timezone.localdate().replace(day=1)
+        previous_month = (current_month - timedelta(days=1)).replace(day=1)
+
+        response = self.client.get(reverse('asleb:surat_honor_generate'))
+        form = response.context['form']
+
+        self.assertEqual(form.initial['bulan'], previous_month.strftime('%Y-%m'))
+        self.assertEqual(form.fields['bulan'].widget.__class__.__name__, 'Select')
+        choice_values = [value for value, _label in form.fields['bulan'].widget.choices]
+        self.assertIn(previous_month.strftime('%Y-%m'), choice_values)
+
+    def test_download_surat_tidak_mengaktifkan_loading_navigasi(self):
+        surat = SuratHonorAsleb.objects.create(
+            bulan=date(2026, 9, 1),
+            nomor_surat='001/HON/IX/2026',
+            tanggal_surat=date(2026, 10, 1),
+            perihal='Honor September',
+            dibuat_oleh=self.pengguna,
+            total_honor=0,
+            jumlah_asleb=0,
+            file_pdf=SimpleUploadedFile('honor-september.pdf', b'%PDF-1.4\n%%EOF'),
+        )
+
+        response = self.client.get(reverse('asleb:surat_honor_list'))
+
+        download_url = reverse('asleb:surat_honor_download', args=[surat.pk])
+        self.assertContains(
+            response,
+            f'href="{download_url}" data-no-global-loading="true" data-no-page-transition="true"',
+            html=False,
+        )
+
     def test_asisten_lab_melihat_menu_rekap_honorarium_pribadi(self):
         self.login_asisten_for_matkul()
 
@@ -2414,7 +2473,7 @@ class AslebViewTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
 
     @patch('apps.asleb.views.generate_surat_honor_pdf', return_value=b'%PDF-1.4\n%%EOF')
-    def test_generate_surat_mencakup_seluruh_aslab_aktif(self, pdf_mock):
+    def test_generate_surat_hanya_mencakup_aslab_dengan_jam_terealisasi(self, pdf_mock):
         active_without_honor = Asleb.objects.create(
             nama='Aslab Aktif Kedua',
             nim='HON-ACTIVE-2',
@@ -2433,6 +2492,12 @@ class AslebViewTests(TestCase):
             tanggal_bergabung=date(2025, 7, 1),
             status='nonaktif',
         )
+        AbsensiAsleb.objects.create(
+            asleb=self.asleb,
+            tanggal_praktikum=date(2026, 10, 1),
+            modul=1,
+            materi_praktikum='Pertemuan pertama',
+        )
 
         response = self.client.post(reverse('asleb:surat_honor_generate'), {
             'bulan': '2026-10',
@@ -2445,15 +2510,27 @@ class AslebViewTests(TestCase):
         surat = SuratHonorAsleb.objects.get()
         self.assertSetEqual(
             set(surat.honors.values_list('asleb_id', flat=True)),
-            {self.asleb.pk, active_without_honor.pk},
+            {self.asleb.pk},
         )
-        self.assertEqual(surat.jumlah_asleb, 2)
+        self.assertEqual(surat.jumlah_asleb, 1)
         self.assertFalse(HonorAsleb.objects.filter(asleb=inactive, bulan=date(2026, 10, 1)).exists())
         generated_honors = pdf_mock.call_args.kwargs['honors']
-        self.assertEqual([honor.asleb.nama for honor in generated_honors], [
-            'Aslab Aktif Kedua',
-            self.asleb.nama,
-        ])
+        self.assertEqual([honor.asleb.nama for honor in generated_honors], [self.asleb.nama])
+
+    def test_lampiran_surat_menampilkan_total_honor_bersih(self):
+        honor = HonorAsleb.objects.create(
+            asleb=self.asleb,
+            bulan=date(2026, 10, 1),
+            jumlah_praktikum=1,
+            total_pertemuan=3,
+            status='diproses',
+        )
+
+        story = build_lampiran_page(build_styles(), 'Laboratorium Pemrograman', [honor], 'Oktober 2026')
+        table = story[-3]
+
+        self.assertEqual(table._cellvalues[0][-1].text, 'TOTAL HONOR')
+        self.assertEqual(table._cellvalues[1][-1].text, honor.jumlah_rupiah)
 
     @patch('apps.asleb.surat_honor.SimpleDocTemplate.build')
     @patch('apps.asleb.surat_honor.build_lampiran_page', return_value=[])

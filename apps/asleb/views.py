@@ -373,7 +373,10 @@ class HonorAslebListView(HonorAccessMixin, ListView):
     context_object_name = 'honor_list'
 
     def _apply_request_filters(self, queryset, *, report_errors=True):
-        return filter_honor_queryset(self.request, queryset, report_errors=report_errors)
+        queryset = filter_honor_queryset(self.request, queryset, report_errors=report_errors)
+        if not self.request.GET.get('bulan', '').strip():
+            queryset = queryset.filter(bulan=timezone.localdate().replace(day=1))
+        return queryset
 
     def get_global_filtered_queryset(self):
         return self._apply_request_filters(
@@ -420,6 +423,10 @@ class HonorAslebListView(HonorAccessMixin, ListView):
 
         context['search_query'] = self.request.GET.get('q', '').strip()
         context['selected_bulan'] = selected_bulan
+        selected_bulan_date = parse_date(f'{selected_bulan}-01')
+        context['selected_bulan_label'] = (
+            month_year_label(selected_bulan_date) if selected_bulan_date else selected_bulan
+        )
         context['selected_status'] = self.request.GET.get('status', '').strip()
         context['status_choices'] = HonorAsleb.STATUS_CHOICES
         context['total_honor'] = f'Rp {total_honor:,.0f}'.replace(',', '.')
@@ -625,7 +632,7 @@ class SuratHonorAslebGenerateView(SuratHonorAccessMixin, FormView):
 
     def get_initial(self):
         today = timezone.localdate()
-        bulan = today.replace(day=1)
+        bulan = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
         return {
             'bulan': bulan.strftime('%Y-%m'),
             'tanggal_surat': today,
@@ -650,9 +657,13 @@ class SuratHonorAslebGenerateView(SuratHonorAccessMixin, FormView):
                 asleb__status='aktif',
             )
         ).order_by('asleb__nama', 'asleb__nim'))
+        # Surat pengajuan pembayaran hanya memuat Aslab yang benar-benar
+        # memiliki jam terealisasi. Rekap nol jam tetap tersimpan di sistem,
+        # tetapi tidak perlu menjadi baris pengajuan honor.
+        honors = [honor for honor in honors if honor.total_akhir > 0]
 
         if not honors:
-            form.add_error('bulan', 'Belum ada rekap honor aslab untuk bulan ini.')
+            form.add_error('bulan', 'Belum ada jam absensi terealisasi untuk bulan ini.')
             return self.form_invalid(form)
 
         total_honor = sum(honor.jumlah for honor in honors)
@@ -3113,5 +3124,9 @@ def _sync_honor_attendance(asleb, bulan):
 
 
 def sync_honor_from_mobile_absensi(absensi_masuk):
+    # `tanggal_absensi` adalah tanggal praktikum efektif. Untuk absensi
+    # susulan nilainya berasal dari izin Laboran, bukan tanggal upload bukti.
+    # Karena itu izin September yang digunakan pada Oktober tetap dibukukan
+    # ke rekap honor September.
     bulan = absensi_masuk.tanggal_absensi.replace(day=1)
     return _sync_honor_attendance(absensi_masuk.asleb, bulan)

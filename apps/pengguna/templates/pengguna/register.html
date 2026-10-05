@@ -291,13 +291,22 @@
         });
 
         const nimInput = document.getElementById('id_nim_nik');
+        const prodiInput = document.getElementById('id_prodi');
         const derivedEmail = document.querySelector('[data-derived-email]');
+        const updateProdiFromNim = function () {
+            if (!nimInput || !prodiInput) return;
+            const prefix = (nimInput.value || '').slice(0, 3);
+            const prodiByPrefix = {'064': 'Informatika', '065': 'Sistem Informasi'};
+            if (prodiByPrefix[prefix]) prodiInput.value = prodiByPrefix[prefix];
+        };
         if (nimInput && derivedEmail) {
             const updateDerivedEmail = function () {
                 derivedEmail.textContent = (nimInput.value || '<NIM>') + '@std.trisakti.ac.id';
             };
             nimInput.addEventListener('input', updateDerivedEmail);
+            nimInput.addEventListener('input', updateProdiFromNim);
             updateDerivedEmail();
+            updateProdiFromNim();
         }
 
         document.querySelectorAll('[data-file-upload]').forEach(function (component) {

@@ -458,6 +458,9 @@ class CheckInView(APIView):
             manual_permission.tanggal_praktikum
             if manual_permission else timezone.localdate()
         )
+        # Simpan tanggal praktikum yang diizinkan sebagai tanggal efektif.
+        # Waktu upload tetap tersedia di `waktu_masuk`/`dibuat_pada`, sehingga
+        # rekap honor tidak bergeser ke bulan saat absensi susulan dikirim.
         if AbsensiMasukAsleb.objects.filter(
             asleb=asleb, jadwal=schedule, tanggal_absensi=attendance_date,
         ).exists():

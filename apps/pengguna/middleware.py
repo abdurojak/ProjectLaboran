@@ -124,6 +124,8 @@ class PenggunaLoginRequiredMiddleware:
         forgot_password_url = reverse('pengguna:forgot_password')
         health_url = reverse('health')
         login_url = reverse('pengguna:login')
+        force_password_url = reverse('pengguna:force_password_change')
+        logout_url = reverse('pengguna:logout')
         register_url = reverse('pengguna:register')
         reset_password_url = reverse('pengguna:reset_password')
         verify_register_url = reverse('pengguna:verify_register')
@@ -171,6 +173,14 @@ class PenggunaLoginRequiredMiddleware:
             from apps.barang_tertinggal.services import link_barang_tertinggal_to_pengguna
             link_peserta_praktikum_to_pengguna(pengguna)
             link_barang_tertinggal_to_pengguna(pengguna)
+
+            force_password_path = self.internal_path(force_password_url)
+            logout_path = self.internal_path(logout_url)
+            password_change_required = bool(pengguna.role == 'laboran' and pengguna.must_change_password)
+            if not password_change_required:
+                request.session.pop('password_change_required', None)
+            if password_change_required and path not in {force_password_path, logout_path}:
+                return self.disable_client_cache(redirect(force_password_url))
 
             if path in {
                 self.internal_path(login_url),

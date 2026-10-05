@@ -782,7 +782,8 @@ class MobileAbsensiApiTests(TestCase):
 
     @patch('apps.mobile_api.views.validate_schedule_time', return_value=(False, 'Bukan hari jadwal.', None))
     def test_izin_susulan_web_dapat_dipakai_sekali_melalui_mobile(self, _mock_time):
-        attendance_date = date(2030, 1, 7)
+        submission_month = timezone.localdate().replace(day=1)
+        attendance_date = submission_month - timedelta(days=1)
         permission = IzinAbsensiManualAsleb.objects.create(
             asleb=self.asleb,
             jadwal=self.schedule,
@@ -806,6 +807,15 @@ class MobileAbsensiApiTests(TestCase):
         self.assertEqual(response.status_code, 201, response.data)
         attendance = AbsensiMasukAsleb.objects.get()
         self.assertEqual(attendance.tanggal_absensi, attendance_date)
+        target_honor = HonorAsleb.objects.get(
+            asleb=self.asleb,
+            bulan=attendance_date.replace(day=1),
+        )
+        self.assertEqual(target_honor.total_pertemuan, 1)
+        self.assertFalse(HonorAsleb.objects.filter(
+            asleb=self.asleb,
+            bulan=submission_month,
+        ).exists())
         permission.refresh_from_db()
         self.assertIsNotNone(permission.digunakan_pada)
 

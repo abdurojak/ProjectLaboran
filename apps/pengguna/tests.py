@@ -976,6 +976,81 @@ class PenggunaAuthTests(TestCase):
         self.assertRedirects(response, reverse('dashboard:home'))
         self.assertEqual(self.client.session['pengguna_id'], self.pengguna.pk)
 
+    def test_laboran_dengan_password_sementara_langsung_diarahkan_ganti_password(self):
+        self.pengguna.role = 'laboran'
+        self.pengguna.must_change_password = True
+        self.pengguna.save(update_fields=['role', 'must_change_password', 'diperbarui_pada'])
+
+        response = self.client.post(
+            reverse('pengguna:login'),
+            {
+                'jenis_login': 'karyawan',
+                'nim_nik': self.pengguna.nim_nik,
+                'password': 'rahasia123',
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('pengguna:force_password_change'),
+            fetch_redirect_response=False,
+        )
+        self.assertTrue(self.client.session['password_change_required'])
+
+    def test_sesi_laboran_aktif_juga_dialihkan_ke_ganti_password(self):
+        self.pengguna.role = 'laboran'
+        self.pengguna.must_change_password = True
+        self.pengguna.save(update_fields=['role', 'must_change_password', 'diperbarui_pada'])
+        session = self.client.session
+        session['pengguna_id'] = self.pengguna.pk
+        session.save()
+
+        response = self.client.get(reverse('dashboard:home'))
+
+        self.assertRedirects(
+            response,
+            reverse('pengguna:force_password_change'),
+            fetch_redirect_response=False,
+        )
+
+    def test_laboran_wajib_ganti_password_tidak_boleh_memakai_password_lama(self):
+        self.pengguna.role = 'laboran'
+        self.pengguna.must_change_password = True
+        self.pengguna.save(update_fields=['role', 'must_change_password', 'diperbarui_pada'])
+        session = self.client.session
+        session['pengguna_id'] = self.pengguna.pk
+        session.save()
+
+        response = self.client.post(reverse('pengguna:force_password_change'), {
+            'password': 'rahasia123',
+            'password_confirmation': 'rahasia123',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Password baru tidak boleh sama dengan password lama/default.')
+        self.pengguna.refresh_from_db()
+        self.assertTrue(self.pengguna.must_change_password)
+
+    def test_laboran_dapat_menyimpan_password_pribadi_dan_melanjutkan(self):
+        self.pengguna.role = 'laboran'
+        self.pengguna.must_change_password = True
+        self.pengguna.save(update_fields=['role', 'must_change_password', 'diperbarui_pada'])
+        session = self.client.session
+        session['pengguna_id'] = self.pengguna.pk
+        session['password_change_required'] = True
+        session.save()
+
+        response = self.client.post(reverse('pengguna:force_password_change'), {
+            'password': 'PasswordPribadi987!',
+            'password_confirmation': 'PasswordPribadi987!',
+        })
+
+        self.assertRedirects(response, reverse('dashboard:home'), fetch_redirect_response=False)
+        self.pengguna.refresh_from_db()
+        self.assertFalse(self.pengguna.must_change_password)
+        self.assertTrue(check_password('PasswordPribadi987!', self.pengguna.password))
+        self.assertNotIn('password_change_required', self.client.session)
+
     @override_settings(URL_PREFIX='/labhub', FORCE_SCRIPT_NAME='/labhub')
     @override_script_prefix('/labhub/')
     def test_login_dari_proxy_yang_menghapus_prefix_masuk_ke_dashboard_public(self):
@@ -1303,7 +1378,7 @@ class PenggunaAuthTests(TestCase):
             self.assertContains(response, "localStorage.getItem(storageKeys.background)", html=False)
             self.assertContains(response, "labhub-custom-background", html=False)
 
-    def test_register_dropdown_fakultas_prodi_mengambil_data_database(self):
+    def test_register_dropdown_prodi_hanya_informatika_dan_sistem_informasi(self):
         Fakultas.objects.create(nama='Fakultas Baru')
         Prodi.objects.create(nama='Prodi Baru')
 
@@ -1311,7 +1386,26 @@ class PenggunaAuthTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Fakultas Baru')
-        self.assertContains(response, 'Prodi Baru')
+        self.assertContains(response, 'Informatika')
+        self.assertContains(response, 'Sistem Informasi')
+        self.assertNotContains(response, 'Prodi Baru')
+
+    def test_prodi_pengguna_otomatis_mengikuti_prefix_nim(self):
+        informatika = Pengguna.objects.create(
+            nama_pengguna='Mahasiswa Informatika', nim_nik='064002300001',
+            email='064002300001@std.trisakti.ac.id', password='rahasia123',
+            no_hp='0812', alamat='Jakarta', fakultas='Teknologi Industri',
+            prodi='Sistem Informasi', gender='laki_laki', role='mahasiswa',
+        )
+        sistem_informasi = Pengguna.objects.create(
+            nama_pengguna='Mahasiswa Sistem Informasi', nim_nik='065002300001',
+            email='065002300001@std.trisakti.ac.id', password='rahasia123',
+            no_hp='0813', alamat='Jakarta', fakultas='Teknologi Industri',
+            prodi='Informatika', gender='perempuan', role='mahasiswa',
+        )
+
+        self.assertEqual(informatika.prodi, 'Informatika')
+        self.assertEqual(sistem_informasi.prodi, 'Sistem Informasi')
 
     def test_register_tidak_menampilkan_input_email_dan_menjelaskan_email_dari_nim(self):
         response = self.client.get(reverse('pengguna:register'))

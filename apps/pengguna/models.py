@@ -34,6 +34,10 @@ class Prodi(models.Model):
 
 
 class Pengguna(models.Model):
+    PRODI_BY_NIM_PREFIX = {
+        '064': 'Informatika',
+        '065': 'Sistem Informasi',
+    }
     ROLE_CHOICES = [
         ('admin', 'Admin'),
         ('laboran', 'Laboran'),
@@ -73,6 +77,7 @@ class Pengguna(models.Model):
     gender = models.CharField(max_length=20, choices=GENDER_CHOICES)
     role = models.CharField(max_length=30, choices=ROLE_CHOICES, default='mahasiswa')
     is_verified = models.BooleanField('Terverifikasi', default=True)
+    must_change_password = models.BooleanField('Wajib ganti password', default=False)
     theme_mode = models.CharField(max_length=20, choices=THEME_MODE_CHOICES, default='light')
     background_mode = models.CharField(max_length=20, choices=BACKGROUND_MODE_CHOICES, default='default')
     background_image = models.ImageField(upload_to='pengguna/backgrounds/', blank=True, null=True)
@@ -88,6 +93,9 @@ class Pengguna(models.Model):
         verbose_name_plural = 'Pengguna'
 
     def save(self, *args, **kwargs):
+        inferred_prodi = self.PRODI_BY_NIM_PREFIX.get((self.nim_nik or '').strip()[:3])
+        if inferred_prodi:
+            self.prodi = inferred_prodi
         if self.password and not self.password_is_hashed():
             self.password = make_password(self.password)
 
@@ -104,6 +112,10 @@ class Pengguna(models.Model):
             return False
 
         return True
+
+    @classmethod
+    def infer_prodi_from_nim(cls, nim_nik):
+        return cls.PRODI_BY_NIM_PREFIX.get((nim_nik or '').strip()[:3], '')
 
     def get_absolute_url(self):
         return reverse('pengguna:detail', args=[self.pk])
