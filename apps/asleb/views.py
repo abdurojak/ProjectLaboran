@@ -406,6 +406,7 @@ class HonorAslebListView(HonorAccessMixin, ListView):
         selected_bulan = self.request.GET.get('bulan', bulan_ini.strftime('%Y-%m'))
         global_honor_qs = self.get_global_filtered_queryset()
         total_honor = global_honor_qs.aggregate(total=Sum('jumlah'))['total'] or 0
+        total_honor_kotor = sum(honor.total_honor for honor in global_honor_qs)
         pengguna = getattr(self.request, 'current_pengguna', None)
         transfer_totals = {
             row['assigned_laboran_id']: row
@@ -432,6 +433,7 @@ class HonorAslebListView(HonorAccessMixin, ListView):
         context['selected_status'] = self.request.GET.get('status', '').strip()
         context['status_choices'] = HonorAsleb.STATUS_CHOICES
         context['total_honor'] = f'Rp {total_honor:,.0f}'.replace(',', '.')
+        context['total_honor_kotor'] = f'Rp {total_honor_kotor:,.0f}'.replace(',', '.')
         context['laboran_count'] = Pengguna.objects.filter(role='laboran', is_verified=True).count()
         context['unassigned_honor_count'] = global_honor_qs.filter(assigned_laboran__isnull=True).count()
         context['laboran_transfer_summary'] = laboran_transfer_summary

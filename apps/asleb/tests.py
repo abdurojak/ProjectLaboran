@@ -2289,6 +2289,10 @@ class AslebViewTests(TestCase):
         response = self.client.get(reverse('asleb:honor_list'))
 
         self.assertEqual(response.context['total_honor'], current_honor.jumlah_rupiah)
+        self.assertEqual(
+            response.context['total_honor_kotor'],
+            f'Rp {current_honor.total_honor:,.0f}'.replace(',', '.'),
+        )
         self.assertEqual(response.context['selected_bulan'], current_month.strftime('%Y-%m'))
         self.assertContains(response, f'Total Honor Seluruh Aslab · {month_year_label(current_month)}')
 
