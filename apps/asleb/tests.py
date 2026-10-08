@@ -509,7 +509,7 @@ class AslebViewTests(TestCase):
         response = self.client.get(reverse('asleb:absensi_list'))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Modul 4')
+        self.assertContains(response, '>4</td>', html=False)
         self.assertContains(response, 'Form dan Validasi')
 
     def test_hapus_absensi_ajax_mengembalikan_json_tanpa_redirect(self):

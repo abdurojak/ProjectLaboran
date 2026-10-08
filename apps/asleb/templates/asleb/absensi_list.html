@@ -312,7 +312,7 @@
                         <td class="font-semibold text-slate-900">{{ absensi.asleb.nama }}</td>
                         <td>{{ absensi.asleb.nim }}</td>
                         <td>{{ absensi.tanggal_absensi|date:"d M Y" }}</td>
-                        <td>{% if absensi.modul_praktikum %}<span class="font-black text-slate-900">Modul {{ absensi.modul_praktikum.nomor }}</span>{% else %}<span class="text-slate-400">-</span>{% endif %}</td>
+                        <td>{% if absensi.modul_praktikum %}{{ absensi.modul_praktikum.nomor }}{% else %}<span class="text-slate-400">-</span>{% endif %}</td>
                         <td>{% if absensi.jadwal %}<div class="font-semibold text-slate-900">{{ absensi.jadwal.mata_kuliah }}</div><div class="text-xs text-slate-500">{{ absensi.jadwal.kelas }} · {{ absensi.jadwal.get_display_ruangan_nama }} · {{ absensi.waktu_masuk|date:"H:i" }}</div>{% else %}<span class="text-slate-400">Jadwal sudah dihapus</span>{% endif %}</td>
                         <td>{% if absensi.modul_praktikum %}<div class="font-semibold text-slate-900">{{ absensi.modul_praktikum.judul }}</div><div class="text-xs text-slate-500">{{ absensi.modul_praktikum.matkul }}</div>{% else %}<span class="text-slate-400">Data modul belum tersedia</span>{% endif %}</td>
                         <td>{% if absensi.foto_absensi %}<a class="inline-flex whitespace-nowrap font-semibold text-brand-700 hover:text-brand-800" href="{{ absensi.foto_absensi.url }}" target="_blank" rel="noreferrer">Lihat foto</a>{% else %}<span class="text-slate-400">-</span>{% endif %}</td>
