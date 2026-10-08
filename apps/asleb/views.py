@@ -867,6 +867,8 @@ class AbsensiAslebListView(ListView):
             'jadwal',
             'jadwal__ruangan',
             'jadwal__ruangan_tambahan',
+            'modul_praktikum',
+            'modul_praktikum__matkul',
         )
         search = self.request.GET.get('q', '').strip()
 

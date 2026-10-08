@@ -490,6 +490,28 @@ class AslebViewTests(TestCase):
         honor = HonorAsleb.objects.get(asleb=self.asleb, bulan=timezone.localdate().replace(day=1))
         self.assertEqual(honor.total_pertemuan, 0)
 
+    def test_tabel_absensi_mobile_menampilkan_nomor_dan_judul_modul(self):
+        jadwal = self.create_active_schedule()
+        modul = ModulPraktikum.objects.create(
+            matkul=self.matkul,
+            nomor=4,
+            judul='Form dan Validasi',
+            file=SimpleUploadedFile('modul-4.pdf', b'%PDF-1.4', content_type='application/pdf'),
+        )
+        AbsensiMasukAsleb.objects.create(
+            asleb=self.asleb,
+            jadwal=jadwal,
+            modul_praktikum=modul,
+            tanggal_absensi=timezone.localdate(),
+            foto_absensi=self.make_camera_photo('modul-mobile.png'),
+        )
+
+        response = self.client.get(reverse('asleb:absensi_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Modul 4')
+        self.assertContains(response, 'Form dan Validasi')
+
     def test_hapus_absensi_ajax_mengembalikan_json_tanpa_redirect(self):
         attendance = AbsensiAsleb.objects.create(
             asleb=self.asleb,
