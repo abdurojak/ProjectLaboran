@@ -2530,6 +2530,13 @@
                     });
                 }).observe(mobileTableRoot, {childList: true, subtree: true});
             }
+
+            document.querySelectorAll('[data-viewport-modal]').forEach(function (modal) {
+                if (modal.parentElement !== document.body) {
+                    document.body.appendChild(modal);
+                }
+            });
+
             const globalLoading = document.querySelector('[data-global-loading]');
             let loadingTimer = null;
             let loadingCount = 0;

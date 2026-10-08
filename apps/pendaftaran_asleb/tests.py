@@ -534,6 +534,8 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertContains(response, 'aslab-registration-steps')
         self.assertContains(response, 'aslab-registration-actions')
         self.assertContains(response, '@media (max-width: 640px)')
+        self.assertContains(response, 'data-transcript-loading data-viewport-modal')
+        self.assertContains(response, "document.querySelectorAll('[data-viewport-modal]')")
 
         transkrip_path = default_storage.save(
             'pendaftaran_asleb/transkrip_tmp/test-transkrip.pdf',

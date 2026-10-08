@@ -290,6 +290,16 @@ class AslebViewTests(TestCase):
         self.assertContains(response, 'results.replaceChildren(')
         self.assertContains(response, "history.pushState(null, '', url)")
 
+    def test_modal_preview_modul_dipindahkan_ke_viewport(self):
+        absensi_response = self.client.get(reverse('asleb:absensi_list'))
+        modul_response = self.client.get(reverse('asleb:modul_create'))
+
+        self.assertEqual(absensi_response.status_code, 200)
+        self.assertEqual(modul_response.status_code, 200)
+        self.assertContains(absensi_response, 'data-inline-preview-modal data-viewport-modal')
+        self.assertContains(modul_response, 'data-modul-preview-modal data-viewport-modal')
+        self.assertContains(absensi_response, "document.querySelectorAll('[data-viewport-modal]')")
+
     def test_absensi_form_memakai_layout_responsif(self):
         PengaturanAbsensiAsleb.get_solo().__class__.objects.update_or_create(pk=1, defaults={'dibuka': True})
         aslab_user = Pengguna.objects.create(
