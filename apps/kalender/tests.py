@@ -244,6 +244,22 @@ class KalenderViewsTests(TestCase):
         self.assertContains(response, 'Peringatan Tragedi Trisakti')
         self.assertContains(response, 'Dies Natalis Universitas Trisakti')
 
+    def test_agenda_terdekat_tidak_menampilkan_kegiatan_yang_sudah_lewat(self):
+        kegiatan_lama = KegiatanKalender.objects.create(
+            judul='Kegiatan September yang Sudah Lewat',
+            tanggal=timezone.localdate() - timedelta(days=10),
+            waktu_mulai=time(8, 0),
+            waktu_selesai=time(9, 0),
+            lokasi='Gedung Lama',
+        )
+
+        response = self.client.get(reverse('kalender:kegiatan_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(kegiatan_lama, response.context['upcoming_kegiatan'])
+        self.assertContains(response, 'Kegiatan September yang Sudah Lewat')
+        self.assertContains(response, 'Praktikum Jaringan')
+
     def test_kalender_dark_mode_dioptimalkan(self):
         response = self.client.get(reverse('kalender:kegiatan_list'))
 

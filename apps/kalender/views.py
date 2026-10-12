@@ -161,7 +161,9 @@ class KegiatanKalenderListView(ListView):
         calendar_events.extend(get_perayaan_calendar_events(timezone.localdate().year))
 
         context['calendar_events'] = calendar_events
-        context['upcoming_kegiatan'] = context['kegiatan_list'][:5]
+        context['upcoming_kegiatan'] = context['kegiatan_list'].filter(
+            tanggal__gte=timezone.localdate(),
+        )[:5]
         return context
 
 
