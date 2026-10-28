@@ -434,6 +434,23 @@ class PeminjamanViewsTests(TestCase):
         self.assertContains(semua_response, 'id="id_semua_filter"')
         self.assertContains(semua_response, 'checked')
 
+    def test_tab_riwayat_hanya_menampilkan_peminjaman_selesai(self):
+        PeminjamanAlat.objects.create(
+            barang=self.barang_lain,
+            nama_peminjam='Peminjaman Selesai',
+            tanggal_pinjam=date(2026, 7, 1),
+            tanggal_kembali=date(2026, 7, 2),
+            status='dikembalikan',
+        )
+
+        response = self.client.get(reverse('peminjaman:peminjaman_list'), {'tampilan': 'riwayat'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Riwayat Peminjaman')
+        self.assertContains(response, 'Peminjaman Selesai')
+        self.assertNotContains(response, 'Andi Pratama')
+        self.assertContains(response, 'name="tampilan" value="riwayat"')
+
     def test_detail_page_menampilkan_foto_peminjam_dan_preview_foto_barang(self):
         response = self.client.get(reverse('peminjaman:peminjaman_detail', args=[self.peminjaman.pk]))
 
@@ -1517,6 +1534,30 @@ class PeminjamanMahasiswaTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Siti Asisten')
         self.assertContains(response, 'Dikembalikan')
+
+    def test_tab_riwayat_mahasiswa_tidak_menampilkan_peminjaman_orang_lain(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Budi', nim_nik='2203001', email='budi@trisakti.ac.id',
+            password='rahasia123', role='mahasiswa', is_verified=True,
+        )
+        PeminjamanAlat.objects.create(
+            barang=self.barang_lain, nama_peminjam='Budi', nim=mahasiswa.nim_nik,
+            tanggal_pinjam=date(2026, 7, 1), tanggal_kembali=date(2026, 7, 2),
+            status='dikembalikan',
+        )
+        PeminjamanAlat.objects.create(
+            barang=self.barang_tersedia_lain, nama_peminjam='Pengguna Lain', nim='2203999',
+            tanggal_pinjam=date(2026, 7, 1), tanggal_kembali=date(2026, 7, 2),
+            status='dikembalikan',
+        )
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+
+        response = self.client.get(reverse('peminjaman:peminjaman_list'), {'tampilan': 'riwayat'})
+
+        self.assertContains(response, 'Budi')
+        self.assertNotContains(response, 'Pengguna Lain')
 
 
 class PeminjamanAlatModelTests(TestCase):

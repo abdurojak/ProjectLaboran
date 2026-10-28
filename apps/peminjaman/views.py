@@ -439,6 +439,7 @@ class PeminjamanAlatListView(ListView):
         tanggal_mulai = self.request.GET.get('tanggal_mulai', '').strip()
         tanggal_selesai = self.request.GET.get('tanggal_selesai', '').strip()
         status = self.request.GET.get('status', '').strip()
+        view_riwayat = self.request.GET.get('tampilan') == 'riwayat'
         tampilkan_semua = self.request.GET.get('semua') == '1'
         pengguna = getattr(self.request, 'current_pengguna', None)
         queryset = scope_peminjaman_for_pengguna(queryset, pengguna)
@@ -460,7 +461,9 @@ class PeminjamanAlatListView(ListView):
         if status:
             queryset = queryset.filter(status=status)
 
-        if not tampilkan_semua:
+        if view_riwayat:
+            queryset = queryset.filter(status__in=ARCHIVED_STATUS_CHOICES)
+        elif not tampilkan_semua:
             queryset = queryset.exclude(status__in=ARCHIVED_STATUS_CHOICES)
 
         if pengguna and pengguna.role in MANAGER_ROLES:
@@ -530,13 +533,18 @@ class PeminjamanAlatListView(ListView):
         context['filter_tanggal_selesai'] = self.request.GET.get('tanggal_selesai', '').strip()
         context['filter_status'] = self.request.GET.get('status', '').strip()
         context['filter_semua'] = self.request.GET.get('semua') == '1'
+        context['view_riwayat'] = self.request.GET.get('tampilan') == 'riwayat'
         context['has_overdue_peminjaman'] = any(
             getattr(peminjaman, 'is_overdue', False)
             for peminjaman in context.get('peminjaman_list', [])
         )
+        allowed_statuses = (
+            ARCHIVED_STATUS_CHOICES if context['view_riwayat']
+            else {value for value, _ in PeminjamanAlat.STATUS_CHOICES} - {'ditolak'}
+        )
         context['status_choices'] = [
             choice for choice in PeminjamanAlat.STATUS_CHOICES
-            if choice[0] != 'ditolak'
+            if choice[0] in allowed_statuses
         ]
         context['bulk_status_choices'] = BULK_STATUS_UI_CHOICES
         context['current_pengguna'] = current_pengguna

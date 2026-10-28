@@ -218,8 +218,8 @@
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
             <p class="text-sm font-bold uppercase tracking-[0.2em] text-amber-600">Peminjaman</p>
-            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Peminjaman Alat</h2>
-            <p class="mt-2 text-sm text-slate-500">{% if is_borrower %}Pilih alat seperti katalog, masukkan ke keranjang, lalu ajukan peminjaman.{% else %}Kelola daftar peminjaman alat laboratorium, status peminjaman, dan jadwal pengembalian.{% endif %}</p>
+            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">{% if view_riwayat %}Riwayat Peminjaman{% else %}Peminjaman Alat{% endif %}</h2>
+            <p class="mt-2 text-sm text-slate-500">{% if view_riwayat %}Lihat peminjaman yang sudah dikembalikan, digantikan, atau ditolak.{% elif is_borrower %}Pilih alat seperti katalog, masukkan ke keranjang, lalu ajukan peminjaman.{% else %}Kelola daftar peminjaman alat laboratorium, status peminjaman, dan jadwal pengembalian.{% endif %}</p>
         </div>
         {% if not is_borrower %}
         <a class="btn-primary bg-amber-500 hover:bg-amber-600 shadow-amber-500/20" href="{% url 'peminjaman:peminjaman_create' %}">
@@ -229,7 +229,16 @@
         {% endif %}
     </div>
 
-    {% if pending_extensions %}
+    <nav class="flex flex-wrap gap-2" aria-label="Tampilan peminjaman">
+        <a href="{% url 'peminjaman:peminjaman_list' %}" class="btn-secondary gap-2 {% if not view_riwayat %}border-teal-500 text-teal-700{% endif %}" {% if not view_riwayat %}aria-current="page"{% endif %}>
+            <i data-lucide="clipboard-list" class="h-4 w-4"></i><span>Peminjaman Aktif</span>
+        </a>
+        <a href="{% url 'peminjaman:peminjaman_list' %}?tampilan=riwayat" class="btn-secondary gap-2 {% if view_riwayat %}border-teal-500 text-teal-700{% endif %}" {% if view_riwayat %}aria-current="page"{% endif %}>
+            <i data-lucide="history" class="h-4 w-4"></i><span>Riwayat</span>
+        </a>
+    </nav>
+
+    {% if pending_extensions and not view_riwayat %}
     <section class="surface-card overflow-hidden">
         <div class="border-b border-slate-100 px-5 py-4">
             <p class="text-xs font-black uppercase tracking-[0.18em] text-cyan-700">Persetujuan Peminjaman</p>
@@ -249,7 +258,7 @@
     </section>
     {% endif %}
 
-    {% if is_borrower %}
+    {% if is_borrower and not view_riwayat %}
     <section class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
         <div class="surface-card flex flex-wrap items-center gap-4 p-5">
             <span class="flex h-14 w-14 items-center justify-center rounded-2xl {% if credit_profile.label == 'Baik' %}bg-emerald-50 text-emerald-700{% elif credit_profile.label == 'Waspada' %}bg-amber-50 text-amber-700{% else %}bg-rose-50 text-rose-700{% endif %}">
@@ -462,6 +471,7 @@
           hx-select="#peminjaman-list-content"
           hx-swap="outerHTML"
           hx-push-url="true">
+        {% if view_riwayat %}<input type="hidden" name="tampilan" value="riwayat">{% endif %}
         <div class="grid min-w-0 gap-4 md:grid-cols-2 lg:grid-cols-4">
             <div>
                 <label for="id_barang_filter">Nama barang</label>
@@ -484,13 +494,13 @@
                     {% endfor %}
                 </select>
             </div>
-            <div>
+            {% if not view_riwayat %}<div>
                 <label for="id_semua_filter">Cakupan status</label>
                 <label class="inline-flex min-h-[48px] w-full cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700">
                     <input id="id_semua_filter" name="semua" value="1" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-amber-500 focus:ring-amber-500"{% if filter_semua %} checked{% endif %}>
                     <span>Semua status</span>
                 </label>
-            </div>
+            </div>{% endif %}
         </div>
 
         <div class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 dark:border-slate-400 pt-4">
@@ -506,10 +516,10 @@
                     <span>Memuat</span>
                 </div>
                 <a class="btn-secondary flex-1 gap-2 sm:flex-none"
-                   href="{% url 'peminjaman:peminjaman_list' %}"
+                   href="{% url 'peminjaman:peminjaman_list' %}{% if view_riwayat %}?tampilan=riwayat{% endif %}"
                    data-no-page-transition="true"
                    data-no-global-loading="true"
-                   hx-get="{% url 'peminjaman:peminjaman_list' %}"
+                   hx-get="{% url 'peminjaman:peminjaman_list' %}{% if view_riwayat %}?tampilan=riwayat{% endif %}"
                    hx-target="#peminjaman-list-content"
                    hx-select="#peminjaman-list-content"
                    hx-swap="outerHTML"
@@ -660,7 +670,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="{% if is_manager %}8{% else %}7{% endif %}" class="py-12 text-center text-slate-500">Belum ada data peminjaman alat.</td>
+                        <td colspan="{% if is_manager %}8{% else %}7{% endif %}" class="py-12 text-center text-slate-500">{% if view_riwayat %}Belum ada riwayat peminjaman.{% else %}Belum ada data peminjaman alat.{% endif %}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -674,9 +684,9 @@
         <div class="flex gap-2">
             {% if page_obj.has_previous %}
             <a class="btn-secondary"
-               href="?page={{ page_obj.previous_page_number }}&barang={{ filter_barang|urlencode }}&tanggal_mulai={{ filter_tanggal_mulai|urlencode }}&tanggal_selesai={{ filter_tanggal_selesai|urlencode }}&status={{ filter_status|urlencode }}{% if filter_semua %}&semua=1{% endif %}"
+               href="?page={{ page_obj.previous_page_number }}&barang={{ filter_barang|urlencode }}&tanggal_mulai={{ filter_tanggal_mulai|urlencode }}&tanggal_selesai={{ filter_tanggal_selesai|urlencode }}&status={{ filter_status|urlencode }}{% if filter_semua %}&semua=1{% endif %}{% if view_riwayat %}&tampilan=riwayat{% endif %}"
                data-no-page-transition="true"
-               hx-get="?page={{ page_obj.previous_page_number }}&barang={{ filter_barang|urlencode }}&tanggal_mulai={{ filter_tanggal_mulai|urlencode }}&tanggal_selesai={{ filter_tanggal_selesai|urlencode }}&status={{ filter_status|urlencode }}{% if filter_semua %}&semua=1{% endif %}"
+               hx-get="?page={{ page_obj.previous_page_number }}&barang={{ filter_barang|urlencode }}&tanggal_mulai={{ filter_tanggal_mulai|urlencode }}&tanggal_selesai={{ filter_tanggal_selesai|urlencode }}&status={{ filter_status|urlencode }}{% if filter_semua %}&semua=1{% endif %}{% if view_riwayat %}&tampilan=riwayat{% endif %}"
                hx-target="#peminjaman-list-content"
                hx-select="#peminjaman-list-content"
                hx-swap="outerHTML"
@@ -684,9 +694,9 @@
             {% endif %}
             {% if page_obj.has_next %}
             <a class="btn-secondary"
-               href="?page={{ page_obj.next_page_number }}&barang={{ filter_barang|urlencode }}&tanggal_mulai={{ filter_tanggal_mulai|urlencode }}&tanggal_selesai={{ filter_tanggal_selesai|urlencode }}&status={{ filter_status|urlencode }}{% if filter_semua %}&semua=1{% endif %}"
+               href="?page={{ page_obj.next_page_number }}&barang={{ filter_barang|urlencode }}&tanggal_mulai={{ filter_tanggal_mulai|urlencode }}&tanggal_selesai={{ filter_tanggal_selesai|urlencode }}&status={{ filter_status|urlencode }}{% if filter_semua %}&semua=1{% endif %}{% if view_riwayat %}&tampilan=riwayat{% endif %}"
                data-no-page-transition="true"
-               hx-get="?page={{ page_obj.next_page_number }}&barang={{ filter_barang|urlencode }}&tanggal_mulai={{ filter_tanggal_mulai|urlencode }}&tanggal_selesai={{ filter_tanggal_selesai|urlencode }}&status={{ filter_status|urlencode }}{% if filter_semua %}&semua=1{% endif %}"
+               hx-get="?page={{ page_obj.next_page_number }}&barang={{ filter_barang|urlencode }}&tanggal_mulai={{ filter_tanggal_mulai|urlencode }}&tanggal_selesai={{ filter_tanggal_selesai|urlencode }}&status={{ filter_status|urlencode }}{% if filter_semua %}&semua=1{% endif %}{% if view_riwayat %}&tampilan=riwayat{% endif %}"
                hx-target="#peminjaman-list-content"
                hx-select="#peminjaman-list-content"
                hx-swap="outerHTML"
