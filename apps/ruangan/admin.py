@@ -11,6 +11,7 @@ class FotoRuanganLabInline(admin.TabularInline):
 
 @admin.register(RuanganLab)
 class RuanganLabAdmin(admin.ModelAdmin):
+    filter_horizontal = ('laboran_akun',)
     list_display = (
         'kode', 'nama', 'kepala_lab', 'laboran', 'kapasitas',
         'kapasitas_tak_terbatas', 'tampil_di_daftar_lab', 'warna', 'aktif',

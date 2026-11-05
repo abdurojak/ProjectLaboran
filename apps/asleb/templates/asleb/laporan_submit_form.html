@@ -7,7 +7,7 @@
         <h2 class="mt-2 text-3xl font-black text-slate-900">{{ view.tugas.judul }}</h2>
         <p class="mt-2 text-sm text-slate-500">{{ view.tugas.matkul }} · Batas {{ view.tugas.batas_pengumpulan|date:"d M Y H:i" }}</p>
     </div>
-    <form method="post" enctype="multipart/form-data" class="surface-card space-y-5 p-6 md:p-8">
+    <form method="post" enctype="multipart/form-data" class="surface-card space-y-5 p-6 md:p-8" data-report-upload-form>
         {% csrf_token %}
         {% if form.non_field_errors %}<div class="rounded-2xl bg-rose-50 p-4 text-sm font-bold text-rose-700">{{ form.non_field_errors }}</div>{% endif %}
         <div>
@@ -19,13 +19,20 @@
             {% if view.tugas.is_late %}
             Tenggat sudah berakhir. Kiriman ini tetap diterima tetapi otomatis diberi status <strong>Terlambat</strong>.
             {% else %}
-            Pengumpulan ulang akan disimpan sebagai versi baru, jadi riwayat revisi tidak hilang.
+            Pastikan file sudah benar sebelum dikumpulkan. Tugas ini hanya dapat dikumpulkan satu kali.
             {% endif %}
         </div>
         <div class="flex flex-wrap gap-3">
-            <button class="btn-primary gap-2" type="submit"><i data-lucide="upload" class="h-4 w-4"></i>Kumpulkan</button>
+            <button class="btn-primary gap-2" type="submit" data-upload-submit><i data-lucide="upload" class="h-4 w-4"></i>Kumpulkan</button>
             <a class="btn-secondary" href="{% url 'asleb:laporan_tugas_list' %}">Batal</a>
         </div>
     </form>
 </section>
+<script>
+document.querySelector('[data-report-upload-form]')?.addEventListener('submit', function () {
+    const button = this.querySelector('[data-upload-submit]');
+    button.disabled = true;
+    button.textContent = 'Mengunggah...';
+});
+</script>
 {% endblock %}

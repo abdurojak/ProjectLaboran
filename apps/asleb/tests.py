@@ -49,6 +49,7 @@ from .models import (
     PengingatAbsensiAsleb,
     PengumpulanLaporanPraktikum,
     PesertaPraktikum,
+    ProgresTugasPraktikum,
     SuratHonorAsleb,
     TugasLaporanPraktikum,
 )
@@ -1797,7 +1798,7 @@ class AslebViewTests(TestCase):
         self.assertTrue(response.json()['deleted_all'])
         self.assertFalse(PesertaPraktikum.objects.filter(pk=peserta.pk).exists())
 
-    def test_input_nilai_menghitung_rata_rata_realtime_dan_laporan(self):
+    def test_laboran_tidak_dapat_mengisi_absensi_atau_nilai_melalui_form_asleb(self):
         peserta = PesertaPraktikum.objects.create(matkul=self.matkul, nim='0640020099', nama='Mahasiswa Nilai')
         modul = ModulPraktikum.objects.create(
             matkul=self.matkul,
@@ -1817,11 +1818,8 @@ class AslebViewTests(TestCase):
             },
         )
 
-        self.assertRedirects(response, reverse('asleb:praktikum_nilai', args=[self.matkul.pk, modul.pk]))
-        hasil = HasilPraktikumMahasiswa.objects.get(peserta=peserta, modul=modul)
-        self.assertEqual(hasil.nilai_realtime, 80)
-        self.assertEqual(hasil.nilai_laporan, 90)
-        self.assertEqual(hasil.nilai, 85)
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(HasilPraktikumMahasiswa.objects.filter(peserta=peserta, modul=modul).exists())
 
     def test_peserta_dinonaktifkan_saat_periode_berakhir_dan_nilai_tetap_terhubung(self):
         today = timezone.localdate()
@@ -2968,6 +2966,72 @@ class AslebViewTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('format_file', form.errors)
 
+    def test_laboran_hanya_bisa_menilai_lab_yang_ditugaskan(self):
+        self.matkul.laboratorium = self.test_room
+        self.matkul.save(update_fields=['laboratorium'])
+        tugas = TugasLaporanPraktikum.objects.create(
+            judul='Laporan Lab', matkul=self.matkul,
+            batas_pengumpulan=timezone.now() + timedelta(days=2),
+        )
+        peserta = PesertaPraktikum.objects.create(
+            matkul=self.matkul, nim='0640020999', nama='Peserta Lab',
+        )
+        laporan = PengumpulanLaporanPraktikum.objects.create(
+            tugas=tugas, peserta=peserta,
+            file_laporan=SimpleUploadedFile('laporan.pdf', b'%PDF-1.4\n%%EOF'),
+        )
+        url = reverse('asleb:laporan_review', args=[laporan.pk])
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.test_room.laboran_akun.add(self.pengguna)
+        self.assertEqual(self.client.get(url).status_code, 200)
+        self.assertEqual(self.client.post(url, {'nilai': '85', 'catatan_asisten': 'Baik'}).status_code, 302)
+        laporan.refresh_from_db()
+        self.assertEqual(laporan.nilai, 85)
+        self.assertEqual(laporan.diperiksa_oleh, self.pengguna)
+
+    def test_laboran_tidak_bisa_mengubah_tugas(self):
+        self.matkul.laboratorium = self.test_room
+        self.matkul.save(update_fields=['laboratorium'])
+        self.test_room.laboran_akun.add(self.pengguna)
+        tugas = TugasLaporanPraktikum.objects.create(
+            judul='Tugas Terbatas', matkul=self.matkul,
+            batas_pengumpulan=timezone.now() + timedelta(days=2),
+        )
+        self.assertEqual(self.client.get(reverse('asleb:laporan_tugas_update', args=[tugas.pk])).status_code, 403)
+
+    def test_progres_tugas_mahasiswa_tersimpan_per_peserta(self):
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Mahasiswa Progres', nim_nik='0640020998',
+            email='progres@std.trisakti.ac.id', password='rahasia123',
+            no_hp='081234567898', alamat='Jakarta', fakultas='Teknologi Industri',
+            prodi='Informatika', gender='laki_laki', role='mahasiswa',
+        )
+        peserta = PesertaPraktikum.objects.create(
+            matkul=self.matkul, pengguna=mahasiswa,
+            nim=mahasiswa.nim_nik, nama=mahasiswa.nama_pengguna,
+        )
+        tugas = TugasLaporanPraktikum.objects.create(
+            judul='Tugas Progres', matkul=self.matkul,
+            batas_pengumpulan=timezone.now() + timedelta(days=2),
+        )
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+        response = self.client.post(
+            reverse('asleb:laporan_tugas_progress', args=[tugas.pk]),
+            {'status': ProgresTugasPraktikum.IN_PROGRESS},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            ProgresTugasPraktikum.objects.get(tugas=tugas, peserta=peserta).status,
+            ProgresTugasPraktikum.IN_PROGRESS,
+        )
+        denied = self.client.post(
+            reverse('asleb:laporan_tugas_progress', args=[tugas.pk]),
+            {'status': ProgresTugasPraktikum.GRADED},
+        )
+        self.assertEqual(denied.status_code, 403)
+
     def test_absensi_menolak_nomor_modul_yang_sudah_pernah_diabsen_meski_absensi_lama_tanpa_relasi_modul(self):
         PendaftaranAsleb.objects.create(
             nama=self.asleb.nama,
@@ -3299,7 +3363,7 @@ class AslebViewTests(TestCase):
         self.assertIn('1/3', mail.outbox[0].subject)
         self.assertIn('3/3', mail.outbox[2].subject)
 
-    def test_asisten_lab_dapat_menghapus_laporan_dan_nilai_sinkronnya(self):
+    def test_asisten_lab_tidak_dapat_menghapus_laporan_yang_sudah_dinilai(self):
         asisten_user = Pengguna.objects.create(
             nama_pengguna=self.asleb.nama,
             nim_nik=self.asleb.nim,
@@ -3365,12 +3429,11 @@ class AslebViewTests(TestCase):
 
         response = self.client.post(reverse('asleb:laporan_delete', args=[laporan.pk]))
 
-        self.assertRedirects(response, reverse('asleb:laporan_kelas_detail', args=[self.matkul.pk]))
-        self.assertFalse(PengumpulanLaporanPraktikum.objects.filter(pk=laporan.pk).exists())
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(PengumpulanLaporanPraktikum.objects.filter(pk=laporan.pk).exists())
         hasil.refresh_from_db()
-        self.assertIsNone(hasil.nilai_laporan)
-        self.assertIsNone(hasil.nilai)
-        self.assertTrue(Notifikasi.objects.filter(pengguna=mahasiswa, source_key=f'laporan-deleted:{laporan.pk}').exists())
+        self.assertEqual(hasil.nilai_laporan, Decimal('88.00'))
+        self.assertFalse(Notifikasi.objects.filter(pengguna=mahasiswa, source_key=f'laporan-deleted:{laporan.pk}').exists())
 
     def test_preview_laporan_pdf_mengirim_header_dan_isi_pdf_utuh(self):
         mahasiswa = Pengguna.objects.create(

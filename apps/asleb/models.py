@@ -815,6 +815,7 @@ class TugasLaporanPraktikum(models.Model):
     )
     pertemuan = models.PositiveSmallIntegerField(blank=True, null=True)
     deskripsi = models.TextField(blank=True)
+    lampiran_instruksi = models.FileField(upload_to='instruksi_praktikum/%Y/%m/', blank=True)
     format_file = models.CharField(max_length=120, default='pdf,doc,docx')
     ukuran_maksimal_mb = models.PositiveSmallIntegerField(default=10)
     mulai_pengumpulan = models.DateTimeField(default=timezone.now)
@@ -860,6 +861,46 @@ class TugasLaporanPraktikum(models.Model):
 
     def __str__(self):
         return f'{self.judul} - {self.matkul}'
+
+    @property
+    def kode_tugas(self):
+        return f'TGS-{self.pk:05d}' if self.pk else 'TGS-BARU'
+
+
+class ProgresTugasPraktikum(models.Model):
+    TODO = 'todo'
+    IN_PROGRESS = 'in_progress'
+    SUBMITTED = 'submitted'
+    IN_REVIEW = 'in_review'
+    GRADED = 'graded'
+    STATUS_CHOICES = [
+        (TODO, 'To Do'), (IN_PROGRESS, 'In Progress'),
+        (SUBMITTED, 'Submitted'), (IN_REVIEW, 'In Review'), (GRADED, 'Graded'),
+    ]
+
+    tugas = models.ForeignKey(TugasLaporanPraktikum, on_delete=models.CASCADE, related_name='progres_peserta')
+    peserta = models.ForeignKey(PesertaPraktikum, on_delete=models.CASCADE, related_name='progres_tugas')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=TODO)
+    diperbarui_pada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['tugas', 'peserta'], name='unique_progres_tugas_peserta')]
+        verbose_name = 'Progres Tugas Praktikum'
+        verbose_name_plural = 'Progres Tugas Praktikum'
+
+
+class AktivitasTugasPraktikum(models.Model):
+    tugas = models.ForeignKey(TugasLaporanPraktikum, on_delete=models.CASCADE, related_name='aktivitas')
+    peserta = models.ForeignKey(PesertaPraktikum, on_delete=models.SET_NULL, blank=True, null=True)
+    pengguna = models.ForeignKey('pengguna.Pengguna', on_delete=models.SET_NULL, blank=True, null=True)
+    aksi = models.CharField(max_length=40)
+    keterangan = models.CharField(max_length=250, blank=True)
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-dibuat_pada']
+        verbose_name = 'Aktivitas Tugas Praktikum'
+        verbose_name_plural = 'Aktivitas Tugas Praktikum'
 
 
 class PengumpulanLaporanPraktikum(models.Model):

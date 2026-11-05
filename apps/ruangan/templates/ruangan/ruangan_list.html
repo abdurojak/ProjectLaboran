@@ -151,7 +151,7 @@
                         <div class="{% if foto_utama %}text-white/80{% else %}text-slate-500{% endif %} text-xs font-black uppercase tracking-[0.18em]">{{ ruangan.kode }}</div>
                         <h3 class="{% if foto_utama %}text-white{% else %}text-slate-900{% endif %} mt-1 truncate text-xl font-black">{{ ruangan.nama }}</h3>
                     </div>
-                    {% if request.current_pengguna and request.current_pengguna.role == 'laboran' %}
+                    {% if request.current_pengguna and request.current_pengguna.role == 'laboran' or request.current_pengguna and request.current_pengguna.role == 'admin' %}
                     <a href="{% url 'ruangan:ruangan_update' ruangan.pk %}" class="room-hero-action shrink-0">
                         <i data-lucide="pencil" class="mr-1 inline h-3.5 w-3.5"></i>Edit
                     </a>
@@ -212,7 +212,7 @@
                     {% for foto in ruangan.foto_lab.all|slice:":6" %}
                     <div class="room-gallery-item group relative overflow-hidden rounded-2xl border border-slate-100 bg-slate-50">
                         <img src="{{ foto.gambar.url }}" alt="{{ foto.judul|default:ruangan.nama }}" class="w-full object-cover">
-                        {% if request.current_pengguna and request.current_pengguna.role == 'laboran' %}
+                        {% if request.current_pengguna and request.current_pengguna.role == 'laboran' or request.current_pengguna and request.current_pengguna.role == 'admin' %}
                         <div class="absolute inset-0 flex items-center justify-center gap-1 bg-slate-950/55 opacity-0 transition group-hover:opacity-100">
                             <a href="{% url 'ruangan:foto_update' foto.pk %}" class="rounded-lg bg-white px-2 py-1 text-[10px] font-black text-slate-800">Edit</a>
                             <a href="{% url 'ruangan:foto_delete' foto.pk %}" class="rounded-lg bg-rose-600 px-2 py-1 text-[10px] font-black text-white">Hapus</a>
@@ -222,7 +222,7 @@
                     {% endfor %}
                 </div>
             </div>
-            {% elif request.current_pengguna and request.current_pengguna.role == 'laboran' %}
+            {% elif request.current_pengguna and request.current_pengguna.role == 'laboran' or request.current_pengguna and request.current_pengguna.role == 'admin' %}
             <div class="room-gallery rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4 text-sm text-slate-500">
                 Belum ada foto lab. Klik tombol <span class="font-black text-teal-700">Foto</span> untuk upload gambar ruangan.
             </div>

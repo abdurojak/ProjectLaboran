@@ -14,11 +14,14 @@ class PenggunaLoginRequiredMiddleware:
     UNSAFE_INLINE_MEDIA_EXTENSIONS = {
         '.css', '.htm', '.html', '.js', '.mjs', '.svg', '.xhtml', '.xml',
     }
-    ADMIN_ALLOWED_NAMESPACES = {'core', 'dashboard', 'kalender', 'pengguna'}
+    ADMIN_ALLOWED_NAMESPACES = {'core', 'dashboard', 'kalender', 'pengguna', 'ruangan'}
     MAHASISWA_ALLOWED_NAMESPACES = {'core', 'dashboard', 'peminjaman', 'jadwal', 'pengguna', 'ruangan'}
     MAHASISWA_ALLOWED_ASLEB_URLS = {
         'laporan_tugas_list',
         'laporan_kelas_detail',
+        'laporan_tugas_detail',
+        'laporan_tugas_attachment',
+        'laporan_tugas_progress',
         'laporan_submit',
         'laporan_cancel',
         'laporan_preview',
@@ -62,6 +65,11 @@ class PenggunaLoginRequiredMiddleware:
         'laporan_tugas_list',
         'laporan_kelas_detail',
         'laporan_tugas_create',
+        'laporan_tugas_detail',
+        'laporan_tugas_update',
+        'laporan_tugas_delete',
+        'laporan_tugas_attachment',
+        'laporan_tugas_progress',
         'laporan_submit',
         'laporan_cancel',
         'laporan_review',

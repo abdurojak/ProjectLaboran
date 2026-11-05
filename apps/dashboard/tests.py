@@ -166,7 +166,7 @@ class DashboardViewTests(TestCase):
         self.assertNotIn('Barang & Peminjaman', titles)
         self.assertNotIn('Asisten Laboratorium', titles)
         self.assertNotIn('Surat Laboran', titles)
-        self.assertNotIn('Ruangan', titles)
+        self.assertIn('Ruangan', titles)
 
     def test_super_admin_melihat_panel_analitik_dashboard(self):
         self.pengguna.role = 'admin'

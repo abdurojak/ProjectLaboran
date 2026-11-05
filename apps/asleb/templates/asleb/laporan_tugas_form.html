@@ -1,13 +1,13 @@
 {% extends "base.html" %}
-{% block title %}Buat Tugas Laporan{% endblock %}
+{% block title %}{% if object %}Ubah{% else %}Buat{% endif %} Tugas Laporan{% endblock %}
 {% block content %}
 <section class="mx-auto max-w-4xl space-y-6">
     <div>
         <p class="text-sm font-black uppercase tracking-[0.22em] text-brand-700">Laporan Praktikum</p>
-        <h2 class="mt-2 text-3xl font-black text-slate-900">Buat Tugas Laporan</h2>
+        <h2 class="mt-2 text-3xl font-black text-slate-900">{% if object %}Ubah{% else %}Buat{% endif %} Tugas Laporan</h2>
         <p class="mt-2 text-sm text-slate-500">Tugas hanya akan tampil untuk peserta pada mata kuliah dan kelas yang dipilih.</p>
     </div>
-    <form method="post" class="surface-card grid gap-5 p-6 md:grid-cols-2 md:p-8">
+    <form method="post" enctype="multipart/form-data" class="surface-card grid gap-5 p-6 md:grid-cols-2 md:p-8">
         {% csrf_token %}
         {% if form.non_field_errors %}<div class="rounded-2xl bg-rose-50 p-4 text-sm font-bold text-rose-700 md:col-span-2">{{ form.non_field_errors }}</div>{% endif %}
         {% for field in form %}

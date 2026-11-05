@@ -81,7 +81,8 @@ SIDEBAR_LINKS = [
         'url': 'asleb:laporan_tugas_list',
         'namespace': 'asleb',
         'url_names': {
-            'laporan_tugas_list', 'laporan_kelas_detail', 'laporan_submit', 'laporan_cancel',
+            'laporan_tugas_list', 'laporan_kelas_detail', 'laporan_tugas_detail',
+            'laporan_tugas_attachment', 'laporan_tugas_progress', 'laporan_submit',
             'laporan_delete', 'laporan_preview', 'laporan_preview_file', 'laporan_download',
         },
         'roles': {MAHASISWA_ROLE},
@@ -130,11 +131,13 @@ SIDEBAR_LINKS = [
                 'url': 'asleb:laporan_tugas_list',
                 'namespace': 'asleb',
                 'url_names': {
-                    'laporan_tugas_list', 'laporan_kelas_detail', 'laporan_tugas_create', 'laporan_submit',
+                    'laporan_tugas_list', 'laporan_kelas_detail', 'laporan_tugas_create',
+                    'laporan_tugas_detail', 'laporan_tugas_update', 'laporan_tugas_delete',
+                    'laporan_tugas_attachment', 'laporan_tugas_progress', 'laporan_start_review', 'laporan_submit',
                     'laporan_review', 'laporan_delete', 'laporan_cancel',
                     'laporan_preview', 'laporan_preview_file', 'laporan_download',
                 },
-                'roles': {ASISTEN_LAB_ROLE},
+                'roles': {ASISTEN_LAB_ROLE, LABORAN_ROLE},
             },
             {
                 'title': 'Data Aslab',
@@ -187,7 +190,7 @@ SIDEBAR_LINKS = [
             },
         ],
     },
-    {'title': 'Ruangan', 'icon': 'door-open', 'url': 'ruangan:ruangan_list', 'namespace': 'ruangan', 'roles': {LABORAN_ROLE, ASISTEN_LAB_ROLE, MAHASISWA_ROLE}},
+    {'title': 'Ruangan', 'icon': 'door-open', 'url': 'ruangan:ruangan_list', 'namespace': 'ruangan', 'roles': {ADMIN_ROLE, LABORAN_ROLE, ASISTEN_LAB_ROLE, MAHASISWA_ROLE}},
     {
         'title': 'Jaringan', 'icon': 'contact-round', 'url': 'pengguna:list',
         'namespace': 'pengguna', 'url_names': {'list', 'detail'},
@@ -211,7 +214,7 @@ SIDEBAR_LINKS = [
 
 MAHASISWA_VISIBLE_NAMESPACES = {'core', 'dashboard', 'kalender', 'peminjaman', 'jadwal', 'asleb', 'ruangan', 'pengguna'}
 ASISTEN_LAB_HIDDEN_NAMESPACES = {'inventaris', 'barang_tertinggal', 'asleb', 'pendaftaran_asleb'}
-ADMIN_VISIBLE_NAMESPACES = {'core', 'dashboard', 'kalender', 'pengguna'}
+ADMIN_VISIBLE_NAMESPACES = {'core', 'dashboard', 'kalender', 'pengguna', 'ruangan'}
 
 PUBLIC_PAGE_META = {
     ('pengguna', 'login'): {'title': 'Login', 'icon': 'log-in'},

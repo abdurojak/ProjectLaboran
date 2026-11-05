@@ -14,6 +14,11 @@ class RuanganLab(models.Model):
     kode = models.CharField(max_length=30, unique=True)
     kepala_lab = models.CharField('Kepala Lab', max_length=150, blank=True)
     laboran = models.CharField('Laboran', max_length=150, blank=True)
+    laboran_akun = models.ManyToManyField(
+        'pengguna.Pengguna', blank=True, related_name='laboratorium_ditugaskan',
+        limit_choices_to={'role': 'laboran'},
+        verbose_name='Akun laboran penanggung jawab',
+    )
     deskripsi = models.TextField(blank=True)
     kapasitas = models.PositiveSmallIntegerField(null=True, blank=True)
     kapasitas_tak_terbatas = models.BooleanField('Kapasitas Tak Terbatas', default=False)

@@ -1376,6 +1376,24 @@
 
 {% block extra_script %}
 <style>
+    body:has(.dashboard-page) [data-app-frame] {
+        background: transparent;
+        box-shadow: none;
+    }
+
+    body:has(.dashboard-page) [data-app-content] {
+        border-color: transparent;
+        background: transparent !important;
+    }
+
+    body:has(.dashboard-page) [data-app-content]::before {
+        display: none;
+    }
+
+    .dashboard-page .surface-card {
+        box-shadow: none !important;
+    }
+
     .dashboard-page .surface-card,
     .dashboard-page article,
     .dashboard-page aside {

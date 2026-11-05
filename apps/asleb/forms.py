@@ -45,7 +45,7 @@ def validate_document_upload(uploaded, allowed_extensions=None):
     allowed_extensions = set(allowed_extensions or {'pdf', 'doc', 'docx'})
     extension = Path(uploaded.name).suffix.lower().lstrip('.')
     if extension not in allowed_extensions:
-        raise forms.ValidationError('File hanya boleh PDF atau Word.')
+        raise forms.ValidationError('Format file tidak diizinkan.')
 
     try:
         uploaded.seek(0)
@@ -55,6 +55,17 @@ def validate_document_upload(uploaded, allowed_extensions=None):
         elif extension == 'doc':
             if uploaded.read(8) != bytes.fromhex('D0CF11E0A1B11AE1'):
                 raise forms.ValidationError('Isi file bukan dokumen Word .doc yang valid.')
+        elif extension == 'zip':
+            uploaded.seek(0)
+            try:
+                with zipfile.ZipFile(uploaded) as archive:
+                    files = archive.infolist()
+                    if len(files) > 200 or sum(item.file_size for item in files) > 100 * 1024 * 1024:
+                        raise forms.ValidationError('Arsip ZIP terlalu besar atau berisi terlalu banyak file.')
+                    if any(item.filename.startswith(('/', '\\')) or '..' in Path(item.filename).parts for item in files):
+                        raise forms.ValidationError('Arsip ZIP berisi jalur file yang tidak aman.')
+            except (zipfile.BadZipFile, OSError):
+                raise forms.ValidationError('Isi file bukan arsip ZIP yang valid.')
         else:
             uploaded.seek(0)
             try:
@@ -675,6 +686,12 @@ class HasilPraktikumMahasiswaForm(forms.ModelForm):
             'catatan': forms.TextInput(attrs={'placeholder': 'Opsional'}),
         }
 
+    def __init__(self, *args, attendance_only=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        if attendance_only:
+            self.fields.pop('nilai_realtime')
+            self.fields.pop('nilai_laporan')
+
 
 class TugasLaporanPraktikumForm(forms.ModelForm):
     class Meta:
@@ -685,6 +702,7 @@ class TugasLaporanPraktikumForm(forms.ModelForm):
             'modul',
             'pertemuan',
             'deskripsi',
+            'lampiran_instruksi',
             'format_file',
             'ukuran_maksimal_mb',
             'mulai_pengumpulan',
@@ -697,6 +715,7 @@ class TugasLaporanPraktikumForm(forms.ModelForm):
             'mulai_pengumpulan': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
             'batas_pengumpulan': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
             'format_file': forms.TextInput(attrs={'placeholder': 'pdf,doc,docx'}),
+            'lampiran_instruksi': forms.ClearableFileInput(attrs={'accept': '.pdf,.doc,.docx,.zip'}),
         }
         help_texts = {
             'format_file': 'Pisahkan dengan koma. Contoh: pdf,doc,docx',
@@ -713,6 +732,8 @@ class TugasLaporanPraktikumForm(forms.ModelForm):
             active_ids = get_active_asleb_matkul_ids_for_pengguna(self.pengguna)
             matkul_qs = MataKuliahAsleb.objects.filter(pk__in=active_ids).order_by('nama', 'kelas')
         self.fields['matkul'].queryset = matkul_qs
+        if self.instance.pk and self.instance.pengumpulan.exists():
+            self.fields['matkul'].disabled = True
         self.fields['modul'].queryset = ModulPraktikum.objects.select_related('matkul').order_by('matkul__nama', 'matkul__kelas', 'nomor')
 
     def clean(self):
@@ -723,6 +744,9 @@ class TugasLaporanPraktikumForm(forms.ModelForm):
         batas = cleaned_data.get('batas_pengumpulan')
         if modul and matkul and modul.matkul_id != matkul.pk:
             self.add_error('modul', 'Modul harus berasal dari mata kuliah yang dipilih.')
+        if self.instance.pk and self.instance.pengumpulan.exists():
+            if modul != self.instance.modul:
+                self.add_error('modul', 'Modul tidak dapat diganti setelah ada laporan terkumpul.')
         if mulai and batas and batas <= mulai:
             self.add_error('batas_pengumpulan', 'Batas pengumpulan harus setelah waktu mulai.')
         raw_formats = cleaned_data.get('format_file', '')
@@ -731,12 +755,20 @@ class TugasLaporanPraktikumForm(forms.ModelForm):
             for item in raw_formats.split(',')
             if item.strip()
         }
-        allowed_formats = {'pdf', 'doc', 'docx'}
+        allowed_formats = {'pdf', 'doc', 'docx', 'zip'}
         if not formats or not formats.issubset(allowed_formats):
-            self.add_error('format_file', 'Format laporan hanya boleh PDF atau Word (pdf, doc, docx).')
+            self.add_error('format_file', 'Format laporan hanya boleh pdf, doc, docx, atau zip.')
         else:
             cleaned_data['format_file'] = ','.join(sorted(formats))
         return cleaned_data
+
+    def clean_lampiran_instruksi(self):
+        uploaded = self.cleaned_data.get('lampiran_instruksi')
+        if uploaded:
+            validate_document_upload(uploaded, ['pdf', 'doc', 'docx', 'zip'])
+            if uploaded.size > 15 * 1024 * 1024:
+                raise forms.ValidationError('Lampiran maksimal 15 MB.')
+        return uploaded
 
 
 class PengumpulanLaporanPraktikumForm(forms.ModelForm):
@@ -769,18 +801,17 @@ class PengumpulanLaporanPraktikumForm(forms.ModelForm):
 class ReviewLaporanPraktikumForm(forms.ModelForm):
     class Meta:
         model = PengumpulanLaporanPraktikum
-        fields = ['status', 'catatan_asisten', 'nilai']
+        fields = ['catatan_asisten', 'nilai']
         widgets = {
-            'catatan_asisten': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Catatan, komentar, atau instruksi revisi'}),
+            'catatan_asisten': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Komentar penilaian (opsional)'}),
             'nilai': forms.NumberInput(attrs={'min': 0, 'max': 100, 'step': '0.01'}),
         }
 
     def clean(self):
         cleaned_data = super().clean()
-        status = cleaned_data.get('status')
         nilai = cleaned_data.get('nilai')
-        if status == PengumpulanLaporanPraktikum.STATUS_DINILAI and nilai is None:
-            self.add_error('nilai', 'Nilai wajib diisi jika status sudah dinilai.')
+        if nilai is None:
+            self.add_error('nilai', 'Nilai wajib diisi.')
         return cleaned_data
 
 

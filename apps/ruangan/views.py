@@ -3,7 +3,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
-from apps.core.permissions import LABORAN_ROLE
+from apps.core.permissions import ADMIN_ROLE, LABORAN_ROLE
 
 from .forms import FotoRuanganLabForm, RuanganLabForm
 from .models import FotoRuanganLab, RuanganLab
@@ -12,8 +12,8 @@ from .models import FotoRuanganLab, RuanganLab
 class LaboranRuanganRequiredMixin:
     def dispatch(self, request, *args, **kwargs):
         pengguna = getattr(request, 'current_pengguna', None)
-        if not pengguna or pengguna.role != LABORAN_ROLE:
-            messages.warning(request, 'Kelola data ruangan hanya tersedia untuk Laboran.')
+        if not pengguna or pengguna.role not in {LABORAN_ROLE, ADMIN_ROLE}:
+            messages.warning(request, 'Kelola data ruangan hanya tersedia untuk pengelola laboratorium.')
             return redirect('ruangan:ruangan_list')
         return super().dispatch(request, *args, **kwargs)
 
@@ -41,6 +41,11 @@ class RuanganUpdateView(LaboranRuanganRequiredMixin, UpdateView):
     form_class = RuanganLabForm
     template_name = 'ruangan/ruangan_form.html'
     success_url = reverse_lazy('ruangan:ruangan_list')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['current_pengguna'] = self.request.current_pengguna
+        return kwargs
 
     def form_valid(self, form):
         messages.success(self.request, 'Data ruangan berhasil diperbarui.')

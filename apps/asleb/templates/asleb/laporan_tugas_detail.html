@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}{{ object.judul }}{% endblock %}
+{% block content %}
+<section class="mx-auto max-w-5xl space-y-6 pb-12">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <a class="text-sm font-bold text-brand-700" href="{% url 'asleb:laporan_kelas_detail' object.matkul_id %}">Kembali ke kelas</a>
+      <p class="mt-4 text-sm font-bold text-slate-500">{{ object.kode_tugas }} · {{ object.matkul }}</p>
+      <h2 class="mt-2 text-3xl font-black text-slate-900">{{ object.judul }}</h2>
+      <p class="mt-2 text-sm text-slate-500">{{ object.matkul.laboratorium.nama|default:"Laboratorium belum ditentukan" }} · Dibuat {{ object.dibuat_pada|date:"d M Y H:i" }} · Batas {{ object.batas_pengumpulan|date:"d M Y H:i" }}</p>
+      <p class="mt-1 text-sm text-slate-500">Asleb: {{ object.dibuat_oleh.nama_pengguna|default:"Tidak tersedia" }}</p>
+    </div>
+    {% if can_manage %}<div class="flex flex-wrap gap-2">
+      <a class="btn-secondary" href="{% url 'asleb:laporan_tugas_update' object.pk %}">Ubah</a>
+      <form method="post" action="{% url 'asleb:laporan_tugas_delete' object.pk %}" data-confirm-message="Hapus tugas ini?">{% csrf_token %}<button class="btn-secondary" type="submit">Hapus</button></form>
+    </div>{% endif %}
+  </div>
+  <article class="surface-card p-6">
+    <h3 class="text-lg font-black text-slate-900">Instruksi</h3>
+    <div class="mt-3 whitespace-pre-line text-sm text-slate-700">{{ object.deskripsi }}</div>
+    <p class="mt-4 text-sm text-slate-500">Format: {{ object.format_file }} · Maksimal {{ object.ukuran_maksimal_mb }} MB</p>
+    {% if object.lampiran_instruksi %}<a class="btn-secondary mt-4" href="{% url 'asleb:laporan_tugas_attachment' object.pk %}">Unduh lampiran</a>{% endif %}
+  </article>
+  {% if peserta %}<article class="surface-card p-6">
+    <h3 class="text-lg font-black text-slate-900">Progres saya</h3>
+    <p class="mt-2 text-sm text-slate-600">{% if progres %}{{ progres.get_status_display }}{% else %}Belum dimulai{% endif %}</p>
+    {% if not laporan %}<div class="mt-4 flex flex-wrap gap-2">
+      <form method="post" action="{% url 'asleb:laporan_tugas_progress' object.pk %}">{% csrf_token %}<input type="hidden" name="status" value="in_progress"><button class="btn-secondary" type="submit">Mulai kerjakan</button></form>
+      {% if object.is_open %}<a class="btn-primary" href="{% url 'asleb:laporan_submit' object.pk %}">Kumpulkan laporan</a>{% endif %}
+    </div>{% else %}<div class="mt-4 flex flex-wrap gap-2"><a class="btn-secondary" href="{% url 'asleb:laporan_preview' laporan.pk %}">Pratinjau</a><a class="btn-secondary" href="{% url 'asleb:laporan_download' laporan.pk %}">Unduh laporan</a></div>{% endif %}
+    {% if laporan.nilai is not None %}<p class="mt-4 font-bold">Nilai: {{ laporan.nilai }}</p>{% endif %}
+    {% if laporan.catatan_asisten %}<p class="mt-2 text-sm text-slate-600">{{ laporan.catatan_asisten }}</p>{% endif %}
+  </article>{% endif %}
+  {% if can_manage or can_grade %}<article class="surface-card p-6">
+    <h3 class="text-lg font-black text-slate-900">Pengumpulan mahasiswa</h3>
+    <div class="mt-4 space-y-3">{% for item in laporan_list %}<div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+      <div><p class="font-bold">{{ item.peserta.nama }}</p><p class="text-sm text-slate-500">{{ item.peserta.nim }} · {{ item.get_status_display }}</p></div>
+      <div class="flex flex-wrap gap-2"><a class="btn-secondary" href="{% url 'asleb:laporan_preview' item.pk %}">Pratinjau</a>{% if can_grade and item.nilai is None and item.status != 'sedang_diperiksa' %}<form method="post" action="{% url 'asleb:laporan_start_review' item.pk %}">{% csrf_token %}<button class="btn-secondary" type="submit">Mulai review</button></form>{% endif %}{% if can_grade %}<a class="btn-primary" href="{% url 'asleb:laporan_review' item.pk %}">Nilai</a>{% endif %}</div>
+    </div>{% empty %}<p class="text-sm text-slate-500">Belum ada laporan masuk.</p>{% endfor %}</div>
+  </article>{% endif %}
+  <article class="surface-card p-6"><h3 class="text-lg font-black text-slate-900">Aktivitas</h3><div class="mt-4 space-y-3">{% for item in aktivitas %}<div class="border-b border-slate-200 pb-3 text-sm"><span class="font-bold">{{ item.get_aksi_display|default:item.aksi }}</span> · {{ item.dibuat_pada|date:"d M Y H:i" }}<p class="text-slate-500">{{ item.keterangan }}</p></div>{% empty %}<p class="text-sm text-slate-500">Belum ada aktivitas.</p>{% endfor %}</div></article>
+</section>
+{% endblock %}
