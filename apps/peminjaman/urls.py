@@ -9,6 +9,7 @@ from .views import (
     barang_options,
     bulk_update_status,
     request_extension,
+    manual_extension,
     review_extension,
     update_detail_status,
     adjust_credit_score,
@@ -17,6 +18,7 @@ from .views import (
 app_name = 'peminjaman'
 
 urlpatterns = [
+    path('<int:pk>/perpanjangan/manual/', manual_extension, name='peminjaman_extension_manual'),
     path('', PeminjamanAlatListView.as_view(), name='peminjaman_list'),
     path('tambah/', PeminjamanAlatCreateView.as_view(), name='peminjaman_create'),
     path('bulk-update-status/', bulk_update_status, name='peminjaman_bulk_update'),

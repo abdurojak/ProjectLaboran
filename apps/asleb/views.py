@@ -1391,6 +1391,8 @@ def can_manage_laporan(pengguna, tugas):
 
 
 def can_review_laporan(pengguna, tugas):
+    if pengguna and pengguna.role == ASISTEN_LAB_ROLE:
+        return can_manage_laporan(pengguna, tugas)
     return bool(
         pengguna and pengguna.role == LABORAN_ROLE
         and tugas.matkul.laboratorium_id
@@ -1840,7 +1842,7 @@ class LaporanPraktikumListView(TemplateView):
             'classroom_cards': classroom_cards,
             'selected_classroom': selected_classroom,
             'can_create_task': pengguna.role == ASISTEN_LAB_ROLE,
-            'can_grade': pengguna.role == LABORAN_ROLE,
+            'can_grade': pengguna.role in {LABORAN_ROLE, ASISTEN_LAB_ROLE},
             'is_participant': peserta_qs.exists(),
             'board_columns': board_columns,
             'review_board_columns': review_board_columns,

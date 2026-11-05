@@ -361,6 +361,43 @@ def request_extension(request, pk):
 
 
 @require_POST
+def manual_extension(request, pk):
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not pengguna or pengguna.role not in EXTENSION_REVIEWER_ROLES:
+        messages.error(request, 'Hanya Laboran yang dapat memperpanjang peminjaman manual.')
+        return redirect('peminjaman:peminjaman_list')
+    with transaction.atomic():
+        anchor = get_object_or_404(PeminjamanAlat, pk=pk)
+        transaksi = get_object_or_404(PeminjamanTransaksi.objects.select_for_update(), pk=anchor.transaksi_id)
+        if transaksi.nim == pengguna.nim_nik or not transaksi.detail.filter(status='dipinjam').exists():
+            messages.error(request, 'Peminjaman ini tidak dapat diperpanjang manual.')
+            return redirect('peminjaman:peminjaman_detail', pk=pk)
+        if transaksi.pengajuan_perpanjangan.filter(status='diajukan').exists():
+            messages.error(request, 'Tinjau pengajuan yang masih menunggu terlebih dahulu.')
+            return redirect('peminjaman:peminjaman_detail', pk=pk)
+        form = PengajuanPerpanjanganForm(request.POST, transaksi=transaksi, credit_profile=get_credit_profile(transaksi.nim))
+        if not form.is_valid():
+            messages.error(request, str(next(iter(form.errors.values()))[0]))
+            return redirect('peminjaman:peminjaman_detail', pk=pk)
+        extension = form.save(commit=False)
+        extension.transaksi = transaksi
+        extension.diajukan_oleh = pengguna
+        extension.ditinjau_oleh = pengguna
+        extension.ditinjau_pada = timezone.now()
+        extension.tanggal_kembali_sebelumnya = transaksi.tanggal_kembali
+        extension.tanggal_kembali_disetujui = extension.tanggal_kembali_diminta
+        extension.status = 'disetujui'
+        extension.catatan_peninjau = 'Perpanjangan manual oleh Laboran.'
+        extension.save()
+        transaksi.tanggal_kembali = extension.tanggal_kembali_disetujui
+        transaksi.save(update_fields=['tanggal_kembali', 'diperbarui_pada'])
+        transaksi.detail.filter(status='dipinjam').update(tanggal_kembali=transaksi.tanggal_kembali, diperbarui_pada=timezone.now())
+    send_extension_status_notification(extension)
+    messages.success(request, 'Perpanjangan manual berhasil disimpan.')
+    return redirect('peminjaman:peminjaman_detail', pk=pk)
+
+
+@require_POST
 def review_extension(request, pk):
     pengguna = getattr(request, 'current_pengguna', None)
     if not pengguna or pengguna.role not in EXTENSION_REVIEWER_ROLES:
@@ -736,7 +773,13 @@ class PeminjamanAlatDetailView(DetailView):
             and pending_extension.diajukan_oleh_id != pengguna.pk
             and self.object.nim != pengguna.nim_nik
         )
-        if context['can_request_extension']:
+        context['can_manual_extension'] = bool(
+            pengguna and pengguna.role in EXTENSION_REVIEWER_ROLES
+            and self.object.transaksi_id and self.object.nim != pengguna.nim_nik
+            and any(detail.status == 'dipinjam' for detail in context['detail_transaksi'])
+            and not pending_extension
+        )
+        if context['can_request_extension'] or context['can_manual_extension']:
             context['extension_form'] = PengajuanPerpanjanganForm(
                 transaksi=self.object.transaksi,
                 credit_profile=credit_profile,

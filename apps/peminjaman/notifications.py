@@ -174,7 +174,10 @@ def send_extension_request_notifications(extension):
 
 
 def send_extension_status_notification(extension):
-    recipient = extension.diajukan_oleh.email
+    from apps.pengguna.models import Pengguna
+
+    borrower = Pengguna.objects.filter(nim_nik=extension.transaksi.nim).first()
+    recipient = borrower.email if borrower else ''
     if not recipient:
         return 0
     anchor = extension.transaksi.detail.first()

@@ -161,6 +161,18 @@
     </section>
     {% endif %}
 
+    {% if can_manual_extension %}
+    <section class="surface-card p-5">
+        <h3 class="text-xl font-black text-slate-900">Perpanjangan Manual</h3>
+        <p class="mt-2 text-sm text-slate-500">Perpanjang transaksi {{ peminjaman.transaksi.kode_pinjam }} milik {{ peminjaman.nama_peminjam }}. Maksimal 7 hari dari tanggal kembali saat ini.</p>
+        <form method="post" action="{% url 'peminjaman:peminjaman_extension_manual' peminjaman.pk %}" class="mt-4 grid gap-4" data-confirm-message="Simpan perpanjangan manual untuk peminjam ini?">
+            {% csrf_token %}
+            {{ extension_form.as_p }}
+            <button type="submit" class="btn-primary"><i data-lucide="calendar-plus" class="h-4 w-4"></i> Perpanjang Sekarang</button>
+        </form>
+    </section>
+    {% endif %}
+
     {% if extension_list %}
     <details class="surface-card p-5">
         <summary class="cursor-pointer font-black text-slate-900">Riwayat Perpanjangan ({{ extension_list|length }})</summary>
