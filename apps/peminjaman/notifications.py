@@ -8,6 +8,10 @@ from apps.kalender.realtime import send_user_notification, users_for_nim
 from apps.pengguna.models import Pengguna
 
 
+def return_date_label(loan):
+    return loan.tanggal_kembali.strftime('%d-%m-%Y') if loan.tanggal_kembali else 'Tanpa batas waktu (Capstone)'
+
+
 def build_public_url(route_name, **kwargs):
     base_url = settings.PUBLIC_ACCESS_BASE_URL.rstrip('/') + '/'
     return urljoin(base_url, reverse(route_name, kwargs=kwargs).lstrip('/'))
@@ -27,7 +31,7 @@ def send_peminjaman_request_notifications(peminjaman):
     text_body = (
         f'{peminjaman.nama_peminjam} mengajukan peminjaman {peminjaman.barang.nama}.\n'
         f'Kode: {peminjaman.kode_pinjam}\n'
-        f'Tanggal: {peminjaman.tanggal_pinjam:%d-%m-%Y} sampai {peminjaman.tanggal_kembali:%d-%m-%Y}\n\n'
+        f'Tanggal: {peminjaman.tanggal_pinjam:%d-%m-%Y} sampai {return_date_label(peminjaman)}\n\n'
         f'Buka sistem: {action_url}'
     )
     return send_branded_email(
@@ -41,7 +45,7 @@ def send_peminjaman_request_notifications(peminjaman):
             {'label': 'Kode', 'value': peminjaman.kode_pinjam},
             {'label': 'Barang', 'value': peminjaman.barang.nama},
             {'label': 'Peminjam', 'value': peminjaman.nama_peminjam},
-            {'label': 'Periode', 'value': f'{peminjaman.tanggal_pinjam:%d %b %Y} - {peminjaman.tanggal_kembali:%d %b %Y}'},
+            {'label': 'Periode', 'value': f'{peminjaman.tanggal_pinjam:%d %b %Y} - {return_date_label(peminjaman)}'},
         ],
         action_url=action_url,
         action_label='Tinjau Pengajuan',
@@ -94,7 +98,7 @@ def send_peminjaman_status_notification(peminjaman):
         f'Kode: {peminjaman.kode_pinjam}\n'
         f'Status: {peminjaman.get_status_display()}\n'
         f'Tanggal pinjam: {peminjaman.tanggal_pinjam:%d-%m-%Y}\n'
-        f'Tanggal kembali: {peminjaman.tanggal_kembali:%d-%m-%Y}\n\n'
+        f'Tanggal kembali: {return_date_label(peminjaman)}\n\n'
         f'Buka sistem: {action_url}'
     )
     return send_branded_email(
@@ -109,7 +113,7 @@ def send_peminjaman_status_notification(peminjaman):
             {'label': 'Barang', 'value': peminjaman.barang.nama},
             {'label': 'Status', 'value': peminjaman.get_status_display()},
             {'label': 'Tanggal pinjam', 'value': f'{peminjaman.tanggal_pinjam:%d %b %Y}'},
-            {'label': 'Tanggal kembali', 'value': f'{peminjaman.tanggal_kembali:%d %b %Y}'},
+            {'label': 'Tanggal kembali', 'value': f'{return_date_label(peminjaman)}'},
         ],
         action_url=action_url,
         action_label='Lihat Peminjaman',
@@ -237,7 +241,7 @@ def send_due_reminder_notification(transaksi, *, overdue=False):
         recipients=[recipient],
         text_body=(
             f'{intro}\nKode: {transaksi.kode_pinjam}\n'
-            f'Tanggal kembali: {transaksi.tanggal_kembali:%d-%m-%Y}\n\n'
+            f'Tanggal kembali: {return_date_label(transaksi)}\n\n'
             f'Jika memerlukan tambahan waktu, ajukan perpanjangan: {action_url}'
         ),
         title=title,
@@ -245,7 +249,7 @@ def send_due_reminder_notification(transaksi, *, overdue=False):
         intro=intro,
         details=[
             {'label': 'Kode', 'value': transaksi.kode_pinjam},
-            {'label': 'Tanggal kembali', 'value': f'{transaksi.tanggal_kembali:%d %b %Y}'},
+            {'label': 'Tanggal kembali', 'value': f'{return_date_label(transaksi)}'},
             {'label': 'Status', 'value': 'Terlambat' if overdue else 'Segera jatuh tempo'},
         ],
         action_url=action_url,

@@ -73,10 +73,10 @@ def get_credit_profile(nim, today=None):
 
     for transaksi in transactions:
         statuses = {detail.status for detail in transaksi.detail.all()}
-        is_active_overdue = 'dipinjam' in statuses and transaksi.tanggal_kembali < today
+        is_active_overdue = 'dipinjam' in statuses and bool(transaksi.tanggal_kembali) and transaksi.tanggal_kembali < today
         returned_late = bool(
             transaksi.tanggal_dikembalikan
-            and transaksi.tanggal_dikembalikan > transaksi.tanggal_kembali
+            and transaksi.tanggal_kembali and transaksi.tanggal_dikembalikan > transaksi.tanggal_kembali
         )
         if is_active_overdue or returned_late:
             late_transactions += 1
@@ -98,7 +98,7 @@ def get_credit_profile(nim, today=None):
 
         returned_on_time = bool(
             transaksi.tanggal_dikembalikan
-            and transaksi.tanggal_dikembalikan <= transaksi.tanggal_kembali
+            and transaksi.tanggal_kembali and transaksi.tanggal_dikembalikan <= transaksi.tanggal_kembali
             and risk == 'normal'
             and not ({'hilang', 'rusak'} & statuses)
         )

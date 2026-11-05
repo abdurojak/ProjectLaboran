@@ -29,6 +29,24 @@ from .services import get_credit_profile
 
 
 class PeminjamanViewsTests(TestCase):
+    def test_capstone_tanpa_tenggat_tidak_terlambat(self):
+        response = self.client.post(reverse('peminjaman:peminjaman_create'), {
+            'selected_barang_ids': str(self.barang_tersedia_lain.pk),
+            'nama_peminjam': 'Mahasiswa Capstone', 'nim': 'CAP001',
+            'no_hp': '08123456789', 'tanggal_pinjam': '2026-01-01',
+            'is_capstone': 'on', 'status': 'dipinjam', 'catatan': 'Capstone',
+        })
+        self.assertEqual(response.status_code, 302, response.context['form'].errors if response.status_code == 200 else '')
+        loan = PeminjamanAlat.objects.get(nim='CAP001')
+        self.assertTrue(loan.is_capstone)
+        self.assertTrue(loan.transaksi.is_capstone)
+        self.assertIsNone(loan.tanggal_kembali)
+        self.assertFalse(get_credit_profile('CAP001').has_active_overdue)
+        detail = self.client.get(reverse('peminjaman:peminjaman_detail', args=[loan.pk]))
+        self.assertContains(detail, 'Tanpa batas waktu (Capstone)')
+        call_command('send_peminjaman_reminders')
+        self.assertFalse(PengingatPeminjaman.objects.filter(transaksi=loan.transaksi).exists())
+
     def setUp(self):
         self.pengguna = Pengguna.objects.create(
             nama_pengguna='Lab Admin',

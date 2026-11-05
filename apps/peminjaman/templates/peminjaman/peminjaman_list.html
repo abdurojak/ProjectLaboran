@@ -616,7 +616,7 @@
                         </td>
                         <td>{{ peminjaman.tanggal_pinjam|date:"d M Y" }}</td>
                         <td>
-                            <div>{{ peminjaman.tanggal_kembali|date:"d M Y" }}</div>
+                            <div>{{ peminjaman.tanggal_kembali|date:"d M Y"|default:"Tanpa batas waktu (Capstone)" }}</div>
                             {% if peminjaman.is_overdue %}
                             <span class="peminjaman-overdue-badge mt-1 inline-flex rounded-full bg-rose-100 px-2.5 py-1 text-[11px] font-black text-rose-700">Terlambat</span>
                             {% endif %}

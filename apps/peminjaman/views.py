@@ -331,7 +331,7 @@ def request_extension(request, pk):
             PeminjamanTransaksi.objects.select_for_update(),
             pk=anchor.transaksi_id,
         )
-        if not transaksi.detail.filter(status='dipinjam').exists():
+        if not transaksi.tanggal_kembali or not transaksi.detail.filter(status='dipinjam').exists():
             messages.error(request, 'Perpanjangan hanya dapat diajukan untuk barang yang sedang dipinjam.')
             return redirect('peminjaman:peminjaman_detail', pk=anchor.pk)
         if transaksi.pengajuan_perpanjangan.filter(status='diajukan').exists():
@@ -369,7 +369,7 @@ def manual_extension(request, pk):
     with transaction.atomic():
         anchor = get_object_or_404(PeminjamanAlat, pk=pk)
         transaksi = get_object_or_404(PeminjamanTransaksi.objects.select_for_update(), pk=anchor.transaksi_id)
-        if transaksi.nim == pengguna.nim_nik or not transaksi.detail.filter(status='dipinjam').exists():
+        if not transaksi.tanggal_kembali or transaksi.nim == pengguna.nim_nik or not transaksi.detail.filter(status='dipinjam').exists():
             messages.error(request, 'Peminjaman ini tidak dapat diperpanjang manual.')
             return redirect('peminjaman:peminjaman_detail', pk=pk)
         if transaksi.pengajuan_perpanjangan.filter(status='diajukan').exists():
@@ -529,7 +529,7 @@ class PeminjamanAlatListView(ListView):
                     for detail in detail_list
                 )
                 transaksi.is_overdue = any(
-                    detail.tanggal_kembali < today
+                    detail.tanggal_kembali and detail.tanggal_kembali < today
                     and detail.status not in ARCHIVED_STATUS_CHOICES
                     for detail in detail_list
                 )
@@ -545,7 +545,7 @@ class PeminjamanAlatListView(ListView):
         today = timezone.localdate()
         for peminjaman in peminjaman_list:
             peminjaman.is_overdue = (
-                peminjaman.tanggal_kembali < today
+                peminjaman.tanggal_kembali and peminjaman.tanggal_kembali < today
                 and peminjaman.status not in ARCHIVED_STATUS_CHOICES
             )
             peminjaman.can_current_pengguna_edit = (
@@ -739,7 +739,7 @@ class PeminjamanAlatDetailView(DetailView):
         today = timezone.localdate()
         overdue_details = [
             detail for detail in context['detail_transaksi']
-            if detail.status == 'dipinjam' and detail.tanggal_kembali < today
+            if detail.status == 'dipinjam' and detail.tanggal_kembali and detail.tanggal_kembali < today
         ]
         context['is_overdue'] = bool(overdue_details)
         context['overdue_days'] = max(
@@ -764,7 +764,7 @@ class PeminjamanAlatDetailView(DetailView):
             and pengguna.role in BORROWER_ROLES
             and self.object.nim == pengguna.nim_nik
             and any(detail.status == 'dipinjam' for detail in context['detail_transaksi'])
-            and not pending_extension
+            and self.object.tanggal_kembali and not pending_extension
         )
         context['can_review_extension'] = bool(
             pengguna
@@ -777,7 +777,7 @@ class PeminjamanAlatDetailView(DetailView):
             pengguna and pengguna.role in EXTENSION_REVIEWER_ROLES
             and self.object.transaksi_id and self.object.nim != pengguna.nim_nik
             and any(detail.status == 'dipinjam' for detail in context['detail_transaksi'])
-            and not pending_extension
+            and self.object.tanggal_kembali and not pending_extension
         )
         if context['can_request_extension'] or context['can_manual_extension']:
             context['extension_form'] = PengajuanPerpanjanganForm(
@@ -850,6 +850,7 @@ class PeminjamanAlatCreateView(CreateView):
                 no_hp=pengguna.no_hp if is_borrower else form.cleaned_data['no_hp'],
                 tanggal_pinjam=form.cleaned_data['tanggal_pinjam'],
                 tanggal_kembali=form.cleaned_data['tanggal_kembali'],
+                is_capstone=form.cleaned_data['is_capstone'],
                 catatan=form.cleaned_data['catatan'],
             )
             for barang in selectable_barang:
@@ -862,6 +863,7 @@ class PeminjamanAlatCreateView(CreateView):
                     no_hp=transaksi.no_hp,
                     tanggal_pinjam=transaksi.tanggal_pinjam,
                     tanggal_kembali=transaksi.tanggal_kembali,
+                    is_capstone=transaksi.is_capstone,
                     status='diajukan' if is_borrower else form.cleaned_data['status'],
                     catatan=transaksi.catatan,
                     paket=paket,
@@ -1008,6 +1010,7 @@ class PeminjamanAlatUpdateView(UpdateView):
             'no_hp': self.object.no_hp,
             'tanggal_pinjam': self.object.tanggal_pinjam,
             'tanggal_kembali': self.object.tanggal_kembali,
+            'is_capstone': self.object.is_capstone,
             'catatan': self.object.catatan,
         }
         group = _get_peminjaman_group_for_update(self.object)
@@ -1029,6 +1032,7 @@ class PeminjamanAlatUpdateView(UpdateView):
             'no_hp': self.object.no_hp,
             'tanggal_pinjam': self.object.tanggal_pinjam,
             'tanggal_kembali': self.object.tanggal_kembali,
+            'is_capstone': self.object.is_capstone,
             'status': self.object.status,
             'catatan': self.object.catatan,
             'paket': self.object.paket,

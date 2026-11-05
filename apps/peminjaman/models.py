@@ -19,7 +19,8 @@ class PeminjamanTransaksi(models.Model):
     nim = models.CharField('NIM', max_length=30, blank=True)
     no_hp = models.CharField('No HP', max_length=30, blank=True)
     tanggal_pinjam = models.DateField()
-    tanggal_kembali = models.DateField()
+    is_capstone = models.BooleanField('Untuk capstone', default=False)
+    tanggal_kembali = models.DateField(blank=True, null=True)
     tanggal_dikembalikan = models.DateField(blank=True, null=True)
     risiko = models.CharField(max_length=10, choices=RISIKO_CHOICES, default='normal')
     catatan = models.TextField(blank=True)
@@ -212,7 +213,8 @@ class PeminjamanAlat(models.Model):
     nim = models.CharField('NIM', max_length=30, blank=True)
     no_hp = models.CharField('No HP', max_length=30, blank=True)
     tanggal_pinjam = models.DateField()
-    tanggal_kembali = models.DateField()
+    is_capstone = models.BooleanField('Untuk capstone', default=False)
+    tanggal_kembali = models.DateField(blank=True, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='diajukan')
     catatan = models.TextField(blank=True)
     dibuat_pada = models.DateTimeField(auto_now_add=True)
@@ -245,6 +247,7 @@ class PeminjamanAlat(models.Model):
                 no_hp=self.no_hp,
                 tanggal_pinjam=self.tanggal_pinjam,
                 tanggal_kembali=self.tanggal_kembali,
+                is_capstone=self.is_capstone,
                 catatan=self.catatan,
             )
             self.kode_pinjam = self.transaksi.kode_pinjam

@@ -26,6 +26,7 @@ class PeminjamanAlatForm(forms.ModelForm):
             'nim',
             'no_hp',
             'tanggal_pinjam',
+            'is_capstone',
             'tanggal_kembali',
             'status',
             'catatan',
@@ -78,6 +79,11 @@ class PeminjamanAlatForm(forms.ModelForm):
         status = cleaned_data.get('status')
         tanggal_pinjam = cleaned_data.get('tanggal_pinjam')
         tanggal_kembali = cleaned_data.get('tanggal_kembali')
+        if cleaned_data.get('is_capstone'):
+            cleaned_data['tanggal_kembali'] = None
+            tanggal_kembali = None
+        elif not tanggal_kembali:
+            self.add_error('tanggal_kembali', 'Tanggal kembali wajib untuk peminjaman non-capstone.')
         if paket:
             cleaned_data['selected_barang_ids'] = ''
 
