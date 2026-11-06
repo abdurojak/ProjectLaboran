@@ -2559,7 +2559,7 @@ class NilaiAbsensiMahasiswaView(PraktikumMahasiswaAccessMixin, TemplateView):
                     data=data,
                     instance=existing.get(peserta.pk),
                     prefix=f'peserta-{peserta.pk}',
-                    attendance_only=True,
+                    attendance_only=False,
                 ),
                 'rata_rata': existing[peserta.pk].nilai_rata_rata_display if peserta.pk in existing else '-',
             }
@@ -2567,8 +2567,14 @@ class NilaiAbsensiMahasiswaView(PraktikumMahasiswaAccessMixin, TemplateView):
         ]
 
     def post(self, request, *args, **kwargs):
-        if request.current_pengguna.role != ASISTEN_LAB_ROLE:
-            raise PermissionDenied('Hanya Asisten Lab yang dapat mengisi absensi mahasiswa.')
+        pengguna = request.current_pengguna
+        if pengguna.role not in {ASISTEN_LAB_ROLE, LABORAN_ROLE}:
+            raise PermissionDenied('Anda tidak memiliki akses mengisi nilai mahasiswa.')
+        if pengguna.role == LABORAN_ROLE and not (
+            self.matkul.laboratorium_id
+            and self.matkul.laboratorium.laboran_akun.filter(pk=pengguna.pk).exists()
+        ):
+            raise PermissionDenied('Anda tidak ditugaskan pada laboratorium ini.')
         rows = self.build_rows(request.POST)
         tanggal = request.POST.get('tanggal_praktikum', '').strip()
         from django.utils.dateparse import parse_date

@@ -236,7 +236,7 @@ class LaporanWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(TugasLaporanPraktikum.objects.filter(judul='Tugas Kelas Lain').exists())
 
-    def test_nilai_terhubung_ke_rekap_tapi_asleb_tidak_bisa_mengubahnya(self):
+    def test_asleb_dapat_mengisi_nilai_realtime_dan_nilai_laporan_tetap_sinkron(self):
         task = self.task()
         hasil = HasilPraktikumMahasiswa.objects.create(
             peserta=self.participant, modul=self.module,
@@ -269,12 +269,12 @@ class LaporanWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 302, response.content[:500])
         hasil.refresh_from_db()
         self.assertEqual(hasil.status_absensi, 'izin')
-        self.assertEqual(hasil.nilai_realtime, Decimal('80'))
+        self.assertEqual(hasil.nilai_realtime, Decimal('100'))
         self.assertEqual(hasil.nilai_laporan, Decimal('90'))
         self.login(self.laboran)
         self.assertEqual(self.client.post(attendance_url, {
             'tanggal_praktikum': timezone.localdate().isoformat(),
-        }).status_code, 403)
+        }).status_code, 200)
 
     def test_zip_valid_diterima_dan_arsip_berbahaya_ditolak(self):
         task = self.task(format_file='pdf,zip')
