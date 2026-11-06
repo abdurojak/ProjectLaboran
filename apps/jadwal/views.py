@@ -231,6 +231,7 @@ class JadwalPraktikumListView(ListView):
                          + timedelta(days=index)).isoformat(),
             }
             for index, (value, label) in enumerate(JadwalPraktikum.HARI_CHOICES)
+            if value != 'sabtu'
         ]
         context['selected_date'] = selected_date
         context['selected_hari'] = selected_hari

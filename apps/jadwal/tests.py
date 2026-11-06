@@ -88,7 +88,7 @@ class JadwalViewTests(TestCase):
         self.assertContains(response, 'Praktikum Basis Data')
         self.assertContains(response, 'Lab Rekayasa Data')
         self.assertContains(response, 'Senin')
-        self.assertContains(response, 'Sabtu')
+        self.assertNotContains(response, 'Sabtu')
         self.assertNotContains(response, 'Minggu')
         self.assertContains(response, 'Ekspor Jadwal')
 
