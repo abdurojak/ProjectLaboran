@@ -49,11 +49,11 @@ class JadwalViewTests(TestCase):
         )
         self.lab_rpl, _ = RuanganLab.objects.update_or_create(
             kode='LAB-RPL',
-            defaults={'nama': 'Lab Rekayasa Perangkat Lunak', 'kapasitas': 20, 'warna': 'teal', 'aktif': True},
+            defaults={'nama': 'Laboratorium Rekayasa Perangkat Lunak', 'kapasitas': 20, 'warna': 'teal', 'aktif': True},
         )
         self.lab_ski, _ = RuanganLab.objects.update_or_create(
             kode='LAB-SKI',
-            defaults={'nama': 'Lab Sistem Keamanan Informasi', 'kapasitas': 18, 'warna': 'amber', 'aktif': True},
+            defaults={'nama': 'Laboratorium Infrastruktur', 'kapasitas': 18, 'warna': 'amber', 'aktif': True},
         )
         combined_group = GrupRuanganGabungan.objects.create(nama='RPL dan SKI Test')
         combined_group.ruangan.set([self.lab_rpl, self.lab_ski])
@@ -91,6 +91,52 @@ class JadwalViewTests(TestCase):
         self.assertContains(response, 'Sabtu')
         self.assertNotContains(response, 'Minggu')
         self.assertContains(response, 'Ekspor Jadwal')
+
+    def test_jadwal_gabungan_tidak_menutupi_kolom_lab_di_antaranya(self):
+        combined = JadwalPraktikum.objects.create(
+            mata_kuliah='Praktikum Gabungan', kelas='TI-01',
+            ruangan=self.lab_ski, ruangan_tambahan=self.lab_rpl,
+            hari='jumat', waktu_mulai=time(8), waktu_selesai=time(10),
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+        pemrograman = RuanganLab.objects.get(kode='LAB-PRG')
+        separate = JadwalPraktikum.objects.create(
+            mata_kuliah='Praktikum Pemrograman', kelas='TI-02',
+            ruangan=pemrograman, hari='jumat',
+            waktu_mulai=time(8), waktu_selesai=time(10),
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+
+        response = self.client.get(reverse('jadwal:jadwal_list'), {'tanggal': '2026-11-06'})
+        rooms = list(response.context['ruangan_list'])
+        blocks = response.context['jadwal_blocks']
+        combined_blocks = [block for block in blocks if block['jadwal'].pk == combined.pk]
+        separate_block = next(block for block in blocks if block['jadwal'].pk == separate.pk)
+
+        self.assertEqual(len(combined_blocks), 2)
+        self.assertEqual(
+            {block['grid_column'] for block in combined_blocks},
+            {rooms.index(self.lab_ski) + 1, rooms.index(self.lab_rpl) + 1},
+        )
+        self.assertEqual(separate_block['grid_column'], rooms.index(pemrograman) + 1)
+        self.assertTrue(all(block['lane_width'] == '100' for block in combined_blocks + [separate_block]))
+
+    def test_jadwal_bentrok_di_lab_sama_ditampilkan_berdampingan(self):
+        JadwalPraktikum.objects.create(
+            mata_kuliah='Praktikum Kedua', kelas='TI-02',
+            ruangan=self.ruangan, hari='kamis',
+            waktu_mulai=time(8, 30), waktu_selesai=time(9, 30),
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+
+        response = self.client.get(reverse('jadwal:jadwal_list'), {'hari': 'kamis'})
+        blocks = [
+            block for block in response.context['jadwal_blocks']
+            if block['jadwal'].ruangan_id == self.ruangan.pk
+        ]
+        self.assertEqual(len(blocks), 2)
+        self.assertEqual({block['lane_width'] for block in blocks}, {'50'})
+        self.assertEqual({block['lane_offset'] for block in blocks}, {0, 100})
 
     def test_export_jadwal_excel_memuat_jadwal_mingguan(self):
         response = self.client.get(reverse('jadwal:jadwal_export_excel'))

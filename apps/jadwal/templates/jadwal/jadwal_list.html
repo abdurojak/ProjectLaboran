@@ -41,6 +41,7 @@
     }
 
     .jadwal-table-head {
+        height: 6.25rem !important;
         background: rgba(204, 251, 241, 0.62);
         border-color: rgba(20, 184, 166, 0.22);
         color: #0f766e;
@@ -66,9 +67,10 @@
     }
 
     .jadwal-practice-block {
-        background: rgba(204, 251, 241, 0.92);
+        background: #ccfbf1;
         border-color: rgba(13, 148, 136, 0.34);
         color: #0f172a;
+        overflow-y: auto;
     }
 
     .jadwal-practice-block a {
@@ -106,7 +108,7 @@
     }
 
     html[data-theme="dark"] .jadwal-practice-block {
-        background: rgba(20, 184, 166, 0.24);
+        background: #134e4a;
         border-color: rgba(94, 234, 212, 0.38);
         color: #f8fafc;
     }
@@ -241,8 +243,8 @@
                     {% endfor %}
 
                     {% for block in jadwal_blocks %}
-                    <div class="z-20" style="grid-column: {{ block.grid_column }} / span {{ block.column_span }}; grid-row: {{ block.grid_row }} / span {{ block.span }};">
-                        <div class="jadwal-practice-block flex h-full min-h-20 flex-col items-center justify-center border px-3 py-4 text-center font-bold">
+                    <div class="z-20 min-w-0" style="grid-column: {{ block.grid_column }} / span {{ block.column_span }}; grid-row: {{ block.grid_row }} / span {{ block.span }}; width: {{ block.lane_width }}%; transform: translateX({{ block.lane_offset }}%);">
+                        <div class="jadwal-practice-block flex h-full min-h-0 flex-col items-center justify-center border px-2 py-2 text-center font-bold">
                             <a href="{% url 'jadwal:jadwal_detail' block.jadwal.pk %}" class="transition">
                                 <span>{{ block.jadwal.mata_kuliah }}</span>
                             </a>

@@ -306,13 +306,12 @@ class JadwalPraktikumListView(ListView):
 
         for jadwal in jadwal_list:
             start_key = self.get_slot_key(jadwal.waktu_mulai, slot_keys)
-            occupied_columns = [
+            occupied_columns = sorted({
                 ruangan_columns.get(room_id)
                 for room_id in jadwal.get_occupied_room_ids()
                 if ruangan_columns.get(room_id)
-            ]
-            grid_column = min(occupied_columns) if occupied_columns else None
-            if not start_key or not grid_column:
+            })
+            if not start_key or not occupied_columns:
                 continue
 
             start_index = slot_keys.index(start_key)
@@ -324,15 +323,55 @@ class JadwalPraktikumListView(ListView):
 
             span = max(1, int((end_dt - start_dt).total_seconds() // 1800))
             span = min(span, len(slot_keys) - start_index)
-            column_span = max(1, len(occupied_columns))
-            blocks.append({
-                'jadwal': jadwal,
-                'grid_column': grid_column,
-                'column_span': column_span,
-                'grid_row': start_index + 1,
-                'span': span,
-                'can_manage': can_manage_jadwal(pengguna, jadwal),
-            })
+            for grid_column in occupied_columns:
+                blocks.append({
+                    'jadwal': jadwal,
+                    'grid_column': grid_column,
+                    'column_span': 1,
+                    'grid_row': start_index + 1,
+                    'span': span,
+                    'can_manage': can_manage_jadwal(pengguna, jadwal),
+                })
+
+        conflicts = [set() for _ in blocks]
+        for index, block in enumerate(blocks):
+            for other_index in range(index + 1, len(blocks)):
+                other = blocks[other_index]
+                if (
+                    block['grid_row'] < other['grid_row'] + other['span']
+                    and other['grid_row'] < block['grid_row'] + block['span']
+                    and block['grid_column'] < other['grid_column'] + other['column_span']
+                    and other['grid_column'] < block['grid_column'] + block['column_span']
+                ):
+                    conflicts[index].add(other_index)
+                    conflicts[other_index].add(index)
+
+        remaining = set(range(len(blocks)))
+        while remaining:
+            pending = [remaining.pop()]
+            component = []
+            while pending:
+                index = pending.pop()
+                component.append(index)
+                for neighbor in conflicts[index] & remaining:
+                    remaining.remove(neighbor)
+                    pending.append(neighbor)
+
+            for index in sorted(component, key=lambda item: (blocks[item]['grid_row'], blocks[item]['grid_column'], item)):
+                used_lanes = {
+                    blocks[neighbor]['lane_index']
+                    for neighbor in conflicts[index]
+                    if 'lane_index' in blocks[neighbor]
+                }
+                lane = 0
+                while lane in used_lanes:
+                    lane += 1
+                blocks[index]['lane_index'] = lane
+
+            lane_count = max(blocks[index]['lane_index'] for index in component) + 1
+            for index in component:
+                blocks[index]['lane_width'] = f'{100 / lane_count:.6g}'
+                blocks[index]['lane_offset'] = blocks[index]['lane_index'] * 100
 
         return blocks
 
