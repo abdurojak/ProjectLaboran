@@ -64,6 +64,7 @@ from .surat_honor import (
     build_lab_signature,
     build_lampiran_page,
     build_styles,
+    classify_laboratorium,
     generate_surat_honor_pdf,
     month_year_label,
 )
@@ -2566,6 +2567,22 @@ class AslebViewTests(TestCase):
         generated_honors = pdf_mock.call_args.kwargs['honors']
         self.assertEqual([honor.asleb.nama for honor in generated_honors], [self.asleb.nama])
 
+    def test_surat_honor_memakai_nama_lab_resmi_2026(self):
+        for code, name in {
+            'LAB-PRG': 'Laboratorium Pemrograman',
+            'LAB-RPL': 'Laboratorium Rekayasa Perangkat Lunak',
+            'LAB-SKI': 'Laboratorium Infrastruktur',
+            'LAB-SDA': 'Laboratorium Bisnis Digital dan Analitik Data (Digital Business & Data Analytics Laboratory)',
+            'LAB-RD': 'Laboratorium Sistem Cerdas',
+        }.items():
+            with self.subTest(code=code):
+                room = RuanganLab.objects.get(kode=code)
+                course = MataKuliahAsleb(laboratorium=room)
+                self.assertEqual(classify_laboratorium(course), name)
+
+        pdf = generate_surat_honor_pdf([], '001/HON/XI/2026', date(2026, 11, 6), date(2026, 11, 1), 'Honor Aslab')
+        self.assertTrue(pdf.startswith(b'%PDF'))
+
     def test_lampiran_surat_menampilkan_total_honor_bersih(self):
         honor = HonorAsleb.objects.create(
             asleb=self.asleb,
@@ -2627,10 +2644,10 @@ class AslebViewTests(TestCase):
         calls_by_lab = {call.args[1]: call.args[2] for call in lampiran_mock.call_args_list}
         self.assertSetEqual(set(calls_by_lab), {
             'Laboratorium Pemrograman',
-            'Laboratorium Sistem Informasi dan Rekayasa Perangkat Lunak',
+            'Laboratorium Rekayasa Perangkat Lunak',
         })
         programming_row = calls_by_lab['Laboratorium Pemrograman'][0]
-        rpl_row = calls_by_lab['Laboratorium Sistem Informasi dan Rekayasa Perangkat Lunak'][0]
+        rpl_row = calls_by_lab['Laboratorium Rekayasa Perangkat Lunak'][0]
         self.assertEqual(programming_row.honor, honor)
         self.assertEqual(programming_row.matkul_labels, (self.matkul.nama,))
         self.assertEqual(rpl_row.honor, honor)

@@ -95,8 +95,8 @@ BOT_GUIDE_TOPICS = [
         'keywords': {'kalender', 'jadwal', 'praktikum', 'ruangan', 'lab'},
         'answer': (
             'Kalender menampilkan kegiatan, hari perayaan, dan jadwal terkait akun. Jadwal praktikum berbeda dari kalender umum. '
-            'Pemilihan lab divalidasi berdasarkan jumlah mahasiswa dan kapasitas ruangan. Ruang tambahan hanya boleh untuk Lab Rekayasa Perangkat Lunak '
-            'dan Lab Sistem Keamanan Informasi sesuai aturan sistem.'
+            'Pemilihan lab divalidasi berdasarkan jumlah mahasiswa dan kapasitas ruangan. Ruang tambahan hanya boleh untuk Laboratorium Rekayasa Perangkat Lunak '
+            'dan Laboratorium Infrastruktur sesuai aturan sistem.'
         ),
     },
     {

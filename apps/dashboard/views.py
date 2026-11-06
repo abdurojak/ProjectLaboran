@@ -652,7 +652,7 @@ class DashboardView(TemplateView):
             },
             {
                 'title': 'Ruangan',
-                'description': 'Akses daftar lab seperti RPL, SKI, Pemrograman, SDA, dan Rekayasa Data.',
+                'description': 'Akses Laboratorium Pemrograman, Rekayasa Perangkat Lunak, Infrastruktur, Bisnis Digital dan Analitik Data, serta Sistem Cerdas.',
                 'url': 'ruangan:ruangan_list',
                 'status': 'Aktif',
                 'icon': 'door-open',

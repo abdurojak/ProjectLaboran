@@ -1,6 +1,7 @@
 from django.test import TestCase
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
+from django.utils.html import escape
 
 from apps.pengguna.models import Pengguna
 from apps.ruangan.models import FotoRuanganLab, GrupRuanganGabungan, RuanganLab
@@ -32,7 +33,7 @@ class RuanganViewTests(TestCase):
         response = self.client.get(reverse('ruangan:ruangan_list'))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Lab Rekayasa Perangkat Lunak')
+        self.assertContains(response, 'Laboratorium Rekayasa Perangkat Lunak')
         self.assertNotContains(response, 'Tambah Kegiatan')
         self.assertContains(response, reverse('ruangan:foto_create', args=[RuanganLab.objects.get(kode='LAB-RPL').pk]))
 
@@ -55,6 +56,19 @@ class RuanganViewTests(TestCase):
             self.assertContains(response, laboran)
         self.assertContains(response, 'Laboran')
         self.assertContains(response, 'Kepala Lab')
+
+    def test_nama_laboratorium_sesuai_peraturan_rektor_2026(self):
+        expected_names = {
+            'LAB-PRG': 'Laboratorium Pemrograman',
+            'LAB-RPL': 'Laboratorium Rekayasa Perangkat Lunak',
+            'LAB-SKI': 'Laboratorium Infrastruktur',
+            'LAB-SDA': 'Laboratorium Bisnis Digital dan Analitik Data (Digital Business & Data Analytics Laboratory)',
+            'LAB-RD': 'Laboratorium Sistem Cerdas',
+        }
+        response = self.client.get(reverse('ruangan:ruangan_list'))
+        for code, name in expected_names.items():
+            self.assertEqual(RuanganLab.objects.get(kode=code).nama, name)
+            self.assertContains(response, escape(name))
 
     def test_kelas_paralel_memiliki_kapasitas_tak_terbatas(self):
         kelas_paralel = RuanganLab.objects.get(kode='KELAS-PARALEL')

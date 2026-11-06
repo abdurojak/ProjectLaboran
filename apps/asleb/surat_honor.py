@@ -32,18 +32,18 @@ MONTH_NAMES = [
 
 LAB_SIGNATURES = OrderedDict([
     ('Laboratorium Pemrograman', 'Anung B. Ariwibowo, S.Kom., M.Kom.'),
-    ('Laboratorium Rekayasa Data', 'Is Mardianto, S.Si., M.Kom.'),
-    ('Laboratorium Sains Data dan Analitik', 'Dian Pratiwi, S.T., MTI'),
-    ('Laboratorium Sistem dan Keamanan Informasi', 'Ir. Gatot Budi Santoso, M.Kom.'),
-    ('Laboratorium Sistem Informasi dan Rekayasa Perangkat Lunak', 'Drs. Syaifudin, M.Si., Ph.D.'),
+    ('Laboratorium Sistem Cerdas', 'Is Mardianto, S.Si., M.Kom.'),
+    ('Laboratorium Bisnis Digital dan Analitik Data (Digital Business & Data Analytics Laboratory)', 'Dian Pratiwi, S.T., MTI'),
+    ('Laboratorium Infrastruktur', 'Ir. Gatot Budi Santoso, M.Kom.'),
+    ('Laboratorium Rekayasa Perangkat Lunak', 'Drs. Syaifudin, M.Si., Ph.D.'),
 ])
 
 LAB_NAMES_BY_ROOM_CODE = {
-    'LAB-RPL': 'Laboratorium Sistem Informasi dan Rekayasa Perangkat Lunak',
-    'LAB-SDA': 'Laboratorium Sains Data dan Analitik',
-    'LAB-RD': 'Laboratorium Rekayasa Data',
+    'LAB-RPL': 'Laboratorium Rekayasa Perangkat Lunak',
+    'LAB-SDA': 'Laboratorium Bisnis Digital dan Analitik Data (Digital Business & Data Analytics Laboratory)',
+    'LAB-RD': 'Laboratorium Sistem Cerdas',
     'LAB-PRG': 'Laboratorium Pemrograman',
-    'LAB-SKI': 'Laboratorium Sistem dan Keamanan Informasi',
+    'LAB-SKI': 'Laboratorium Infrastruktur',
 }
 
 
@@ -54,7 +54,7 @@ class HonorLabRow:
 
 
 LAB_KEYWORDS = [
-    ('Laboratorium Sistem Informasi dan Rekayasa Perangkat Lunak', [
+    ('Laboratorium Rekayasa Perangkat Lunak', [
         'enterprise resource planning',
         'erp',
         'pemrograman web',
@@ -62,14 +62,14 @@ LAB_KEYWORDS = [
         'rekayasa perangkat lunak',
         'sistem informasi',
     ]),
-    ('Laboratorium Sains Data dan Analitik', [
+    ('Laboratorium Bisnis Digital dan Analitik Data (Digital Business & Data Analytics Laboratory)', [
         'analitik data',
         'machine learning',
         'probabilitas',
         'statistika',
         'sains data',
     ]),
-    ('Laboratorium Rekayasa Data', [
+    ('Laboratorium Sistem Cerdas', [
         'manajemen data',
         'data warehouse',
         'rekayasa data',
@@ -81,7 +81,7 @@ LAB_KEYWORDS = [
         'algoritma',
         'pemrograman',
     ]),
-    ('Laboratorium Sistem dan Keamanan Informasi', [
+    ('Laboratorium Infrastruktur', [
         'jaringan komputer',
         'keamanan',
         'sistem keamanan',

@@ -308,8 +308,8 @@ class JadwalViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'name="ruangan_tambahan"', html=False)
-        self.assertContains(response, 'Lab Rekayasa Perangkat Lunak')
-        self.assertContains(response, 'Lab Sistem Keamanan Informasi')
+        self.assertContains(response, 'Laboratorium Rekayasa Perangkat Lunak')
+        self.assertContains(response, 'Laboratorium Infrastruktur')
         self.assertContains(response, 'Hanya lab dalam grup ruangan gabungan aktif')
 
     def test_form_jadwal_menyimpan_matkul_kelas_dan_pengampu_dari_pilihan_matkul(self):
@@ -348,7 +348,7 @@ class JadwalViewTests(TestCase):
         self.assertEqual(jadwal.ruangan_tambahan_id, lab_rpl.pk)
         self.assertEqual(
             jadwal.get_display_ruangan_nama(),
-            'Lab Sistem Keamanan Informasi + Lab Rekayasa Perangkat Lunak',
+            'Laboratorium Infrastruktur + Laboratorium Rekayasa Perangkat Lunak',
         )
 
     def test_form_jadwal_ruangan_tambahan_mengikuti_grup_gabungan_aktif(self):
