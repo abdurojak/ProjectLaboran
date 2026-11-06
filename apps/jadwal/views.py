@@ -216,6 +216,13 @@ class JadwalPraktikumListView(ListView):
         if selected_date.weekday() == 6:
             selected_date += timedelta(days=1)
         ruangan_list = list(RuanganLab.objects.filter(aktif=True).order_by('nama'))
+        room_positions = {ruangan.kode: index for index, ruangan in enumerate(ruangan_list)}
+        if 'LAB-RPL' in room_positions and 'LAB-PRG' in room_positions:
+            rpl_index = room_positions['LAB-RPL']
+            programming_index = room_positions['LAB-PRG']
+            ruangan_list[rpl_index], ruangan_list[programming_index] = (
+                ruangan_list[programming_index], ruangan_list[rpl_index]
+            )
         context['current_pengguna'] = getattr(self.request, 'current_pengguna', None)
         context['hari_tabs'] = [
             {
@@ -323,11 +330,15 @@ class JadwalPraktikumListView(ListView):
 
             span = max(1, int((end_dt - start_dt).total_seconds() // 1800))
             span = min(span, len(slot_keys) - start_index)
-            for grid_column in occupied_columns:
+            if len(occupied_columns) == 2 and occupied_columns[1] == occupied_columns[0] + 1:
+                positions = [(occupied_columns[0], 2)]
+            else:
+                positions = [(column, 1) for column in occupied_columns]
+            for grid_column, column_span in positions:
                 blocks.append({
                     'jadwal': jadwal,
                     'grid_column': grid_column,
-                    'column_span': 1,
+                    'column_span': column_span,
                     'grid_row': start_index + 1,
                     'span': span,
                     'can_manage': can_manage_jadwal(pengguna, jadwal),

@@ -92,7 +92,7 @@ class JadwalViewTests(TestCase):
         self.assertNotContains(response, 'Minggu')
         self.assertContains(response, 'Ekspor Jadwal')
 
-    def test_jadwal_gabungan_tidak_menutupi_kolom_lab_di_antaranya(self):
+    def test_jadwal_gabungan_menyatu_setelah_kolom_rpl_dan_pemrograman_ditukar(self):
         combined = JadwalPraktikum.objects.create(
             mata_kuliah='Praktikum Gabungan', kelas='TI-01',
             ruangan=self.lab_ski, ruangan_tambahan=self.lab_rpl,
@@ -113,13 +113,35 @@ class JadwalViewTests(TestCase):
         combined_blocks = [block for block in blocks if block['jadwal'].pk == combined.pk]
         separate_block = next(block for block in blocks if block['jadwal'].pk == separate.pk)
 
+        self.assertEqual(rooms.index(self.lab_rpl), rooms.index(self.lab_ski) + 1)
+        self.assertEqual(rooms.index(pemrograman), rooms.index(self.lab_rpl) + 1)
+        self.assertEqual(len(combined_blocks), 1)
+        self.assertEqual(combined_blocks[0]['grid_column'], rooms.index(self.lab_ski) + 1)
+        self.assertEqual(combined_blocks[0]['column_span'], 2)
+        self.assertEqual(separate_block['grid_column'], rooms.index(pemrograman) + 1)
+        self.assertTrue(all(block['lane_width'] == '100' for block in combined_blocks + [separate_block]))
+
+    def test_jadwal_gabungan_tetap_terpisah_bila_kolom_tidak_berdampingan(self):
+        RuanganLab.objects.create(nama='Laboratorium Jaringan', kode='LAB-JAR', kapasitas=20)
+        combined = JadwalPraktikum.objects.create(
+            mata_kuliah='Praktikum Gabungan', kelas='TI-01',
+            ruangan=self.lab_ski, ruangan_tambahan=self.lab_rpl,
+            hari='jumat', waktu_mulai=time(8), waktu_selesai=time(10),
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+
+        response = self.client.get(reverse('jadwal:jadwal_list'), {'tanggal': '2026-11-06'})
+        rooms = list(response.context['ruangan_list'])
+        combined_blocks = [
+            block for block in response.context['jadwal_blocks']
+            if block['jadwal'].pk == combined.pk
+        ]
+        self.assertGreater(rooms.index(self.lab_rpl) - rooms.index(self.lab_ski), 1)
         self.assertEqual(len(combined_blocks), 2)
         self.assertEqual(
             {block['grid_column'] for block in combined_blocks},
             {rooms.index(self.lab_ski) + 1, rooms.index(self.lab_rpl) + 1},
         )
-        self.assertEqual(separate_block['grid_column'], rooms.index(pemrograman) + 1)
-        self.assertTrue(all(block['lane_width'] == '100' for block in combined_blocks + [separate_block]))
 
     def test_jadwal_bentrok_di_lab_sama_ditampilkan_berdampingan(self):
         JadwalPraktikum.objects.create(
