@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% block title %}QR Absensi Saya{% endblock %}
+{% block content %}
+<section class="mx-auto w-full max-w-3xl space-y-6">
+    <div><p class="text-sm font-bold uppercase text-brand-700">Praktikum</p><h2 class="mt-2 text-3xl font-black text-slate-900">QR Absensi Saya</h2></div>
+    {% if kelas %}
+    <div class="surface-card flex flex-col items-center gap-5 p-5 text-center sm:p-8">
+        <div class="flex items-center gap-3 self-start text-left">
+            {% if pengguna.foto %}<img src="{{ pengguna.foto.url }}" alt="Foto {{ pengguna.nama_pengguna }}" class="h-14 w-14 rounded-lg object-cover">{% else %}<div class="flex h-14 w-14 items-center justify-center rounded-lg bg-brand-50 text-brand-700"><i data-lucide="user-round" class="h-7 w-7"></i></div>{% endif %}
+            <div><p class="font-black text-slate-900">{{ pengguna.nama_pengguna }}</p><p class="text-sm text-slate-500">{{ pengguna.nim_nik }}</p></div>
+        </div>
+        <div class="w-full max-w-72 overflow-hidden rounded-lg border border-slate-200 bg-white p-3"><img src="{% url 'asleb:qr_mahasiswa_image' %}" data-qr-image data-qr-url="{% url 'asleb:qr_mahasiswa_image' %}" alt="QR absensi {{ pengguna.nama_pengguna }}" class="aspect-square w-full object-contain"></div>
+        <div class="flex flex-wrap items-center justify-center gap-3"><p class="text-sm text-slate-600" data-qr-countdown aria-live="polite"></p><button type="button" class="btn-secondary gap-2" data-qr-refresh title="Perbarui QR"><i data-lucide="refresh-cw" class="h-4 w-4"></i>Perbarui QR</button></div>
+        <p class="text-sm font-semibold text-slate-700">Tunjukkan QR dan identitas Anda kepada Asisten Lab.</p>
+    </div>
+    <div class="space-y-2"><h3 class="text-lg font-black text-slate-900">Kelas aktif</h3><ul class="divide-y divide-slate-200 border-y border-slate-200">{% for peserta in kelas %}<li class="py-3 text-sm text-slate-700">{{ peserta.matkul }}</li>{% endfor %}</ul></div>
+    {% else %}
+    <div class="surface-card p-6 text-sm text-slate-600">Belum ada kelas praktikum aktif yang terhubung dengan NIM Anda.</div>
+    {% endif %}
+</section>
+{% endblock %}
+{% block extra_script %}
+{% if kelas %}<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const image = document.querySelector('[data-qr-image]');
+    const countdown = document.querySelector('[data-qr-countdown]');
+    const button = document.querySelector('[data-qr-refresh]');
+    let nextRefresh = Date.now() + 30000;
+    let validUntil = Date.now() + 60000;
+    let pending = false;
+    let currentUrl = null;
+    async function refresh() {
+        if (pending) return;
+        pending = true;
+        try {
+            const response = await fetch(image.dataset.qrUrl, {cache: 'no-store'});
+            if (!response.ok) throw new Error('QR tidak tersedia');
+            const newUrl = URL.createObjectURL(await response.blob());
+            const ready = new Image();
+            ready.src = newUrl;
+            try {
+                await ready.decode();
+            } catch (error) {
+                URL.revokeObjectURL(newUrl);
+                throw error;
+            }
+            const oldUrl = currentUrl;
+            image.src = newUrl;
+            currentUrl = newUrl;
+            if (oldUrl) URL.revokeObjectURL(oldUrl);
+            const now = Date.now();
+            nextRefresh = now + 30000;
+            validUntil = now + 60000;
+        } catch (error) {
+            nextRefresh = Date.now() + 5000;
+        } finally {
+            pending = false;
+        }
+    }
+    button.addEventListener('click', refresh);
+    document.addEventListener('visibilitychange', function () {
+        if (!document.hidden && Date.now() >= nextRefresh) refresh();
+    });
+    window.setInterval(function () {
+        const seconds = Math.max(0, Math.ceil((nextRefresh - Date.now()) / 1000));
+        countdown.textContent = Date.now() > validUntil ? 'QR tidak tersedia. Periksa koneksi.' : 'QR diperbarui otomatis dalam ' + seconds + ' detik';
+        image.style.visibility = Date.now() > validUntil ? 'hidden' : 'visible';
+        if (seconds === 0) refresh();
+    }, 1000);
+});
+</script>{% endif %}
+{% endblock %}

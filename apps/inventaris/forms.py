@@ -82,6 +82,7 @@ class InventarisBarangGalleryForm(InventarisGalleryFormMixin, forms.ModelForm):
 
 class InventarisBarangCreateForm(InventarisBarangGalleryForm):
     lokasi = forms.ModelChoiceField(queryset=None)
+    kategori = forms.ChoiceField(choices=InventarisBarang.KATEGORI_CHOICES, required=False)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -89,7 +90,7 @@ class InventarisBarangCreateForm(InventarisBarangGalleryForm):
 
     class Meta:
         model = InventarisBarang
-        fields = ['nama', 'jumlah', 'lokasi', 'foto', 'keterangan']
+        fields = ['nama', 'kategori', 'jumlah', 'lokasi', 'foto', 'keterangan']
         widgets = {
             'foto': forms.FileInput(attrs={'class': 'hidden', 'accept': 'image/*'}),
             'keterangan': forms.Textarea(attrs={'rows': 4}),
@@ -97,6 +98,7 @@ class InventarisBarangCreateForm(InventarisBarangGalleryForm):
 
     def save(self, commit=True):
         instance = super().save(commit=False)
+        instance.kategori = self.cleaned_data.get('kategori') or 'lainnya'
         hapus_foto = self.data.get('hapus_foto') == '1'
 
         if hapus_foto:
@@ -110,9 +112,11 @@ class InventarisBarangCreateForm(InventarisBarangGalleryForm):
 
 
 class InventarisBarangUpdateForm(InventarisBarangGalleryForm):
+    kategori = forms.ChoiceField(choices=InventarisBarang.KATEGORI_CHOICES, required=False)
+
     class Meta:
         model = InventarisBarang
-        fields = ['nama', 'jumlah', 'foto', 'keterangan']
+        fields = ['nama', 'kategori', 'jumlah', 'foto', 'keterangan']
         widgets = {
             'jumlah': forms.NumberInput(attrs={'min': 0}),
             'foto': forms.FileInput(attrs={'class': 'hidden', 'accept': 'image/*'}),
@@ -121,6 +125,7 @@ class InventarisBarangUpdateForm(InventarisBarangGalleryForm):
 
     def save(self, commit=True):
         instance = super().save(commit=False)
+        instance.kategori = self.cleaned_data.get('kategori') or instance.kategori
         hapus_foto = self.data.get('hapus_foto') == '1'
 
         if hapus_foto:
@@ -140,6 +145,19 @@ class BarangForm(forms.ModelForm):
         widgets = {
             'keterangan': forms.Textarea(attrs={'rows': 4}),
         }
+
+
+class LokasiForm(forms.ModelForm):
+    class Meta:
+        model = Lokasi
+        fields = ['nama_lokasi', 'ukuran_lokasi', 'petunjuk_penyimpanan', 'foto']
+        widgets = {'foto': forms.FileInput(attrs={'accept': 'image/jpeg,image/png,image/webp'})}
+
+    def clean_foto(self):
+        photo = self.cleaned_data.get('foto')
+        if photo and hasattr(photo, 'size') and photo.size > 5 * 1024 * 1024:
+            raise forms.ValidationError('Foto lokasi maksimal 5 MB.')
+        return photo
 
 
 class PaketBarangForm(forms.ModelForm):

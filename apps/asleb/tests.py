@@ -9,6 +9,7 @@ from unittest import skipUnless
 from unittest.mock import patch
 
 from django.core import mail
+from django.core import signing
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -54,6 +55,7 @@ from .models import (
     TugasLaporanPraktikum,
 )
 from .services import get_asleb_matkul_for_schedule, get_asleb_schedule_queryset
+from .qr_attendance import QR_SALT
 from .views import (
     get_active_absensi_schedule,
     get_available_absensi_schedules,
@@ -454,6 +456,62 @@ class AslebViewTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('sudah melakukan absensi', str(form.non_field_errors()))
         self.assertFalse(AbsensiAsleb.objects.filter(asleb=self.asleb, jadwal=jadwal).exists())
+
+    def test_absensi_web_menolak_modul_berbeda_pada_jadwal_dan_tanggal_sama(self):
+        jadwal = self.create_active_schedule()
+        modul = ModulPraktikum.objects.create(
+            matkul=self.matkul, nomor=10, judul='Modul Berikutnya',
+            file=SimpleUploadedFile('modul-berikutnya.pdf', b'%PDF-1.4', content_type='application/pdf'),
+        )
+        AbsensiAsleb.objects.create(
+            asleb=self.asleb, jadwal=jadwal, tanggal_praktikum=timezone.localdate(), modul=9,
+        )
+        form = AbsensiAslebForm(
+            data={'modul_praktikum': modul.pk, 'pekerjaan': 'Membantu praktikum'},
+            files={
+                'bukti_foto': self.make_camera_photo('foto-modul-berikutnya.png'),
+                'bukti_video': SimpleUploadedFile('video-modul-berikutnya.mp4', b'video', content_type='video/mp4'),
+            },
+            asleb=self.asleb, jadwal=jadwal,
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn('jadwal dan tanggal ini', str(form.non_field_errors()))
+
+    def test_absensi_web_post_kedua_dengan_modul_lain_ditolak(self):
+        self.login_asisten_for_matkul()
+        jadwal = self.create_active_schedule()
+        PengaturanAbsensiAsleb.objects.update_or_create(pk=1, defaults={'dibuka': True})
+        modules = [ModulPraktikum.objects.create(
+            matkul=self.matkul, nomor=nomor, judul=f'Modul {nomor}',
+            file=SimpleUploadedFile(f'modul-{nomor}.pdf', b'%PDF-1.4', content_type='application/pdf'),
+        ) for nomor in (9, 10)]
+        with patch('apps.asleb.views.get_available_absensi_schedules', return_value=[jadwal]):
+            for index, modul in enumerate(modules):
+                response = self.client.post(reverse('asleb:absensi_create'), {
+                    'jadwal': str(jadwal.pk),
+                    'modul_praktikum': modul.pk,
+                    'pekerjaan': 'Membantu praktikum',
+                    'bukti_foto': self.make_camera_photo(f'foto-post-{index}.png'),
+                    'bukti_video': SimpleUploadedFile(f'video-post-{index}.mp4', b'video', content_type='video/mp4'),
+                })
+                self.assertEqual(response.status_code, 302 if index == 0 else 200)
+        self.assertEqual(AbsensiAsleb.objects.filter(asleb=self.asleb, jadwal=jadwal).count(), 1)
+        honor = HonorAsleb.objects.get(asleb=self.asleb, bulan=timezone.localdate().replace(day=1))
+        self.assertEqual(honor.total_pertemuan, 1)
+
+    def test_honor_menghitung_tiga_bukti_satu_jadwal_hari_sebagai_satu_pertemuan(self):
+        from .views import sync_honor_from_absensi
+
+        jadwal = self.create_active_schedule()
+        for nomor in (9, 10, 11):
+            absensi = AbsensiAsleb.objects.create(
+                asleb=self.asleb, jadwal=jadwal,
+                tanggal_praktikum=timezone.localdate(), modul=nomor,
+            )
+        sync_honor_from_absensi(absensi)
+        self.assertEqual(AbsensiAsleb.objects.filter(asleb=self.asleb, jadwal=jadwal).count(), 3)
+        honor = HonorAsleb.objects.get(asleb=self.asleb, bulan=timezone.localdate().replace(day=1))
+        self.assertEqual(honor.total_pertemuan, 1)
 
     def test_laboran_dapat_menghapus_absensi_web_dan_honor_dihitung_ulang(self):
         jadwal = self.create_active_schedule()
@@ -3257,7 +3315,7 @@ class AslebViewTests(TestCase):
 
         self.assertTrue(form.is_valid(), form.errors)
 
-    def test_absensi_mengizinkan_lebih_dari_dua_modul_di_hari_yang_sama(self):
+    def test_absensi_hanya_sekali_per_jadwal_hari_meski_modul_berbeda(self):
         PendaftaranAsleb.objects.create(
             nama=self.asleb.nama,
             nim=self.asleb.nim,
@@ -3348,9 +3406,10 @@ class AslebViewTests(TestCase):
             jadwal=jadwal_diubah,
         )
 
-        self.assertTrue(third_form.is_valid(), third_form.errors)
+        self.assertFalse(third_form.is_valid())
+        self.assertIn('jadwal dan tanggal ini', str(third_form.non_field_errors()))
 
-    def test_pengingat_email_maksimal_tiga_kali(self):
+    def test_pengingat_email_berjarak_empat_jam_dan_berhenti_setelah_absen(self):
         PendaftaranAsleb.objects.create(
             nama=self.asleb.nama,
             nim=self.asleb.nim,
@@ -3365,20 +3424,40 @@ class AslebViewTests(TestCase):
         reminder_times = [
             timezone.make_aware(datetime(2026, 6, 29, 9, 31)),
             timezone.make_aware(datetime(2026, 6, 29, 10, 7)),
-            timezone.make_aware(datetime(2026, 6, 29, 10, 43)),
-            timezone.make_aware(datetime(2026, 6, 29, 10, 50)),
+            timezone.make_aware(datetime(2026, 6, 29, 13, 30)),
+            timezone.make_aware(datetime(2026, 6, 29, 13, 32)),
+            timezone.make_aware(datetime(2026, 6, 29, 17, 33)),
         ]
 
+        actual_localtime = timezone.localtime
         for current_time in reminder_times:
             with patch(
                 'apps.asleb.management.commands.send_absensi_reminders.timezone.localtime',
-                return_value=current_time,
+                side_effect=lambda value=None: current_time if value is None else actual_localtime(value),
+            ), patch(
+                'django.utils.timezone.now', return_value=current_time,
             ):
                 call_command('send_absensi_reminders')
 
         self.assertEqual(len(mail.outbox), 3)
-        self.assertIn('1/3', mail.outbox[0].subject)
-        self.assertIn('3/3', mail.outbox[2].subject)
+        self.assertEqual(PengingatAbsensiAsleb.objects.count(), 3)
+        self.assertIn('Hari Ini', mail.outbox[0].subject)
+
+        AbsensiMasukAsleb.objects.create(
+            asleb=self.asleb,
+            jadwal=JadwalPraktikum.objects.get(hari='senin', waktu_mulai='09:00'),
+            tanggal_absensi=date(2026, 6, 29),
+            modul_praktikum=ModulPraktikum.objects.create(
+                matkul=self.matkul, nomor=99, judul='Tes pengingat',
+                file=SimpleUploadedFile('tes.pdf', b'%PDF-1.4', content_type='application/pdf'),
+            ),
+        )
+        with patch(
+            'apps.asleb.management.commands.send_absensi_reminders.timezone.localtime',
+            return_value=timezone.make_aware(datetime(2026, 6, 29, 21, 34)),
+        ):
+            call_command('send_absensi_reminders')
+        self.assertEqual(len(mail.outbox), 3)
 
     def test_asisten_lab_tidak_dapat_menghapus_laporan_yang_sudah_dinilai(self):
         asisten_user = Pengguna.objects.create(
@@ -3524,3 +3603,170 @@ class AslebViewTests(TestCase):
                 rekening='123456789',
                 status='digenerate',
             )
+
+
+class QrAbsensiMahasiswaTests(TestCase):
+    def setUp(self):
+        today = timezone.localdate()
+        self.matkul = MataKuliahAsleb.objects.create(
+            kode='QR_TEST', nama='Pemrograman Web', dosen='Dosen QR', kelas='TIF-01',
+        )
+        self.modul = ModulPraktikum.objects.create(
+            matkul=self.matkul, nomor=1, judul='Dasar',
+            file=SimpleUploadedFile('modul.pdf', b'%PDF-1.4', content_type='application/pdf'),
+        )
+        self.mahasiswa = self.make_user('Mahasiswa QR', '0640020201', 'mahasiswa')
+        self.asisten = self.make_user('Asisten QR', '0640020202', 'asisten_lab')
+        self.peserta = PesertaPraktikum.objects.create(
+            matkul=self.matkul, nim=self.mahasiswa.nim_nik, nama=self.mahasiswa.nama_pengguna,
+        )
+        self.asleb = Asleb.objects.create(
+            nama=self.asisten.nama_pengguna, nim=self.asisten.nim_nik,
+            no_hp='081200000002', email=self.asisten.email,
+            program_studi='Informatika', semester=4, tanggal_bergabung=today,
+        )
+        period = PeriodeAsleb.get_for_date(today)
+        slot = AslabSlot.objects.create(periode=period, matkul=self.matkul, nomor=1)
+        AslabAssignment.objects.create(
+            slot=slot, asleb=self.asleb, mulai_pada=today,
+            status=AslabAssignment.STATUS_ACTIVE,
+        )
+
+    def make_user(self, name, nim, role):
+        return Pengguna.objects.create(
+            nama_pengguna=name, nim_nik=nim, email=f'{nim}@std.trisakti.ac.id',
+            password='rahasia123', no_hp='081200000001', alamat='Jakarta',
+            fakultas='Teknologi Industri', prodi='Informatika',
+            gender='laki_laki', role=role,
+        )
+
+    def login(self, pengguna):
+        session = self.client.session
+        session['pengguna_id'] = pengguna.pk
+        session.save()
+
+    def token(self, pengguna=None):
+        pengguna = pengguna or self.mahasiswa
+        return signing.dumps({'user': pengguna.pk, 'nim': pengguna.nim_nik}, salt=QR_SALT)
+
+    def scan_url(self, action):
+        return reverse(f'asleb:praktikum_qr_{action}', args=[self.matkul.pk, self.modul.pk])
+
+    def make_schedule_on_another_day(self):
+        today_key = dict(enumerate(key for key, _ in JadwalPraktikum.HARI_CHOICES)).get(
+            timezone.localdate().weekday(), 'minggu',
+        )
+        other_day = next(key for key, _ in JadwalPraktikum.HARI_CHOICES if key != today_key)
+        room = RuanganLab.objects.create(kode='QR-ROOM', nama='Lab QR', kapasitas=30)
+        JadwalPraktikum.objects.create(
+            mata_kuliah=str(self.matkul), kelas=self.matkul.kelas,
+            ruangan=room, pengampu=self.matkul.dosen, hari=other_day,
+            waktu_mulai='08:00', waktu_selesai='10:00',
+            status=JadwalPraktikum.STATUS_DITERIMA,
+        )
+        return other_day
+
+    def test_qr_mahasiswa_berubah_dan_tidak_disimpan_di_cache(self):
+        self.login(self.mahasiswa)
+        page = self.client.get(reverse('asleb:qr_mahasiswa'))
+        self.assertContains(page, 'QR Absensi Saya')
+        with patch('apps.asleb.qr_attendance.token_urlsafe', side_effect=['nonce-pertama', 'nonce-kedua']):
+            first = self.client.get(reverse('asleb:qr_mahasiswa_image'))
+            second = self.client.get(reverse('asleb:qr_mahasiswa_image'))
+        self.assertEqual(first.status_code, 200)
+        self.assertTrue(first.content.startswith(b'\x89PNG'))
+        self.assertNotEqual(first.content, second.content)
+        self.assertIn('no-store', first['Cache-Control'])
+
+    def test_pindai_memerlukan_konfirmasi_dan_menolak_duplikat(self):
+        self.login(self.asisten)
+        page = self.client.get(reverse('asleb:praktikum_nilai', args=[self.matkul.pk, self.modul.pk]))
+        self.assertContains(page, 'data-qr-attendance')
+        preview = self.client.post(self.scan_url('preview'), {'token': self.token()})
+        self.assertEqual(preview.status_code, 200)
+        self.assertEqual(preview.json()['nim'], self.mahasiswa.nim_nik)
+        self.assertFalse(HasilPraktikumMahasiswa.objects.exists())
+
+        confirmed = self.client.post(self.scan_url('confirm'), {'token': self.token()})
+        self.assertEqual(confirmed.status_code, 200)
+        hasil = HasilPraktikumMahasiswa.objects.get(peserta=self.peserta, modul=self.modul)
+        self.assertEqual(hasil.status_absensi, 'hadir')
+        self.assertEqual(hasil.sumber_absensi, 'qr')
+        self.assertEqual(hasil.dicatat_oleh, self.asisten)
+        self.peserta.refresh_from_db()
+        self.assertEqual(self.peserta.pengguna, self.mahasiswa)
+        self.assertEqual(self.client.post(self.scan_url('confirm'), {'token': self.token()}).status_code, 409)
+
+    def test_scan_web_di_luar_hari_jadwal_tetap_tercatat_pada_hari_scan(self):
+        scheduled_day = self.make_schedule_on_another_day()
+        self.login(self.asisten)
+        response = self.client.post(self.scan_url('confirm'), {'token': self.token()})
+        self.assertEqual(response.status_code, 200)
+        result = HasilPraktikumMahasiswa.objects.get(peserta=self.peserta, modul=self.modul)
+        self.assertEqual(result.tanggal_praktikum, timezone.localdate())
+        self.assertNotEqual(scheduled_day, dict(enumerate(key for key, _ in JadwalPraktikum.HARI_CHOICES)).get(result.tanggal_praktikum.weekday(), 'minggu'))
+
+    def test_scan_api_di_luar_hari_jadwal_tetap_tercatat_pada_hari_scan(self):
+        from rest_framework.test import APIClient
+
+        scheduled_day = self.make_schedule_on_another_day()
+        mobile = APIClient()
+        mobile.force_authenticate(user=self.asisten)
+        response = mobile.post(
+            reverse('mobile_api:aslab_qr_scan', args=[self.matkul.pk, self.modul.pk, 'confirm']),
+            {'token': self.token()},
+        )
+        self.assertEqual(response.status_code, 200)
+        result = HasilPraktikumMahasiswa.objects.get(peserta=self.peserta, modul=self.modul)
+        self.assertEqual(result.tanggal_praktikum, timezone.localdate())
+        self.assertNotEqual(scheduled_day, dict(enumerate(key for key, _ in JadwalPraktikum.HARI_CHOICES)).get(result.tanggal_praktikum.weekday(), 'minggu'))
+
+    def test_qr_palsu_kedaluwarsa_dan_bukan_peserta_ditolak(self):
+        self.login(self.asisten)
+        self.assertEqual(self.client.post(self.scan_url('preview'), {'token': 'palsu'}).status_code, 400)
+        orang_lain = self.make_user('Orang Lain', '0640020203', 'mahasiswa')
+        self.assertEqual(self.client.post(self.scan_url('preview'), {'token': self.token(orang_lain)}).status_code, 403)
+        with patch('django.core.signing.time.time', return_value=1):
+            expired = self.token()
+        self.assertEqual(self.client.post(self.scan_url('preview'), {'token': expired}).status_code, 400)
+        self.assertFalse(HasilPraktikumMahasiswa.objects.exists())
+
+    def test_mahasiswa_tidak_dapat_mengonfirmasi_dan_asisten_lain_ditolak(self):
+        self.login(self.mahasiswa)
+        self.assertRedirects(
+            self.client.post(self.scan_url('confirm'), {'token': self.token()}),
+            reverse('dashboard:home'),
+        )
+        asisten_lain = self.make_user('Asisten Lain', '0640020204', 'asisten_lab')
+        self.login(asisten_lain)
+        self.assertEqual(self.client.post(self.scan_url('preview'), {'token': self.token()}).status_code, 403)
+        self.assertFalse(HasilPraktikumMahasiswa.objects.exists())
+
+    def test_mahasiswa_tanpa_kelas_tidak_mendapat_qr(self):
+        self.peserta.aktif = False
+        self.peserta.save(update_fields=['aktif'])
+        self.login(self.mahasiswa)
+        self.assertEqual(self.client.get(reverse('asleb:qr_mahasiswa_image')).status_code, 404)
+
+    def test_api_mobile_qr_dan_konfirmasi(self):
+        from rest_framework.test import APIClient
+
+        mobile = APIClient()
+        mobile.force_authenticate(user=self.mahasiswa)
+        first = mobile.get(reverse('mobile_api:mahasiswa_qr'))
+        second = mobile.get(reverse('mobile_api:mahasiswa_qr'))
+        self.assertEqual(first.status_code, 200)
+        self.assertNotEqual(first.data['token'], second.data['token'])
+        self.assertIn('no-store', first['Cache-Control'])
+
+        mobile.force_authenticate(user=self.asisten)
+        modules = mobile.get(reverse('mobile_api:aslab_qr_modules'))
+        self.assertEqual(modules.status_code, 200)
+        self.assertEqual(modules.data['results'][0]['modul_id'], self.modul.pk)
+        base = [self.matkul.pk, self.modul.pk]
+        preview = mobile.post(reverse('mobile_api:aslab_qr_scan', args=[*base, 'preview']), {'token': first.data['token']})
+        self.assertEqual(preview.status_code, 200)
+        self.assertFalse(HasilPraktikumMahasiswa.objects.exists())
+        confirm_url = reverse('mobile_api:aslab_qr_scan', args=[*base, 'confirm'])
+        self.assertEqual(mobile.post(confirm_url, {'token': first.data['token']}).status_code, 200)
+        self.assertEqual(mobile.post(confirm_url, {'token': first.data['token']}).status_code, 409)

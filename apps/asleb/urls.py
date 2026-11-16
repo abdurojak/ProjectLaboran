@@ -1,5 +1,7 @@
 from django.urls import path
 
+from .qr_attendance import qr_scan_confirm, qr_scan_preview, student_qr_image, student_qr_page
+
 from .views import (
     AbsensiAslebCreateView,
     AbsensiAslebListView,
@@ -64,6 +66,10 @@ from .views import (
 app_name = 'asleb'
 
 urlpatterns = [
+    path('qr-mahasiswa/', student_qr_page, name='qr_mahasiswa'),
+    path('qr-mahasiswa/gambar/', student_qr_image, name='qr_mahasiswa_image'),
+    path('praktikum-mahasiswa/<int:matkul_pk>/modul/<int:modul_pk>/qr/pratinjau/', qr_scan_preview, name='praktikum_qr_preview'),
+    path('praktikum-mahasiswa/<int:matkul_pk>/modul/<int:modul_pk>/qr/konfirmasi/', qr_scan_confirm, name='praktikum_qr_confirm'),
     path('', AslebListView.as_view(), name='asleb_list'),
     path('tambah/', AslebCreateView.as_view(), name='asleb_create'),
     path('absensi/', AbsensiAslebListView.as_view(), name='absensi_list'),

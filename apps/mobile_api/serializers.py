@@ -8,7 +8,7 @@ from rest_framework import serializers
 
 from apps.asleb.models import AbsensiAsleb, AbsensiMasukAsleb
 from apps.jadwal.models import JadwalPraktikum
-from apps.inventaris.models import Lokasi
+from apps.inventaris.models import InventarisBarang, Lokasi
 from apps.barang_tertinggal.models import BarangTertinggal
 
 
@@ -31,6 +31,7 @@ class RefreshSerializer(serializers.Serializer):
 
 class LaboranInventoryCreateSerializer(serializers.Serializer):
     nama = serializers.CharField(max_length=150)
+    kategori = serializers.ChoiceField(choices=InventarisBarang.KATEGORI_CHOICES, required=False)
     jumlah = serializers.IntegerField(min_value=1, max_value=1000)
     lokasi_id = serializers.PrimaryKeyRelatedField(
         source='lokasi', queryset=Lokasi.objects.all()

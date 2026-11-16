@@ -1,19 +1,20 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
+from django.db import transaction
 from django.utils import timezone
 
-from apps.jadwal.models import JadwalPraktikum
 from apps.core.emails import send_branded_email
+from apps.jadwal.models import JadwalPraktikum
 from apps.pengguna.models import Pengguna
 
-from apps.asleb.models import AbsensiAsleb, Asleb, PengingatAbsensiAsleb
-from apps.asleb.services import get_asleb_schedule_queryset
+from apps.asleb.models import Asleb, PengingatAbsensiAsleb
+from apps.asleb.services import get_asleb_schedule_queryset, get_attendance_source_for_slot
 
 
 class Command(BaseCommand):
-    help = 'Kirim maksimal tiga pengingat email untuk jadwal praktikum yang belum diabsen aslab.'
+    help = 'Kirim pengingat email setiap empat jam selama hari jadwal jika aslab belum absen.'
 
     def handle(self, *args, **options):
         if settings.EMAIL_BACKEND == 'django.core.mail.backends.console.EmailBackend':
@@ -21,8 +22,8 @@ class Command(BaseCommand):
                 'Pengingat tidak dikirim karena EMAIL_BACKEND masih console. Konfigurasikan SMTP pada file .env.'
             ))
             return
+
         now = timezone.localtime()
-        today = now.date()
         day_keys = [key for key, _ in JadwalPraktikum.HARI_CHOICES]
         if now.weekday() >= len(day_keys):
             self.stdout.write('Tidak ada jadwal praktikum hari ini.')
@@ -32,71 +33,67 @@ class Command(BaseCommand):
             hari=day_keys[now.weekday()],
             status=JadwalPraktikum.STATUS_DITERIMA,
             waktu_mulai__lte=now.time().replace(tzinfo=None),
-            waktu_selesai__gte=now.time().replace(tzinfo=None),
         )
         sent_count = 0
-        for asleb in Asleb.objects.filter(status='aktif').exclude(email=''):
+        for asleb in Asleb.objects.filter(status='aktif'):
             owned_schedule_ids = get_asleb_schedule_queryset(
-                asleb,
-                statuses=[JadwalPraktikum.STATUS_DITERIMA],
+                asleb, statuses=[JadwalPraktikum.STATUS_DITERIMA],
             ).values('pk')
             for schedule in schedules.filter(pk__in=owned_schedule_ids):
-                if AbsensiAsleb.objects.filter(asleb=asleb, jadwal=schedule, tanggal_praktikum=today).exists():
-                    continue
                 sent_count += self.send_next_due_reminder(asleb, schedule, now)
 
         self.stdout.write(self.style.SUCCESS(f'{sent_count} pengingat absensi berhasil dikirim.'))
 
+    @transaction.atomic
     def send_next_due_reminder(self, asleb, schedule, now):
-        start = timezone.make_aware(datetime.combine(now.date(), schedule.waktu_mulai))
-        end = timezone.make_aware(datetime.combine(now.date(), schedule.waktu_selesai))
-        duration = end - start
-        thresholds = [start + duration * ratio for ratio in (0.25, 0.55, 0.85)]
-        sent_stages = set(PengingatAbsensiAsleb.objects.filter(
-            asleb=asleb,
-            jadwal=schedule,
-            tanggal=now.date(),
-        ).values_list('tahap', flat=True))
-
-        next_stage = next((stage for stage in range(1, 4) if stage not in sent_stages), None)
-        if not next_stage or now < thresholds[next_stage - 1]:
+        asleb = Asleb.objects.select_for_update().get(pk=asleb.pk)
+        today = now.date()
+        if get_attendance_source_for_slot(asleb, schedule, today):
             return 0
 
-        recipient = asleb.email or Pengguna.objects.filter(nim_nik=asleb.nim).values_list('email', flat=True).first()
+        start = timezone.make_aware(datetime.combine(today, schedule.waktu_mulai))
+        reminders = PengingatAbsensiAsleb.objects.filter(
+            asleb=asleb, jadwal=schedule, tanggal=today,
+        )
+        latest = reminders.order_by('-dikirim_pada').first()
+        if now < start or (latest and now < timezone.localtime(latest.dikirim_pada) + timedelta(hours=4)):
+            return 0
+
+        recipient = Pengguna.objects.filter(
+            nim_nik=asleb.nim, role='asisten_lab', is_verified=True,
+        ).exclude(email='').values_list('email', flat=True).first() or asleb.email
         if not recipient:
             return 0
+
+        stage = (reminders.order_by('-tahap').values_list('tahap', flat=True).first() or 0) + 1
+        attendance_url = f"{settings.PUBLIC_ACCESS_BASE_URL.rstrip('/')}/asleb/absensi/tambah/"
         text_body = (
             f'Halo {asleb.nama},\n\n'
-            f'Anda belum mengisi absensi untuk {schedule.mata_kuliah} pada jadwal '
-            f'{schedule.waktu_mulai:%H:%M}-{schedule.waktu_selesai:%H:%M}.\n'
-            'Segera isi absensi dari lokasi praktikum sebelum jadwal berakhir. '
-            'Setelah waktu selesai, absensi akan tertutup otomatis.'
+            f'Absensi {schedule.mata_kuliah} untuk jadwal hari ini '
+            f'{schedule.waktu_mulai:%H:%M}-{schedule.waktu_selesai:%H:%M} belum tercatat.\n'
+            'Jika waktu absensi sudah ditutup, hubungi laboran untuk meminta izin absensi susulan.'
         )
-        attendance_url = f"{settings.PUBLIC_ACCESS_BASE_URL.rstrip('/')}/asleb/absensi/tambah/"
         sent = send_branded_email(
-            subject=f'Pengingat Absensi Aslab {next_stage}/3',
+            subject='Pengingat Absensi Aslab Hari Ini',
             recipients=[recipient],
             text_body=text_body,
-            title=f'Absensi belum diisi ({next_stage}/3)',
+            title='Absensi hari ini belum tercatat',
             greeting=f'Halo {asleb.nama},',
-            intro='Jadwal praktikum sedang berlangsung dan absensi Anda belum tercatat.',
+            intro='Jadwal praktikum Anda hari ini belum memiliki catatan absensi.',
             details=[
                 {'label': 'Mata kuliah', 'value': schedule.mata_kuliah},
                 {'label': 'Ruangan', 'value': schedule.get_display_ruangan_nama()},
                 {'label': 'Waktu', 'value': f'{schedule.waktu_mulai:%H:%M} - {schedule.waktu_selesai:%H:%M}'},
-                {'label': 'Pengingat', 'value': f'{next_stage} dari 3'},
+                {'label': 'Tanggal', 'value': today.strftime('%d-%m-%Y')},
             ],
             action_url=attendance_url,
-            action_label='Isi Absensi Sekarang',
-            note='Absensi memerlukan lokasi kampus serta bukti foto dan video langsung dari kamera. Form tertutup otomatis saat jadwal berakhir.',
+            action_label='Lihat Absensi',
+            note='Jika jadwal sudah berakhir, minta laboran membuka izin absensi susulan. Pengingat berhenti setelah absensi tercatat.',
             fail_silently=False,
         )
-        if sent:
-            PengingatAbsensiAsleb.objects.get_or_create(
-                asleb=asleb,
-                jadwal=schedule,
-                tanggal=now.date(),
-                tahap=next_stage,
-            )
-            return 1
-        return 0
+        if not sent:
+            return 0
+        PengingatAbsensiAsleb.objects.create(
+            asleb=asleb, jadwal=schedule, tanggal=today, tahap=stage,
+        )
+        return 1

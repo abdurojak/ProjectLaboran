@@ -27,6 +27,7 @@
             <table data-mobile-card-table>
                 <thead class="bg-slate-50">
                     <tr>
+                        <th>Foto</th>
                         <th>Kode Lokasi</th>
                         <th>Nama Lokasi</th>
                         <th>Ukuran Lokasi</th>
@@ -36,6 +37,7 @@
                 <tbody>
                     {% for lokasi in lokasi_list %}
                     <tr class="hover:bg-slate-50/70">
+                        <td>{% if lokasi.foto %}<img src="{{ lokasi.foto.url }}" alt="{{ lokasi.nama_lokasi }}" class="h-12 w-16 rounded object-cover">{% else %}-{% endif %}</td>
                         <td class="font-semibold text-slate-600">{{ lokasi.kode_lokasi }}</td>
                         <td class="font-semibold text-slate-900">{{ lokasi.nama_lokasi }}</td>
                         <td>{{ lokasi.ukuran_lokasi|default:"-" }}</td>
@@ -61,7 +63,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="4" class="py-12 text-center text-slate-500">Belum ada data lokasi.</td>
+                        <td colspan="5" class="py-12 text-center text-slate-500">Belum ada data lokasi.</td>
                     </tr>
                     {% endfor %}
                 </tbody>

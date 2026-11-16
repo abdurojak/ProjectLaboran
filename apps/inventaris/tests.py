@@ -1,6 +1,9 @@
+from io import BytesIO
+
 from django.test import TestCase
 from django.urls import reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
+from PIL import Image
 
 from apps.peminjaman.models import PeminjamanAlat
 from apps.pengguna.models import Pengguna
@@ -43,6 +46,20 @@ class LokasiViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, 'name="kode_lokasi"')
+
+    def test_foto_dan_petunjuk_lokasi_tersimpan(self):
+        image = BytesIO()
+        Image.new('RGB', (20, 20), 'white').save(image, format='JPEG')
+        response = self.client.post(reverse('inventaris:lokasi_create'), {
+            'nama_lokasi': 'Lemari A',
+            'petunjuk_penyimpanan': 'Rak kedua sebelah kiri',
+            'foto': SimpleUploadedFile('lemari.jpg', image.getvalue(), content_type='image/jpeg'),
+        })
+
+        self.assertEqual(response.status_code, 302)
+        lokasi = Lokasi.objects.get(nama_lokasi='Lemari A')
+        self.assertEqual(lokasi.petunjuk_penyimpanan, 'Rak kedua sebelah kiri')
+        self.assertTrue(lokasi.foto.name)
 
     def test_daftar_lokasi_memakai_desain_dan_modal_konfirmasi_inventaris(self):
         lokasi = Lokasi.objects.create(nama_lokasi='Lab Kimia')
@@ -268,10 +285,18 @@ class BarangListViewTests(TestCase):
         self.assertNotContains(response, 'name="kondisi"')
         self.assertNotContains(response, 'name="lokasi"')
 
-    def test_daftar_barang_filter_memakai_request_submit_agar_loading_global_muncul(self):
+    def test_daftar_barang_filter_realtime_tanpa_submit(self):
         response = self.client.get(reverse('inventaris:barang_list'))
 
-        self.assertContains(response, 'form.requestSubmit();')
+        self.assertContains(response, 'data-inventory-search-item')
+        self.assertContains(response, "searchInput.addEventListener('input', filterInventory)")
+        self.assertNotContains(response, 'form.requestSubmit();')
+
+    def test_daftar_barang_menyembunyikan_kategori_kosong_dari_filter(self):
+        response = self.client.get(reverse('inventaris:barang_list'))
+
+        self.assertNotIn(('sensor', 'Sensor'), response.context['kategori_choices'])
+        self.assertIn(('lainnya', 'Lainnya'), response.context['kategori_choices'])
 
     def test_daftar_barang_memiliki_tombol_kelola_lokasi(self):
         response = self.client.get(reverse('inventaris:barang_list'))
@@ -503,6 +528,7 @@ class InventarisCrudTests(TestCase):
             reverse('inventaris:barang_create'),
             {
                 'nama': 'Osiloskop',
+                'kategori': 'elektronika',
                 'jumlah': 3,
                 'lokasi': self.lokasi.pk,
                 'keterangan': 'Unit praktikum',
@@ -512,7 +538,17 @@ class InventarisCrudTests(TestCase):
 
         self.assertRedirects(response, reverse('inventaris:barang_list'))
         self.assertEqual(inventaris.detail_barang.count(), 3)
+        self.assertEqual(inventaris.kategori, 'elektronika')
         self.assertTrue(inventaris.detail_barang.filter(kondisi='baik', lokasi=self.lokasi).count(), 3)
+
+    def test_filter_kategori_inventaris(self):
+        InventarisBarang.objects.create(nama='Sensor Suhu', kategori='sensor', jumlah=1)
+        InventarisBarang.objects.create(nama='Kamera', kategori='audio_visual', jumlah=1)
+
+        response = self.client.get(reverse('inventaris:barang_list'), {'kategori': 'sensor'})
+
+        self.assertContains(response, 'Sensor Suhu')
+        self.assertNotIn('Kamera', [item.nama for item in response.context['barang_list']])
 
     def test_edit_inventaris_boleh_mengubah_stok_tapi_bukan_lokasi_massal(self):
         inventaris = InventarisBarang.objects.create(nama='Osiloskop', jumlah=3)

@@ -17,6 +17,8 @@ class PenggunaLoginRequiredMiddleware:
     ADMIN_ALLOWED_NAMESPACES = {'core', 'dashboard', 'kalender', 'pengguna', 'ruangan'}
     MAHASISWA_ALLOWED_NAMESPACES = {'core', 'dashboard', 'peminjaman', 'jadwal', 'pengguna', 'ruangan'}
     MAHASISWA_ALLOWED_ASLEB_URLS = {
+        'qr_mahasiswa',
+        'qr_mahasiswa_image',
         'laporan_tugas_list',
         'laporan_kelas_detail',
         'laporan_tugas_detail',
@@ -50,6 +52,10 @@ class PenggunaLoginRequiredMiddleware:
     MAHASISWA_ALLOWED_PENGGUNA_PATHS = {'/pengguna/logout/'}
     ASISTEN_LAB_BLOCKED_NAMESPACES = {'inventaris', 'barang_tertinggal', 'pendaftaran_asleb'}
     ASISTEN_LAB_ALLOWED_ASLEB_URLS = {
+        'qr_mahasiswa',
+        'qr_mahasiswa_image',
+        'praktikum_qr_preview',
+        'praktikum_qr_confirm',
         'absensi_list',
         'absensi_create',
         'absensi_history',

@@ -66,6 +66,8 @@ def send_peminjaman_status_notification(peminjaman):
         peminjaman.status,
         ('Status Peminjaman Alat Diperbarui', 'Status peminjaman diperbarui', 'Status peminjaman alat Anda telah diperbarui.'),
     )
+    if peminjaman.status in {'hilang', 'rusak'} and peminjaman.potongan_skor:
+        intro += f' Skor kredit dikurangi {peminjaman.potongan_skor} poin oleh Laboran.'
     related_url = reverse('peminjaman:peminjaman_detail', kwargs={'pk': peminjaman.pk})
     action_url = build_public_url('peminjaman:peminjaman_detail', pk=peminjaman.pk)
     realtime_payload = {

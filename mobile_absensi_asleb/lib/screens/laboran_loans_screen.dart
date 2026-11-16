@@ -175,6 +175,13 @@ class _LoanCard extends StatelessWidget {
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
+          if (loan.potonganSkor > 0) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Skor kredit -${loan.potonganSkor} poin',
+              style: const TextStyle(color: Color(0xFFE11D48), fontWeight: FontWeight.w700),
+            ),
+          ],
           const SizedBox(height: 10),
           Row(
             children: [
@@ -186,7 +193,7 @@ class _LoanCard extends StatelessWidget {
               const SizedBox(width: 7),
               Expanded(
                 child: Text(
-                  '${date(loan.tanggalPinjam)} - ${date(loan.tanggalKembali)}',
+                  'Dipinjam ${date(loan.tanggalPinjam)} · tanpa batas waktu',
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -246,31 +253,58 @@ class _LoanCard extends StatelessWidget {
                   ),
                   onTap: () async {
                     Navigator.pop(sheetContext);
-                    final confirmed = await showDialog<bool>(
+                    final isIncident = {'hilang', 'rusak'}.contains(action.$1);
+                    final penaltyController = TextEditingController();
+                    String? penaltyError;
+                    final confirmed = await showDialog<int?>(
                       context: context,
-                      builder: (dialogContext) => AlertDialog(
+                      builder: (dialogContext) => StatefulBuilder(builder: (dialogContext, setDialogState) => AlertDialog(
                         title: const Text('Konfirmasi perubahan'),
-                        content: Text(
-                          'Yakin ingin mengubah status menjadi “${action.$2}”?',
+                        content: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('Yakin ingin mengubah status menjadi “${action.$2}”?'),
+                            if (isIncident) ...[
+                              const SizedBox(height: 16),
+                              TextField(
+                                controller: penaltyController,
+                                keyboardType: TextInputType.number,
+                                decoration: InputDecoration(
+                                  labelText: 'Potongan skor kredit',
+                                  helperText: 'Tentukan 1-100 poin untuk barang ini.',
+                                  errorText: penaltyError,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                         actions: [
                           TextButton(
                             onPressed: () =>
-                                Navigator.pop(dialogContext, false),
+                                Navigator.pop(dialogContext),
                             child: const Text('Batal'),
                           ),
                           FilledButton(
-                            onPressed: () => Navigator.pop(dialogContext, true),
+                            onPressed: () {
+                              final points = int.tryParse(penaltyController.text);
+                              if (isIncident && (points == null || points < 1 || points > 100)) {
+                                setDialogState(() => penaltyError = 'Isi 1 sampai 100 poin.');
+                                return;
+                              }
+                              Navigator.pop(dialogContext, isIncident ? points : 0);
+                            },
                             child: const Text('Ya, lanjutkan'),
                           ),
                         ],
-                      ),
+                      )),
                     );
-                    if (confirmed != true || !context.mounted) return;
+                    penaltyController.dispose();
+                    if (confirmed == null || !context.mounted) return;
                     final state = context.read<LaboranProvider>();
                     final success = await state.updateLoanStatus(
                       loan,
                       action.$1,
+                      penalty: isIncident ? confirmed : null,
                     );
                     if (!context.mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(

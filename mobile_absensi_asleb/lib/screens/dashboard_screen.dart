@@ -9,6 +9,7 @@ import '../widgets/labhub_loading.dart';
 import '../widgets/schedule_card.dart';
 import '../widgets/state_views.dart';
 import 'schedule_detail_screen.dart';
+import 'aslab_qr_scanner_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -116,6 +117,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
+                  FilledButton.icon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AslabQrScannerScreen(),
+                      ),
+                    ),
+                    icon: const Icon(Icons.qr_code_scanner),
+                    label: const Text('Pindai QR Mahasiswa'),
+                  ),
+                  const SizedBox(height: 16),
                   _HonorSummaryCard(honor: state.honor),
                   const SizedBox(height: 24),
                   Text(

@@ -22,12 +22,14 @@
         </div>
     </div>
 
-    <form id="inventaris-search-form" method="get" class="surface-card p-5">
+    <form id="inventaris-search-form" method="get" class="surface-card grid gap-3 p-5 sm:grid-cols-[minmax(0,1fr)_220px]">
         <div>
             <label for="id_q">Cari barang</label>
-            <input id="id_q" name="q" type="text" value="{{ search_query }}" placeholder="Cari nama, kode, atau keterangan" autocomplete="off">
+            <input id="id_q" name="q" type="text" value="{{ search_query }}" placeholder="Cari nama, kode, lokasi" autocomplete="off">
         </div>
+        <div><label for="id_kategori">Kategori</label><select id="id_kategori" name="kategori"><option value="">Semua kategori</option>{% for value, label in kategori_choices %}<option value="{{ value }}"{% if selected_kategori == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
     </form>
+    <p class="text-sm text-slate-500" data-inventory-result-count aria-live="polite"></p>
 
     <div class="inventory-table-card overflow-hidden surface-card" data-inventory-desktop-list>
         <div class="inventory-table-scroll overflow-x-auto">
@@ -37,6 +39,7 @@
                         <th>Foto</th>
                         <th>Kode Inventaris</th>
                         <th>Nama</th>
+                        <th>Kategori</th>
                         <th>Stok Total</th>
                         <th>Dipinjam</th>
                         <th>Tersedia</th>
@@ -45,7 +48,7 @@
                 </thead>
                 <tbody>
                     {% for barang in barang_list %}
-                    <tr class="inventory-row hover:bg-slate-50/70">
+                    <tr class="inventory-row hover:bg-slate-50/70" data-inventory-search-item data-search="{{ barang.search_text|lower }}" data-category="{{ barang.kategori }}">
                         <td class="inventory-photo-cell" data-label="Foto">
                             {% if barang.foto %}
                             <img src="{{ barang.foto.url }}" alt="{{ barang.nama }}" class="h-14 w-14 rounded-2xl object-cover ring-1 ring-slate-200">
@@ -57,6 +60,7 @@
                         </td>
                         <td class="font-semibold text-slate-600" data-label="Kode Inventaris">{{ barang.kode_inventaris }}</td>
                         <td class="inventory-name-cell font-semibold text-slate-900" data-label="Nama">{{ barang.nama }}</td>
+                        <td data-label="Kategori">{{ barang.get_kategori_display }}</td>
                         <td data-label="Stok Total">{{ barang.jumlah }}</td>
                         <td data-label="Dipinjam">{{ barang.jumlah_dipinjam }}</td>
                         <td data-label="Tersedia">
@@ -86,9 +90,10 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="7" class="py-12 text-center text-slate-500">Tidak ada barang yang cocok dengan pencarian saat ini.</td>
+                        <td colspan="8" class="py-12 text-center text-slate-500">Tidak ada barang yang cocok dengan pencarian saat ini.</td>
                     </tr>
                     {% endfor %}
+                    <tr class="inventory-search-hidden" data-inventory-no-results><td colspan="8" class="py-12 text-center text-slate-500">Barang tidak ditemukan.</td></tr>
                 </tbody>
             </table>
         </div>
@@ -96,7 +101,7 @@
 
     <div class="grid gap-3" data-inventory-mobile-list>
         {% for barang in barang_list %}
-        <article class="surface-card overflow-hidden p-4" data-inventory-mobile-card>
+        <article class="surface-card overflow-hidden p-4" data-inventory-mobile-card data-inventory-search-item data-search="{{ barang.search_text|lower }}" data-category="{{ barang.kategori }}">
             <div class="flex min-w-0 items-center gap-3">
                 {% if barang.foto %}
                 <img src="{{ barang.foto.url }}" alt="{{ barang.nama }}" class="h-16 w-16 shrink-0 rounded-lg object-cover ring-1 ring-slate-200">
@@ -108,6 +113,7 @@
                 <div class="min-w-0 flex-1">
                     <h3 class="break-words text-base font-black leading-6 text-slate-900">{{ barang.nama }}</h3>
                     <p class="mt-1 break-all text-xs font-bold text-slate-500">{{ barang.kode_inventaris }}</p>
+                    <p class="mt-1 text-xs text-slate-500">{{ barang.get_kategori_display }}</p>
                 </div>
                 <span class="{% if barang.stok_tersedia %}bg-emerald-100 text-emerald-700{% else %}bg-rose-100 text-rose-700{% endif %} inline-flex shrink-0 rounded-full px-2.5 py-1 text-xs font-black">
                     {{ barang.stok_tersedia }} tersedia
@@ -150,12 +156,14 @@
         {% empty %}
         <div class="surface-card px-4 py-10 text-center text-sm text-slate-500">Tidak ada barang yang cocok dengan pencarian saat ini.</div>
         {% endfor %}
+        <div class="inventory-search-hidden surface-card px-4 py-10 text-center text-sm text-slate-500" data-inventory-no-results>Barang tidak ditemukan.</div>
     </div>
 </section>
 {% endblock %}
 
 {% block extra_head %}
 <style>
+    .inventory-search-hidden { display: none !important; }
     [data-inventory-desktop-list] {
         display: block !important;
     }
@@ -327,16 +335,35 @@
     document.addEventListener('DOMContentLoaded', function () {
         const form = document.getElementById('inventaris-search-form');
         const searchInput = document.getElementById('id_q');
-        let searchTimer = null;
+        const categoryInput = document.getElementById('id_kategori');
+        const rows = Array.from(document.querySelectorAll('[data-inventory-search-item]'));
+        const emptyStates = document.querySelectorAll('[data-inventory-no-results]');
+        const resultCount = document.querySelector('[data-inventory-result-count]');
+        if (!form || !searchInput || !categoryInput) return;
 
-        if (searchInput) {
-            searchInput.addEventListener('input', function () {
-                clearTimeout(searchTimer);
-                searchTimer = setTimeout(function () {
-                    form.requestSubmit();
-                }, 350);
+        function filterInventory() {
+            const query = searchInput.value.trim().toLocaleLowerCase('id-ID');
+            const category = categoryInput.value;
+            let matches = 0;
+            rows.forEach(function (item) {
+                const visible = (!query || item.dataset.search.includes(query))
+                    && (!category || item.dataset.category === category);
+                item.classList.toggle('inventory-search-hidden', !visible);
+                if (visible && item.matches('tr')) matches += 1;
             });
+            emptyStates.forEach(function (item) {
+                item.classList.toggle('inventory-search-hidden', matches !== 0 || rows.length === 0);
+            });
+            if (resultCount) resultCount.textContent = matches + ' barang';
         }
+
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+            filterInventory();
+        });
+        searchInput.addEventListener('input', filterInventory);
+        categoryInput.addEventListener('change', filterInventory);
+        filterInventory();
     });
 </script>
 {% endblock %}

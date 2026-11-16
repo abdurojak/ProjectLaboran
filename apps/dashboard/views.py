@@ -868,10 +868,24 @@ def _mark_borrowed_status(request, pk, status):
         messages.warning(request, 'Anda tidak memiliki akses untuk mengubah status peminjaman.')
         return redirect('dashboard:home')
 
+    pengguna = getattr(request, 'current_pengguna', None)
+    points = None
+    if status in {'hilang', 'rusak'}:
+        if not pengguna or pengguna.role != LABORAN_ROLE:
+            messages.error(request, 'Hanya Laboran yang dapat menentukan potongan skor.')
+            return redirect('dashboard:home')
+        try:
+            points = int(request.POST.get('potongan_skor', ''))
+        except (TypeError, ValueError):
+            points = 0
+        if not 1 <= points <= 100:
+            messages.error(request, 'Isi potongan skor 1 sampai 100 poin per barang.')
+            return redirect('dashboard:home')
+
     with transaction.atomic():
         peminjaman = get_object_or_404(PeminjamanAlat.objects.select_for_update(), pk=pk, status='dipinjam')
         for item in _get_peminjaman_group_for_update(peminjaman).filter(status='dipinjam'):
-            update_peminjaman_status(item, status)
+            update_peminjaman_status(item, status, potongan_skor=points, laboran=pengguna)
             send_peminjaman_status_notification(item)
     return redirect('dashboard:home')
 

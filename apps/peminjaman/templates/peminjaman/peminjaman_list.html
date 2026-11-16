@@ -5,54 +5,6 @@
 {% block extra_head %}{{ block.super }}
 <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
 <style>
-    .peminjaman-row-overdue td {
-        background: rgba(255, 241, 242, 0.74) !important;
-        border-color: rgba(251, 113, 133, 0.22) !important;
-    }
-
-    .peminjaman-row-overdue:hover td {
-        background: rgba(255, 228, 230, 0.86) !important;
-    }
-
-    .peminjaman-row-overdue td:first-child {
-        box-shadow: inset 4px 0 0 rgba(225, 29, 72, 0.68);
-    }
-
-    html[data-theme="dark"] .peminjaman-row-overdue td {
-        background: rgba(244, 63, 94, 0.08) !important;
-        border-color: rgba(148, 163, 184, 0.14) !important;
-    }
-
-    html[data-theme="dark"] .peminjaman-row-overdue:hover td {
-        background: rgba(244, 63, 94, 0.13) !important;
-    }
-
-    html[data-theme="dark"] .peminjaman-row-overdue td:first-child {
-        box-shadow: inset 4px 0 0 rgba(251, 113, 133, 0.62);
-    }
-
-    html[data-theme="dark"] .peminjaman-overdue-badge {
-        border: 1px solid rgba(251, 113, 133, 0.28);
-        background: rgba(127, 29, 29, 0.34) !important;
-        color: #fecdd3 !important;
-    }
-
-    .peminjaman-overdue-alert {
-        border: 1px solid rgba(244, 63, 94, 0.28);
-        background:
-            radial-gradient(circle at 0% 0%, rgba(244, 63, 94, 0.18), transparent 34%),
-            linear-gradient(135deg, rgba(255, 241, 242, 0.96), rgba(255, 255, 255, 0.82));
-        color: #9f1239;
-    }
-
-    html[data-theme="dark"] .peminjaman-overdue-alert {
-        border-color: rgba(251, 113, 133, 0.24);
-        background:
-            radial-gradient(circle at 0% 0%, rgba(244, 63, 94, 0.18), transparent 36%),
-            linear-gradient(135deg, rgba(127, 29, 29, 0.34), rgba(15, 23, 42, 0.72));
-        color: #fecdd3;
-    }
-
     .loan-shop-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr));
@@ -231,26 +183,6 @@
         </a>
     </nav>
 
-    {% if pending_extensions and not view_riwayat %}
-    <section class="surface-card overflow-hidden">
-        <div class="border-b border-slate-100 px-5 py-4">
-            <p class="text-xs font-black uppercase tracking-[0.18em] text-cyan-700">Persetujuan Peminjaman</p>
-            <h3 class="mt-1 text-xl font-black text-slate-900">Pengajuan Perpanjangan</h3>
-        </div>
-        <div class="divide-y divide-slate-100">
-            {% for extension in pending_extensions %}
-            <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
-                <div>
-                    <p class="font-black text-slate-900">{{ extension.transaksi.kode_pinjam }} · {{ extension.transaksi.nama_peminjam }}</p>
-                    <p class="mt-1 text-sm text-slate-500">{{ extension.tanggal_kembali_sebelumnya|date:"d M Y" }} menjadi {{ extension.tanggal_kembali_diminta|date:"d M Y" }}</p>
-                </div>
-                {% if extension.anchor_pk %}<a href="{% url 'peminjaman:peminjaman_detail' extension.anchor_pk %}" class="btn-secondary">Tinjau</a>{% endif %}
-            </div>
-            {% endfor %}
-        </div>
-    </section>
-    {% endif %}
-
     {% if is_borrower and not view_riwayat %}
     <section class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
         <div class="surface-card flex flex-wrap items-center gap-4 p-5">
@@ -263,18 +195,13 @@
                     <strong class="text-3xl font-black text-slate-900">{{ credit_profile.score }}</strong>
                     <span class="font-black {% if credit_profile.label == 'Baik' %}text-emerald-700{% elif credit_profile.label == 'Waspada' %}text-amber-700{% else %}text-rose-700{% endif %}">{{ credit_profile.label }}</span>
                 </div>
-                <p class="mt-1 text-sm font-semibold text-slate-500">Batas pengajuan Anda saat ini maksimal {{ credit_profile.max_loan_days }} hari.</p>
-                <p class="mt-1 text-xs font-semibold text-slate-500">Pengembalian tepat waktu setelah skor berkurang memulihkan 10 poin, maksimal hingga 100. Perpanjangan yang disetujui tidak mengurangi skor.</p>
-                {% if credit_profile.has_active_overdue %}<p class="mt-2 text-sm font-bold text-rose-700">Selesaikan peminjaman yang terlambat sebelum mengajukan kembali.</p>{% endif %}
+                <p class="mt-1 text-xs font-semibold text-slate-500">Skor berkurang hanya bila barang rusak atau hilang sesuai keputusan laboran.</p>
                 {% if credit_profile.blocked_for_low_score %}<p class="mt-2 text-sm font-bold text-rose-700">Skor Anda di bawah 40 sehingga peminjaman diblokir. Buat konten edukasi sesuai arahan, lalu hubungi Laboran untuk verifikasi dan perubahan skor.</p>{% endif %}
             </div>
         </div>
-        <div class="surface-card flex items-center px-5 py-4 text-sm font-semibold text-slate-600 md:max-w-sm">
-            Masa normal maksimal 7 hari. Tanggal kembali yang jatuh pada hari libur diundur otomatis ke hari operasional berikutnya.
-        </div>
     </section>
 
-    <section class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]" data-loan-shop data-credit-can-submit="{{ credit_profile.can_submit|yesno:'true,false' }}" data-max-loan-days="{{ credit_profile.max_loan_days }}">
+    <section class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]" data-loan-shop data-credit-can-submit="{{ credit_profile.can_submit|yesno:'true,false' }}">
         <div class="surface-card min-w-0 p-5 md:p-6">
             <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -286,7 +213,7 @@
 
             <div class="mb-5 rounded-3xl border border-slate-200 bg-slate-50/70 p-3 md:p-4">
                 <label for="id_catalog_search" class="text-xs font-black uppercase tracking-[0.16em] text-slate-500">Cari barang</label>
-                <div class="mt-2 flex min-w-0 items-center gap-2">
+                <div class="mt-2 flex min-w-0 flex-wrap items-center gap-2">
                     <div class="relative min-w-0 flex-1">
                         <i data-lucide="search" class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"></i>
                         <input
@@ -298,6 +225,10 @@
                             data-catalog-search
                         >
                     </div>
+                    <select class="w-full sm:w-56" aria-label="Filter kategori barang" data-catalog-category>
+                        <option value="">Semua kategori</option>
+                        {% for value, label in inventory_categories %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                    </select>
                     <button type="button" class="btn-secondary hidden shrink-0 gap-2 px-4" data-catalog-search-clear>
                         <i data-lucide="x" class="h-4 w-4"></i>
                         <span class="hidden sm:inline">Bersihkan</span>
@@ -313,6 +244,7 @@
                 <article class="loan-product-card {% if not product.is_available %}is-disabled{% endif %}"
                          data-product-card
                          data-product-name="{{ product.nama }}"
+                         data-product-category="{{ product.kategori }}"
                          data-product-code="{{ product.kode }}"
                          data-product-detail-code="{{ product.detail_kode }}"
                          data-product-location="{{ product.lokasi }}"
@@ -335,6 +267,7 @@
                         <div class="p-4">
                             <h4 class="line-clamp-2 min-h-[2.7rem] text-sm font-black leading-5 text-slate-900">{{ product.nama }}</h4>
                             <p class="mt-2 text-xs font-semibold text-slate-500">{{ product.kode }} · {{ product.lokasi }}</p>
+                            <p class="mt-1 text-xs font-semibold text-teal-700">{{ product.kategori_label }}</p>
                             <div class="mt-3 flex items-center justify-between gap-2">
                                 {% if product.is_available %}
                                 <span class="text-sm font-black text-emerald-600">{{ product.available_count }} tersedia</span>
@@ -388,10 +321,6 @@
                     <div>
                         <label for="id_catalog_tanggal_pinjam">Tanggal pinjam</label>
                         <input id="id_catalog_tanggal_pinjam" name="tanggal_pinjam" type="date" value="{{ today|date:'Y-m-d' }}" required>
-                    </div>
-                    <div>
-                        <label for="id_catalog_tanggal_kembali">Tanggal kembali</label>
-                        <input id="id_catalog_tanggal_kembali" name="tanggal_kembali" type="date" required>
                     </div>
                     <div>
                         <label for="id_catalog_catatan">Catatan</label>
@@ -544,26 +473,16 @@
                     {% endfor %}
                 </select>
             </div>
+            <div class="min-w-[180px] flex-1" data-incident-penalty hidden>
+                <label for="id_bulk_penalty">Potongan skor per barang (jika hilang/rusak)</label>
+                <input id="id_bulk_penalty" name="potongan_skor" type="number" min="1" max="100" placeholder="1-100 poin">
+            </div>
             <button type="submit" class="btn-primary gap-2 bg-amber-500 shadow-amber-500/20 hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-45" data-selection-submit disabled>
                 <i data-lucide="save" class="h-4 w-4"></i>
                 <span>Simpan</span>
             </button>
         </div>
     </form>
-    {% endif %}
-
-    {% if has_overdue_peminjaman %}
-    <div class="peminjaman-overdue-alert rounded-[28px] px-5 py-4 shadow-lg shadow-rose-950/10">
-        <div class="flex flex-wrap items-start gap-3">
-            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-rose-600 text-white">
-                <i data-lucide="triangle-alert" class="h-5 w-5"></i>
-            </span>
-            <div>
-                <p class="font-black">Ada peminjaman yang terlambat dikembalikan.</p>
-                <p class="mt-1 text-sm font-semibold opacity-85">Baris berwarna merah perlu segera ditindaklanjuti atau dikonfirmasi pengembaliannya.</p>
-            </div>
-        </div>
-    </div>
     {% endif %}
 
     <div class="surface-card min-w-0 max-w-full overflow-hidden">
@@ -576,14 +495,14 @@
                         <th>Barang</th>
                         <th>Peminjam</th>
                         <th>Tanggal Pinjam</th>
-                        <th>Tanggal Kembali</th>
+                        <th>Masa Pinjam</th>
                         <th>Status</th>
                         <th>Aksi</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for peminjaman in peminjaman_list %}
-                    <tr class="{% if peminjaman.is_overdue %}peminjaman-row-overdue{% else %}hover:bg-slate-50/70{% endif %}">
+                    <tr class="hover:bg-slate-50/70">
                         {% if is_manager %}
                         <td>
                             <input type="checkbox" name="transaksi_ids" value="{{ peminjaman.pk }}" form="peminjaman-bulk-status-form" aria-label="{% if peminjaman.has_actionable_details %}Pilih {{ peminjaman.kode_pinjam }}{% else %}{{ peminjaman.kode_pinjam }} sudah selesai{% endif %}"{% if not peminjaman.has_actionable_details %} disabled title="Semua detail sudah selesai"{% endif %}>
@@ -609,10 +528,7 @@
                         </td>
                         <td>{{ peminjaman.tanggal_pinjam|date:"d M Y" }}</td>
                         <td>
-                            <div>{{ peminjaman.tanggal_kembali|date:"d M Y"|default:"Tanpa batas waktu (Capstone)" }}</div>
-                            {% if peminjaman.is_overdue %}
-                            <span class="peminjaman-overdue-badge mt-1 inline-flex rounded-full bg-rose-100 px-2.5 py-1 text-[11px] font-black text-rose-700">Terlambat</span>
-                            {% endif %}
+                            <div>Tanpa batas waktu</div>
                         </td>
                         <td>
                             <span class="
@@ -781,6 +697,7 @@
             const submitButton = form.querySelector('[data-selection-submit]');
             const selectionName = form.dataset.selectionName;
             const statusField = form.querySelector('select[name="status"]');
+            const penaltyField = form.querySelector('input[name="potongan_skor"]');
             if (!submitButton || !selectionName) {
                 return;
             }
@@ -788,6 +705,11 @@
             function syncSelectionState() {
                 const hasSelection = document.querySelectorAll('input[name="' + selectionName + '"]:checked').length > 0;
                 const hasStatus = !statusField || Boolean(statusField.value);
+                const isIncident = statusField && ['hilang', 'rusak'].includes(statusField.value);
+                if (penaltyField) {
+                    penaltyField.closest('[data-incident-penalty]').hidden = !isIncident;
+                    penaltyField.required = Boolean(isIncident);
+                }
                 submitButton.disabled = !(hasSelection && hasStatus);
             }
 
@@ -819,6 +741,7 @@
             document.body.appendChild(modal);
         }
         const catalogSearch = shop.querySelector('[data-catalog-search]');
+        const catalogCategory = shop.querySelector('[data-catalog-category]');
         const catalogSearchClear = shop.querySelector('[data-catalog-search-clear]');
         const catalogSearchStatus = shop.querySelector('[data-catalog-search-status]');
         const catalogSearchEmpty = shop.querySelector('[data-catalog-search-empty]');
@@ -826,32 +749,6 @@
         const productCards = Array.from(shop.querySelectorAll('[data-product-card]'));
         const selected = new Map();
         const creditCanSubmit = shop.dataset.creditCanSubmit !== 'false';
-        const maxLoanDays = Number(shop.dataset.maxLoanDays || 7);
-        const startDateInput = shop.querySelector('[name="tanggal_pinjam"]');
-        const returnDateInput = shop.querySelector('[name="tanggal_kembali"]');
-
-        function syncReturnDateLimit() {
-            if (!startDateInput || !returnDateInput || !startDateInput.value) {
-                return;
-            }
-            const startDate = new Date(startDateInput.value + 'T00:00:00');
-            const maxDate = new Date(startDate);
-            maxDate.setDate(maxDate.getDate() + maxLoanDays);
-            returnDateInput.min = startDateInput.value;
-            returnDateInput.max = [
-                maxDate.getFullYear(),
-                String(maxDate.getMonth() + 1).padStart(2, '0'),
-                String(maxDate.getDate()).padStart(2, '0'),
-            ].join('-');
-            if (returnDateInput.value && returnDateInput.value > returnDateInput.max) {
-                returnDateInput.value = '';
-            }
-        }
-
-        if (startDateInput) {
-            startDateInput.addEventListener('change', syncReturnDateLimit);
-            syncReturnDateLimit();
-        }
 
         function normalizeSearchValue(value) {
             return (value || '')
@@ -863,6 +760,7 @@
 
         function filterCatalog() {
             const keyword = normalizeSearchValue(catalogSearch ? catalogSearch.value : '');
+            const category = catalogCategory ? catalogCategory.value : '';
             let visibleCount = 0;
 
             productCards.forEach(function (card) {
@@ -872,7 +770,8 @@
                     card.dataset.productDetailCode,
                     card.dataset.productLocation,
                 ].join(' '));
-                const isVisible = !keyword || searchableValue.includes(keyword);
+                const isVisible = (!keyword || searchableValue.includes(keyword))
+                    && (!category || card.dataset.productCategory === category);
                 card.classList.toggle('hidden', !isVisible);
                 if (isVisible) {
                     visibleCount += 1;
@@ -886,12 +785,12 @@
                 catalogSearchEmpty.classList.toggle('hidden', visibleCount > 0);
             }
             if (catalogCount) {
-                catalogCount.textContent = keyword
+                catalogCount.textContent = keyword || category
                     ? visibleCount + ' dari ' + productCards.length + ' produk'
                     : productCards.length + ' produk';
             }
             if (catalogSearchStatus) {
-                catalogSearchStatus.textContent = keyword
+                catalogSearchStatus.textContent = keyword || category
                     ? (visibleCount
                         ? visibleCount + ' barang ditemukan.'
                         : 'Tidak ada barang yang cocok dengan pencarian.')
@@ -901,6 +800,9 @@
 
         if (catalogSearch) {
             catalogSearch.addEventListener('input', filterCatalog);
+        }
+        if (catalogCategory) {
+            catalogCategory.addEventListener('change', filterCatalog);
         }
         if (catalogSearchClear) {
             catalogSearchClear.addEventListener('click', function () {

@@ -23,7 +23,6 @@ LIBUR_NASIONAL_TETAP = {
 class CreditProfile:
     score: int
     label: str
-    max_loan_days: int
     has_late_history: bool
     has_active_overdue: bool
     late_transactions: int
@@ -34,7 +33,7 @@ class CreditProfile:
 
     @property
     def can_submit(self):
-        return not self.has_active_overdue and self.score >= 40
+        return self.score >= 40
 
     @property
     def blocked_for_low_score(self):
@@ -73,41 +72,10 @@ def get_credit_profile(nim, today=None):
 
     for transaksi in transactions:
         statuses = {detail.status for detail in transaksi.detail.all()}
-        is_active_overdue = 'dipinjam' in statuses and bool(transaksi.tanggal_kembali) and transaksi.tanggal_kembali < today
-        returned_late = bool(
-            transaksi.tanggal_dikembalikan
-            and transaksi.tanggal_kembali and transaksi.tanggal_dikembalikan > transaksi.tanggal_kembali
-        )
-        if is_active_overdue or returned_late:
-            late_transactions += 1
-            has_active_overdue = has_active_overdue or is_active_overdue
-            late_days = (
-                (today - transaksi.tanggal_kembali).days
-                if is_active_overdue
-                else (transaksi.tanggal_dikembalikan - transaksi.tanggal_kembali).days
-            )
-            score -= 30 + min(max(late_days - 1, 0), 10)
-
         risk = transaksi.risiko
-        if risk == 'hilang' or 'hilang' in statuses:
-            score -= 40
+        if risk in {'hilang', 'rusak'} or {'hilang', 'rusak'} & statuses:
+            score -= sum(detail.potongan_skor for detail in transaksi.detail.all())
             problem_transactions += 1
-        elif risk == 'rusak' or 'rusak' in statuses:
-            score -= 20
-            problem_transactions += 1
-
-        returned_on_time = bool(
-            transaksi.tanggal_dikembalikan
-            and transaksi.tanggal_kembali and transaksi.tanggal_dikembalikan <= transaksi.tanggal_kembali
-            and risk == 'normal'
-            and not ({'hilang', 'rusak'} & statuses)
-        )
-        if returned_on_time:
-            on_time_returns += 1
-            if score < 100:
-                restored = min(10, 100 - score)
-                score += restored
-                recovery_points += restored
 
     score = max(0, score)
     manual_adjustment = PenyesuaianSkorKredit.objects.filter(
@@ -115,17 +83,10 @@ def get_credit_profile(nim, today=None):
     ).aggregate(total=Sum('nilai_penyesuaian'))['total'] or 0
     score = min(100, max(0, score + manual_adjustment))
     has_late_history = late_transactions > 0
-    if has_active_overdue or (has_late_history and recovery_points == 0) or score < 60:
-        max_loan_days = 1
-    elif score < 80:
-        max_loan_days = 3
-    else:
-        max_loan_days = 7
     label = 'Baik' if score >= 80 else ('Waspada' if score >= 60 else 'Buruk')
     return CreditProfile(
         score=score,
         label=label,
-        max_loan_days=max_loan_days,
         has_late_history=has_late_history,
         has_active_overdue=has_active_overdue,
         late_transactions=late_transactions,
@@ -155,13 +116,22 @@ def sync_barang_after_peminjaman_status(peminjaman, next_status):
         barang.save(update_fields=updated_fields)
 
 
-def update_peminjaman_status(peminjaman, next_status):
+def update_peminjaman_status(peminjaman, next_status, *, potongan_skor=None, laboran=None):
     if peminjaman.status == next_status:
         return False
 
+    if next_status in {'hilang', 'rusak'}:
+        if not isinstance(potongan_skor, int) or not 1 <= potongan_skor <= 100 or laboran is None or laboran.role != 'laboran':
+            raise ValueError('Laboran wajib menentukan potongan skor 1 sampai 100 poin.')
+
     sync_barang_after_peminjaman_status(peminjaman, next_status)
     peminjaman.status = next_status
-    peminjaman.save(update_fields=['status', 'diperbarui_pada'])
+    update_fields = ['status', 'diperbarui_pada']
+    if next_status in {'hilang', 'rusak'}:
+        peminjaman.potongan_skor = potongan_skor
+        peminjaman.potongan_skor_oleh = laboran
+        update_fields.extend(['potongan_skor', 'potongan_skor_oleh'])
+    peminjaman.save(update_fields=update_fields)
     if peminjaman.transaksi_id:
         transaksi = peminjaman.transaksi
         update_fields = []

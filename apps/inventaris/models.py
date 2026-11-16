@@ -10,6 +10,8 @@ class Lokasi(models.Model):
     kode_lokasi = models.CharField(max_length=8, unique=True, editable=False, blank=True)
     nama_lokasi = models.CharField(max_length=150)
     ukuran_lokasi = models.CharField(max_length=100, blank=True)
+    foto = models.ImageField(upload_to='lokasi/', blank=True, null=True)
+    petunjuk_penyimpanan = models.CharField(max_length=255, blank=True)
     dibuat_pada = models.DateTimeField(auto_now_add=True)
     diperbarui_pada = models.DateTimeField(auto_now=True)
 
@@ -30,7 +32,23 @@ class Lokasi(models.Model):
 
 
 class InventarisBarang(models.Model):
+    KATEGORI_CHOICES = [
+        ('sensor', 'Sensor'),
+        ('mikrokontroler', 'Board Mikro & SBC'),
+        ('modul', 'Modul & Antarmuka'),
+        ('tampilan', 'Tampilan & Indikator'),
+        ('daya', 'Daya & Baterai'),
+        ('motor', 'Motor & Aktuator'),
+        ('kabel', 'Kabel & Konektor'),
+        ('komputer', 'Komputer & Periferal'),
+        ('jaringan', 'Jaringan'),
+        ('elektronika', 'Komponen Elektronika'),
+        ('audio_visual', 'Audio, Video & XR'),
+        ('perkakas', 'Perkakas & Alat Ukur'),
+        ('lainnya', 'Lainnya'),
+    ]
     nama = models.CharField(max_length=150)
+    kategori = models.CharField(max_length=20, choices=KATEGORI_CHOICES, default='lainnya', db_index=True)
     kode_inventaris = models.CharField(max_length=50, unique=True, blank=True)
     jumlah = models.PositiveIntegerField(default=0)
     foto = models.ImageField(upload_to='barang/', blank=True, null=True)

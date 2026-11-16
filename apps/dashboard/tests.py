@@ -597,11 +597,12 @@ class DashboardViewTests(TestCase):
             status='dipinjam',
         )
 
-        response = self.client.post(reverse('dashboard:peminjaman_lost', args=[peminjaman.pk]))
+        response = self.client.post(reverse('dashboard:peminjaman_lost', args=[peminjaman.pk]), {'potongan_skor': '25'})
         peminjaman.refresh_from_db()
 
         self.assertRedirects(response, reverse('dashboard:home'))
         self.assertEqual(peminjaman.status, 'hilang')
+        self.assertEqual(peminjaman.potongan_skor, 25)
 
     def test_mark_borrowed_as_broken_changes_status_to_rusak(self):
         peminjaman = PeminjamanAlat.objects.create(
@@ -612,11 +613,12 @@ class DashboardViewTests(TestCase):
             status='dipinjam',
         )
 
-        response = self.client.post(reverse('dashboard:peminjaman_broken', args=[peminjaman.pk]))
+        response = self.client.post(reverse('dashboard:peminjaman_broken', args=[peminjaman.pk]), {'potongan_skor': '15'})
         peminjaman.refresh_from_db()
 
         self.assertRedirects(response, reverse('dashboard:home'))
         self.assertEqual(peminjaman.status, 'rusak')
+        self.assertEqual(peminjaman.potongan_skor, 15)
         self.barang.refresh_from_db()
         self.assertEqual(self.barang.kondisi, 'rusak_ringan')
         self.assertEqual(self.barang.status_pinjam, 'Rusak')

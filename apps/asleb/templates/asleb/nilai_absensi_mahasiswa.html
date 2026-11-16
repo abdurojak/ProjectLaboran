@@ -3,13 +3,143 @@
 {% block content %}
 <section class="min-w-0 space-y-6">
     <div class="flex flex-wrap items-start justify-between gap-4"><div><p class="text-sm font-black uppercase tracking-[0.2em] text-brand-700">{{ matkul.kode_mk|default:matkul.kode }} · {{ matkul.kelas }}</p><h2 class="mt-2 text-3xl font-black text-slate-900">Modul {{ modul.nomor }} · {{ modul.judul }}</h2><p class="mt-2 text-sm text-slate-500">Catat kehadiran dan nilai mahasiswa pada pertemuan ini.</p></div><a class="btn-secondary" href="{% url 'asleb:praktikum_mahasiswa_list' %}">Kembali</a></div>
+    {% if is_asisten_lab %}
+    <section class="surface-card p-5 sm:p-6" data-qr-attendance data-preview-url="{% url 'asleb:praktikum_qr_preview' matkul.pk modul.pk %}" data-confirm-url="{% url 'asleb:praktikum_qr_confirm' matkul.pk modul.pk %}">
+        <div class="flex flex-wrap items-center justify-between gap-3"><div><h3 class="text-xl font-black text-slate-900">Pindai QR Mahasiswa</h3><p class="mt-1 text-sm text-slate-500">{{ matkul.kelas }} · Modul {{ modul.nomor }}</p></div><button type="button" class="btn-primary gap-2" data-scan-start><i data-lucide="scan-qr-code" class="h-4 w-4"></i>Mulai pindai</button></div>
+        <div class="mt-4 hidden max-w-md overflow-hidden rounded-lg bg-slate-900" id="student-qr-reader" data-scan-reader></div>
+        <p class="mt-3 text-sm text-slate-600" data-scan-status aria-live="polite"></p>
+        <div class="mt-4 hidden border-t border-slate-200 pt-4" data-scan-preview>
+            <div class="flex flex-wrap items-center gap-4"><img class="hidden h-20 w-20 rounded-lg object-cover" data-scan-photo alt="Foto mahasiswa"><div><p class="text-lg font-black text-slate-900" data-scan-name></p><p class="text-sm font-semibold text-slate-600" data-scan-nim></p><p class="text-sm text-slate-500" data-scan-class></p></div></div>
+            <p class="mt-3 text-sm font-semibold text-amber-700">Cocokkan wajah dan identitas mahasiswa sebelum konfirmasi.</p>
+            <div class="mt-4 flex flex-wrap gap-2"><button type="button" class="btn-primary gap-2" data-scan-confirm><i data-lucide="check" class="h-4 w-4"></i>Konfirmasi Hadir</button><button type="button" class="btn-secondary" data-scan-cancel>Batal</button></div>
+        </div>
+        <form hidden data-scan-csrf>{% csrf_token %}</form>
+    </section>
+    {% endif %}
+    <h3 class="text-xl font-black text-slate-900">Rekap Manual & Nilai</h3>
     <form method="post" class="surface-card overflow-hidden">{% csrf_token %}
         <div class="border-b border-slate-200 p-5"><label for="id_tanggal_praktikum">Tanggal praktikum</label><input class="mt-2 max-w-xs" id="id_tanggal_praktikum" name="tanggal_praktikum" type="date" value="{{ tanggal_praktikum }}" required></div>
         <div class="overflow-x-auto"><table class="w-full" data-mobile-card-table><thead><tr><th>NIM</th><th>Nama</th><th>Absensi</th><th>Nilai Realtime</th><th>Nilai Laporan</th><th>Rata-rata</th><th>Catatan</th></tr></thead><tbody>
-            {% for row in rows %}<tr><td class="font-bold">{{ row.peserta.nim }}</td><td>{{ row.peserta.nama }}</td><td>{{ row.form.status_absensi }}{{ row.form.status_absensi.errors }}</td><td>{{ row.form.nilai_realtime }}{{ row.form.nilai_realtime.errors }}</td><td>{{ row.form.nilai_laporan }}{{ row.form.nilai_laporan.errors }}</td><td><span class="inline-flex rounded-full bg-brand-50 px-3 py-1 text-sm font-black text-brand-800">{{ row.rata_rata }}</span></td><td>{{ row.form.catatan }}{{ row.form.catatan.errors }}</td></tr>
+            {% for row in rows %}<tr><td class="font-bold">{{ row.peserta.nim }}</td><td>{{ row.peserta.nama }}</td><td>{{ row.form.status_absensi }}{{ row.form.status_absensi.errors }}{% if row.sumber_absensi == 'qr' %}<span class="mt-1 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">QR</span>{% endif %}</td><td>{{ row.form.nilai_realtime }}{{ row.form.nilai_realtime.errors }}</td><td>{{ row.form.nilai_laporan }}{{ row.form.nilai_laporan.errors }}</td><td><span class="inline-flex rounded-full bg-brand-50 px-3 py-1 text-sm font-black text-brand-800">{{ row.rata_rata }}</span></td><td>{{ row.form.catatan }}{{ row.form.catatan.errors }}</td></tr>
             {% empty %}<tr><td colspan="7" class="py-12 text-center text-slate-500">Belum ada peserta aktif untuk mata kuliah ini.</td></tr>{% endfor %}
         </tbody></table></div>
         <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 p-5"><p class="text-sm text-slate-500">Nilai laporan yang sudah dinilai melalui menu Laporan Praktikum mengikuti penilaian laporan tersebut. Koreksi melalui menu Laporan Praktikum.</p><button class="btn-primary gap-2" type="submit"><i data-lucide="save" class="h-4 w-4"></i>Simpan Semua</button></div>
     </form>
 </section>
+{% endblock %}
+{% block extra_script %}
+{% if is_asisten_lab %}
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const panel = document.querySelector('[data-qr-attendance]');
+    if (!panel) return;
+    const readerElement = panel.querySelector('[data-scan-reader]');
+    const startButton = panel.querySelector('[data-scan-start]');
+    const confirmButton = panel.querySelector('[data-scan-confirm]');
+    const cancelButton = panel.querySelector('[data-scan-cancel]');
+    const preview = panel.querySelector('[data-scan-preview]');
+    const status = panel.querySelector('[data-scan-status]');
+    const photo = panel.querySelector('[data-scan-photo]');
+    const csrf = panel.querySelector('[name=csrfmiddlewaretoken]').value;
+    let scanner = null;
+    let token = '';
+    let busy = false;
+    let scanning = false;
+
+    async function post(url, value) {
+        const body = new URLSearchParams({token: value});
+        const response = await fetch(url, {method: 'POST', body, headers: {'X-CSRFToken': csrf, 'X-Requested-With': 'XMLHttpRequest'}, credentials: 'same-origin'});
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || 'Permintaan gagal.');
+        return payload;
+    }
+
+    async function stopCamera() {
+        if (scanner && scanning) {
+            await scanner.stop();
+            scanning = false;
+        }
+        readerElement.classList.add('hidden');
+    }
+
+    async function onScan(value) {
+        if (busy) return;
+        busy = true;
+        token = value;
+        status.textContent = 'Memeriksa QR...';
+        try {
+            await stopCamera();
+            const data = await post(panel.dataset.previewUrl, value);
+            panel.querySelector('[data-scan-name]').textContent = data.nama;
+            panel.querySelector('[data-scan-nim]').textContent = data.nim;
+            panel.querySelector('[data-scan-class]').textContent = data.matkul + ' · ' + data.modul;
+            photo.classList.toggle('hidden', !data.foto);
+            if (data.foto) photo.src = data.foto;
+            preview.classList.remove('hidden');
+            status.textContent = data.nama_peserta !== data.nama ? 'Nama pada daftar kelas berbeda; periksa identitas dengan saksama.' : 'Identitas ditemukan.';
+        } catch (error) {
+            token = '';
+            status.textContent = error.message;
+            startButton.disabled = false;
+        } finally {
+            busy = false;
+        }
+    }
+
+    startButton.addEventListener('click', async function () {
+        if (busy) return;
+        if (!window.Html5Qrcode) {
+            status.textContent = 'Pemindai belum tersedia. Gunakan absensi manual.';
+            return;
+        }
+        busy = true;
+        token = '';
+        preview.classList.add('hidden');
+        status.textContent = 'Membuka kamera...';
+        readerElement.classList.remove('hidden');
+        try {
+            scanner = scanner || new Html5Qrcode('student-qr-reader', {formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE], verbose: false});
+            await scanner.start({facingMode: 'environment'}, {fps: 10, qrbox: {width: 220, height: 220}}, onScan);
+            scanning = true;
+            startButton.disabled = true;
+            status.textContent = 'Arahkan kamera ke QR mahasiswa.';
+        } catch (error) {
+            readerElement.classList.add('hidden');
+            status.textContent = 'Kamera tidak tersedia. Periksa izin kamera atau gunakan absensi manual.';
+        } finally {
+            busy = false;
+        }
+    });
+
+    confirmButton.addEventListener('click', async function () {
+        if (!token || busy) return;
+        busy = true;
+        confirmButton.disabled = true;
+        status.textContent = 'Menyimpan kehadiran...';
+        try {
+            const data = await post(panel.dataset.confirmUrl, token);
+            status.textContent = data.nama + ' berhasil dicatat hadir.';
+            preview.classList.add('hidden');
+            token = '';
+            startButton.disabled = false;
+            window.setTimeout(function () { window.location.reload(); }, 1200);
+        } catch (error) {
+            status.textContent = error.message;
+            confirmButton.disabled = false;
+            startButton.disabled = false;
+        } finally {
+            busy = false;
+        }
+    });
+    cancelButton.addEventListener('click', function () {
+        token = '';
+        preview.classList.add('hidden');
+        startButton.disabled = false;
+        status.textContent = '';
+    });
+    window.addEventListener('pagehide', function () { stopCamera().catch(function () {}); });
+});
+</script>
+{% endif %}
 {% endblock %}

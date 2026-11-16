@@ -687,6 +687,7 @@ class PesertaPraktikum(models.Model):
 
 
 class HasilPraktikumMahasiswa(models.Model):
+    SUMBER_ABSENSI_CHOICES = [('manual', 'Manual'), ('qr', 'QR mahasiswa')]
     STATUS_CHOICES = [
         ('hadir', 'Hadir'),
         ('izin', 'Izin'),
@@ -709,6 +710,7 @@ class HasilPraktikumMahasiswa(models.Model):
     matkul_label = models.CharField('Mata kuliah', max_length=250, blank=True)
     tanggal_praktikum = models.DateField(default=timezone.localdate)
     status_absensi = models.CharField(max_length=12, choices=STATUS_CHOICES, default='hadir')
+    sumber_absensi = models.CharField(max_length=10, choices=SUMBER_ABSENSI_CHOICES, default='manual')
     nilai = models.DecimalField(
         max_digits=5,
         decimal_places=2,

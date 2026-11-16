@@ -46,6 +46,9 @@ class PeminjamanAlatForm(forms.ModelForm):
         self.fields['paket'].queryset = PaketBarang.objects.filter(aktif=True).prefetch_related('items__inventaris')
         self.fields['barang'].label = 'Detail Barang'
         self.fields['barang'].required = False
+        self.fields['tanggal_kembali'].required = False
+        self.fields['tanggal_kembali'].widget = forms.HiddenInput()
+        self.fields['is_capstone'].widget = forms.HiddenInput()
         if self.instance.pk and self.instance.barang_id:
             self.fields['barang'].required = False
         if self.current_pengguna and self.current_pengguna.role in BORROWER_ROLES:
@@ -79,11 +82,9 @@ class PeminjamanAlatForm(forms.ModelForm):
         status = cleaned_data.get('status')
         tanggal_pinjam = cleaned_data.get('tanggal_pinjam')
         tanggal_kembali = cleaned_data.get('tanggal_kembali')
-        if cleaned_data.get('is_capstone'):
-            cleaned_data['tanggal_kembali'] = None
-            tanggal_kembali = None
-        elif not tanggal_kembali:
-            self.add_error('tanggal_kembali', 'Tanggal kembali wajib untuk peminjaman non-capstone.')
+        cleaned_data['tanggal_kembali'] = None
+        cleaned_data['is_capstone'] = False
+        tanggal_kembali = None
         if paket:
             cleaned_data['selected_barang_ids'] = ''
 
@@ -92,31 +93,12 @@ class PeminjamanAlatForm(forms.ModelForm):
             return cleaned_data
 
         nim = cleaned_data.get('nim', '')
-        if tanggal_pinjam and tanggal_kembali and tanggal_kembali >= tanggal_pinjam:
+        if tanggal_pinjam:
             credit_profile = get_credit_profile(nim) if nim else None
             if credit_profile and not credit_profile.can_submit and not self.instance.pk:
-                if credit_profile.blocked_for_low_score:
-                    self.add_error(
-                        'tanggal_kembali',
-                        'Skor kredit di bawah 40. Buat konten edukasi sesuai arahan Laboran, lalu hubungi Laboran untuk verifikasi dan pemulihan skor.',
-                    )
-                else:
-                    self.add_error(
-                        'tanggal_kembali',
-                        'Masih ada peminjaman terlambat. Kembalikan barang tersebut sebelum mengajukan lagi.',
-                    )
-            max_days = credit_profile.max_loan_days if credit_profile else 7
-            requested_days = (tanggal_kembali - tanggal_pinjam).days
-            if requested_days > max_days:
-                self.add_error(
-                    'tanggal_kembali',
-                    f'Masa peminjaman maksimal {max_days} hari berdasarkan skor kredit peminjam.',
+                raise forms.ValidationError(
+                    'Skor kredit di bawah 40. Hubungi Laboran untuk verifikasi dan pemulihan skor.'
                 )
-            else:
-                adjusted_date = adjust_return_date(tanggal_kembali)
-                if adjusted_date != tanggal_kembali:
-                    self.return_date_adjusted_from = tanggal_kembali
-                    cleaned_data['tanggal_kembali'] = adjusted_date
 
         if self.instance.pk and not barang and not selected_barang_ids:
             self.add_error('barang', 'Pilih detail barang.')
@@ -138,7 +120,6 @@ class PeminjamanAlatForm(forms.ModelForm):
 
 
 class PengajuanPerpanjanganForm(forms.ModelForm):
-    MAX_EXTENSION_DAYS = 7
 
     class Meta:
         model = PengajuanPerpanjangan
@@ -184,7 +165,6 @@ class PengajuanPerpanjanganForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['tanggal_kembali_diminta'].widget.attrs.update({
             'min': (transaksi.tanggal_kembali + timedelta(days=1)).isoformat(),
-            'max': (transaksi.tanggal_kembali + timedelta(days=self.MAX_EXTENSION_DAYS)).isoformat(),
         })
         self.fields['pernyataan_jujur'].required = True
 
@@ -200,12 +180,6 @@ class PengajuanPerpanjanganForm(forms.ModelForm):
         if requested_date <= current_date:
             raise forms.ValidationError('Tanggal baru harus setelah tanggal kembali saat ini.')
 
-        extension_days = (requested_date - current_date).days
-        max_days = self.MAX_EXTENSION_DAYS
-        if extension_days > max_days:
-            raise forms.ValidationError(
-                f'Setiap perpanjangan maksimal {max_days} hari dari tanggal kembali saat ini.'
-            )
         return adjust_return_date(requested_date)
 
     def clean(self):

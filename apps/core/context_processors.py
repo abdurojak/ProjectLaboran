@@ -88,6 +88,11 @@ SIDEBAR_LINKS = [
         'roles': {MAHASISWA_ROLE},
     },
     {
+        'title': 'QR Absensi Saya', 'icon': 'qr-code',
+        'url': 'asleb:qr_mahasiswa', 'namespace': 'asleb',
+        'url_names': {'qr_mahasiswa'}, 'roles': {MAHASISWA_ROLE},
+    },
+    {
         'title': 'Asisten Laboratorium',
         'icon': 'users-round',
         'namespace': 'asisten_laboratorium',
@@ -122,6 +127,7 @@ SIDEBAR_LINKS = [
                     'praktikum_peserta_update', 'praktikum_peserta_bulk_delete',
                     'praktikum_peserta_delete', 'praktikum_peserta_delete_all',
                     'praktikum_nilai', 'praktikum_nilai_export',
+                    'praktikum_qr_preview', 'praktikum_qr_confirm',
                 },
                 'roles': {LABORAN_ROLE, ASISTEN_LAB_ROLE},
             },

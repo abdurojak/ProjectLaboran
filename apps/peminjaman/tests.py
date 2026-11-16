@@ -1,5 +1,5 @@
 from datetime import date, time, timedelta
-from dataclasses import replace
+from unittest.mock import patch
 
 from django.core import mail
 from django.core.management import call_command
@@ -38,12 +38,12 @@ class PeminjamanViewsTests(TestCase):
         })
         self.assertEqual(response.status_code, 302, response.context['form'].errors if response.status_code == 200 else '')
         loan = PeminjamanAlat.objects.get(nim='CAP001')
-        self.assertTrue(loan.is_capstone)
-        self.assertTrue(loan.transaksi.is_capstone)
+        self.assertFalse(loan.is_capstone)
+        self.assertFalse(loan.transaksi.is_capstone)
         self.assertIsNone(loan.tanggal_kembali)
         self.assertFalse(get_credit_profile('CAP001').has_active_overdue)
         detail = self.client.get(reverse('peminjaman:peminjaman_detail', args=[loan.pk]))
-        self.assertContains(detail, 'Tanpa batas waktu (Capstone)')
+        self.assertContains(detail, 'Tanpa batas waktu')
         call_command('send_peminjaman_reminders')
         self.assertFalse(PengingatPeminjaman.objects.filter(transaksi=loan.transaksi).exists())
 
@@ -126,7 +126,7 @@ class PeminjamanViewsTests(TestCase):
     def test_list_page_hover_tabel_ditangani_dark_mode_global(self):
         response = self.client.get(reverse('peminjaman:peminjaman_list'))
 
-        self.assertContains(response, 'peminjaman-row')
+        self.assertContains(response, 'hover:bg-slate-50/70')
 
     def test_list_page_highlight_peminjaman_terlambat(self):
         self.peminjaman.tanggal_kembali = date(2026, 1, 1)
@@ -136,11 +136,8 @@ class PeminjamanViewsTests(TestCase):
         response = self.client.get(reverse('peminjaman:peminjaman_list'))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'peminjaman-row-overdue')
-        self.assertContains(response, 'Terlambat')
-        self.assertContains(response, 'html[data-theme="dark"] .peminjaman-row-overdue td')
-        self.assertContains(response, 'html[data-theme="dark"] .peminjaman-overdue-badge')
-        self.assertContains(response, 'rgba(244, 63, 94, 0.08)')
+        self.assertNotContains(response, 'Ada peminjaman yang terlambat dikembalikan.')
+        self.assertContains(response, 'Tanpa batas waktu')
 
     def test_filter_peminjaman_otomatis_responsif_tanpa_tombol_filter(self):
         response = self.client.get(reverse('peminjaman:peminjaman_list'))
@@ -1051,7 +1048,7 @@ class PeminjamanMahasiswaTests(TestCase):
         self.assertContains(edit_page, f'data-selected-barang-id="{self.barang.pk}"')
         self.assertContains(edit_page, f'data-selected-barang-id="{barang_kedua.pk}"')
         self.assertContains(edit_page, 'value="2026-06-21"')
-        self.assertContains(edit_page, 'value="2026-06-22"')
+        self.assertNotContains(edit_page, 'name="tanggal_kembali"')
 
         response = self.client.post(reverse('peminjaman:peminjaman_update', args=[peminjaman.pk]), {
             'barang': str(barang_kedua.pk),
@@ -1681,12 +1678,11 @@ class PeminjamanPolicyTests(TestCase):
         )
         return transaksi, loan
 
-    def test_pengajuan_awal_maksimal_tujuh_hari(self):
+    def test_pengajuan_awal_tanpa_batas_durasi(self):
         response = self.submit_loan(date(2026, 10, 1), date(2026, 10, 9))
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Masa peminjaman maksimal 7 hari')
-        self.assertFalse(PeminjamanAlat.objects.filter(nim=self.mahasiswa.nim_nik).exists())
+        self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
+        self.assertTrue(PeminjamanAlat.objects.filter(nim=self.mahasiswa.nim_nik).exists())
 
     def test_tanggal_libur_dan_minggu_diundur_sampai_hari_operasional(self):
         KegiatanKalender.objects.create(
@@ -1700,10 +1696,10 @@ class PeminjamanPolicyTests(TestCase):
 
         self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
         transaksi = PeminjamanTransaksi.objects.get(nim=self.mahasiswa.nim_nik)
-        self.assertEqual(transaksi.tanggal_kembali, date(2026, 10, 5))
-        self.assertEqual(transaksi.detail.get().tanggal_kembali, date(2026, 10, 5))
+        self.assertIsNone(transaksi.tanggal_kembali)
+        self.assertIsNone(transaksi.detail.get().tanggal_kembali)
 
-    def test_riwayat_terlambat_membatasi_pengajuan_berikutnya_satu_hari(self):
+    def test_riwayat_terlambat_tidak_membatasi_durasi_berikutnya(self):
         transaksi_lama = PeminjamanTransaksi.objects.create(
             nama_peminjam=self.mahasiswa.nama_pengguna,
             nim=self.mahasiswa.nim_nik,
@@ -1726,11 +1722,10 @@ class PeminjamanPolicyTests(TestCase):
 
         response = self.submit_loan(date(2026, 10, 1), date(2026, 10, 3))
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Masa peminjaman maksimal 1 hari')
+        self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
         profile = get_credit_profile(self.mahasiswa.nim_nik, today=date(2026, 10, 1))
-        self.assertEqual(profile.max_loan_days, 1)
-        self.assertTrue(profile.has_late_history)
+        self.assertFalse(profile.has_late_history)
+        self.assertEqual(profile.score, 100)
 
     def test_skor_kredit_pulih_sepuluh_poin_setiap_pengembalian_tepat_waktu_berikutnya(self):
         late = PeminjamanTransaksi.objects.create(
@@ -1772,9 +1767,8 @@ class PeminjamanPolicyTests(TestCase):
 
         profile = get_credit_profile(self.mahasiswa.nim_nik, today=date(2026, 4, 1))
 
-        self.assertEqual(profile.score, 89)
-        self.assertEqual(profile.recovery_points, 20)
-        self.assertEqual(profile.max_loan_days, 7)
+        self.assertEqual(profile.score, 100)
+        self.assertEqual(profile.recovery_points, 0)
 
     def test_perpanjangan_disetujui_tidak_mengurangi_skor_selama_kembali_tepat_waktu(self):
         transaksi, loan = self.create_active_transaction()
@@ -1802,9 +1796,8 @@ class PeminjamanPolicyTests(TestCase):
 
         response = self.submit_loan(date(2026, 10, 1), date(2026, 10, 2))
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Masih ada peminjaman terlambat')
-        self.assertEqual(PeminjamanAlat.objects.filter(nim=self.mahasiswa.nim_nik).count(), 1)
+        self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
+        self.assertEqual(PeminjamanAlat.objects.filter(nim=self.mahasiswa.nim_nik).count(), 2)
 
     def test_skor_di_bawah_empat_puluh_memblokir_peminjaman(self):
         PenyesuaianSkorKredit.objects.create(
@@ -1871,254 +1864,48 @@ class PeminjamanPolicyTests(TestCase):
         self.assertEqual(PenyesuaianSkorKredit.objects.filter(pengguna=self.mahasiswa).count(), 1)
         self.assertEqual(get_credit_profile(self.mahasiswa.nim_nik).score, 30)
 
-    def test_asisten_lab_tidak_dapat_meninjau_pengajuan_perpanjangan(self):
+    def test_perpanjangan_tidak_bisa_diajukan_lagi(self):
         transaksi, loan = self.create_active_transaction()
         response = self.client.post(
             reverse('peminjaman:peminjaman_extension_request', args=[loan.pk]),
-            {
-                'tanggal_kembali_diminta': '2026-10-07',
-                'alasan': 'Peralatan masih dipakai untuk praktikum.',
-                'kondisi_barang': 'baik',
-                'keterangan_kondisi': '',
-                'pernyataan_jujur': 'on',
-            },
+            {'tanggal_kembali_diminta': '2026-10-10'},
         )
-        extension = PengajuanPerpanjangan.objects.get(transaksi=transaksi)
-        self.assertRedirects(response, reverse('peminjaman:peminjaman_detail', args=[loan.pk]))
-        self.assertEqual(extension.status, 'diajukan')
-        self.assertEqual(extension.kondisi_barang, 'baik')
-        self.assertTrue(extension.pernyataan_jujur)
-
-        self.login(self.asisten)
-        list_response = self.client.get(reverse('peminjaman:peminjaman_list'))
-        detail_response = self.client.get(reverse('peminjaman:peminjaman_detail', args=[loan.pk]))
-        self.assertNotContains(list_response, 'Pengajuan Perpanjangan')
-        self.assertNotContains(detail_response, 'data-extension-review-action="approve"')
-        response = self.client.post(
-            reverse('peminjaman:peminjaman_extension_review', args=[extension.pk]),
-            {'action': 'approve', 'catatan_peninjau': 'Disetujui untuk penyelesaian praktikum.'},
-            follow=True,
-        )
-
-        self.assertContains(response, 'Hanya Laboran yang dapat meninjau perpanjangan')
-        extension.refresh_from_db()
-        transaksi.refresh_from_db()
-        loan.refresh_from_db()
-        self.assertEqual(extension.status, 'diajukan')
-        self.assertEqual(transaksi.tanggal_kembali, date(2026, 10, 5))
-        self.assertEqual(loan.tanggal_kembali, date(2026, 10, 5))
-        self.assertIsNone(extension.ditinjau_oleh)
-        self.assertEqual(mail.outbox[0].to, [self.laboran.email])
-
-    def test_laboran_melihat_dan_menyetujui_pengajuan_perpanjangan(self):
-        transaksi, loan = self.create_active_transaction()
-        extension = PengajuanPerpanjangan.objects.create(
-            transaksi=transaksi,
-            diajukan_oleh=self.mahasiswa,
-            tanggal_kembali_sebelumnya=transaksi.tanggal_kembali,
-            tanggal_kembali_diminta=date(2026, 10, 10),
-            alasan='Peralatan masih diperlukan untuk menyelesaikan pengujian.',
-            kondisi_barang='baik',
-            pernyataan_jujur=True,
-        )
-        self.login(self.laboran)
-
-        list_response = self.client.get(reverse('peminjaman:peminjaman_list'))
-        detail_response = self.client.get(reverse('peminjaman:peminjaman_detail', args=[loan.pk]))
-
-        self.assertContains(list_response, 'Pengajuan Perpanjangan')
-        self.assertContains(list_response, transaksi.kode_pinjam)
-        self.assertContains(detail_response, 'data-extension-review-action="approve"')
-
-        response = self.client.post(
-            reverse('peminjaman:peminjaman_extension_review', args=[extension.pk]),
-            {'action': 'approve', 'catatan_peninjau': 'Disetujui oleh Laboran.'},
-        )
-
         self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
-        extension.refresh_from_db()
-        transaksi.refresh_from_db()
-        loan.refresh_from_db()
-        self.assertEqual(extension.status, 'disetujui')
-        self.assertEqual(extension.ditinjau_oleh, self.laboran)
-        self.assertEqual(transaksi.tanggal_kembali, date(2026, 10, 10))
-        self.assertEqual(loan.tanggal_kembali, date(2026, 10, 10))
-
-    def test_perpanjangan_selalu_maksimal_tujuh_hari_meski_skor_kredit_membatasi_peminjaman_awal(self):
-        transaksi, loan = self.create_active_transaction()
-        profile = replace(get_credit_profile(self.mahasiswa.nim_nik), max_loan_days=1)
-        form = PengajuanPerpanjanganForm(
-            transaksi=transaksi,
-            credit_profile=profile,
-        )
-
-        self.assertEqual(
-            form.fields['tanggal_kembali_diminta'].widget.attrs['max'],
-            (transaksi.tanggal_kembali + timedelta(days=7)).isoformat(),
-        )
-
-    def test_perpanjangan_dapat_diajukan_berulang_setelah_disetujui(self):
-        transaksi, loan = self.create_active_transaction()
-        first_due = transaksi.tanggal_kembali
-        payload = {
-            'tanggal_kembali_diminta': (first_due + timedelta(days=7)).isoformat(),
-            'alasan': 'Peralatan masih diperlukan untuk menyelesaikan pengujian.',
-            'kondisi_barang': 'baik',
-            'keterangan_kondisi': '',
-            'pernyataan_jujur': 'on',
-        }
-        self.client.post(reverse('peminjaman:peminjaman_extension_request', args=[loan.pk]), payload)
-        first = PengajuanPerpanjangan.objects.get(transaksi=transaksi)
-        self.login(self.laboran)
-        self.client.post(
-            reverse('peminjaman:peminjaman_extension_review', args=[first.pk]),
-            {'action': 'approve'},
-        )
-
-        transaksi.refresh_from_db()
-        loan.refresh_from_db()
-        self.login(self.mahasiswa)
-        second_due = transaksi.tanggal_kembali + timedelta(days=7)
-        response = self.client.post(
-            reverse('peminjaman:peminjaman_extension_request', args=[loan.pk]),
-            {**payload, 'tanggal_kembali_diminta': second_due.isoformat()},
-        )
-
-        self.assertRedirects(response, reverse('peminjaman:peminjaman_detail', args=[loan.pk]))
-        self.assertEqual(
-            PengajuanPerpanjangan.objects.filter(transaksi=transaksi, status='diajukan').count(),
-            1,
-        )
-        self.assertEqual(
-            PengajuanPerpanjangan.objects.filter(transaksi=transaksi).count(),
-            2,
-        )
-
-    def test_asisten_lab_tidak_boleh_menyetujui_perpanjangan_sendiri(self):
-        self.mahasiswa.role = 'asisten_lab'
-        self.mahasiswa.save(update_fields=['role'])
-        transaksi, loan = self.create_active_transaction()
-        extension = PengajuanPerpanjangan.objects.create(
-            transaksi=transaksi,
-            diajukan_oleh=self.mahasiswa,
-            tanggal_kembali_sebelumnya=transaksi.tanggal_kembali,
-            tanggal_kembali_diminta=date(2026, 10, 6),
-            alasan='Peralatan masih diperlukan untuk penyelesaian modul.',
-        )
-
-        response = self.client.post(
-            reverse('peminjaman:peminjaman_extension_review', args=[extension.pk]),
-            {'action': 'approve'},
-            follow=True,
-        )
-
-        extension.refresh_from_db()
-        self.assertEqual(extension.status, 'diajukan')
-        self.assertContains(response, 'Hanya Laboran yang dapat meninjau perpanjangan')
-
-    def test_mahasiswa_tidak_boleh_meninjau_perpanjangan(self):
-        transaksi, loan = self.create_active_transaction()
-        extension = PengajuanPerpanjangan.objects.create(
-            transaksi=transaksi,
-            diajukan_oleh=self.mahasiswa,
-            tanggal_kembali_sebelumnya=transaksi.tanggal_kembali,
-            tanggal_kembali_diminta=date(2026, 10, 6),
-            alasan='Peralatan masih diperlukan untuk penyelesaian modul.',
-        )
-
-        response = self.client.post(
-            reverse('peminjaman:peminjaman_extension_review', args=[extension.pk]),
-            {'action': 'approve'},
-        )
-
-        extension.refresh_from_db()
-        self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
-        self.assertEqual(extension.status, 'diajukan')
-
-    def test_pengajuan_perpanjangan_pending_tidak_bisa_diduplikasi(self):
-        transaksi, loan = self.create_active_transaction()
-        payload = {
-            'tanggal_kembali_diminta': '2026-10-06',
-            'alasan': 'Peralatan masih diperlukan untuk penyelesaian modul.',
-            'kondisi_barang': 'baik',
-            'keterangan_kondisi': '',
-            'pernyataan_jujur': 'on',
-        }
-
-        self.client.post(reverse('peminjaman:peminjaman_extension_request', args=[loan.pk]), payload)
-        self.client.post(reverse('peminjaman:peminjaman_extension_request', args=[loan.pk]), payload)
-
-        self.assertEqual(
-            PengajuanPerpanjangan.objects.filter(transaksi=transaksi, status='diajukan').count(),
-            1,
-        )
-
-    def test_pengajuan_perpanjangan_wajib_menyetujui_pernyataan_kejujuran(self):
-        transaksi, loan = self.create_active_transaction()
-
-        response = self.client.post(
-            reverse('peminjaman:peminjaman_extension_request', args=[loan.pk]),
-            {
-                'tanggal_kembali_diminta': '2026-10-06',
-                'alasan': 'Peralatan masih diperlukan untuk penyelesaian modul.',
-                'kondisi_barang': 'baik',
-            },
-            follow=True,
-        )
-
-        self.assertContains(response, 'Pernyataan kejujuran wajib disetujui')
         self.assertFalse(PengajuanPerpanjangan.objects.filter(transaksi=transaksi).exists())
 
-    def test_barang_tidak_baik_wajib_memiliki_keterangan_kondisi(self):
+    def test_laboran_menentukan_potongan_skor_saat_barang_rusak(self):
         transaksi, loan = self.create_active_transaction()
+        self.login(self.laboran)
+        endpoint = reverse('peminjaman:peminjaman_detail_status_update', args=[loan.pk])
 
+        invalid = self.client.post(endpoint, {
+            'detail_ids': [str(loan.pk)], 'status': 'rusak',
+        })
+        self.assertRedirects(invalid, reverse('peminjaman:peminjaman_detail', args=[loan.pk]))
+        loan.refresh_from_db()
+        self.assertEqual(loan.status, 'dipinjam')
+
+        with patch('apps.peminjaman.views.send_peminjaman_status_notification'):
+            response = self.client.post(endpoint, {
+                'detail_ids': [str(loan.pk)], 'status': 'rusak', 'potongan_skor': '17',
+            })
+        self.assertRedirects(response, reverse('peminjaman:peminjaman_detail', args=[loan.pk]))
+        loan.refresh_from_db()
+        self.assertEqual(loan.potongan_skor, 17)
+        self.assertEqual(loan.potongan_skor_oleh, self.laboran)
+        self.assertEqual(get_credit_profile(self.mahasiswa.nim_nik, today=date(2026, 10, 2)).score, 83)
+
+    def test_perpanjangan_manual_dan_tinjauan_dinonaktifkan(self):
+        transaksi, loan = self.create_active_transaction()
+        self.login(self.laboran)
         response = self.client.post(
-            reverse('peminjaman:peminjaman_extension_request', args=[loan.pk]),
-            {
-                'tanggal_kembali_diminta': '2026-10-06',
-                'alasan': 'Peralatan masih diperlukan untuk penyelesaian modul.',
-                'kondisi_barang': 'tidak_baik',
-                'keterangan_kondisi': 'lecet',
-                'pernyataan_jujur': 'on',
-            },
-            follow=True,
+            reverse('peminjaman:peminjaman_extension_manual', args=[loan.pk]), {}
         )
-
-        self.assertContains(response, 'Jelaskan masalah atau kerusakan barang minimal 10 karakter')
+        self.assertRedirects(response, reverse('peminjaman:peminjaman_list'))
         self.assertFalse(PengajuanPerpanjangan.objects.filter(transaksi=transaksi).exists())
 
-    def test_kondisi_barang_perpanjangan_terlihat_oleh_laboran_dan_dikirim_via_email(self):
-        transaksi, loan = self.create_active_transaction()
-        response = self.client.post(
-            reverse('peminjaman:peminjaman_extension_request', args=[loan.pk]),
-            {
-                'tanggal_kembali_diminta': '2026-10-06',
-                'alasan': 'Peralatan masih diperlukan untuk penyelesaian modul.',
-                'kondisi_barang': 'tidak_baik',
-                'keterangan_kondisi': 'Terdapat lecet kecil pada bagian samping alat.',
-                'pernyataan_jujur': 'on',
-            },
-        )
-
-        self.assertRedirects(response, reverse('peminjaman:peminjaman_detail', args=[loan.pk]))
-        extension = PengajuanPerpanjangan.objects.get(transaksi=transaksi)
-        self.assertEqual(extension.kondisi_barang, 'tidak_baik')
-        self.assertTrue(extension.pernyataan_jujur)
-        self.assertIn('Tidak baik / ada masalah', mail.outbox[0].body)
-        self.assertIn('Terdapat lecet kecil', mail.outbox[0].body)
-
-        self.login(self.laboran)
-        detail_response = self.client.get(reverse('peminjaman:peminjaman_detail', args=[loan.pk]))
-        self.assertContains(detail_response, 'Kondisi barang: Tidak baik / ada masalah')
-        self.assertContains(detail_response, 'Pernyataan kejujuran telah disetujui')
-
-    def test_email_pengingat_memuat_perpanjangan_dan_tidak_duplikat(self):
-        today = timezone.localdate()
-        self.create_active_transaction(due=today + timedelta(days=1))
-
+    def test_tidak_ada_email_pengingat_jatuh_tempo(self):
+        self.create_active_transaction(due=timezone.localdate() + timedelta(days=1))
         call_command('send_peminjaman_reminders')
-        call_command('send_peminjaman_reminders')
-
-        self.assertEqual(PengingatPeminjaman.objects.count(), 1)
-        self.assertEqual(len(mail.outbox), 1)
-        self.assertIn('ajukan perpanjangan', mail.outbox[0].body.lower())
+        self.assertFalse(PengingatPeminjaman.objects.exists())
+        self.assertEqual(len(mail.outbox), 0)

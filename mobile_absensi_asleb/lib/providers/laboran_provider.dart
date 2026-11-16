@@ -38,6 +38,7 @@ class LaboranProvider extends ChangeNotifier {
 
   Future<bool> createInventory({
     required String name,
+    required String category,
     required int quantity,
     required int locationId,
     required String description,
@@ -49,6 +50,7 @@ class LaboranProvider extends ChangeNotifier {
     try {
       final item = await api.createLaboranInventory(
         name: name,
+        category: category,
         quantity: quantity,
         locationId: locationId,
         description: description,
@@ -72,6 +74,7 @@ class LaboranProvider extends ChangeNotifier {
   Future<InventoryItem?> updateInventory({
     required int id,
     required String name,
+    required String category,
     required int quantity,
     required int locationId,
     required String description,
@@ -83,6 +86,7 @@ class LaboranProvider extends ChangeNotifier {
       final updated = await api.updateLaboranInventory(
         id: id,
         name: name,
+        category: category,
         quantity: quantity,
         locationId: locationId,
         description: description,
@@ -119,12 +123,12 @@ class LaboranProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> updateLoanStatus(LoanItem loan, String status) async {
+  Future<bool> updateLoanStatus(LoanItem loan, String status, {int? penalty}) async {
     submitting = true;
     error = null;
     notifyListeners();
     try {
-      final updated = await api.updateLaboranLoanStatus(loan.id, status);
+      final updated = await api.updateLaboranLoanStatus(loan.id, status, penalty: penalty);
       loans = loans
           .map((item) => item.id == updated.id ? updated : item)
           .toList();

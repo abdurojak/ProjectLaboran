@@ -14,6 +14,7 @@ from .forms import (
     BarangForm,
     InventarisBarangCreateForm,
     InventarisBarangUpdateForm,
+    LokasiForm,
     PaketBarangForm,
     PaketBarangItemFormSet,
 )
@@ -45,7 +46,7 @@ class BarangListView(LaboranInventarisRequiredMixin, ListView):
     context_object_name = 'barang_list'
 
     def get_queryset(self):
-        queryset = super().get_queryset().annotate(
+        queryset = super().get_queryset().prefetch_related('detail_barang__lokasi').annotate(
             jumlah_dipinjam_aktif=Coalesce(
                 Count(
                     'detail_barang__peminjaman',
@@ -55,19 +56,36 @@ class BarangListView(LaboranInventarisRequiredMixin, ListView):
             ),
         )
         search = self.request.GET.get('q', '').strip()
+        kategori = self.request.GET.get('kategori', '').strip()
+        if kategori in dict(InventarisBarang.KATEGORI_CHOICES):
+            queryset = queryset.filter(kategori=kategori)
 
         if search:
             queryset = queryset.filter(
                 Q(nama__icontains=search) |
                 Q(kode_inventaris__icontains=search) |
-                Q(keterangan__icontains=search)
+                Q(keterangan__icontains=search) |
+                Q(detail_barang__lokasi__nama_lokasi__icontains=search)
             )
 
-        return queryset
+        return queryset.distinct()
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['search_query'] = self.request.GET.get('q', '').strip()
+        context['selected_kategori'] = self.request.GET.get('kategori', '').strip()
+        populated = set(InventarisBarang.objects.values_list('kategori', flat=True).distinct())
+        context['kategori_choices'] = [
+            choice for choice in InventarisBarang.KATEGORI_CHOICES if choice[0] in populated
+        ]
+        barang_list = list(context['barang_list'])
+        for barang in barang_list:
+            lokasi = {unit.lokasi.nama_lokasi for unit in barang.detail_barang.all() if unit.lokasi}
+            barang.search_text = ' '.join((
+                barang.nama, barang.kode_inventaris, barang.keterangan,
+                barang.get_kategori_display(), *sorted(lokasi),
+            ))
+        context['barang_list'] = barang_list
         return context
 
 
@@ -372,14 +390,14 @@ class LokasiDetailView(LaboranInventarisRequiredMixin, DetailView):
 class LokasiCreateView(LaboranInventarisRequiredMixin, CreateView):
     model = Lokasi
     template_name = 'inventaris/lokasi_form.html'
-    fields = ['nama_lokasi', 'ukuran_lokasi']
+    form_class = LokasiForm
     success_url = reverse_lazy('inventaris:lokasi_list')
 
 
 class LokasiUpdateView(LaboranInventarisRequiredMixin, UpdateView):
     model = Lokasi
     template_name = 'inventaris/lokasi_form.html'
-    fields = ['nama_lokasi', 'ukuran_lokasi']
+    form_class = LokasiForm
     success_url = reverse_lazy('inventaris:lokasi_list')
 
 

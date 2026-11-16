@@ -3,6 +3,8 @@ from django.urls import path
 from .views import (
     AttendanceHistoryView,
     AppVersionView,
+    AslabQrModulesView,
+    AslabQrScanView,
     AslebAdminChatView,
     ChatbotView,
     CheckInView,
@@ -23,6 +25,7 @@ from .views import (
     RefreshTokenView,
     ScheduleDetailView,
     ScheduleListView,
+    StudentQrView,
 )
 
 app_name = 'mobile_api'
@@ -35,6 +38,9 @@ urlpatterns = [
     path('media/<path:path>/', MobileMediaView.as_view(), name='media'),
     path('profile/', ProfileView.as_view(), name='profile'),
     path('mahasiswa/loans/', MahasiswaLoanListView.as_view(), name='mahasiswa_loans'),
+    path('mahasiswa/qr/', StudentQrView.as_view(), name='mahasiswa_qr'),
+    path('aslab/qr/modules/', AslabQrModulesView.as_view(), name='aslab_qr_modules'),
+    path('aslab/qr/<int:matkul_pk>/<int:modul_pk>/<str:action>/', AslabQrScanView.as_view(), name='aslab_qr_scan'),
     path('dashboard/', DashboardView.as_view(), name='dashboard'),
     path('schedules/', ScheduleListView.as_view(), name='schedule_list'),
     path('schedules/<int:pk>/', ScheduleDetailView.as_view(), name='schedule_detail'),

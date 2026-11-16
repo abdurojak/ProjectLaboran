@@ -456,12 +456,17 @@ class MobileAbsensiApiTests(TestCase):
         self.assertEqual(response.data['summary']['total_unit'], 5)
 
     def test_laboran_dapat_membuat_inventaris_dengan_beberapa_foto(self):
-        location = Lokasi.objects.create(nama_lokasi='Lemari Mobile')
+        location = Lokasi.objects.create(
+            nama_lokasi='Lemari Mobile',
+            petunjuk_penyimpanan='Rak kedua, sisi kiri',
+            foto=valid_photo('lokasi.jpg'),
+        )
         self.authenticate_laboran()
         response = self.client.post(
             reverse('mobile_api:laboran_inventory'),
             {
                 'nama': 'Kamera Praktikum',
+                'kategori': 'audio_visual',
                 'jumlah': 2,
                 'lokasi_id': location.pk,
                 'keterangan': 'Perangkat dokumentasi praktikum.',
@@ -473,8 +478,27 @@ class MobileAbsensiApiTests(TestCase):
         self.assertEqual(response.status_code, 201, response.data)
         inventory = InventarisBarang.objects.get(nama='Kamera Praktikum')
         self.assertEqual(inventory.detail_barang.count(), 2)
+        self.assertEqual(response.data['kategori'], 'audio_visual')
+        self.assertEqual(response.data['lokasi'][0]['petunjuk'], 'Rak kedua, sisi kiri')
+        self.assertTrue(response.data['lokasi'][0]['foto_url'])
         self.assertEqual(FotoInventarisBarang.objects.filter(inventaris=inventory).count(), 2)
         self.assertEqual(len(response.data['foto_urls']), 3)
+        media_response = self.client.get(response.data['foto_url'])
+        self.assertEqual(media_response.status_code, 200)
+        listing = self.client.get(reverse('mobile_api:laboran_inventory'))
+        listed_item = next(item for item in listing.data['results'] if item['id'] == inventory.pk)
+        self.assertEqual(listed_item['foto_urls'], response.data['foto_urls'])
+
+    def test_inventaris_mobile_tanpa_foto_sampul_ditolak(self):
+        location = Lokasi.objects.create(nama_lokasi='Rak Foto Wajib')
+        self.authenticate_laboran()
+        response = self.client.post(
+            reverse('mobile_api:laboran_inventory'),
+            {'nama': 'Barang Tanpa Foto', 'jumlah': 1, 'lokasi_id': location.pk},
+            format='multipart',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(InventarisBarang.objects.filter(nama='Barang Tanpa Foto').exists())
 
     def test_upload_gambar_palsu_ditolak_backend(self):
         location = Lokasi.objects.create(nama_lokasi='Lemari Aman')
@@ -669,6 +693,24 @@ class MobileAbsensiApiTests(TestCase):
         )
         self.assertEqual(invalid.status_code, 400)
 
+        missing_penalty = self.client.post(
+            reverse('mobile_api:laboran_loan_status', args=[loan.pk]),
+            {'status': 'rusak'}, format='json',
+        )
+        self.assertEqual(missing_penalty.status_code, 400)
+        loan.refresh_from_db()
+        self.assertEqual(loan.status, 'dipinjam')
+
+        with patch('apps.mobile_api.views.send_peminjaman_status_notification'):
+            incident = self.client.post(
+                reverse('mobile_api:laboran_loan_status', args=[loan.pk]),
+                {'status': 'rusak', 'potongan_skor': 17}, format='json',
+            )
+        self.assertEqual(incident.status_code, 200, incident.data)
+        loan.refresh_from_db()
+        self.assertEqual(loan.potongan_skor, 17)
+        self.assertEqual(loan.potongan_skor_oleh, self.laboran)
+
     def test_daftar_jadwal_hanya_milik_asleb_login(self):
         other_room = RuanganLab.objects.create(kode='LAB-OTHER', nama='Lab Other', kapasitas=20)
         JadwalPraktikum.objects.create(
@@ -742,6 +784,24 @@ class MobileAbsensiApiTests(TestCase):
         )
 
     @patch('apps.mobile_api.views.validate_schedule_time', return_value=(True, '', 'sudah_absen'))
+    def test_absensi_mobile_modul_berbeda_di_jadwal_hari_sama_ditolak(self, _mock_time):
+        self.authenticate()
+        first = self.client.post(
+            reverse('mobile_api:check_in'), self.check_in_payload(), format='multipart',
+        )
+        self.assertEqual(first.status_code, 201, first.data)
+        second = self.client.post(
+            reverse('mobile_api:check_in'),
+            self.check_in_payload(modul_praktikum_id=self.second_module.pk),
+            format='multipart',
+        )
+        self.assertEqual(second.status_code, 400, second.data)
+        self.assertEqual(second.data['code'], 'duplicate_attendance')
+        self.assertEqual(AbsensiMasukAsleb.objects.filter(asleb=self.asleb, jadwal=self.schedule).count(), 1)
+        honor = HonorAsleb.objects.get(asleb=self.asleb, bulan=timezone.localdate().replace(day=1))
+        self.assertEqual(honor.total_pertemuan, 1)
+
+    @patch('apps.mobile_api.views.validate_schedule_time', return_value=(True, '', 'sudah_absen'))
     def test_absensi_web_dan_mobile_jadwal_yang_sama_tidak_menggandakan_honor(self, _mock_time):
         module = ModulPraktikum.objects.create(
             matkul=self.matkul,
@@ -800,9 +860,10 @@ class MobileAbsensiApiTests(TestCase):
         self.assertTrue(detail.data['can_check_in'])
         self.assertIn('susulan resmi', detail.data['check_in_message'])
 
-        response = self.client.post(
-            reverse('mobile_api:check_in'), self.check_in_payload(), format='multipart'
-        )
+        with patch('apps.mobile_api.views.get_missing_attendance_dates', return_value=[attendance_date]):
+            response = self.client.post(
+                reverse('mobile_api:check_in'), self.check_in_payload(), format='multipart'
+            )
 
         self.assertEqual(response.status_code, 201, response.data)
         attendance = AbsensiMasukAsleb.objects.get()
@@ -824,6 +885,24 @@ class MobileAbsensiApiTests(TestCase):
         )
         self.assertEqual(duplicate.status_code, 400)
         self.assertEqual(AbsensiMasukAsleb.objects.count(), 1)
+
+    def test_izin_susulan_dengan_tanggal_di_luar_jadwal_ditolak(self):
+        attendance_date = timezone.localdate() - timedelta(days=1)
+        IzinAbsensiManualAsleb.objects.create(
+            asleb=self.asleb,
+            jadwal=self.schedule,
+            tanggal_praktikum=attendance_date,
+            berlaku_sampai=timezone.now() + timedelta(hours=2),
+            alasan='Tanggal izin tidak cocok dengan jadwal.',
+            dibuka_oleh=self.laboran,
+        )
+        self.authenticate()
+        response = self.client.post(
+            reverse('mobile_api:check_in'), self.check_in_payload(), format='multipart'
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data['code'], 'invalid_manual_attendance')
+        self.assertFalse(AbsensiMasukAsleb.objects.exists())
 
     def test_riwayat_aplikasi_memuat_absensi_dari_web_dan_mobile(self):
         web_attendance = AbsensiAsleb.objects.create(

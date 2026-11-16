@@ -79,6 +79,7 @@ from .services import (
     get_active_asleb_matkul_ids,
     get_asleb_schedule_queryset,
     get_asleb_matkul_for_schedule,
+    get_attendance_source_for_slot,
     matkul_matches_schedule,
 )
 from .surat_honor import generate_surat_honor_pdf, month_year_label
@@ -1102,11 +1103,31 @@ class AbsensiAslebCreateView(CreateView):
         context['manual_permission'] = self.manual_permission
         return context
 
+    @transaction.atomic
     def form_valid(self, form):
+        Asleb.objects.select_for_update().get(pk=self.asleb.pk)
+        if self.manual_permission:
+            permission = IzinAbsensiManualAsleb.objects.select_for_update().filter(
+                pk=self.manual_permission.pk,
+                asleb=self.asleb,
+                jadwal=self.jadwal,
+                tanggal_praktikum=self.attendance_date,
+                digunakan_pada__isnull=True,
+                dibatalkan_pada__isnull=True,
+                berlaku_sampai__gt=timezone.now(),
+            ).first()
+            if permission is None or self.attendance_date not in get_missing_attendance_dates(self.asleb, self.jadwal):
+                form.add_error(None, 'Izin absensi susulan sudah tidak berlaku atau tanggalnya telah diabsen.')
+                return self.form_invalid(form)
+            self.manual_permission = permission
+        if get_attendance_source_for_slot(self.asleb, self.jadwal, self.attendance_date):
+            form.add_error(None, 'Anda sudah melakukan absensi untuk jadwal dan tanggal ini.')
+            return self.form_invalid(form)
         form.instance.asleb = self.asleb
         form.instance.izin_manual = self.manual_permission
         try:
-            response = super().form_valid(form)
+            with transaction.atomic():
+                response = super().form_valid(form)
         except IntegrityError:
             modul = form.cleaned_data.get('modul_praktikum')
             if modul:
@@ -2562,6 +2583,7 @@ class NilaiAbsensiMahasiswaView(PraktikumMahasiswaAccessMixin, TemplateView):
                     attendance_only=False,
                 ),
                 'rata_rata': existing[peserta.pk].nilai_rata_rata_display if peserta.pk in existing else '-',
+                'sumber_absensi': existing[peserta.pk].sumber_absensi if peserta.pk in existing else '',
             }
             for peserta in peserta_list
         ]
@@ -3368,14 +3390,9 @@ def get_total_honor_attendance_count(asleb, bulan):
     )
 
     web_keys = set(web_absensi.exclude(jadwal__isnull=True).values_list('jadwal_id', 'tanggal_praktikum'))
-    mobile_count = 0
-    for attendance in mobile_absensi.values('jadwal_id', 'tanggal_absensi'):
-        key = (attendance['jadwal_id'], attendance['tanggal_absensi'])
-        if attendance['jadwal_id'] and key in web_keys:
-            continue
-        mobile_count += 1
-
-    return web_absensi.count() + mobile_count
+    mobile_keys = set(mobile_absensi.exclude(jadwal__isnull=True).values_list('jadwal_id', 'tanggal_absensi'))
+    legacy_count = web_absensi.filter(jadwal__isnull=True).count() + mobile_absensi.filter(jadwal__isnull=True).count()
+    return len(web_keys | mobile_keys) + legacy_count
 
 
 @transaction.atomic

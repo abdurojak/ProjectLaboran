@@ -19,6 +19,7 @@ class LaboranInventoryScreen extends StatefulWidget {
 
 class _LaboranInventoryScreenState extends State<LaboranInventoryScreen> {
   String query = '';
+  String categoryFilter = '';
   @override
   void initState() {
     super.initState();
@@ -30,9 +31,9 @@ class _LaboranInventoryScreenState extends State<LaboranInventoryScreen> {
     final state = context.watch<LaboranProvider>();
     final items = state.inventory
         .where(
-          (item) => '${item.nama} ${item.kode}'.toLowerCase().contains(
-            query.toLowerCase(),
-          ),
+          (item) => (categoryFilter.isEmpty || item.category == categoryFilter) &&
+              '${item.nama} ${item.kode} ${item.categoryLabel} ${item.locations.map((location) => location['nama']).join(' ')}'
+                  .toLowerCase().contains(query.toLowerCase()),
         )
         .toList();
     return Scaffold(
@@ -63,6 +64,18 @@ class _LaboranInventoryScreenState extends State<LaboranInventoryScreen> {
                 hintText: 'Cari nama atau kode barang',
                 prefixIcon: Icon(Icons.search),
               ),
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              initialValue: categoryFilter,
+              decoration: const InputDecoration(labelText: 'Kategori'),
+              items: [
+                const DropdownMenuItem(value: '', child: Text('Semua kategori')),
+                ...InventoryItem.categoryOptions.entries.map(
+                  (entry) => DropdownMenuItem(value: entry.key, child: Text(entry.value)),
+                ),
+              ],
+              onChanged: (value) => setState(() => categoryFilter = value ?? ''),
             ),
             const SizedBox(height: 16),
             if (state.loading && state.inventory.isEmpty)
@@ -159,6 +172,7 @@ class _InventoryCard extends StatelessWidget {
                     runSpacing: 6,
                     children: [
                       _Chip('${item.tersedia} tersedia', AppTheme.teal),
+                      _Chip(item.categoryLabel, const Color(0xFF2563EB)),
                       _Chip('${item.dipinjam} dipinjam', AppTheme.amber),
                       if (item.photoUrls.length > 1)
                         _Chip(
@@ -321,6 +335,7 @@ class _InventoryDetailScreenState extends State<_InventoryDetailScreen> {
                 _Chip('${item.jumlah} total unit', const Color(0xFF2563EB)),
                 _Chip('${item.tersedia} tersedia', AppTheme.teal),
                 _Chip('${item.dipinjam} dipinjam', AppTheme.amber),
+                _Chip(item.categoryLabel, const Color(0xFF2563EB)),
               ],
             ),
             const SizedBox(height: 22),
@@ -332,6 +347,20 @@ class _InventoryDetailScreenState extends State<_InventoryDetailScreen> {
                   : item.locations
                         .map((location) => location['nama'])
                         .join(', '),
+            ),
+            ...item.locations.where((location) => location['foto_url'] != null).map(
+              (location) => Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Foto lokasi: ${location['nama']}', style: const TextStyle(fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 8),
+                  ClipRRect(borderRadius: BorderRadius.circular(8), child: AuthenticatedNetworkImage(
+                    location['foto_url'] as String, fit: BoxFit.cover, height: 180, width: double.infinity,
+                  )),
+                  if ((location['petunjuk'] as String? ?? '').isNotEmpty)
+                    Text(location['petunjuk'] as String),
+                ]),
+              ),
             ),
             const SizedBox(height: 12),
             _DetailSection(
@@ -383,6 +412,7 @@ class _EditInventoryScreenState extends State<_EditInventoryScreen> {
   late final TextEditingController quantity;
   late final TextEditingController description;
   int? locationId;
+  late String category;
 
   @override
   void initState() {
@@ -393,6 +423,7 @@ class _EditInventoryScreenState extends State<_EditInventoryScreen> {
     locationId = widget.item.locations.isEmpty
         ? null
         : widget.item.locations.first['id'] as int?;
+    category = widget.item.category;
   }
 
   @override
@@ -409,6 +440,7 @@ class _EditInventoryScreenState extends State<_EditInventoryScreen> {
     final updated = await provider.updateInventory(
       id: widget.item.id,
       name: name.text.trim(),
+      category: category,
       quantity: int.parse(quantity.text),
       locationId: locationId!,
       description: description.text.trim(),
@@ -451,6 +483,14 @@ class _EditInventoryScreenState extends State<_EditInventoryScreen> {
                   validator: (value) => value == null || value.trim().isEmpty
                       ? 'Nama barang wajib diisi.'
                       : null,
+                ),
+                const SizedBox(height: 14),
+                DropdownButtonFormField<String>(
+                  initialValue: category,
+                  decoration: const InputDecoration(labelText: 'Kategori'),
+                  items: InventoryItem.categoryOptions.entries.map((entry) =>
+                    DropdownMenuItem(value: entry.key, child: Text(entry.value))).toList(),
+                  onChanged: (value) => setState(() => category = value ?? 'lainnya'),
                 ),
                 const SizedBox(height: 14),
                 TextFormField(
@@ -647,6 +687,7 @@ class _AddInventoryScreen extends StatefulWidget {
 
 class _AddInventoryScreenState extends State<_AddInventoryScreen> {
   final formKey = GlobalKey<FormState>();
+  String? category;
   final name = TextEditingController();
   final quantity = TextEditingController(text: '1');
   final description = TextEditingController();
@@ -748,9 +789,16 @@ class _AddInventoryScreenState extends State<_AddInventoryScreen> {
 
   Future<void> submit() async {
     if (!formKey.currentState!.validate()) return;
+    if (photos.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pilih minimal satu foto barang.')),
+      );
+      return;
+    }
     final state = context.read<LaboranProvider>();
     final success = await state.createInventory(
       name: name.text.trim(),
+      category: category!,
       quantity: int.parse(quantity.text),
       locationId: locationId!,
       description: description.text.trim(),
@@ -790,6 +838,15 @@ class _AddInventoryScreenState extends State<_AddInventoryScreen> {
               validator: (v) => v == null || v.trim().isEmpty
                   ? 'Nama barang wajib diisi.'
                   : null,
+            ),
+            const SizedBox(height: 14),
+            DropdownButtonFormField<String>(
+              initialValue: category,
+              decoration: const InputDecoration(labelText: 'Kategori barang'),
+              items: InventoryItem.categoryOptions.entries.map((entry) =>
+                DropdownMenuItem(value: entry.key, child: Text(entry.value))).toList(),
+              onChanged: (value) => setState(() => category = value),
+              validator: (value) => value == null ? 'Pilih kategori barang.' : null,
             ),
             const SizedBox(height: 14),
             TextFormField(

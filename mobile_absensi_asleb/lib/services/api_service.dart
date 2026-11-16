@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:image_picker/image_picker.dart';
@@ -174,6 +175,26 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> profile() => _getMap('profile/');
+  Future<Map<String, dynamic>> studentQr() => _getMap('mahasiswa/qr/');
+  Future<Map<String, dynamic>> aslabQrModules() => _getMap('aslab/qr/modules/');
+
+  Future<Map<String, dynamic>> aslabQrScan(
+    int courseId,
+    int moduleId,
+    String action,
+    String token,
+  ) async {
+    try {
+      final response = await dio.post(
+        'aslab/qr/$courseId/$moduleId/$action/',
+        data: {'token': token},
+      );
+      return Map<String, dynamic>.from(response.data as Map);
+    } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
+  }
+
   Future<Map<String, dynamic>> dashboard() => _getMap('dashboard/');
   Future<Map<String, dynamic>> laboranDashboard() =>
       _getMap('laboran/dashboard/');
@@ -259,6 +280,7 @@ class ApiService {
   Future<InventoryItem> updateLaboranInventory({
     required int id,
     required String name,
+    required String category,
     required int quantity,
     required int locationId,
     required String description,
@@ -268,6 +290,7 @@ class ApiService {
         'laboran/inventory/$id/',
         data: {
           'nama': name,
+          'kategori': category,
           'jumlah': quantity,
           'lokasi_id': locationId,
           'keterangan': description,
@@ -283,6 +306,7 @@ class ApiService {
 
   Future<InventoryItem> createLaboranInventory({
     required String name,
+    required String category,
     required int quantity,
     required int locationId,
     required String description,
@@ -292,27 +316,43 @@ class ApiService {
       final data = FormData();
       data.fields.addAll([
         MapEntry('nama', name),
+        MapEntry('kategori', category),
         MapEntry('jumlah', '$quantity'),
         MapEntry('lokasi_id', '$locationId'),
         MapEntry('keterangan', description),
       ]);
       for (var index = 0; index < photos.length; index++) {
         final photo = photos[index];
-        final isPng = photo.name.toLowerCase().endsWith('.png');
+        final extension = photo.name.toLowerCase().split('.').last;
+        final subtype = switch (extension) {
+          'png' => 'png',
+          'webp' => 'webp',
+          _ => 'jpeg',
+        };
         data.files.add(
           MapEntry(
             index == 0 ? 'foto' : 'foto_galeri',
             await MultipartFile.fromFile(
               photo.path,
               filename: photo.name,
-              contentType: DioMediaType('image', isPng ? 'png' : 'jpeg'),
+              contentType: DioMediaType('image', subtype),
             ),
           ),
         );
       }
       final response = await dio.post('laboran/inventory/', data: data);
-      return InventoryItem.fromJson(
+      final item = InventoryItem.fromJson(
         Map<String, dynamic>.from(response.data as Map),
+      );
+      if (item.photoUrls.length != photos.length) {
+        throw ApiException(
+          'Barang tersimpan, tetapi sebagian foto tidak tercatat. Periksa detail barang sebelum mengulang.',
+        );
+      }
+      return item;
+    } on FileSystemException {
+      throw const ApiException(
+        'Foto yang dipilih tidak dapat dibaca. Pilih ulang foto lalu coba lagi.',
       );
     } on DioException catch (error) {
       throw ApiException.fromDio(error);
@@ -373,11 +413,15 @@ class ApiService {
         .toList();
   }
 
-  Future<LoanItem> updateLaboranLoanStatus(int id, String status) async {
+  Future<LoanItem> updateLaboranLoanStatus(
+    int id,
+    String status, {
+    int? penalty,
+  }) async {
     try {
       final response = await dio.post(
         'laboran/loans/$id/status/',
-        data: {'status': status},
+        data: {'status': status, if (penalty != null) 'potongan_skor': penalty},
       );
       return LoanItem.fromJson(Map<String, dynamic>.from(response.data as Map));
     } on DioException catch (error) {

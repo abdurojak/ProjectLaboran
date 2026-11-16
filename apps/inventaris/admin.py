@@ -17,7 +17,8 @@ class LokasiAdmin(admin.ModelAdmin):
 
 @admin.register(InventarisBarang)
 class InventarisBarangAdmin(admin.ModelAdmin):
-    list_display = ('kode_inventaris', 'nama', 'jumlah')
+    list_display = ('kode_inventaris', 'nama', 'kategori', 'jumlah')
+    list_filter = ('kategori',)
     search_fields = ('kode_inventaris', 'nama')
     readonly_fields = ('kode_inventaris',)
 

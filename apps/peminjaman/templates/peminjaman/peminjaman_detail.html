@@ -2,16 +2,6 @@
 
 {% block title %}Detail Peminjaman{% endblock %}
 
-{% block extra_head %}{{ block.super }}
-<style>
-    html[data-theme="dark"] .peminjaman-detail-overdue-alert {
-        border-color: rgba(251, 113, 133, 0.28) !important;
-        background: linear-gradient(135deg, rgba(127, 29, 29, 0.38), rgba(15, 23, 42, 0.72)) !important;
-        color: #fecdd3 !important;
-    }
-</style>
-{% endblock %}
-
 {% block content %}
 <section id="peminjaman-detail-content" class="mx-auto max-w-4xl space-y-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
@@ -50,151 +40,15 @@
         </div>
     </div>
 
-    {% if is_overdue %}
-    <div class="peminjaman-detail-overdue-alert rounded-[28px] border border-rose-200 bg-rose-50 px-5 py-4 text-rose-800 shadow-lg shadow-rose-950/10">
-        <div class="flex flex-wrap items-start gap-3">
-            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-rose-600 text-white">
-                <i data-lucide="triangle-alert" class="h-5 w-5"></i>
-            </span>
-            <div>
-                <p class="font-black">Peminjaman ini terlambat dikembalikan{% if overdue_days %} {{ overdue_days }} hari{% endif %}.</p>
-                <p class="mt-1 text-sm font-semibold opacity-85">Segera kembalikan barang atau hubungi laboran untuk konfirmasi status peminjaman.</p>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
     <div class="surface-card grid gap-5 p-5 md:grid-cols-[auto_minmax(0,1fr)] md:p-6">
         <div class="flex h-16 w-16 items-center justify-center rounded-3xl {% if credit_profile.label == 'Baik' %}bg-emerald-50 text-emerald-700{% elif credit_profile.label == 'Waspada' %}bg-amber-50 text-amber-700{% else %}bg-rose-50 text-rose-700{% endif %}">
             <span class="text-2xl font-black">{{ credit_profile.score }}</span>
         </div>
         <div>
             <p class="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Skor Kredit · {{ credit_profile.label }}</p>
-            <p class="mt-2 font-bold text-slate-900">Batas peminjaman awal saat ini maksimal {{ credit_profile.max_loan_days }} hari.</p>
-            <p class="mt-1 text-sm text-slate-500">Kembalikan tepat waktu untuk memulihkan 10 poin. Perpanjangan yang disetujui tidak mengurangi skor.</p>
-            <p class="mt-1 text-sm text-slate-500">Terlambat, kehilangan, dan kerusakan mengurangi skor. Pengembalian tepat waktu menjaga akses peminjaman.</p>
+            <p class="mt-1 text-sm text-slate-500">Skor hanya berkurang bila barang rusak atau hilang. Laboran menentukan jumlah pengurangannya.</p>
         </div>
     </div>
-
-    {% if pending_extension %}
-    <section class="surface-card border border-cyan-100 p-5 md:p-6">
-        <div class="flex flex-wrap items-start justify-between gap-4">
-            <div>
-                <p class="text-xs font-black uppercase tracking-[0.18em] text-cyan-700">Perpanjangan Menunggu</p>
-                <h3 class="mt-2 text-xl font-black text-slate-900">{{ pending_extension.tanggal_kembali_sebelumnya|date:"d M Y" }} menjadi {{ pending_extension.tanggal_kembali_diminta|date:"d M Y" }}</h3>
-                <p class="mt-2 text-sm text-slate-600">{{ pending_extension.alasan }}</p>
-                <div class="mt-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm">
-                    <p class="font-black text-slate-800">Kondisi barang: {{ pending_extension.get_kondisi_barang_display }}</p>
-                    {% if pending_extension.keterangan_kondisi %}
-                    <p class="mt-1 text-slate-600">{{ pending_extension.keterangan_kondisi }}</p>
-                    {% endif %}
-                    <p class="mt-2 flex items-center gap-2 font-bold {% if pending_extension.pernyataan_jujur %}text-emerald-700{% else %}text-amber-700{% endif %}">
-                        <i data-lucide="badge-check" class="h-4 w-4"></i>
-                        {% if pending_extension.pernyataan_jujur %}Pernyataan kejujuran telah disetujui{% else %}Pernyataan belum tercatat (pengajuan lama){% endif %}
-                    </p>
-                </div>
-            </div>
-            <span class="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-black text-amber-700">Menunggu Asisten Lab</span>
-        </div>
-        {% if can_review_extension %}
-        <form method="post" action="{% url 'peminjaman:peminjaman_extension_review' pending_extension.pk %}" class="mt-5 grid gap-3" data-confirm-message="Proses keputusan perpanjangan ini?">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="" data-extension-review-action-input>
-            <div>
-                <label for="id_catatan_peninjau">Catatan peninjau</label>
-                <textarea id="id_catatan_peninjau" name="catatan_peninjau" rows="3" placeholder="Wajib diisi jika pengajuan ditolak."></textarea>
-            </div>
-            <div class="flex flex-wrap gap-3">
-                <button type="submit" data-extension-review-action="approve" class="btn-primary bg-emerald-600 hover:bg-emerald-700">
-                    <i data-lucide="check" class="h-4 w-4"></i> Setujui
-                </button>
-                <button type="submit" data-extension-review-action="reject" class="inline-flex items-center gap-2 rounded-2xl bg-rose-600 px-4 py-3 text-sm font-bold text-white hover:bg-rose-700">
-                    <i data-lucide="x" class="h-4 w-4"></i> Tolak
-                </button>
-            </div>
-        </form>
-        {% endif %}
-    </section>
-    {% elif can_request_extension %}
-    <section class="surface-card p-5 md:p-6">
-        <div class="mb-4">
-            <p class="text-xs font-black uppercase tracking-[0.18em] text-cyan-700">Butuh Tambahan Waktu?</p>
-            <h3 class="mt-2 text-xl font-black text-slate-900">Ajukan Perpanjangan</h3>
-            <p class="mt-1 text-sm text-slate-500">Tanggal baru berlaku setelah disetujui Asisten Lab. Setiap pengajuan maksimal 7 hari tambahan dan dapat diajukan kembali setelah pengajuan sebelumnya selesai.</p>
-        </div>
-        <form method="post" action="{% url 'peminjaman:peminjaman_extension_request' peminjaman.pk %}" class="grid gap-4 md:grid-cols-2" data-confirm-message="Kirim pengajuan perpanjangan kepada Laboran?">
-            {% csrf_token %}
-            <div>
-                <label for="{{ extension_form.tanggal_kembali_diminta.id_for_label }}">{{ extension_form.tanggal_kembali_diminta.label }}</label>
-                {{ extension_form.tanggal_kembali_diminta }}
-            </div>
-            <div class="md:col-span-2">
-                <label for="{{ extension_form.alasan.id_for_label }}">{{ extension_form.alasan.label }}</label>
-                {{ extension_form.alasan }}
-            </div>
-            <fieldset class="md:col-span-2" data-condition-fieldset>
-                <legend class="mb-2 font-bold text-slate-800">{{ extension_form.kondisi_barang.label }}</legend>
-                <div class="grid gap-3 sm:grid-cols-2">
-                    {% for choice in extension_form.kondisi_barang %}
-                    <label class="flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-bold text-slate-700 transition hover:border-cyan-400 hover:bg-cyan-50">
-                        {{ choice.tag }}
-                        <span>{{ choice.choice_label }}</span>
-                    </label>
-                    {% endfor %}
-                </div>
-            </fieldset>
-            <div class="md:col-span-2" data-condition-note>
-                <label for="{{ extension_form.keterangan_kondisi.id_for_label }}">{{ extension_form.keterangan_kondisi.label }}</label>
-                {{ extension_form.keterangan_kondisi }}
-                <p class="mt-1 text-xs font-semibold text-slate-500">Wajib diisi minimal 10 karakter jika barang tidak baik atau mengalami masalah.</p>
-            </div>
-            <label class="md:col-span-2 flex cursor-pointer items-start gap-3 rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-4 text-sm font-bold leading-6 text-slate-700">
-                {{ extension_form.pernyataan_jujur }}
-                <span>{{ extension_form.pernyataan_jujur.label }}</span>
-            </label>
-            <div class="md:col-span-2">
-                <button type="submit" class="btn-primary bg-cyan-700 hover:bg-cyan-800">
-                    <i data-lucide="calendar-plus" class="h-4 w-4"></i> Kirim Pengajuan
-                </button>
-            </div>
-        </form>
-    </section>
-    {% endif %}
-
-    {% if can_manual_extension %}
-    <section class="surface-card p-5">
-        <h3 class="text-xl font-black text-slate-900">Perpanjangan Manual</h3>
-        <p class="mt-2 text-sm text-slate-500">Perpanjang transaksi {{ peminjaman.transaksi.kode_pinjam }} milik {{ peminjaman.nama_peminjam }}. Maksimal 7 hari dari tanggal kembali saat ini.</p>
-        <form method="post" action="{% url 'peminjaman:peminjaman_extension_manual' peminjaman.pk %}" class="mt-4 grid gap-4" data-confirm-message="Simpan perpanjangan manual untuk peminjam ini?">
-            {% csrf_token %}
-            {{ extension_form.as_p }}
-            <button type="submit" class="btn-primary"><i data-lucide="calendar-plus" class="h-4 w-4"></i> Perpanjang Sekarang</button>
-        </form>
-    </section>
-    {% endif %}
-
-    {% if extension_list %}
-    <details class="surface-card p-5">
-        <summary class="cursor-pointer font-black text-slate-900">Riwayat Perpanjangan ({{ extension_list|length }})</summary>
-        <div class="mt-4 grid gap-3">
-            {% for extension in extension_list %}
-            <div class="rounded-2xl bg-slate-50 px-4 py-3 text-sm">
-                <div class="flex flex-wrap justify-between gap-2">
-                    <strong class="text-slate-900">{{ extension.tanggal_kembali_sebelumnya|date:"d M Y" }} menjadi {{ extension.tanggal_kembali_diminta|date:"d M Y" }}</strong>
-                    <span class="font-black">{{ extension.get_status_display }}</span>
-                </div>
-                <p class="mt-1 text-slate-500">{{ extension.alasan }}</p>
-                <p class="mt-2 font-bold text-slate-700">Kondisi barang: {{ extension.get_kondisi_barang_display }}</p>
-                {% if extension.keterangan_kondisi %}<p class="mt-1 text-slate-500">{{ extension.keterangan_kondisi }}</p>{% endif %}
-                <p class="mt-1 text-xs font-bold {% if extension.pernyataan_jujur %}text-emerald-700{% else %}text-amber-700{% endif %}">
-                    {% if extension.pernyataan_jujur %}Pernyataan kejujuran disetujui{% else %}Pernyataan belum tercatat{% endif %}
-                </p>
-                {% if extension.catatan_peninjau %}<p class="mt-1 font-semibold text-slate-600">Catatan: {{ extension.catatan_peninjau }}</p>{% endif %}
-            </div>
-            {% endfor %}
-        </div>
-    </details>
-    {% endif %}
 
     <div class="surface-card grid gap-5 p-6 md:grid-cols-2 md:p-8">
         <div class="rounded-3xl bg-slate-50 p-5 md:col-span-2">
@@ -223,8 +77,8 @@
             <div class="mt-2 text-xl font-bold text-slate-900">{{ peminjaman.tanggal_pinjam|date:"d M Y" }}</div>
         </div>
         <div class="rounded-3xl bg-slate-50 p-5">
-            <div class="text-sm font-semibold text-slate-500">Tanggal Kembali</div>
-            <div class="mt-2 text-xl font-bold text-slate-900">{{ peminjaman.tanggal_kembali|date:"d M Y"|default:"Tanpa batas waktu (Capstone)" }}</div>
+            <div class="text-sm font-semibold text-slate-500">Masa Pinjam</div>
+            <div class="mt-2 text-xl font-bold text-slate-900">Tanpa batas waktu</div>
         </div>
         <div class="rounded-3xl bg-slate-50 p-5">
             <div class="text-sm font-semibold text-slate-500">Peminjam</div>
@@ -267,6 +121,10 @@
                         {% endfor %}
                     </select>
                 </div>
+                <div class="min-w-[180px] flex-1" data-incident-penalty hidden>
+                    <label for="id_detail_penalty">Potongan skor per barang (jika hilang/rusak)</label>
+                    <input id="id_detail_penalty" name="potongan_skor" type="number" min="1" max="100" placeholder="1-100 poin">
+                </div>
                 <button type="submit" class="btn-primary gap-2 bg-amber-500 shadow-amber-500/20 hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-45" data-selection-submit disabled>
                     <i data-lucide="save" class="h-4 w-4"></i>
                     <span>Simpan</span>
@@ -306,7 +164,7 @@
                         <td class="font-semibold text-slate-900">{{ detail.barang.nama }}</td>
                         <td>{{ detail.barang.kode_barang }}</td>
                         <td>{% if detail.barang.lokasi %}{{ detail.barang.lokasi.nama_lokasi }}{% else %}-{% endif %}</td>
-                        <td>{{ detail.get_status_display }}</td>
+                        <td>{{ detail.get_status_display }}{% if detail.potongan_skor %}<span class="block text-xs font-semibold text-rose-700">-{{ detail.potongan_skor }} poin skor</span>{% endif %}</td>
                         <td>
                             <div class="flex flex-wrap gap-2">
                                 {% for photo_url in detail.barang_photo_urls %}
@@ -373,6 +231,7 @@
             const submitButton = form.querySelector('[data-selection-submit]');
             const selectionName = form.dataset.selectionName;
             const statusField = form.querySelector('select[name="status"]');
+            const penaltyField = form.querySelector('input[name="potongan_skor"]');
             if (!submitButton || !selectionName) {
                 return;
             }
@@ -380,6 +239,11 @@
             function syncSelectionState() {
                 const hasSelection = form.querySelectorAll('input[name="' + selectionName + '"]:checked').length > 0;
                 const hasStatus = !statusField || Boolean(statusField.value);
+                const isIncident = statusField && ['hilang', 'rusak'].includes(statusField.value);
+                if (penaltyField) {
+                    penaltyField.closest('[data-incident-penalty]').hidden = !isIncident;
+                    penaltyField.required = Boolean(isIncident);
+                }
                 submitButton.disabled = !(hasSelection && hasStatus);
             }
 

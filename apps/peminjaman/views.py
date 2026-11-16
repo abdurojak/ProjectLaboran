@@ -15,22 +15,19 @@ from django.views.generic import CreateView, DeleteView, DetailView, ListView, U
 
 from apps.core.views import PostOnlyDeleteMixin
 from apps.core.permissions import BORROWER_ROLES, LABORAN_ROLE
-from apps.inventaris.models import ACTIVE_PEMINJAMAN_STATUSES, Barang, PaketBarang
+from apps.inventaris.models import ACTIVE_PEMINJAMAN_STATUSES, Barang, InventarisBarang, PaketBarang
 from apps.kalender.realtime import send_peminjaman_request_update, send_peminjaman_status_update
 from apps.pengguna.models import Pengguna
-from .forms import PengajuanPerpanjanganForm, PeminjamanAlatForm
-from .models import PenyesuaianSkorKredit, PengajuanPerpanjangan, PeminjamanAlat, PeminjamanTransaksi
+from .forms import PeminjamanAlatForm
+from .models import PenyesuaianSkorKredit, PeminjamanAlat, PeminjamanTransaksi
 from .notifications import (
-    send_extension_request_notifications,
-    send_extension_status_notification,
     send_peminjaman_request_notifications,
     send_peminjaman_status_notification,
 )
-from .services import adjust_return_date, get_credit_profile, update_peminjaman_status
+from .services import get_credit_profile, update_peminjaman_status
 
 
 MANAGER_ROLES = {LABORAN_ROLE}
-EXTENSION_REVIEWER_ROLES = {LABORAN_ROLE}
 BULK_STATUS_CHOICES = {'dipinjam', 'hilang', 'rusak', 'selesai'}
 BULK_STATUS_UI_CHOICES = [
     ('dipinjam', 'Dipinjam'),
@@ -39,6 +36,18 @@ BULK_STATUS_UI_CHOICES = [
     ('selesai', 'Selesai'),
 ]
 ARCHIVED_STATUS_CHOICES = {'ditolak', 'digantikan', 'dikembalikan'}
+
+
+def incident_penalty(request, next_status):
+    if next_status not in {'hilang', 'rusak'}:
+        return None
+    try:
+        points = int(request.POST.get('potongan_skor', ''))
+    except (TypeError, ValueError):
+        points = 0
+    if not 1 <= points <= 100:
+        raise ValueError('Isi potongan skor 1 sampai 100 poin per barang hilang/rusak.')
+    return points
 
 
 @require_POST
@@ -240,6 +249,11 @@ def bulk_update_status(request):
     if status not in BULK_STATUS_CHOICES:
         messages.error(request, 'Pilih status peminjaman yang valid.')
         return redirect('peminjaman:peminjaman_list')
+    try:
+        points = incident_penalty(request, status)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect('peminjaman:peminjaman_list')
 
     updated_count = 0
     with transaction.atomic():
@@ -251,7 +265,7 @@ def bulk_update_status(request):
         )
         for peminjaman in detail_list:
             next_status = resolve_bulk_status(peminjaman.status, status)
-            if not update_peminjaman_status(peminjaman, next_status):
+            if not update_peminjaman_status(peminjaman, next_status, potongan_skor=points, laboran=pengguna):
                 continue
             send_peminjaman_status_notification(peminjaman)
             transaction.on_commit(lambda item_id=peminjaman.pk: send_peminjaman_status_update(
@@ -284,6 +298,11 @@ def update_detail_status(request, pk):
     if status not in BULK_STATUS_CHOICES:
         messages.error(request, 'Pilih status peminjaman yang valid.')
         return redirect('peminjaman:peminjaman_detail', pk=pk)
+    try:
+        points = incident_penalty(request, status)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect('peminjaman:peminjaman_detail', pk=pk)
 
     updated_count = 0
     with transaction.atomic():
@@ -295,7 +314,7 @@ def update_detail_status(request, pk):
         )
         for peminjaman in detail_queryset:
             next_status = resolve_bulk_status(peminjaman.status, status)
-            if not update_peminjaman_status(peminjaman, next_status):
+            if not update_peminjaman_status(peminjaman, next_status, potongan_skor=points, laboran=pengguna):
                 continue
             send_peminjaman_status_notification(peminjaman)
             transaction.on_commit(lambda item_id=peminjaman.pk: send_peminjaman_status_update(
@@ -316,151 +335,19 @@ def update_detail_status(request, pk):
 
 @require_POST
 def request_extension(request, pk):
-    pengguna = getattr(request, 'current_pengguna', None)
-    if not pengguna or pengguna.role not in BORROWER_ROLES:
-        messages.warning(request, 'Anda tidak memiliki akses untuk mengajukan perpanjangan.')
-        return redirect('peminjaman:peminjaman_list')
-
-    with transaction.atomic():
-        anchor = get_object_or_404(
-            PeminjamanAlat.objects.select_for_update().select_related('transaksi'),
-            pk=pk,
-            nim=pengguna.nim_nik,
-        )
-        transaksi = get_object_or_404(
-            PeminjamanTransaksi.objects.select_for_update(),
-            pk=anchor.transaksi_id,
-        )
-        if not transaksi.tanggal_kembali or not transaksi.detail.filter(status='dipinjam').exists():
-            messages.error(request, 'Perpanjangan hanya dapat diajukan untuk barang yang sedang dipinjam.')
-            return redirect('peminjaman:peminjaman_detail', pk=anchor.pk)
-        if transaksi.pengajuan_perpanjangan.filter(status='diajukan').exists():
-            messages.info(request, 'Pengajuan perpanjangan sebelumnya masih menunggu persetujuan.')
-            return redirect('peminjaman:peminjaman_detail', pk=anchor.pk)
-
-        credit_profile = get_credit_profile(pengguna.nim_nik)
-        form = PengajuanPerpanjanganForm(
-            request.POST,
-            transaksi=transaksi,
-            credit_profile=credit_profile,
-        )
-        if not form.is_valid():
-            error = next(iter(form.errors.values()))[0]
-            messages.error(request, str(error))
-            return redirect('peminjaman:peminjaman_detail', pk=anchor.pk)
-
-        extension = form.save(commit=False)
-        extension.transaksi = transaksi
-        extension.diajukan_oleh = pengguna
-        extension.tanggal_kembali_sebelumnya = transaksi.tanggal_kembali
-        extension.save()
-
-    send_extension_request_notifications(extension)
-    messages.success(request, 'Pengajuan perpanjangan dikirim kepada Laboran.')
-    return redirect('peminjaman:peminjaman_detail', pk=anchor.pk)
+    messages.info(request, 'Perpanjangan tidak diperlukan karena peminjaman tidak memiliki batas waktu.')
+    return redirect('peminjaman:peminjaman_list')
 
 
 @require_POST
 def manual_extension(request, pk):
-    pengguna = getattr(request, 'current_pengguna', None)
-    if not pengguna or pengguna.role not in EXTENSION_REVIEWER_ROLES:
-        messages.error(request, 'Hanya Laboran yang dapat memperpanjang peminjaman manual.')
-        return redirect('peminjaman:peminjaman_list')
-    with transaction.atomic():
-        anchor = get_object_or_404(PeminjamanAlat, pk=pk)
-        transaksi = get_object_or_404(PeminjamanTransaksi.objects.select_for_update(), pk=anchor.transaksi_id)
-        if not transaksi.tanggal_kembali or transaksi.nim == pengguna.nim_nik or not transaksi.detail.filter(status='dipinjam').exists():
-            messages.error(request, 'Peminjaman ini tidak dapat diperpanjang manual.')
-            return redirect('peminjaman:peminjaman_detail', pk=pk)
-        if transaksi.pengajuan_perpanjangan.filter(status='diajukan').exists():
-            messages.error(request, 'Tinjau pengajuan yang masih menunggu terlebih dahulu.')
-            return redirect('peminjaman:peminjaman_detail', pk=pk)
-        form = PengajuanPerpanjanganForm(request.POST, transaksi=transaksi, credit_profile=get_credit_profile(transaksi.nim))
-        if not form.is_valid():
-            messages.error(request, str(next(iter(form.errors.values()))[0]))
-            return redirect('peminjaman:peminjaman_detail', pk=pk)
-        extension = form.save(commit=False)
-        extension.transaksi = transaksi
-        extension.diajukan_oleh = pengguna
-        extension.ditinjau_oleh = pengguna
-        extension.ditinjau_pada = timezone.now()
-        extension.tanggal_kembali_sebelumnya = transaksi.tanggal_kembali
-        extension.tanggal_kembali_disetujui = extension.tanggal_kembali_diminta
-        extension.status = 'disetujui'
-        extension.catatan_peninjau = 'Perpanjangan manual oleh Laboran.'
-        extension.save()
-        transaksi.tanggal_kembali = extension.tanggal_kembali_disetujui
-        transaksi.save(update_fields=['tanggal_kembali', 'diperbarui_pada'])
-        transaksi.detail.filter(status='dipinjam').update(tanggal_kembali=transaksi.tanggal_kembali, diperbarui_pada=timezone.now())
-    send_extension_status_notification(extension)
-    messages.success(request, 'Perpanjangan manual berhasil disimpan.')
-    return redirect('peminjaman:peminjaman_detail', pk=pk)
+    messages.info(request, 'Perpanjangan manual tidak tersedia karena peminjaman tidak memiliki batas waktu.')
+    return redirect('peminjaman:peminjaman_list')
 
 
 @require_POST
 def review_extension(request, pk):
-    pengguna = getattr(request, 'current_pengguna', None)
-    if not pengguna or pengguna.role not in EXTENSION_REVIEWER_ROLES:
-        messages.warning(request, 'Hanya Laboran yang dapat meninjau perpanjangan.')
-        return redirect('peminjaman:peminjaman_list')
-
-    action = request.POST.get('action', '').strip()
-    if action not in {'approve', 'reject'}:
-        messages.error(request, 'Keputusan perpanjangan tidak valid.')
-        return redirect('peminjaman:peminjaman_list')
-
-    with transaction.atomic():
-        extension = get_object_or_404(
-            PengajuanPerpanjangan.objects.select_for_update().select_related(
-                'transaksi', 'diajukan_oleh'
-            ),
-            pk=pk,
-        )
-        transaksi = PeminjamanTransaksi.objects.select_for_update().get(pk=extension.transaksi_id)
-        anchor = transaksi.detail.order_by('pk').first()
-        if extension.diajukan_oleh_id == pengguna.pk or transaksi.nim == pengguna.nim_nik:
-            messages.error(request, 'Peninjau tidak boleh menyetujui perpanjangan miliknya sendiri.')
-            return redirect('peminjaman:peminjaman_detail', pk=anchor.pk)
-        if extension.status != 'diajukan':
-            messages.info(request, 'Pengajuan perpanjangan ini sudah diproses.')
-            return redirect('peminjaman:peminjaman_detail', pk=anchor.pk)
-        if transaksi.tanggal_kembali != extension.tanggal_kembali_sebelumnya:
-            messages.error(request, 'Tanggal peminjaman telah berubah. Pengajuan lama tidak dapat diproses.')
-            return redirect('peminjaman:peminjaman_detail', pk=anchor.pk)
-
-        extension.ditinjau_oleh = pengguna
-        extension.ditinjau_pada = timezone.now()
-        extension.catatan_peninjau = request.POST.get('catatan_peninjau', '').strip()
-        if action == 'approve':
-            approved_date = adjust_return_date(extension.tanggal_kembali_diminta)
-            extension.status = 'disetujui'
-            extension.tanggal_kembali_disetujui = approved_date
-            transaksi.tanggal_kembali = approved_date
-            transaksi.save(update_fields=['tanggal_kembali', 'diperbarui_pada'])
-            transaksi.detail.filter(status='dipinjam').update(
-                tanggal_kembali=approved_date,
-                diperbarui_pada=timezone.now(),
-            )
-        else:
-            if len(extension.catatan_peninjau) < 5:
-                messages.error(request, 'Alasan penolakan minimal 5 karakter.')
-                return redirect('peminjaman:peminjaman_detail', pk=anchor.pk)
-            extension.status = 'ditolak'
-        extension.save(update_fields=[
-            'status',
-            'tanggal_kembali_disetujui',
-            'ditinjau_oleh',
-            'ditinjau_pada',
-            'catatan_peninjau',
-            'diperbarui_pada',
-        ])
-
-    send_extension_status_notification(extension)
-    messages.success(
-        request,
-        'Perpanjangan disetujui dan tanggal kembali diperbarui.'
-        if action == 'approve' else 'Pengajuan perpanjangan ditolak.',
-    )
+    messages.info(request, 'Perpanjangan tidak tersedia karena peminjaman tidak memiliki batas waktu.')
     return redirect('peminjaman:peminjaman_list')
 
 
@@ -504,7 +391,6 @@ class PeminjamanAlatListView(ListView):
             queryset = queryset.exclude(status__in=ARCHIVED_STATUS_CHOICES)
 
         if pengguna and pengguna.role in MANAGER_ROLES:
-            today = timezone.localdate()
             transaksi_ids = list(
                 queryset.exclude(transaksi__isnull=True)
                 .values_list('transaksi_id', flat=True)
@@ -528,11 +414,6 @@ class PeminjamanAlatListView(ListView):
                     detail.status not in ARCHIVED_STATUS_CHOICES
                     for detail in detail_list
                 )
-                transaksi.is_overdue = any(
-                    detail.tanggal_kembali and detail.tanggal_kembali < today
-                    and detail.status not in ARCHIVED_STATUS_CHOICES
-                    for detail in detail_list
-                )
                 transaksi.can_current_pengguna_edit = (
                     detail_list and all(detail.status == 'diajukan' for detail in detail_list)
                 )
@@ -542,12 +423,7 @@ class PeminjamanAlatListView(ListView):
             return transaksi_list
 
         peminjaman_list = list(queryset)
-        today = timezone.localdate()
         for peminjaman in peminjaman_list:
-            peminjaman.is_overdue = (
-                peminjaman.tanggal_kembali and peminjaman.tanggal_kembali < today
-                and peminjaman.status not in ARCHIVED_STATUS_CHOICES
-            )
             peminjaman.can_current_pengguna_edit = (
                 pengguna.role in MANAGER_ROLES
                 or (peminjaman.nim == pengguna.nim_nik and peminjaman.status == 'diajukan')
@@ -571,10 +447,6 @@ class PeminjamanAlatListView(ListView):
         context['filter_status'] = self.request.GET.get('status', '').strip()
         context['filter_semua'] = self.request.GET.get('semua') == '1'
         context['view_riwayat'] = self.request.GET.get('tampilan') == 'riwayat'
-        context['has_overdue_peminjaman'] = any(
-            getattr(peminjaman, 'is_overdue', False)
-            for peminjaman in context.get('peminjaman_list', [])
-        )
         allowed_statuses = (
             ARCHIVED_STATUS_CHOICES if context['view_riwayat']
             else {value for value, _ in PeminjamanAlat.STATUS_CHOICES} - {'ditolak'}
@@ -593,19 +465,12 @@ class PeminjamanAlatListView(ListView):
         )
         if context['is_borrower']:
             context['catalog_products'] = self.get_catalog_products()
+            populated = {product['kategori'] for product in context['catalog_products']}
+            context['inventory_categories'] = [
+                choice for choice in InventarisBarang.KATEGORI_CHOICES if choice[0] in populated
+            ]
             context['today'] = timezone.localdate()
             context['credit_profile'] = get_credit_profile(current_pengguna.nim_nik)
-        if current_pengguna and current_pengguna.role in EXTENSION_REVIEWER_ROLES:
-            pending_extensions = list(
-                PengajuanPerpanjangan.objects.filter(status='diajukan')
-                .exclude(diajukan_oleh=current_pengguna)
-                .select_related('transaksi', 'diajukan_oleh')
-                .prefetch_related('transaksi__detail')[:10]
-            )
-            for extension in pending_extensions:
-                anchor = extension.transaksi.detail.order_by('pk').first()
-                extension.anchor_pk = anchor.pk if anchor else None
-            context['pending_extensions'] = pending_extensions
         return context
 
     def get_catalog_products(self):
@@ -666,6 +531,8 @@ class PeminjamanAlatListView(ListView):
             products.append({
                 'id': barang.pk,
                 'nama': barang.inventaris.nama if barang.inventaris_id else barang.nama,
+                'kategori': barang.inventaris.kategori if barang.inventaris_id else 'lainnya',
+                'kategori_label': barang.inventaris.get_kategori_display() if barang.inventaris_id else 'Lainnya',
                 'kode': barang.inventaris.kode_inventaris if barang.inventaris_id else barang.kode_barang,
                 'detail_kode': barang.kode_barang,
                 'lokasi': barang.lokasi.nama_lokasi if barang.lokasi_id else '-',
@@ -736,54 +603,8 @@ class PeminjamanAlatDetailView(DetailView):
             detail.status not in ARCHIVED_STATUS_CHOICES
             for detail in context['detail_transaksi']
         )
-        today = timezone.localdate()
-        overdue_details = [
-            detail for detail in context['detail_transaksi']
-            if detail.status == 'dipinjam' and detail.tanggal_kembali and detail.tanggal_kembali < today
-        ]
-        context['is_overdue'] = bool(overdue_details)
-        context['overdue_days'] = max(
-            [(today - detail.tanggal_kembali).days for detail in overdue_details] or [0]
-        )
         context['detail_status_choices'] = BULK_STATUS_UI_CHOICES
-        credit_profile = get_credit_profile(self.object.nim)
-        context['credit_profile'] = credit_profile
-        extension_list = list(
-            self.object.transaksi.pengajuan_perpanjangan.select_related(
-                'diajukan_oleh', 'ditinjau_oleh'
-            )
-        ) if self.object.transaksi_id else []
-        context['extension_list'] = extension_list
-        pending_extension = next(
-            (item for item in extension_list if item.status == 'diajukan'),
-            None,
-        )
-        context['pending_extension'] = pending_extension
-        context['can_request_extension'] = bool(
-            pengguna
-            and pengguna.role in BORROWER_ROLES
-            and self.object.nim == pengguna.nim_nik
-            and any(detail.status == 'dipinjam' for detail in context['detail_transaksi'])
-            and self.object.tanggal_kembali and not pending_extension
-        )
-        context['can_review_extension'] = bool(
-            pengguna
-            and pengguna.role in EXTENSION_REVIEWER_ROLES
-            and pending_extension
-            and pending_extension.diajukan_oleh_id != pengguna.pk
-            and self.object.nim != pengguna.nim_nik
-        )
-        context['can_manual_extension'] = bool(
-            pengguna and pengguna.role in EXTENSION_REVIEWER_ROLES
-            and self.object.transaksi_id and self.object.nim != pengguna.nim_nik
-            and any(detail.status == 'dipinjam' for detail in context['detail_transaksi'])
-            and self.object.tanggal_kembali and not pending_extension
-        )
-        if context['can_request_extension'] or context['can_manual_extension']:
-            context['extension_form'] = PengajuanPerpanjanganForm(
-                transaksi=self.object.transaksi,
-                credit_profile=credit_profile,
-            )
+        context['credit_profile'] = get_credit_profile(self.object.nim)
         return context
 
 

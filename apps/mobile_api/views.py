@@ -22,12 +22,19 @@ from rest_framework.views import APIView
 from apps.asleb.models import (
     AbsensiAsleb,
     AbsensiMasukAsleb,
+    Asleb,
     IzinAbsensiManualAsleb,
     ModulPraktikum,
+    HasilPraktikumMahasiswa,
+    PesertaPraktikum,
     PengaturanAbsensiAsleb,
 )
-from apps.asleb.services import get_active_asleb_period
-from apps.asleb.views import sync_honor_from_mobile_absensi
+from apps.asleb.qr_attendance import QR_MAX_AGE_SECONDS, _active_participants, issue_student_token, resolve_scan
+from apps.asleb.views import get_praktikum_matkul_queryset
+from apps.kalender.realtime import send_data_refresh
+import json
+from apps.asleb.services import get_active_asleb_period, get_attendance_source_for_slot
+from apps.asleb.views import get_missing_attendance_dates, sync_honor_from_mobile_absensi
 from apps.asleb.models import HonorAsleb
 from apps.barang_tertinggal.notifications import publish_barang_tertinggal_news
 from apps.core.views import bot_answer
@@ -83,6 +90,66 @@ from .services import (
 
 def api_error(message, code, http_status=status.HTTP_400_BAD_REQUEST, **extra):
     return Response({'detail': message, 'code': code, **extra}, status=http_status)
+
+
+class StudentQrView(APIView):
+    permission_classes = [IsMobileUser]
+
+    def get(self, request):
+        if request.user.role not in {'mahasiswa', 'asisten_lab'}:
+            return api_error('Akses ditolak.', 'forbidden', status.HTTP_403_FORBIDDEN)
+        if not _active_participants(request.user).exists():
+            return api_error('Belum ada kelas praktikum aktif.', 'no_class', status.HTTP_404_NOT_FOUND)
+        response = Response({'token': issue_student_token(request.user), 'expires_in': QR_MAX_AGE_SECONDS, 'refresh_after': 30})
+        response['Cache-Control'] = 'no-store'
+        return response
+
+
+class AslabQrModulesView(APIView):
+    permission_classes = [IsAsistenLab]
+
+    def get(self, request):
+        courses = get_praktikum_matkul_queryset(request.user)
+        modules = ModulPraktikum.objects.filter(matkul__in=courses).select_related('matkul').order_by('matkul__nama', 'nomor')
+        return Response({'results': [
+            {'matkul_id': module.matkul_id, 'modul_id': module.pk, 'label': f'{module.matkul} / Modul {module.nomor} - {module.judul}'}
+            for module in modules
+        ]})
+
+
+class AslabQrScanView(APIView):
+    permission_classes = [IsAsistenLab]
+
+    def post(self, request, matkul_pk, modul_pk, action):
+        if action not in {'preview', 'confirm'}:
+            return api_error('Aksi tidak valid.', 'invalid_action')
+        token = request.data.get('token', '')
+        with transaction.atomic():
+            resolved, error = resolve_scan(request.user, matkul_pk, modul_pk, token, lock=action == 'confirm')
+            if error:
+                return Response(json.loads(error.content), status=error.status_code)
+            asisten, mahasiswa, peserta, modul, matkul = resolved
+            result = {'nama': mahasiswa.nama_pengguna, 'nim': mahasiswa.nim_nik, 'matkul': str(matkul), 'modul': f'Modul {modul.nomor} - {modul.judul}'}
+            if action == 'preview':
+                result['foto'] = mahasiswa.foto.url if mahasiswa.foto else ''
+                response = Response(result)
+                response['Cache-Control'] = 'no-store'
+                return response
+            if not peserta.pengguna_id:
+                peserta.pengguna = mahasiswa
+                peserta.save(update_fields=['pengguna', 'diperbarui_pada'])
+            hasil = HasilPraktikumMahasiswa(
+                peserta=peserta, modul=modul, tanggal_praktikum=timezone.localdate(),
+                status_absensi='hadir', sumber_absensi='qr', dicatat_oleh=asisten,
+            )
+            hasil.full_clean()
+            hasil.save()
+            transaction.on_commit(lambda: send_data_refresh(
+                ('asisten_lab', 'laboran', 'mahasiswa'), 'practicum.attendance.updated',
+                [reverse('asleb:praktikum_nilai', args=[matkul.pk, modul.pk]), '/'],
+                related_object_id=matkul.pk, title='Absensi mahasiswa diperbarui',
+            ))
+        return Response({'ok': True, **result})
 
 
 class AppVersionView(APIView):
@@ -425,6 +492,7 @@ class CheckInView(APIView):
         serializer = CheckInSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         asleb = get_active_asleb(request.user)
+        asleb = Asleb.objects.select_for_update().get(pk=asleb.pk)
         schedule = get_owned_schedules(asleb).select_for_update().filter(
             pk=serializer.validated_data['jadwal_id']
         ).first()
@@ -458,22 +526,18 @@ class CheckInView(APIView):
             manual_permission.tanggal_praktikum
             if manual_permission else timezone.localdate()
         )
+        if manual_permission and attendance_date not in get_missing_attendance_dates(asleb, schedule):
+            return api_error('Tanggal izin susulan sudah tidak tersedia untuk jadwal ini.', 'invalid_manual_attendance')
         # Simpan tanggal praktikum yang diizinkan sebagai tanggal efektif.
         # Waktu upload tetap tersedia di `waktu_masuk`/`dibuat_pada`, sehingga
         # rekap honor tidak bergeser ke bulan saat absensi susulan dikirim.
-        if AbsensiMasukAsleb.objects.filter(
-            asleb=asleb, jadwal=schedule, tanggal_absensi=attendance_date,
-        ).exists():
-            return api_error('Anda sudah melakukan absensi masuk untuk jadwal ini.', 'duplicate_attendance')
-        if AbsensiAsleb.objects.filter(
-            asleb=asleb,
-            jadwal=schedule,
-            tanggal_praktikum=attendance_date,
-        ).exists():
-            return api_error(
-                'Anda sudah melakukan absensi untuk jadwal ini melalui web.',
-                'duplicate_attendance',
+        source = get_attendance_source_for_slot(asleb, schedule, attendance_date)
+        if source:
+            message = (
+                'Anda sudah melakukan absensi untuk jadwal ini melalui web.'
+                if source == 'web' else 'Anda sudah melakukan absensi masuk untuk jadwal ini.'
             )
+            return api_error(message, 'duplicate_attendance')
 
         valid_time, reason, attendance_status = validate_schedule_time(schedule)
         if manual_permission:
@@ -611,13 +675,16 @@ def inventory_payload(request, inventory):
     borrowed = getattr(inventory, 'jumlah_dipinjam_aktif', 0) or 0
     locations = list(
         inventory.detail_barang.exclude(lokasi=None)
-        .values('lokasi_id', 'lokasi__kode_lokasi', 'lokasi__nama_lokasi')
+        .values('lokasi_id', 'lokasi__kode_lokasi', 'lokasi__nama_lokasi',
+                'lokasi__petunjuk_penyimpanan', 'lokasi__foto')
         .distinct()
     )
     return {
         'id': inventory.pk,
         'kode': inventory.kode_inventaris,
         'nama': inventory.nama,
+        'kategori': inventory.kategori,
+        'kategori_label': inventory.get_kategori_display(),
         'jumlah': inventory.jumlah,
         'dipinjam': borrowed,
         'tersedia': max(inventory.jumlah - borrowed, 0),
@@ -627,6 +694,10 @@ def inventory_payload(request, inventory):
                 'id': item['lokasi_id'],
                 'kode': item['lokasi__kode_lokasi'],
                 'nama': item['lokasi__nama_lokasi'],
+                'petunjuk': item['lokasi__petunjuk_penyimpanan'],
+                'foto_url': request.build_absolute_uri(
+                    reverse('mobile_api:media', kwargs={'path': item['lokasi__foto']})
+                ) if item['lokasi__foto'] else None,
             }
             for item in locations
         ],
@@ -662,7 +733,9 @@ class LaboranLocationListView(APIView):
 
     def get(self, request):
         return Response({'results': [
-            {'id': item.pk, 'kode': item.kode_lokasi, 'nama': item.nama_lokasi}
+            {'id': item.pk, 'kode': item.kode_lokasi, 'nama': item.nama_lokasi,
+             'petunjuk': item.petunjuk_penyimpanan,
+             'foto_url': absolute_file_url(request, item.foto)}
             for item in Lokasi.objects.order_by('nama_lokasi')
         ]})
 
@@ -673,6 +746,7 @@ class LaboranInventoryListCreateView(APIView):
 
     def get(self, request):
         query = str(request.query_params.get('q') or '').strip()
+        kategori = str(request.query_params.get('kategori') or '').strip()
         queryset = InventarisBarang.objects.annotate(
             jumlah_dipinjam_aktif=Count(
                 'detail_barang__peminjaman',
@@ -681,10 +755,14 @@ class LaboranInventoryListCreateView(APIView):
         ).prefetch_related('galeri_foto', 'detail_barang__lokasi')
         if query:
             queryset = queryset.filter(Q(nama__icontains=query) | Q(kode_inventaris__icontains=query))
+        if kategori in dict(InventarisBarang.KATEGORI_CHOICES):
+            queryset = queryset.filter(kategori=kategori)
         return Response({'results': [inventory_payload(request, item) for item in queryset]})
 
     @transaction.atomic
     def post(self, request):
+        if not request.FILES.get('foto'):
+            return api_error('Pilih minimal satu foto barang.', 'inventory_photo_required')
         serializer = LaboranInventoryCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         gallery_files = request.FILES.getlist('foto_galeri')
@@ -699,6 +777,7 @@ class LaboranInventoryListCreateView(APIView):
         try:
             inventory = InventarisBarang.objects.create(
                 nama=values['nama'],
+                kategori=values.get('kategori', 'lainnya'),
                 jumlah=values['jumlah'],
                 foto=values.get('foto'),
                 keterangan=values.get('keterangan', ''),
@@ -804,10 +883,11 @@ class LaboranInventoryDetailView(APIView):
                 )
 
         inventory.nama = values['nama']
+        inventory.kategori = values.get('kategori', inventory.kategori)
         inventory.jumlah = requested_quantity
         inventory.keterangan = values.get('keterangan', '')
         inventory.save(
-            update_fields=['nama', 'jumlah', 'keterangan', 'diperbarui_pada']
+            update_fields=['nama', 'kategori', 'jumlah', 'keterangan', 'diperbarui_pada']
         )
         inventory.detail_barang.update(
             nama=inventory.nama,
@@ -853,6 +933,7 @@ def loan_payload(loan):
         'tanggal_kembali': loan.tanggal_kembali,
         'status': loan.status,
         'status_display': loan.get_status_display(),
+        'potongan_skor': loan.potongan_skor,
         'catatan': loan.catatan,
     }
 
@@ -895,7 +976,15 @@ class LaboranLoanStatusView(APIView):
         next_status = str(request.data.get('status') or '').strip()
         if next_status not in self.allowed_transitions.get(loan.status, set()):
             return api_error('Perubahan status peminjaman tidak diizinkan.', 'invalid_status_transition')
-        update_peminjaman_status(loan, next_status)
+        points = None
+        if next_status in {'hilang', 'rusak'}:
+            try:
+                points = int(request.data.get('potongan_skor', ''))
+            except (TypeError, ValueError):
+                points = 0
+            if not 1 <= points <= 100:
+                return api_error('Isi potongan skor 1 sampai 100 poin.', 'invalid_credit_penalty')
+        update_peminjaman_status(loan, next_status, potongan_skor=points, laboran=request.user)
         send_peminjaman_status_notification(loan)
         transaction.on_commit(
             lambda loan_id=loan.pk: send_peminjaman_status_update(

@@ -51,6 +51,7 @@
                 <div class="text-sm font-semibold text-slate-500">Kode Inventaris</div>
                 <div class="mt-2 text-xl font-bold text-slate-900">{{ inventaris.kode_inventaris }}</div>
             </div>
+            <div><div class="text-sm font-semibold text-slate-500">Kategori</div><div class="mt-2 font-bold text-slate-900">{{ inventaris.get_kategori_display }}</div></div>
             <div>
                 <div class="text-sm font-semibold text-slate-500">Stok Total</div>
                 <div class="mt-2 text-xl font-bold text-slate-900">{{ inventaris.jumlah }}</div>
@@ -121,7 +122,7 @@
                     <tr class="hover:bg-slate-50/70">
                         <td class="font-semibold text-slate-600">{{ inventaris.kode_inventaris }}</td>
                         <td class="font-semibold text-slate-900">{{ barang.kode_barang }}</td>
-                        <td>{{ barang.lokasi.nama_lokasi|default:"-" }}</td>
+                        <td>{% if barang.lokasi %}<a class="text-brand-700 hover:underline" href="{% url 'inventaris:lokasi_detail' barang.lokasi.pk %}">{{ barang.lokasi.nama_lokasi }}</a>{% else %}-{% endif %}</td>
                         <td>{{ barang.get_kondisi_display }}</td>
                         <td>
                             <span class="{% if barang.status_pinjam_key == 'dipinjam' %}bg-amber-100 text-amber-700{% elif barang.status_pinjam_key == 'rusak' %}bg-rose-100 text-rose-700{% elif barang.status_pinjam_key == 'hilang' %}bg-slate-200 text-slate-700{% else %}bg-emerald-100 text-emerald-700{% endif %} inline-flex rounded-full px-3 py-1 text-xs font-bold">

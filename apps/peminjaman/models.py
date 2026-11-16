@@ -216,6 +216,11 @@ class PeminjamanAlat(models.Model):
     is_capstone = models.BooleanField('Untuk capstone', default=False)
     tanggal_kembali = models.DateField(blank=True, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='diajukan')
+    potongan_skor = models.PositiveSmallIntegerField(default=0)
+    potongan_skor_oleh = models.ForeignKey(
+        Pengguna, on_delete=models.PROTECT, null=True, blank=True,
+        related_name='potongan_skor_peminjaman',
+    )
     catatan = models.TextField(blank=True)
     dibuat_pada = models.DateTimeField(auto_now_add=True)
     diperbarui_pada = models.DateTimeField(auto_now=True)

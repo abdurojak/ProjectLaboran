@@ -1,6 +1,20 @@
 from .models import PesertaPraktikum
 
 
+def get_attendance_source_for_slot(asleb, jadwal, attendance_date):
+    from .models import AbsensiAsleb, AbsensiMasukAsleb
+
+    if AbsensiAsleb.objects.filter(
+        asleb=asleb, jadwal=jadwal, tanggal_praktikum=attendance_date,
+    ).exists():
+        return 'web'
+    if AbsensiMasukAsleb.objects.filter(
+        asleb=asleb, jadwal=jadwal, tanggal_absensi=attendance_date,
+    ).exists():
+        return 'mobile'
+    return None
+
+
 def get_active_asleb_for_pengguna(pengguna):
     """Resolve the currently active Aslab profile for an authenticated user."""
     if not pengguna or getattr(pengguna, 'role', '') != 'asisten_lab':

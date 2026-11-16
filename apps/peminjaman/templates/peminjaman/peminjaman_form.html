@@ -12,7 +12,7 @@
 
     {% if credit_profile %}
     <div class="rounded-3xl border border-amber-100 bg-amber-50 px-5 py-4 text-sm font-semibold text-amber-900">
-        Skor kredit {{ credit_profile.score }} ({{ credit_profile.label }}). Masa peminjaman maksimal {{ credit_profile.max_loan_days }} hari. Tanggal kembali pada hari libur akan diundur otomatis.
+        Skor kredit {{ credit_profile.score }} ({{ credit_profile.label }}). Skor hanya berkurang bila barang rusak atau hilang sesuai keputusan laboran.
     </div>
     {% endif %}
 
@@ -25,23 +25,6 @@
         {{ form.non_field_errors }}
         {{ form.barang }}
         {{ form.selected_barang_ids }}
-        <script>
-            (function () {
-                function syncCapstone() {
-                    const capstone = document.getElementById('id_is_capstone');
-                    const date = document.getElementById('id_tanggal_kembali');
-                    if (!capstone || !date) return;
-                    date.disabled = capstone.checked;
-                    date.required = !capstone.checked;
-                    date.closest('div').hidden = capstone.checked;
-                }
-                document.addEventListener('change', function (event) {
-                    if (event.target.id === 'id_is_capstone') syncCapstone();
-                });
-                document.addEventListener('DOMContentLoaded', syncCapstone);
-                document.addEventListener('htmx:afterSwap', syncCapstone);
-            }());
-        </script>
         {% if current_pengguna and current_pengguna.role == 'mahasiswa' or current_pengguna.role == 'asisten_lab' %}
         {{ form.status }}
         <div class="rounded-3xl border border-amber-100 bg-amber-50 p-4 text-sm font-semibold leading-7 text-amber-800">

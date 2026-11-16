@@ -10,6 +10,7 @@ class LoanItem {
     required this.tanggalKembali,
     required this.status,
     required this.statusDisplay,
+    required this.potonganSkor,
     required this.catatan,
   });
 
@@ -23,6 +24,7 @@ class LoanItem {
   final DateTime? tanggalKembali;
   final String status;
   final String statusDisplay;
+  final int potonganSkor;
   final String catatan;
 
   factory LoanItem.fromJson(Map<String, dynamic> json) => LoanItem(
@@ -36,6 +38,7 @@ class LoanItem {
     tanggalKembali: DateTime.tryParse('${json['tanggal_kembali'] ?? ''}'),
     status: json['status'] as String? ?? '-',
     statusDisplay: json['status_display'] as String? ?? '-',
+    potonganSkor: json['potongan_skor'] as int? ?? 0,
     catatan: json['catatan'] as String? ?? '',
   );
 }
