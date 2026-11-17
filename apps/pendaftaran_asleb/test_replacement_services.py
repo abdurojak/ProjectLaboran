@@ -29,6 +29,7 @@ from .models import (
     PendaftaranAsleb,
 )
 from .replacement_forms import DirectOfferForm, ReplacementCandidateForm
+from .selection import OVERRIDE_PHRASE
 from .replacement_services import (
     accept_offer,
     activate_replacement,
@@ -2240,6 +2241,7 @@ class DirectOfferConcurrencyTests(TransactionTestCase):
                 offer_id=offer.pk,
                 actor=Pengguna.objects.get(pk=self.laboran.pk),
                 active_date=date(2026, 9, 1),
+                override_phrase=OVERRIDE_PHRASE,
             ).pk,
             lambda: end_assignment_for_replacement(
                 assignment_id=other_assignment.pk,
