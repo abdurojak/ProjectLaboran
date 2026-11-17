@@ -2200,6 +2200,7 @@ class PrivateChatTests(TestCase):
         self.assertContains(response, 'Halo pengirim')
         self.assertNotContains(response, 'Rahasia ketiga')
         self.assertContains(response, 'data-chat-messages')
+        self.assertNotContains(response, f'Pesan {self.recipient.pk} ke {self.sender.pk}')
 
     def test_direktori_chat_tidak_menampilkan_hubungkan(self):
         response = self.client.get(reverse('pengguna:list'))

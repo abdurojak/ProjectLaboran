@@ -127,7 +127,7 @@ def chat_room(request, pk):
             'online': bool(target.terakhir_aktif_pada and target.terakhir_aktif_pada >= now - timedelta(seconds=75))})
     return render(request, 'pengguna/chat_room.html', {
         'target': target,
-        'messages': messages,
+        'chat_messages': messages,
         'has_more': has_more,
         'embedded': request.GET.get('popup') == '1',
         'stickers': STIKER,

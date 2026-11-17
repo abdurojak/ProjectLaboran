@@ -9,7 +9,7 @@
     </header>
     <div class="flex-1 space-y-3 overflow-y-auto bg-slate-50 px-4 py-5 sm:px-6" data-chat-messages aria-live="polite">
         <button type="button" class="btn-secondary mx-auto {% if not has_more %}hidden{% endif %}" data-load-older>Muat pesan lama</button>
-        {% for item in messages %}
+        {% for item in chat_messages %}
         <div class="flex {% if item.pengirim_id == current_pengguna.pk %}justify-end{% else %}justify-start{% endif %}" data-message-id="{{ item.pk }}">
             <div class="max-w-[85%] rounded-lg px-4 py-2.5 sm:max-w-[75%] {% if item.pengirim_id == current_pengguna.pk %}bg-brand-700 text-white{% else %}border border-slate-200 bg-white text-slate-900{% endif %}">
                 {% if item.stiker_emoji %}<span class="chat-sticker" role="img" aria-label="Stiker {{ item.isi }}">{{ item.stiker_emoji }}</span>{% else %}<p class="whitespace-pre-wrap break-words text-sm">{{ item.isi }}</p>{% endif %}<time class="mt-1 block text-right text-[11px] opacity-70">{{ item.dibuat_pada|date:"d M H:i" }}{% if item.pengirim_id == current_pengguna.pk %}<span class="chat-check {% if item.dibaca_pada %}is-read{% endif %}" data-chat-read>{% if item.dibaca_pada %}✓✓{% else %}✓{% endif %}</span>{% endif %}</time>
