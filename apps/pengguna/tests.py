@@ -2152,6 +2152,8 @@ class PrivateChatTests(TestCase):
         message = PesanPribadi.objects.get()
         self.assertEqual(message.isi, 'Halo, ada jadwal baru?')
         self.assertTrue(Notifikasi.objects.filter(pengguna=self.recipient, source_key=f'chat:{message.pk}').exists())
+        sent = self.client.get(reverse('pengguna:chat_room', args=[self.recipient.pk]), HTTP_ACCEPT='application/json')
+        self.assertFalse(sent.json()['messages'][0]['read'])
 
         session = self.client.session
         session['pengguna_id'] = self.recipient.pk
@@ -2159,9 +2161,19 @@ class PrivateChatTests(TestCase):
         result = self.client.get(reverse('pengguna:chat_room', args=[self.sender.pk]), HTTP_ACCEPT='application/json')
         self.assertEqual(result.status_code, 200)
         self.assertEqual(result.json()['messages'][0]['text'], message.isi)
+        self.assertTrue(result.json()['messages'][0]['read'])
         message.refresh_from_db()
         self.assertIsNotNone(message.dibaca_pada)
+        session['pengguna_id'] = self.sender.pk
+        session.save()
+        read = self.client.get(reverse('pengguna:chat_room', args=[self.recipient.pk]), HTTP_ACCEPT='application/json')
+        self.assertTrue(read.json()['messages'][0]['read'])
         self.assertFalse(Notifikasi.objects.filter(pengguna=self.recipient, source_key=f'chat:{message.pk}', dibaca_pada__isnull=True).exists())
+
+    def test_chat_popup_memakai_layout_tanpa_shell(self):
+        response = self.client.get(reverse('pengguna:chat_room', args=[self.recipient.pk]) + '?popup=1')
+        self.assertContains(response, 'data-chat-embedded')
+        self.assertContains(response, 'data-chat-close')
 
     def test_chat_menolak_akun_sendiri_dan_pesan_kosong(self):
         self.assertEqual(self.client.post(reverse('pengguna:chat_send', args=[self.sender.pk]), {'message': 'tes'}).status_code, 400)

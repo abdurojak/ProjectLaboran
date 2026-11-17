@@ -17,6 +17,12 @@ from apps.kalender.realtime import send_user_notification
 from .models import Pengguna, PesanPribadi
 
 
+STIKER = {
+    'senang': '😄', 'tertawa': '😂', 'suka': '😍', 'semangat': '💪',
+    'sip': '👍', 'terima_kasih': '🙏', 'kaget': '😮', 'sedih': '😢',
+}
+
+
 def conversation_messages(pengguna, target, before_id=None):
     messages = PesanPribadi.objects.filter(
         Q(pengirim=pengguna, penerima=target) | Q(pengirim=target, penerima=pengguna)
@@ -52,10 +58,18 @@ def touch_presence(pengguna):
         })
 
 
-def create_private_message(pengguna, target, content):
+def create_private_message(pengguna, target, content, sticker=None):
+    sticker = str(sticker or '').strip()
     content = str(content or '').strip()
-    if not content or len(content) > 2000:
-        return None, 'Pesan harus berisi 1 sampai 2000 karakter.', 400
+    if sticker:
+        if sticker not in STIKER or content:
+            return None, 'Stiker tidak valid.', 400
+        content = sticker
+        jenis = 'stiker'
+    else:
+        if not content or len(content) > 2000:
+            return None, 'Pesan harus berisi 1 sampai 2000 karakter.', 400
+        jenis = 'teks'
     if target.pk == pengguna.pk:
         return None, 'Tidak dapat mengirim pesan ke akun sendiri.', 400
     rate_key = f'chat-rate:{pengguna.pk}'
@@ -65,7 +79,7 @@ def create_private_message(pengguna, target, content):
     cache.set(rate_key, count + 1, 60)
 
     with transaction.atomic():
-        message = PesanPribadi.objects.create(pengirim=pengguna, penerima=target, isi=content)
+        message = PesanPribadi.objects.create(pengirim=pengguna, penerima=target, isi=content, jenis=jenis)
         url = reverse('pengguna:chat_room', args=[pengguna.pk])
         transaction.on_commit(lambda: send_user_notification(target.pk, {
             'event': 'chat.message',
@@ -95,13 +109,18 @@ def chat_room(request, pk):
     recent = list(conversation_messages(pengguna, target, int(before_id) if before_id else None))
     has_more = len(recent) > 100
     messages = list(reversed(recent[:100]))
+    for item in messages:
+        item.stiker_emoji = STIKER.get(item.isi) if item.jenis == 'stiker' else None
     if request.headers.get('Accept') == 'application/json':
         return JsonResponse({'messages': [
             {
                 'id': item.pk,
                 'text': item.isi,
+                'sticker': item.isi if item.jenis == 'stiker' else None,
+                'sticker_emoji': STIKER.get(item.isi) if item.jenis == 'stiker' else None,
                 'mine': item.pengirim_id == pengguna.pk,
                 'time': timezone.localtime(item.dibuat_pada).strftime('%d %b %H:%M'),
+                'read': bool(item.dibaca_pada),
             }
             for item in messages
         ], 'has_more': has_more,
@@ -110,6 +129,8 @@ def chat_room(request, pk):
         'target': target,
         'messages': messages,
         'has_more': has_more,
+        'embedded': request.GET.get('popup') == '1',
+        'stickers': STIKER,
         'online': bool(target.terakhir_aktif_pada and target.terakhir_aktif_pada >= now - timedelta(seconds=75)),
     })
 
@@ -118,7 +139,9 @@ def chat_room(request, pk):
 def chat_send(request, pk):
     pengguna = request.current_pengguna
     target = chat_target(request, pk)
-    message, error, status_code = create_private_message(pengguna, target, request.POST.get('message'))
+    message, error, status_code = create_private_message(
+        pengguna, target, request.POST.get('message'), request.POST.get('sticker'),
+    )
     if error:
         return JsonResponse({'detail': error}, status=status_code)
     return JsonResponse({'ok': True, 'id': message.pk}, status=201)

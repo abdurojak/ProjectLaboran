@@ -152,9 +152,11 @@ class KoneksiPengguna(models.Model):
 
 
 class PesanPribadi(models.Model):
+    JENIS_CHOICES = [('teks', 'Teks'), ('stiker', 'Stiker')]
     pengirim = models.ForeignKey(Pengguna, on_delete=models.PROTECT, related_name='pesan_terkirim')
     penerima = models.ForeignKey(Pengguna, on_delete=models.PROTECT, related_name='pesan_diterima')
     isi = models.TextField(max_length=2000)
+    jenis = models.CharField(max_length=10, choices=JENIS_CHOICES, default='teks')
     dibuat_pada = models.DateTimeField(auto_now_add=True)
     dibaca_pada = models.DateTimeField(blank=True, null=True)
 

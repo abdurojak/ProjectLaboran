@@ -1,10 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Chat dengan {{ target.nama_pengguna }}{% endblock %}
-
 {% block content %}
-<section class="mx-auto flex h-[min(75vh,760px)] min-h-[420px] max-w-4xl flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
+<section class="chat-dialog" {% if embedded %}data-chat-embedded{% endif %} role="dialog" aria-modal="true" aria-label="Chat dengan {{ target.nama_pengguna }}">
     <header class="flex items-center gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
-        <a href="{% url 'pengguna:list' %}" class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full hover:bg-slate-100" aria-label="Kembali ke daftar chat"><i data-lucide="arrow-left" class="h-5 w-5"></i></a>
+        <a href="{% url 'pengguna:list' %}" {% if embedded %}data-chat-close{% endif %} class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full hover:bg-slate-100" aria-label="Tutup chat"><i data-lucide="x" class="h-5 w-5"></i></a>
         {% if target.foto %}<img src="{{ target.foto.url }}" alt="" class="h-10 w-10 rounded-full object-cover">{% else %}<span class="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100"><i data-lucide="user" class="h-5 w-5"></i></span>{% endif %}
         <div class="min-w-0"><h1 class="truncate font-bold text-slate-900">{{ target.nama_pengguna }}</h1><p class="text-xs text-slate-500" data-chat-presence>{% if online %}Aktif di LabHub{% else %}Tidak aktif{% endif %}</p></div>
     </header>
@@ -13,15 +12,19 @@
         {% for item in messages %}
         <div class="flex {% if item.pengirim_id == current_pengguna.pk %}justify-end{% else %}justify-start{% endif %}" data-message-id="{{ item.pk }}">
             <div class="max-w-[85%] rounded-lg px-4 py-2.5 sm:max-w-[75%] {% if item.pengirim_id == current_pengguna.pk %}bg-brand-700 text-white{% else %}border border-slate-200 bg-white text-slate-900{% endif %}">
-                <p class="whitespace-pre-wrap break-words text-sm">{{ item.isi }}</p><time class="mt-1 block text-right text-[11px] opacity-70">{{ item.dibuat_pada|date:"d M H:i" }}</time>
+                {% if item.stiker_emoji %}<span class="chat-sticker" role="img" aria-label="Stiker {{ item.isi }}">{{ item.stiker_emoji }}</span>{% else %}<p class="whitespace-pre-wrap break-words text-sm">{{ item.isi }}</p>{% endif %}<time class="mt-1 block text-right text-[11px] opacity-70">{{ item.dibuat_pada|date:"d M H:i" }}{% if item.pengirim_id == current_pengguna.pk %}<span class="chat-check {% if item.dibaca_pada %}is-read{% endif %}" data-chat-read>{% if item.dibaca_pada %}✓✓{% else %}✓{% endif %}</span>{% endif %}</time>
             </div>
         </div>
         {% endfor %}
     </div>
+    <div class="chat-sticker-picker hidden" data-sticker-picker aria-label="Pilih stiker">
+        {% for code, emoji in stickers.items %}<button type="button" data-sticker="{{ code }}" aria-label="Kirim stiker {{ code }}" title="{{ code }}">{{ emoji }}</button>{% endfor %}
+    </div>
     <form method="post" action="{% url 'pengguna:chat_send' target.pk %}" class="flex items-end gap-2 border-t border-slate-200 bg-white p-3 sm:p-4" data-chat-form>
         {% csrf_token %}
+        <button type="button" class="chat-sticker-toggle" data-sticker-toggle aria-label="Pilih stiker" title="Pilih stiker"><i data-lucide="smile" class="h-5 w-5"></i></button>
         <label for="chat-message" class="sr-only">Pesan</label>
-        <textarea id="chat-message" name="message" rows="2" maxlength="2000" required class="min-w-0 flex-1 resize-none" placeholder="Tulis pesan..." data-chat-input></textarea>
+        <textarea id="chat-message" name="message" rows="1" maxlength="2000" required class="min-w-0 flex-1 resize-none" placeholder="Tulis pesan..." data-chat-input></textarea>
         <button type="submit" class="btn-primary h-11 shrink-0 gap-2" aria-label="Kirim pesan"><i data-lucide="send" class="h-4 w-4"></i><span class="hidden sm:inline">Kirim</span></button>
     </form>
     <p class="hidden px-4 pb-3 text-sm text-rose-700" data-chat-error role="alert"></p>
@@ -29,18 +32,52 @@
 {% endblock %}
 
 {% block extra_script %}
+<style>
+    .chat-dialog { width: min(100% - 2rem, 860px); height: min(720px, calc(100dvh - 2rem)); min-height: 360px; margin: auto; display: flex; flex-direction: column; overflow: hidden; border-radius: 12px; border: 1px solid var(--surface-border, #cbd5e1); background: var(--surface-bg, #fff); box-shadow: 0 24px 80px rgba(15,23,42,.24); }
+    .chat-dialog textarea { height: 44px !important; min-height: 44px !important; max-height: 120px; padding: 10px 14px !important; }
+    .chat-dialog [data-chat-messages] { min-height: 0; }
+    .chat-dialog .chat-check { display: inline-flex; vertical-align: middle; margin-left: 4px; }
+    .chat-dialog .chat-check.is-read { color: #67e8f9; opacity: 1; }
+    .chat-dialog { position: relative; }
+    .chat-sticker { display: block; font-size: 3rem; line-height: 1.2; }
+    .chat-sticker-toggle { width: 44px; height: 44px; flex: none; display: grid; place-items: center; border-radius: 8px; color: var(--text-main,#0f172a); }
+    .chat-sticker-toggle:hover { background: rgba(148,163,184,.18); }
+    .chat-sticker-picker { position: absolute; z-index: 10; bottom: 76px; left: 12px; width: min(320px,calc(100% - 24px)); padding: 12px; display: grid; grid-template-columns: repeat(4,1fr); gap: 4px; border: 1px solid rgba(148,163,184,.4); border-radius: 8px; background: var(--surface-bg,#fff); box-shadow: 0 12px 36px rgba(15,23,42,.2); }
+    .chat-sticker-picker.hidden { display: none; }
+    .chat-sticker-picker button { min-height: 58px; font-size: 2.2rem; border-radius: 6px; }
+    .chat-sticker-picker button:hover, .chat-sticker-picker button:focus-visible { background: rgba(20,184,166,.16); }
+    @media (max-width: 640px) { .chat-dialog { width: 100%; height: 100dvh; min-height: 0; border-radius: 0; } }
+    {% if embedded %}
+    body { background: transparent !important; min-height: 0 !important; }
+    body > header, body > footer, body > nav, #dashboard-sidebar, [data-app-window-bar], [data-app-content] > footer, [data-admin-chat-floating] { display: none !important; }
+    body > main { width: 100% !important; max-width: none !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; display: block !important; background: transparent !important; }
+    [data-app-frame], [data-app-content] { width: 100% !important; max-width: none !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; }
+    .chat-dialog { width: 100%; height: 100dvh; border: 0; border-radius: 0; box-shadow: none; }
+    {% endif %}
+</style>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    const closeLink = document.querySelector('[data-chat-close]');
+    if (closeLink) closeLink.addEventListener('click', function (event) {
+        if (window.parent !== window) { event.preventDefault(); window.parent.postMessage({type: 'labhub:close-chat'}, window.location.origin); }
+    });
     const root = document.querySelector('[data-chat-messages]');
     const form = document.querySelector('[data-chat-form]');
     const input = document.querySelector('[data-chat-input]');
     const errorBox = document.querySelector('[data-chat-error]');
     const presence = document.querySelector('[data-chat-presence]');
     const olderButton = document.querySelector('[data-load-older]');
+    const stickerPicker = document.querySelector('[data-sticker-picker]');
+    const stickerToggle = document.querySelector('[data-sticker-toggle]');
     const targetId = {{ target.pk }};
     function scrollToBottom() { root.scrollTop = root.scrollHeight; }
+    function setRead(row, read) {
+        const check = row.querySelector('[data-chat-read]');
+        if (check) { check.textContent = read ? '✓✓' : '✓'; check.classList.toggle('is-read', read); }
+    }
     function addMessage(item, prepend) {
-        if (root.querySelector('[data-message-id="' + item.id + '"]')) return;
+        const existing = root.querySelector('[data-message-id="' + item.id + '"]');
+        if (existing) { if (item.mine) setRead(existing, item.read); return; }
         const row = document.createElement('div');
         row.className = 'flex ' + (item.mine ? 'justify-end' : 'justify-start');
         row.dataset.messageId = String(item.id);
@@ -48,10 +85,22 @@ document.addEventListener('DOMContentLoaded', function () {
         bubble.className = 'max-w-[85%] rounded-lg px-4 py-2.5 sm:max-w-[75%] ' + (item.mine ? 'bg-brand-700 text-white' : 'border border-slate-200 bg-white text-slate-900');
         const body = document.createElement('p');
         body.className = 'whitespace-pre-wrap break-words text-sm';
-        body.textContent = item.text;
+        if (item.sticker && item.sticker_emoji) {
+            body.className = 'chat-sticker';
+            body.setAttribute('role', 'img');
+            body.setAttribute('aria-label', 'Stiker ' + item.sticker);
+            body.textContent = item.sticker_emoji;
+        } else body.textContent = item.text;
         const time = document.createElement('time');
         time.className = 'mt-1 block text-right text-[11px] opacity-70';
         time.textContent = item.time;
+        if (item.mine) {
+            const check = document.createElement('span');
+            check.className = 'chat-check' + (item.read ? ' is-read' : '');
+            check.dataset.chatRead = '';
+            check.textContent = item.read ? '✓✓' : '✓';
+            time.appendChild(check);
+        }
         bubble.append(body, time);
         row.appendChild(bubble);
         if (prepend) olderButton.after(row);
@@ -65,23 +114,41 @@ document.addEventListener('DOMContentLoaded', function () {
         presence.textContent = payload.online ? 'Aktif di LabHub' : 'Tidak aktif';
         scrollToBottom();
     }
-    form.addEventListener('submit', async function (event) {
-        event.preventDefault();
-        const content = input.value.trim();
-        if (!content) return;
-        const button = form.querySelector('button');
+    async function sendMessage(sticker) {
+        if (!sticker && !input.value.trim()) return;
+        const button = form.querySelector('[type="submit"]');
         button.disabled = true;
+        stickerToggle.disabled = true;
         errorBox.classList.add('hidden');
         try {
-            const response = await fetch(form.action, {method: 'POST', body: new FormData(form), credentials: 'same-origin', headers: {'Accept': 'application/json'}});
+            const data = new FormData(form);
+            if (sticker) { data.set('message', ''); data.set('sticker', sticker); }
+            const response = await fetch(form.action, {method: 'POST', body: data, credentials: 'same-origin', headers: {'Accept': 'application/json'}});
             const result = await response.json();
             if (!response.ok) throw new Error(result.detail || 'Pesan belum terkirim.');
-            input.value = '';
+            if (!sticker) input.value = '';
+            stickerPicker.classList.add('hidden');
             await syncMessages();
         } catch (error) {
             errorBox.textContent = error.message;
             errorBox.classList.remove('hidden');
-        } finally { button.disabled = false; input.focus(); }
+        } finally { button.disabled = false; stickerToggle.disabled = false; if (!sticker) input.focus(); }
+    }
+    form.addEventListener('submit', async function (event) {
+        event.preventDefault();
+        await sendMessage(null);
+    });
+    stickerToggle.addEventListener('click', function () { stickerPicker.classList.toggle('hidden'); });
+    stickerPicker.addEventListener('click', function (event) {
+        const button = event.target.closest('[data-sticker]');
+        if (button) sendMessage(button.dataset.sticker);
+    });
+    document.addEventListener('keydown', function (event) { if (event.key === 'Escape') stickerPicker.classList.add('hidden'); });
+    input.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+            event.preventDefault();
+            if (input.value.trim()) form.requestSubmit();
+        }
     });
     olderButton.addEventListener('click', async function () {
         const first = root.querySelector('[data-message-id]');
