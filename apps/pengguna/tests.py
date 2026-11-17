@@ -36,6 +36,37 @@ def registration_photo(name='wajah.gif'):
 
 
 class ProfilePhotoValidationTests(SimpleTestCase):
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    def test_verification_code_only_appears_in_email(self):
+        from django.contrib.messages.storage.fallback import FallbackStorage
+        from .views import send_verification_code
+
+        request = RequestFactory().get('/')
+        from django.contrib.sessions.backends.signed_cookies import SessionStore
+        request.session = SessionStore()
+        request._messages = FallbackStorage(request)
+        user = Pengguna(pk=1, nama_pengguna='Test', email='test@example.com')
+        self.assertTrue(send_verification_code(request, user, 'email', 'register'))
+        code = request.session['pengguna_otp']['code']
+        displayed = ' '.join(str(message) for message in request._messages)
+        self.assertNotIn(code, displayed)
+        self.assertNotIn('?kode=', mail.outbox[-1].body)
+        self.assertIn(code, mail.outbox[-1].body)
+
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.console.EmailBackend')
+    def test_simulated_delivery_does_not_expose_code(self):
+        from django.contrib.messages.storage.fallback import FallbackStorage
+        from .views import send_verification_code
+
+        request = RequestFactory().get('/')
+        from django.contrib.sessions.backends.signed_cookies import SessionStore
+        request.session = SessionStore()
+        request._messages = FallbackStorage(request)
+        user = Pengguna(pk=1, nama_pengguna='Test', email='test@example.com')
+        self.assertFalse(send_verification_code(request, user, 'email', 'register'))
+        code = request.session['pengguna_otp']['code']
+        self.assertNotIn(code, ' '.join(str(message) for message in request._messages))
+
     def test_known_avatar_and_near_duplicate_are_blocked(self):
         import cv2
 

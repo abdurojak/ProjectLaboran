@@ -214,7 +214,7 @@ def send_verification_code(
 ):
     code = store_otp(request, purpose, pengguna, method, extra=extra)
     if purpose == 'register':
-        verification_url = build_public_url_with_query('pengguna:verify_register', {'kode': code})
+        verification_url = build_public_url('pengguna:verify_register')
     elif purpose == 'profile_phone':
         verification_url = build_public_url('pengguna:verify_profile_phone', pengguna.pk)
     else:
@@ -226,9 +226,9 @@ def send_verification_code(
             if show_delivery_message:
                 messages.info(
                     request,
-                    f'Kode verifikasi email untuk simulasi lokal: {code}. Link verifikasi: {verification_url}. SMTP belum aktif sampai EMAIL_HOST_PASSWORD diganti dari change-me.',
+                    'Email verifikasi belum dapat dikirim. Hubungi pengelola LabHub.',
                 )
-            return True
+            return False
         else:
             try:
                 text_body = (
@@ -250,7 +250,7 @@ def send_verification_code(
                     fail_silently=False,
                 )
                 if show_delivery_message:
-                    messages.info(request, f'Kode verifikasi dikirim ke email {pengguna.email}. Link verifikasi memakai {verification_url}.')
+                    messages.info(request, f'Kode verifikasi dikirim ke email {pengguna.email}.')
                 return True
             except (OSError, SMTPException):
                 if show_delivery_message:
@@ -262,9 +262,9 @@ def send_verification_code(
     else:
         messages.info(
             request,
-            f'Kode verifikasi No HP untuk simulasi lokal: {code}. Link verifikasi: {verification_url}. Integrasi SMS/WhatsApp bisa ditambahkan nanti.',
+            'Pengiriman kode melalui nomor HP belum tersedia. Gunakan verifikasi email.',
         )
-        return True
+        return False
 
 
 class PenggunaListView(ListView):
@@ -900,13 +900,6 @@ class PenggunaVerifyRegisterView(FormView):
         return redirect('pengguna:verify_register')
 
     def get(self, request, *args, **kwargs):
-        kode = request.GET.get('kode', '').strip()
-        if kode:
-            form = self.form_class(data={'kode': kode})
-            if form.is_valid():
-                return self.form_valid(form)
-            return self.form_invalid(form)
-
         return super().get(request, *args, **kwargs)
 
     def form_valid(self, form):
@@ -974,11 +967,6 @@ class ForgotPasswordRequestView(FormView):
             return self.form_invalid(form)
 
         messages.success(self.request, 'Profil ditemukan. Masukkan kode yang dikirim ke email akun.')
-        if settings.DEBUG and email_delivery_is_simulated():
-            messages.info(
-                self.request,
-                f"Kode simulasi lokal: {self.request.session[OTP_SESSION_KEY]['code']}.",
-            )
         return redirect(self.success_url)
 
 
