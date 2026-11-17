@@ -1,6 +1,8 @@
 from django.test import TestCase
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
+from io import BytesIO
+from PIL import Image
 
 from apps.pengguna.models import Pengguna
 from apps.kalender.models import Notifikasi
@@ -9,6 +11,12 @@ from .models import BarangTertinggal
 
 
 class BarangTertinggalViewTests(TestCase):
+    @staticmethod
+    def foto_pengambil():
+        buffer = BytesIO()
+        Image.new('RGB', (32, 32), 'white').save(buffer, format='JPEG')
+        return SimpleUploadedFile('pengambil.jpg', buffer.getvalue(), content_type='image/jpeg')
+
     def setUp(self):
         self.laboran = Pengguna.objects.create(
             nama_pengguna='Laboran Barang Tertinggal',
@@ -192,6 +200,7 @@ class BarangTertinggalViewTests(TestCase):
                 'nim_pemilik': '06400230001',
                 'nomor_whatsapp': '081234567890',
                 'status': 'diambil',
+                'foto_pengambil': self.foto_pengambil(),
             },
         )
 
@@ -201,6 +210,38 @@ class BarangTertinggalViewTests(TestCase):
         self.assertEqual(self.barang.status, 'diambil')
         self.assertEqual(self.barang.nim_pemilik, '06400230001')
         self.assertEqual(self.barang.nomor_whatsapp, '081234567890')
+        self.assertTrue(self.barang.foto_pengambil)
+        detail = self.client.get(reverse('barang_tertinggal:detail', args=[self.barang.pk]))
+        self.assertContains(detail, 'Foto Orang yang Mengambil')
+
+    def test_barang_tidak_bisa_diambil_tanpa_foto_pengambil(self):
+        response = self.client.post(reverse('barang_tertinggal:update', args=[self.barang.pk]), {
+            'nama_barang': self.barang.nama_barang,
+            'jenis_barang': self.barang.jenis_barang,
+            'jumlah_barang': 1,
+            'tanggal_ditemukan': '2026-06-22',
+            'status': 'diambil',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Foto orang yang mengambil barang wajib')
+        self.barang.refresh_from_db()
+        self.assertEqual(self.barang.status, 'tertinggal')
+
+    def test_foto_pengambil_hanya_dapat_dibuka_laboran(self):
+        self.barang.foto_pengambil = self.foto_pengambil()
+        self.barang.save()
+        url = self.barang.foto_pengambil.url
+        self.assertEqual(self.client.get(url).status_code, 200)
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Mahasiswa', nim_nik='06400239998',
+            email='foto-pengambil@std.trisakti.ac.id', password='rahasia123',
+            no_hp='081299998', alamat='Jakarta', fakultas='Teknologi Industri',
+            prodi='Informatika', gender='perempuan', role='mahasiswa',
+        )
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+        self.assertEqual(self.client.get(url).status_code, 403)
 
     def test_form_edit_menampilkan_data_lama(self):
         self.barang.nama_pemilik = 'Andi'

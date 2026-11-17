@@ -79,6 +79,7 @@ from .services import (
     get_active_asleb_matkul_ids,
     get_asleb_schedule_queryset,
     get_asleb_matkul_for_schedule,
+    get_attendance_count_for_slot,
     get_attendance_source_for_slot,
     matkul_matches_schedule,
 )
@@ -1124,8 +1125,10 @@ class AbsensiAslebCreateView(CreateView):
                 form.add_error(None, 'Izin absensi susulan sudah tidak berlaku atau tanggalnya telah diabsen.')
                 return self.form_invalid(form)
             self.manual_permission = permission
-        if get_attendance_source_for_slot(self.asleb, self.jadwal, self.attendance_date):
-            form.add_error(None, 'Anda sudah melakukan absensi untuk jadwal dan tanggal ini.')
+        if get_attendance_count_for_slot(self.asleb, self.jadwal, self.attendance_date) >= (
+            1 if self.manual_permission else 2
+        ):
+            form.add_error(None, 'Batas modul untuk jadwal dan tanggal ini sudah tercapai.')
             return self.form_invalid(form)
         form.instance.asleb = self.asleb
         form.instance.izin_manual = self.manual_permission

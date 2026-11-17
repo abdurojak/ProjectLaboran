@@ -15,6 +15,19 @@ def get_attendance_source_for_slot(asleb, jadwal, attendance_date):
     return None
 
 
+def get_attendance_count_for_slot(asleb, jadwal, attendance_date):
+    from .models import AbsensiAsleb, AbsensiMasukAsleb
+
+    return (
+        AbsensiAsleb.objects.filter(
+            asleb=asleb, jadwal=jadwal, tanggal_praktikum=attendance_date,
+        ).count()
+        + AbsensiMasukAsleb.objects.filter(
+            asleb=asleb, jadwal=jadwal, tanggal_absensi=attendance_date,
+        ).count()
+    )
+
+
 def get_active_asleb_for_pengguna(pengguna):
     """Resolve the currently active Aslab profile for an authenticated user."""
     if not pengguna or getattr(pengguna, 'role', '') != 'asisten_lab':

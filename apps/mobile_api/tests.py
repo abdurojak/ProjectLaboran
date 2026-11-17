@@ -818,7 +818,7 @@ class MobileAbsensiApiTests(TestCase):
         )
 
     @patch('apps.mobile_api.views.validate_schedule_time', return_value=(True, '', 'sudah_absen'))
-    def test_absensi_mobile_modul_berbeda_di_jadwal_hari_sama_ditolak(self, _mock_time):
+    def test_absensi_mobile_maksimal_dua_modul_di_jadwal_hari_sama(self, _mock_time):
         self.authenticate()
         first = self.client.post(
             reverse('mobile_api:check_in'), self.check_in_payload(), format='multipart',
@@ -829,9 +829,11 @@ class MobileAbsensiApiTests(TestCase):
             self.check_in_payload(modul_praktikum_id=self.second_module.pk),
             format='multipart',
         )
-        self.assertEqual(second.status_code, 400, second.data)
-        self.assertEqual(second.data['code'], 'duplicate_attendance')
-        self.assertEqual(AbsensiMasukAsleb.objects.filter(asleb=self.asleb, jadwal=self.schedule).count(), 1)
+        self.assertEqual(second.status_code, 201, second.data)
+        self.assertEqual(AbsensiMasukAsleb.objects.filter(asleb=self.asleb, jadwal=self.schedule).count(), 2)
+        detail = self.client.get(reverse('mobile_api:schedule_detail', args=[self.schedule.pk]))
+        self.assertFalse(detail.data['can_check_in'])
+        self.assertEqual(detail.data['modul_diabsen'], 2)
         honor = HonorAsleb.objects.get(asleb=self.asleb, bulan=timezone.localdate().replace(day=1))
         self.assertEqual(honor.total_pertemuan, 1)
 
@@ -864,10 +866,8 @@ class MobileAbsensiApiTests(TestCase):
             reverse('mobile_api:check_in'), self.check_in_payload(), format='multipart'
         )
 
-        self.assertEqual(response.status_code, 400, response.data)
-        self.assertEqual(response.data['code'], 'duplicate_attendance')
-        self.assertIn('melalui web', response.data['detail'])
-        self.assertFalse(AbsensiMasukAsleb.objects.exists())
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(AbsensiMasukAsleb.objects.count(), 1)
         honor = HonorAsleb.objects.get(
             asleb=self.asleb,
             bulan=timezone.localdate().replace(day=1),

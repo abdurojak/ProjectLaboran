@@ -312,6 +312,9 @@ class PenggunaLoginRequiredMiddleware:
         if media_name.startswith('surat_honor_asleb/'):
             return pengguna.role == 'laboran'
 
+        if media_name.startswith('barang_tertinggal/pengambil/'):
+            return pengguna.role == 'laboran'
+
         if media_name.startswith('modul_praktikum/'):
             from apps.asleb.models import Asleb, ModulPraktikum, PesertaPraktikum
             from apps.asleb.services import get_active_asleb_matkul_ids

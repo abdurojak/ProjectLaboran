@@ -34,7 +34,7 @@ from apps.asleb.qr_attendance import QR_MAX_AGE_SECONDS, _active_participants, i
 from apps.asleb.views import get_praktikum_matkul_queryset
 from apps.kalender.realtime import send_data_refresh
 import json
-from apps.asleb.services import get_active_asleb_period, get_attendance_source_for_slot
+from apps.asleb.services import get_active_asleb_period, get_attendance_count_for_slot
 from apps.asleb.views import get_missing_attendance_dates, sync_honor_from_mobile_absensi
 from apps.asleb.models import HonorAsleb
 from apps.barang_tertinggal.notifications import publish_barang_tertinggal_news
@@ -522,10 +522,10 @@ class ScheduleDetailView(APIView):
         if manual_permission:
             valid = True
             reason = ''
-        already_checked_in = (
-            schedule.pk in context['attendance_by_schedule']
-            or context['status_by_schedule'].get(schedule.pk) == AbsensiMasukAsleb.STATUS_SUDAH_ABSEN
-        )
+        attendance_date = manual_permission.tanggal_praktikum if manual_permission else timezone.localdate()
+        used_slots = get_attendance_count_for_slot(asleb, schedule, attendance_date)
+        limit = 1 if manual_permission else 2
+        already_checked_in = used_slots >= limit
         available_modules = list(get_available_modules(asleb, schedule))
         return Response({
             'schedule': ScheduleSerializer(schedule, context=context).data,
@@ -533,6 +533,8 @@ class ScheduleDetailView(APIView):
                 {'id': module.pk, 'nomor': module.nomor, 'judul': module.judul}
                 for module in available_modules
             ],
+            'modul_diabsen': used_slots,
+            'maks_modul_per_jadwal': limit,
             'can_check_in': (
                 valid
                 and not request.user.wajib_ganti_foto
@@ -543,13 +545,13 @@ class ScheduleDetailView(APIView):
             'check_in_message': (
                 'Ganti foto profil dengan foto wajah asli melalui web LabHub sebelum absen.'
                 if request.user.wajib_ganti_foto
-                else 'Anda sudah melakukan absensi masuk untuk jadwal ini.'
+                else 'Batas modul untuk jadwal ini sudah tercapai.'
                 if already_checked_in
                 else 'Tidak ada modul yang belum diabsen untuk mata kuliah ini.'
                 if not available_modules
                 else 'Absensi susulan resmi dari Laboran tersedia.'
                 if manual_permission
-                else reason or 'Absensi masuk tersedia.'
+                else reason or f'Absensi modul tersedia ({used_slots}/{limit} modul).'
             ),
         })
 
@@ -607,13 +609,10 @@ class CheckInView(APIView):
         # Simpan tanggal praktikum yang diizinkan sebagai tanggal efektif.
         # Waktu upload tetap tersedia di `waktu_masuk`/`dibuat_pada`, sehingga
         # rekap honor tidak bergeser ke bulan saat absensi susulan dikirim.
-        source = get_attendance_source_for_slot(asleb, schedule, attendance_date)
-        if source:
-            message = (
-                'Anda sudah melakukan absensi untuk jadwal ini melalui web.'
-                if source == 'web' else 'Anda sudah melakukan absensi masuk untuk jadwal ini.'
-            )
-            return api_error(message, 'duplicate_attendance')
+        if get_attendance_count_for_slot(asleb, schedule, attendance_date) >= (
+            1 if manual_permission else 2
+        ):
+            return api_error('Batas modul untuk jadwal ini sudah tercapai.', 'attendance_limit_reached')
 
         valid_time, reason, attendance_status = validate_schedule_time(schedule)
         if manual_permission:

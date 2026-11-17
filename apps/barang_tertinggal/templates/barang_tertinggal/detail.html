@@ -42,6 +42,15 @@
             {% endif %}
         </article>
 
+        {% if barang.foto_pengambil %}
+        <article class="surface-card p-5">
+            <h3 class="mb-3 text-sm font-bold text-slate-900">Foto Orang yang Mengambil</h3>
+            <button type="button" data-image-lightbox="{{ barang.foto_pengambil.url }}" data-image-alt="Foto orang yang mengambil {{ barang.nama_barang }}" aria-label="Perbesar foto pengambil" class="block w-full rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-700">
+                <img src="{{ barang.foto_pengambil.url }}" alt="Orang yang mengambil {{ barang.nama_barang }}" class="max-h-72 w-full rounded-md object-contain">
+            </button>
+        </article>
+        {% endif %}
+
         <article class="surface-card grid gap-5 p-6 md:grid-cols-2 md:p-8">
         <div class="rounded-3xl bg-slate-50 p-5">
             <div class="text-sm font-semibold text-slate-500">Kode Barang Tertinggal</div>

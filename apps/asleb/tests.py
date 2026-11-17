@@ -441,7 +441,7 @@ class AslebViewTests(TestCase):
         self.assertContains(response, 'Pilih Video dari Galeri')
         self.assertContains(response, 'data-camera-capture')
 
-    def test_absensi_web_ditolak_jika_jadwal_sudah_diabsen_melalui_mobile(self):
+    def test_absensi_web_kedua_diizinkan_jika_jadwal_sudah_diabsen_melalui_mobile(self):
         jadwal = self.create_active_schedule()
         modul = ModulPraktikum.objects.create(
             matkul=self.matkul,
@@ -469,11 +469,10 @@ class AslebViewTests(TestCase):
             jadwal=jadwal,
         )
 
-        self.assertFalse(form.is_valid())
-        self.assertIn('sudah melakukan absensi', str(form.non_field_errors()))
+        self.assertTrue(form.is_valid(), form.errors)
         self.assertFalse(AbsensiAsleb.objects.filter(asleb=self.asleb, jadwal=jadwal).exists())
 
-    def test_absensi_web_menolak_modul_berbeda_pada_jadwal_dan_tanggal_sama(self):
+    def test_absensi_web_menerima_modul_kedua_pada_jadwal_dan_tanggal_sama(self):
         jadwal = self.create_active_schedule()
         modul = ModulPraktikum.objects.create(
             matkul=self.matkul, nomor=10, judul='Modul Berikutnya',
@@ -490,10 +489,9 @@ class AslebViewTests(TestCase):
             },
             asleb=self.asleb, jadwal=jadwal,
         )
-        self.assertFalse(form.is_valid())
-        self.assertIn('jadwal dan tanggal ini', str(form.non_field_errors()))
+        self.assertTrue(form.is_valid(), form.errors)
 
-    def test_absensi_web_post_kedua_dengan_modul_lain_ditolak(self):
+    def test_absensi_web_post_kedua_dengan_modul_lain_diterima(self):
         self.login_asisten_for_matkul()
         jadwal = self.create_active_schedule()
         PengaturanAbsensiAsleb.objects.update_or_create(pk=1, defaults={'dibuka': True})
@@ -510,8 +508,8 @@ class AslebViewTests(TestCase):
                     'bukti_foto': self.make_camera_photo(f'foto-post-{index}.png'),
                     'bukti_video': SimpleUploadedFile(f'video-post-{index}.mp4', b'video', content_type='video/mp4'),
                 })
-                self.assertEqual(response.status_code, 302 if index == 0 else 200)
-        self.assertEqual(AbsensiAsleb.objects.filter(asleb=self.asleb, jadwal=jadwal).count(), 1)
+                self.assertEqual(response.status_code, 302)
+        self.assertEqual(AbsensiAsleb.objects.filter(asleb=self.asleb, jadwal=jadwal).count(), 2)
         honor = HonorAsleb.objects.get(asleb=self.asleb, bulan=timezone.localdate().replace(day=1))
         self.assertEqual(honor.total_pertemuan, 1)
 

@@ -20,10 +20,25 @@
         {% csrf_token %}
         <input type="hidden" id="id_hapus_foto" name="hapus_foto" value="0">
         {% for field in form %}
-        <div class="{% if field.name == 'nama_barang' or field.name == 'foto' %}md:col-span-2{% endif %}">
+        <div class="{% if field.name == 'nama_barang' or field.name == 'foto' or field.name == 'foto_pengambil' %}md:col-span-2{% endif %}" {% if field.name == 'foto_pengambil' %}data-pengambil-photo-section{% endif %}>
             {{ field.label_tag }}
             {% if field.name == 'foto' %}
             {% include "components/file_upload.html" with field=field current_file=object.foto button_label="Pilih Foto" title="Upload foto barang tertinggal" empty_label="Belum ada foto dipilih" delete_label="Foto akan dihapus saat disimpan" preview_label="Preview foto" preview_alt="Preview foto barang tertinggal" delete_input_id="id_hapus_foto" delete_button_label="Hapus Foto" %}
+            {% elif field.name == 'foto_pengambil' %}
+            {{ field }}
+            <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+                <div class="overflow-hidden rounded-md border border-slate-200 bg-slate-950">
+                    <video data-pengambil-camera autoplay muted playsinline class="hidden aspect-video w-full object-cover"></video>
+                    <img data-pengambil-preview {% if object.foto_pengambil %}src="{{ object.foto_pengambil.url }}"{% else %}hidden{% endif %} alt="Foto orang yang mengambil barang" class="aspect-video w-full object-contain">
+                    <p data-pengambil-empty class="p-8 text-center text-sm text-white {% if object.foto_pengambil %}hidden{% endif %}">Foto pengambil belum ada.</p>
+                </div>
+                <div class="flex flex-wrap gap-2 sm:flex-col">
+                    <button type="button" class="btn-secondary gap-2" data-camera-open><i data-lucide="camera" class="h-4 w-4"></i>Buka kamera</button>
+                    <button type="button" class="btn-primary hidden gap-2" data-camera-capture><i data-lucide="camera" class="h-4 w-4"></i>Ambil foto</button>
+                </div>
+            </div>
+            <p class="mt-2 text-sm text-slate-500">Foto diambil langsung saat barang diserahkan. Kamera memerlukan izin browser.</p>
+            <p class="mt-2 hidden text-sm font-semibold text-rose-700" data-camera-error role="alert"></p>
             {% else %}
             {{ field }}
             {% endif %}
@@ -49,6 +64,69 @@
 {% block extra_script %}
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        const cameraSection = document.querySelector('[data-pengambil-photo-section]');
+        const statusInput = document.getElementById('id_status');
+        const cameraInput = document.getElementById('id_foto_pengambil');
+        const cameraVideo = document.querySelector('[data-pengambil-camera]');
+        const cameraPreview = document.querySelector('[data-pengambil-preview]');
+        const cameraEmpty = document.querySelector('[data-pengambil-empty]');
+        const cameraError = document.querySelector('[data-camera-error]');
+        const openCamera = document.querySelector('[data-camera-open]');
+        const captureCamera = document.querySelector('[data-camera-capture]');
+        let cameraStream = null;
+        function stopCamera() {
+            if (cameraStream) cameraStream.getTracks().forEach(function (track) { track.stop(); });
+            cameraStream = null;
+            if (cameraVideo) { cameraVideo.srcObject = null; cameraVideo.classList.add('hidden'); }
+            if (captureCamera) captureCamera.classList.add('hidden');
+        }
+        function togglePhotoSection() {
+            if (!cameraSection || !statusInput) return;
+            const visible = statusInput.value === 'diambil';
+            cameraSection.classList.toggle('hidden', !visible);
+            if (!visible) stopCamera();
+        }
+        if (statusInput) statusInput.addEventListener('change', togglePhotoSection);
+        togglePhotoSection();
+        if (openCamera) openCamera.addEventListener('click', async function () {
+            cameraError.classList.add('hidden');
+            stopCamera();
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                cameraError.textContent = 'Kamera tidak tersedia. Buka LabHub melalui HTTPS dan izinkan akses kamera.';
+                cameraError.classList.remove('hidden');
+                return;
+            }
+            try {
+                cameraStream = await navigator.mediaDevices.getUserMedia({video: {facingMode: 'user'}, audio: false});
+                cameraVideo.srcObject = cameraStream;
+                cameraVideo.classList.remove('hidden');
+                cameraPreview.hidden = true;
+                cameraEmpty.classList.add('hidden');
+                captureCamera.classList.remove('hidden');
+                await cameraVideo.play();
+            } catch (error) {
+                cameraError.textContent = 'Kamera tidak dapat dibuka. Periksa izin kamera pada browser.';
+                cameraError.classList.remove('hidden');
+            }
+        });
+        if (captureCamera) captureCamera.addEventListener('click', function () {
+            if (!cameraStream || !cameraVideo.videoWidth) return;
+            const canvas = document.createElement('canvas');
+            const scale = Math.min(1, 1280 / cameraVideo.videoWidth);
+            canvas.width = Math.round(cameraVideo.videoWidth * scale);
+            canvas.height = Math.round(cameraVideo.videoHeight * scale);
+            canvas.getContext('2d').drawImage(cameraVideo, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob(function (blob) {
+                if (!blob) return;
+                const files = new DataTransfer();
+                files.items.add(new File([blob], 'foto-pengambil.jpg', {type: 'image/jpeg'}));
+                cameraInput.files = files.files;
+                cameraPreview.src = URL.createObjectURL(blob);
+                cameraPreview.hidden = false;
+                stopCamera();
+            }, 'image/jpeg', 0.82);
+        });
+        window.addEventListener('pagehide', stopCamera);
         const hapusFotoInput = document.getElementById('id_hapus_foto');
 
         document.querySelectorAll('[data-file-upload]').forEach(function (component) {

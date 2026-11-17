@@ -632,10 +632,6 @@ class AbsensiMasukAsleb(models.Model):
         ordering = ['-tanggal_absensi', '-waktu_masuk']
         constraints = [
             models.UniqueConstraint(
-                fields=['asleb', 'jadwal', 'tanggal_absensi'],
-                name='unique_absensi_masuk_asleb_jadwal_tanggal',
-            ),
-            models.UniqueConstraint(
                 fields=['asleb', 'periode', 'modul_praktikum'],
                 name='unique_absensi_masuk_asleb_periode_modul',
             ),

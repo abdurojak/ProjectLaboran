@@ -31,7 +31,7 @@ from .services import (
     get_active_asleb_matkul_ids_for_pengguna,
     get_active_asleb_period,
     get_asleb_matkul_for_schedule,
-    get_attendance_source_for_slot,
+    get_attendance_count_for_slot,
 )
 
 
@@ -358,11 +358,9 @@ class AbsensiAslebForm(forms.ModelForm):
         cleaned_data = super().clean()
         attendance_date = self.attendance_date
 
-        source = get_attendance_source_for_slot(self.asleb, self.jadwal, attendance_date)
-        if source:
-            platform = ' melalui aplikasi mobile' if source == 'mobile' else ''
+        if get_attendance_count_for_slot(self.asleb, self.jadwal, attendance_date) >= 2:
             raise forms.ValidationError(
-                f'Anda sudah melakukan absensi untuk jadwal dan tanggal ini{platform}.'
+                'Maksimal 2 modul dapat diabsen untuk jadwal dan tanggal ini.'
             )
 
         latitude = self._read_decimal(cleaned_data.get('latitude'))
