@@ -724,6 +724,27 @@ class MobileAbsensiApiTests(TestCase):
         self.assertEqual(len(response.data['results']), 1)
         self.assertEqual(response.data['results'][0]['id'], self.schedule.pk)
 
+    def test_chat_mobile_menyimpan_pesan_dan_menandai_dibaca(self):
+        self.authenticate()
+        users = self.client.get(reverse('mobile_api:peer_chat_users'))
+        self.assertEqual(users.status_code, 200)
+        self.assertTrue(any(item['id'] == self.mahasiswa.pk for item in users.data['results']))
+
+        sent = self.client.post(
+            reverse('mobile_api:peer_chat_thread', args=[self.mahasiswa.pk]),
+            {'message': 'Halo mahasiswa'}, format='json',
+        )
+        self.assertEqual(sent.status_code, 201, sent.data)
+        thread = self.client.get(reverse('mobile_api:peer_chat_thread', args=[self.mahasiswa.pk]))
+        self.assertEqual(thread.status_code, 200)
+        self.assertEqual(thread.data['messages'][0]['text'], 'Halo mahasiswa')
+
+        own = self.client.post(
+            reverse('mobile_api:peer_chat_thread', args=[self.user.pk]),
+            {'message': 'Tidak boleh'}, format='json',
+        )
+        self.assertEqual(own.status_code, 404)
+
     @patch('apps.mobile_api.views.validate_schedule_time', return_value=(True, '', 'sudah_absen'))
     def test_absensi_masuk_tanpa_lokasi_menyimpan_foto(self, _mock_time):
         self.authenticate()
@@ -746,6 +767,19 @@ class MobileAbsensiApiTests(TestCase):
         )
         self.assertEqual(duplicate.status_code, 400)
         self.assertEqual(AbsensiMasukAsleb.objects.count(), 1)
+
+    def test_wajib_ganti_foto_memblokir_absensi_mobile(self):
+        self.user.wajib_ganti_foto = True
+        self.user.save(update_fields=['wajib_ganti_foto'])
+        self.authenticate()
+
+        response = self.client.post(
+            reverse('mobile_api:check_in'), self.check_in_payload(), format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data['code'], 'profile_photo_required')
+        self.assertFalse(AbsensiMasukAsleb.objects.exists())
 
     @patch('apps.mobile_api.views.validate_schedule_time', return_value=(True, '', 'sudah_absen'))
     def test_riwayat_mobile_menampilkan_modul_yang_diabsen(self, _mock_time):

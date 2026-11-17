@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../providers/attendance_provider.dart';
 import '../providers/auth_provider.dart';
 import 'chatbot_screen.dart';
 import 'dashboard_screen.dart';
@@ -11,6 +14,7 @@ import 'laboran_loans_screen.dart';
 import 'mahasiswa_home_screen.dart';
 import 'student_qr_screen.dart';
 import 'profile_screen.dart';
+import 'peer_chat_screen.dart';
 import 'schedule_list_screen.dart';
 
 class MainShell extends StatefulWidget {
@@ -20,8 +24,52 @@ class MainShell extends StatefulWidget {
   State<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell> {
+class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   int index = 0;
+  Timer? chatStatusTimer;
+  int? lastUnreadCount;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    Future.microtask(_checkChatStatus);
+    chatStatusTimer = Timer.periodic(const Duration(seconds: 20), (_) => _checkChatStatus());
+  }
+
+  @override
+  void dispose() {
+    chatStatusTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _checkChatStatus();
+  }
+
+  Future<void> _checkChatStatus() async {
+    if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) return;
+    try {
+      final result = await context.read<AttendanceProvider>().api.peerChatStatus();
+      if (!mounted) return;
+      final count = result['unread_count'] as int? ?? 0;
+      if (lastUnreadCount != null && count > lastUnreadCount!) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('$count pesan chat belum dibaca'),
+          action: SnackBarAction(
+            label: 'Buka',
+            onPressed: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const PeerChatScreen())),
+          ),
+        ));
+      }
+      lastUnreadCount = count;
+    } catch (_) {
+      // Koneksi sementara terputus; pemeriksaan berikutnya akan mencoba lagi.
+    }
+  }
 
   Future<void> _confirmLogout() async {
     final shouldLogout = await showDialog<bool>(

@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Chat dengan {{ target.nama_pengguna }}{% endblock %}
+
+{% block content %}
+<section class="mx-auto flex h-[min(75vh,760px)] min-h-[420px] max-w-4xl flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
+    <header class="flex items-center gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
+        <a href="{% url 'pengguna:list' %}" class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full hover:bg-slate-100" aria-label="Kembali ke daftar chat"><i data-lucide="arrow-left" class="h-5 w-5"></i></a>
+        {% if target.foto %}<img src="{{ target.foto.url }}" alt="" class="h-10 w-10 rounded-full object-cover">{% else %}<span class="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100"><i data-lucide="user" class="h-5 w-5"></i></span>{% endif %}
+        <div class="min-w-0"><h1 class="truncate font-bold text-slate-900">{{ target.nama_pengguna }}</h1><p class="text-xs text-slate-500" data-chat-presence>{% if online %}Aktif di LabHub{% else %}Tidak aktif{% endif %}</p></div>
+    </header>
+    <div class="flex-1 space-y-3 overflow-y-auto bg-slate-50 px-4 py-5 sm:px-6" data-chat-messages aria-live="polite">
+        <button type="button" class="btn-secondary mx-auto {% if not has_more %}hidden{% endif %}" data-load-older>Muat pesan lama</button>
+        {% for item in messages %}
+        <div class="flex {% if item.pengirim_id == current_pengguna.pk %}justify-end{% else %}justify-start{% endif %}" data-message-id="{{ item.pk }}">
+            <div class="max-w-[85%] rounded-lg px-4 py-2.5 sm:max-w-[75%] {% if item.pengirim_id == current_pengguna.pk %}bg-brand-700 text-white{% else %}border border-slate-200 bg-white text-slate-900{% endif %}">
+                <p class="whitespace-pre-wrap break-words text-sm">{{ item.isi }}</p><time class="mt-1 block text-right text-[11px] opacity-70">{{ item.dibuat_pada|date:"d M H:i" }}</time>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <form method="post" action="{% url 'pengguna:chat_send' target.pk %}" class="flex items-end gap-2 border-t border-slate-200 bg-white p-3 sm:p-4" data-chat-form>
+        {% csrf_token %}
+        <label for="chat-message" class="sr-only">Pesan</label>
+        <textarea id="chat-message" name="message" rows="2" maxlength="2000" required class="min-w-0 flex-1 resize-none" placeholder="Tulis pesan..." data-chat-input></textarea>
+        <button type="submit" class="btn-primary h-11 shrink-0 gap-2" aria-label="Kirim pesan"><i data-lucide="send" class="h-4 w-4"></i><span class="hidden sm:inline">Kirim</span></button>
+    </form>
+    <p class="hidden px-4 pb-3 text-sm text-rose-700" data-chat-error role="alert"></p>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const root = document.querySelector('[data-chat-messages]');
+    const form = document.querySelector('[data-chat-form]');
+    const input = document.querySelector('[data-chat-input]');
+    const errorBox = document.querySelector('[data-chat-error]');
+    const presence = document.querySelector('[data-chat-presence]');
+    const olderButton = document.querySelector('[data-load-older]');
+    const targetId = {{ target.pk }};
+    function scrollToBottom() { root.scrollTop = root.scrollHeight; }
+    function addMessage(item, prepend) {
+        if (root.querySelector('[data-message-id="' + item.id + '"]')) return;
+        const row = document.createElement('div');
+        row.className = 'flex ' + (item.mine ? 'justify-end' : 'justify-start');
+        row.dataset.messageId = String(item.id);
+        const bubble = document.createElement('div');
+        bubble.className = 'max-w-[85%] rounded-lg px-4 py-2.5 sm:max-w-[75%] ' + (item.mine ? 'bg-brand-700 text-white' : 'border border-slate-200 bg-white text-slate-900');
+        const body = document.createElement('p');
+        body.className = 'whitespace-pre-wrap break-words text-sm';
+        body.textContent = item.text;
+        const time = document.createElement('time');
+        time.className = 'mt-1 block text-right text-[11px] opacity-70';
+        time.textContent = item.time;
+        bubble.append(body, time);
+        row.appendChild(bubble);
+        if (prepend) olderButton.after(row);
+        else root.appendChild(row);
+    }
+    async function syncMessages() {
+        const response = await fetch(window.location.href, {headers: {'Accept': 'application/json'}, credentials: 'same-origin', cache: 'no-store'});
+        if (!response.ok) return;
+        const payload = await response.json();
+        payload.messages.forEach(function (item) { addMessage(item, false); });
+        presence.textContent = payload.online ? 'Aktif di LabHub' : 'Tidak aktif';
+        scrollToBottom();
+    }
+    form.addEventListener('submit', async function (event) {
+        event.preventDefault();
+        const content = input.value.trim();
+        if (!content) return;
+        const button = form.querySelector('button');
+        button.disabled = true;
+        errorBox.classList.add('hidden');
+        try {
+            const response = await fetch(form.action, {method: 'POST', body: new FormData(form), credentials: 'same-origin', headers: {'Accept': 'application/json'}});
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.detail || 'Pesan belum terkirim.');
+            input.value = '';
+            await syncMessages();
+        } catch (error) {
+            errorBox.textContent = error.message;
+            errorBox.classList.remove('hidden');
+        } finally { button.disabled = false; input.focus(); }
+    });
+    olderButton.addEventListener('click', async function () {
+        const first = root.querySelector('[data-message-id]');
+        if (!first) return;
+        olderButton.disabled = true;
+        try {
+            const url = new URL(window.location.href);
+            url.searchParams.set('before', first.dataset.messageId);
+            const response = await fetch(url, {headers: {'Accept': 'application/json'}, credentials: 'same-origin'});
+            if (!response.ok) throw new Error('Pesan lama belum dapat dimuat.');
+            const payload = await response.json();
+            const previousHeight = root.scrollHeight;
+            payload.messages.slice().reverse().forEach(function (item) { addMessage(item, true); });
+            olderButton.classList.toggle('hidden', !payload.has_more);
+            root.scrollTop += root.scrollHeight - previousHeight;
+        } catch (error) {
+            errorBox.textContent = error.message;
+            errorBox.classList.remove('hidden');
+        } finally { olderButton.disabled = false; }
+    });
+    document.addEventListener('labhub:realtime', function (event) {
+        const payload = event.detail || {};
+        if (payload.event === 'chat.message' && payload.sender_id === targetId) syncMessages();
+        if (payload.event === 'presence.updated' && payload.user_id === targetId) presence.textContent = 'Aktif di LabHub';
+    });
+    scrollToBottom();
+    window.setInterval(function () { if (!document.hidden) syncMessages(); }, 15000);
+});
+</script>
+{% endblock %}

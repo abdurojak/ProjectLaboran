@@ -1,4 +1,4 @@
-from datetime import date, time
+from datetime import date, time, timedelta
 from io import BytesIO
 
 from openpyxl import load_workbook
@@ -79,6 +79,32 @@ class JadwalViewTests(TestCase):
             waktu_selesai=time(10, 0),
             status=JadwalPraktikum.STATUS_DITERIMA,
         )
+
+    def login_aslab_for_jadwal(self):
+        today = timezone.localdate()
+        period = PeriodeAsleb.get_for_date(today)
+        account = Pengguna.objects.create(
+            nama_pengguna='Aslab Penguji Jadwal', nim_nik='ASLAB-JADWAL',
+            email='aslab-jadwal@example.com', password='rahasia123', no_hp='081234567899',
+            alamat='Jakarta', fakultas='Teknologi Industri', prodi='Informatika',
+            gender='laki_laki', role='asisten_lab',
+        )
+        asleb = Asleb.objects.create(
+            nama=account.nama_pengguna, nim=account.nim_nik, no_hp=account.no_hp,
+            email=account.email, program_studi=account.prodi, semester=5,
+            periode_aktif=period, tanggal_bergabung=today,
+        )
+        for index, matkul in enumerate((self.matkul, self.matkul_lain), start=1):
+            slot = AslabSlot.objects.create(periode=period, matkul=matkul, nomor=index)
+            AslabAssignment.objects.create(
+                slot=slot, asleb=asleb, mulai_pada=today,
+                status=AslabAssignment.STATUS_ACTIVE,
+            )
+            PesertaPraktikum.objects.create(matkul=matkul, nim=f'ASLAB-PESERTA-{index}', nama='Peserta Uji')
+        session = self.client.session
+        session['pengguna_id'] = account.pk
+        session.save()
+        return account
 
     def test_jadwal_page_loads(self):
         response = self.client.get(reverse('jadwal:jadwal_list'), {'hari': 'kamis'})
@@ -216,6 +242,8 @@ class JadwalViewTests(TestCase):
         self.assertNotContains(other_date, f'data-lab-event-block="{event.pk}"')
 
     def test_only_aslab_with_overlapping_practicum_gets_event_notification(self):
+        today = timezone.localdate()
+        event_date = today + timedelta(days=(3 - today.weekday()) % 7)
         period = PeriodeAsleb.objects.create(
             tahun=2026, semester=2, mulai=date(2026, 7, 1), selesai=date(2026, 12, 31),
             pendaftaran_mulai=date(2026, 6, 1), pendaftaran_selesai=date(2026, 6, 30),
@@ -236,7 +264,7 @@ class JadwalViewTests(TestCase):
             status=AslabAssignment.STATUS_ACTIVE,
         )
         event = KegiatanKalender.objects.create(
-            judul='Seminar Lab', tanggal=date(2026, 9, 17),
+            judul='Seminar Lab', tanggal=event_date,
             waktu_mulai=time(8), waktu_selesai=time(10), ruangan=self.ruangan,
             dibuat_oleh=self.laboran,
         )
@@ -259,6 +287,7 @@ class JadwalViewTests(TestCase):
         self.assertFalse(Notifikasi.objects.filter(pengguna=user, source_key=f'lab-event:{event.pk}').exists())
 
     def test_under_capacity_room_requires_explicit_confirmation(self):
+        self.login_aslab_for_jadwal()
         PesertaPraktikum.objects.bulk_create([
             PesertaPraktikum(matkul=self.matkul_lain, nim=f'080{i:07d}', nama=f'Mahasiswa {i}')
             for i in range(31)
@@ -354,12 +383,13 @@ class JadwalViewTests(TestCase):
         self.assertContains(response, 'Praktikum Jaringan')
 
     def test_form_jadwal_memakai_hari_bukan_tanggal(self):
+        self.login_aslab_for_jadwal()
         response = self.client.get(reverse('jadwal:jadwal_create'))
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'name="hari"', html=False)
         self.assertContains(response, 'Senin')
-        self.assertContains(response, 'Sabtu')
+        self.assertNotContains(response, '<option value="sabtu"', html=False)
         self.assertContains(response, 'name="ruangan"', html=False)
         self.assertContains(response, 'name="matkul"', html=False)
         self.assertContains(response, str(self.matkul))
@@ -372,6 +402,7 @@ class JadwalViewTests(TestCase):
         self.assertNotContains(response, 'name="pengampu"', html=False)
 
     def test_form_jadwal_menampilkan_ruangan_tambahan_untuk_kelas_besar(self):
+        self.login_aslab_for_jadwal()
         response = self.client.get(reverse('jadwal:jadwal_create'))
 
         self.assertEqual(response.status_code, 200)
@@ -381,6 +412,7 @@ class JadwalViewTests(TestCase):
         self.assertContains(response, 'Hanya lab dalam grup ruangan gabungan aktif')
 
     def test_form_jadwal_menyimpan_matkul_kelas_dan_pengampu_dari_pilihan_matkul(self):
+        self.login_aslab_for_jadwal()
         response = self.client.post(reverse('jadwal:jadwal_create'), {
             'matkul': self.matkul_lain.pk,
             'ruangan': self.ruangan.pk,
@@ -397,6 +429,7 @@ class JadwalViewTests(TestCase):
         self.assertEqual(jadwal.pengampu, self.matkul_lain.dosen)
 
     def test_form_jadwal_ruangan_tambahan_hanya_pasangan_rpl_ski(self):
+        self.login_aslab_for_jadwal()
         lab_rpl = RuanganLab.objects.get(kode='LAB-RPL')
         lab_ski = RuanganLab.objects.get(kode='LAB-SKI')
 
@@ -420,6 +453,7 @@ class JadwalViewTests(TestCase):
         )
 
     def test_form_jadwal_ruangan_tambahan_mengikuti_grup_gabungan_aktif(self):
+        self.login_aslab_for_jadwal()
         lab_a = RuanganLab.objects.create(nama='Lab Barat', kode='LAB-BRT', kapasitas=12)
         lab_b = RuanganLab.objects.create(nama='Lab Timur', kode='LAB-TMR', kapasitas=12)
         group = GrupRuanganGabungan.objects.create(nama='Lab Barat dan Timur')
@@ -471,6 +505,7 @@ class JadwalViewTests(TestCase):
         self.assertIn('Salah satu ruangan pada jadwal ini sudah dipakai', str(error.exception))
 
     def test_form_jadwal_menampilkan_error_validasi_berwarna_merah(self):
+        self.login_aslab_for_jadwal()
         response = self.client.post(reverse('jadwal:jadwal_create'), {
             'matkul': self.matkul.pk,
             'ruangan': self.ruangan.pk,
@@ -779,6 +814,7 @@ class JadwalViewTests(TestCase):
         self.assertIn(self.lab_ski.pk, [room['id'] for room in payload['rooms']])
 
     def test_kelas_paralel_tersedia_tanpa_batas_kapasitas(self):
+        self.login_aslab_for_jadwal()
         PesertaPraktikum.objects.bulk_create([
             PesertaPraktikum(matkul=self.matkul_lain, nim=f'099{i:07d}', nama=f'Peserta Paralel {i}')
             for i in range(100)
@@ -804,6 +840,7 @@ class JadwalViewTests(TestCase):
         self.assertEqual(jadwal.get_display_ruangan_kapasitas(), 'Tak terbatas')
 
     def test_jadwal_kelas_besar_boleh_memakai_kapasitas_gabungan_lab(self):
+        self.login_aslab_for_jadwal()
         PesertaPraktikum.objects.bulk_create([
             PesertaPraktikum(matkul=self.matkul_lain, nim=f'065{i:07d}', nama=f'Mahasiswa Gabungan {i}')
             for i in range(30)
@@ -839,6 +876,7 @@ class JadwalViewTests(TestCase):
         self.assertContains(response, reverse('asleb:praktikum_peserta_create'))
 
     def test_lab_lain_ditolak_jika_memilih_ruang_tambahan(self):
+        self.login_aslab_for_jadwal()
         response = self.client.post(reverse('jadwal:jadwal_create'), {
             'matkul': self.matkul_lain.pk,
             'ruangan': self.ruangan.pk,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 
@@ -64,6 +65,8 @@ class _AslabQrScannerScreenState extends State<AslabQrScannerScreen> {
         token,
       );
       if (!mounted) return;
+      SystemSound.play(SystemSoundType.click);
+      HapticFeedback.lightImpact();
       await _controller.stop();
       cameraStopped = true;
       if (!mounted) return;

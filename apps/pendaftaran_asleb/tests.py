@@ -89,6 +89,7 @@ class PendaftaranAslebViewTests(TestCase):
         self.laboran = pengguna
 
         self.laboratorium = RuanganLab.objects.get(kode='LAB-PRG')
+        self.laboratorium.laboran_akun.add(self.laboran)
 
         self.matkul, _ = MataKuliahAsleb.objects.get_or_create(
             kode='SDA_TIF01_ABDUL',
@@ -120,7 +121,7 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertContains(response, 'Pendaftaran Aslab')
         self.assertContains(response, 'Rizki Pratama')
         self.assertContains(response, 'Status: Ditutup')
-        self.assertContains(response, 'Buka Pendaftaran')
+        self.assertContains(response, 'Aktifkan Jadwal Pendaftaran')
         self.assertContains(response, get_public_registration_url())
         self.assertContains(response, 'registration-admin-cards')
         self.assertContains(response, 'registration-admin-table')
@@ -349,6 +350,11 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertNotContains(response, 'Kembali ke Form')
 
     def test_toggle_pendaftaran_membuka_dan_menutup_form(self):
+        today = timezone.localdate()
+        period = PeriodeAsleb.get_for_date(today)
+        period.pendaftaran_mulai = today
+        period.pendaftaran_selesai = min(today + timedelta(days=10), period.selesai)
+        period.save(update_fields=['pendaftaran_mulai', 'pendaftaran_selesai', 'diperbarui_pada'])
         Pengguna.objects.create(
             nama_pengguna='Mahasiswa Pendaftar',
             nim_nik='2401999',
@@ -414,7 +420,7 @@ class PendaftaranAslebViewTests(TestCase):
         self.assertRedirects(response, reverse('pendaftaran_asleb:pendaftaran_list'))
         period.refresh_from_db()
         self.assertFalse(PengaturanPendaftaranAsleb.get_solo().dibuka)
-        self.assertLess(period.pendaftaran_selesai, today)
+        self.assertGreaterEqual(period.pendaftaran_selesai, today)
         self.assertFalse(is_registration_open())
 
     @patch('apps.pendaftaran_asleb.views.send_branded_email', return_value=1)
@@ -439,7 +445,7 @@ class PendaftaranAslebViewTests(TestCase):
             'Setiap mahasiswa dapat memilih maksimal 3 matkul dalam satu periode.',
         )
 
-    def test_buka_pendaftaran_memulihkan_periode_yang_sudah_diakhiri(self):
+    def test_buka_pendaftaran_menolak_periode_yang_sudah_diakhiri(self):
         today = timezone.localdate()
         period = PeriodeAsleb.get_for_date(today)
         period.selesai = today - timedelta(days=1)
@@ -457,11 +463,11 @@ class PendaftaranAslebViewTests(TestCase):
 
         self.assertRedirects(response, reverse('pendaftaran_asleb:pendaftaran_list'))
         period.refresh_from_db()
-        self.assertIsNone(period.diakhiri_pada)
-        self.assertGreaterEqual(period.selesai, today)
+        self.assertIsNotNone(period.diakhiri_pada)
+        self.assertLess(period.selesai, today)
         self.assertEqual(period.pendaftaran_mulai, today)
-        self.assertGreaterEqual(period.pendaftaran_selesai, today)
-        self.assertTrue(is_registration_open())
+        self.assertLess(period.pendaftaran_selesai, today)
+        self.assertFalse(is_registration_open())
 
     def test_public_form_ditutup_jika_pendaftaran_belum_dibuka(self):
         self.client.session.flush()

@@ -304,6 +304,22 @@ class AslebViewTests(TestCase):
         self.assertContains(modul_response, 'data-modul-preview-modal data-viewport-modal')
         self.assertContains(absensi_response, "document.querySelectorAll('[data-viewport-modal]')")
 
+    def test_asleb_wajib_ganti_foto_tidak_bisa_membuka_form_absensi(self):
+        account = Pengguna.objects.create(
+            nama_pengguna='Siti Nurhaliza', nim_nik=self.asleb.nim,
+            email='siti-photo-review@example.com', password='rahasia123',
+            no_hp='081234567891', alamat='Jakarta', fakultas='Teknologi Industri',
+            prodi='Informatika', gender='perempuan', role='asisten_lab',
+            wajib_ganti_foto=True,
+        )
+        session = self.client.session
+        session['pengguna_id'] = account.pk
+        session.save()
+
+        response = self.client.get(reverse('asleb:absensi_create'))
+
+        self.assertRedirects(response, reverse('pengguna:detail', args=[account.pk]))
+
     def test_absensi_form_memakai_layout_responsif(self):
         PengaturanAbsensiAsleb.get_solo().__class__.objects.update_or_create(pk=1, defaults={'dibuka': True})
         aslab_user = Pengguna.objects.create(
@@ -2161,7 +2177,7 @@ class AslebViewTests(TestCase):
         session['pengguna_id'] = asisten_user.pk
         session.save()
 
-        response = self.client.get(reverse('asleb:honor_list'))
+        response = self.client.get(reverse('asleb:honor_list'), {'bulan': '2026-07'})
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, self.asleb.nama)
@@ -2711,8 +2727,9 @@ class AslebViewTests(TestCase):
         self.assertEqual(rpl_row.honor, honor)
         self.assertEqual(rpl_row.matkul_labels, (pemrograman_web.nama,))
 
+    @patch('apps.asleb.views.get_total_honor_attendance_count', return_value=2)
     @patch('apps.asleb.views.generate_surat_honor_pdf', return_value=b'%PDF-1.4\n%%EOF')
-    def test_honor_ditahan_visible_tetapi_tidak_dapat_dibayar_atau_masuk_surat(self, _pdf):
+    def test_honor_ditahan_visible_tetapi_tidak_dapat_dibayar_atau_masuk_surat(self, _pdf, _attendance):
         assignment = self.create_active_assignment()
         from apps.pendaftaran_asleb.replacement_services import end_assignment_for_replacement
         end_assignment_for_replacement(

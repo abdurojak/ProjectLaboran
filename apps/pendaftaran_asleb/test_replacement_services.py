@@ -703,7 +703,7 @@ class HonorReassignmentTests(TestCase):
 
     def test_laboran_honor_history_keeps_inactive_outgoing_aslab_visible(self):
         historical = self.honor(self.outgoing, date(2026, 9, 1))
-        request = RequestFactory().get('/asleb/honor/')
+        request = RequestFactory().get('/asleb/honor/', {'bulan': '2026-09'})
         request.current_pengguna = self.laboran
         view = HonorAslebListView()
         view.request = request

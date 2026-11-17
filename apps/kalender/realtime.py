@@ -37,6 +37,8 @@ def _normalized_payload(payload):
     for key in ('catalog_available_ids', 'catalog_unavailable_ids'):
         if key in payload:
             result[key] = payload[key]
+    if 'sender_id' in payload:
+        result['sender_id'] = payload['sender_id']
     return result
 
 

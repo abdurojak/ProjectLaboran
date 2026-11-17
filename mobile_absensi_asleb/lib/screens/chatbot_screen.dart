@@ -6,6 +6,7 @@ import '../providers/auth_provider.dart';
 import '../providers/laboran_provider.dart';
 import '../services/api_exception.dart';
 import 'admin_chat_screen.dart';
+import 'peer_chat_screen.dart';
 
 class ChatbotScreen extends StatefulWidget {
   const ChatbotScreen({super.key});
@@ -196,6 +197,14 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
       appBar: AppBar(
         title: const Text('Chat Bantuan'),
         actions: [
+          IconButton(
+            tooltip: 'Chat pengguna',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const PeerChatScreen()),
+            ),
+            icon: const Icon(Icons.forum_outlined),
+          ),
           if (isAsleb)
             IconButton(
               tooltip: 'Chat Admin',

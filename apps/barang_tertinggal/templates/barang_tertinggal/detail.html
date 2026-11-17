@@ -32,7 +32,9 @@
     <div class="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
         <article class="surface-card p-5">
             {% if barang.foto %}
-            <img src="{{ barang.foto.url }}" alt="{{ barang.nama_barang }}" class="h-56 w-full rounded-3xl object-cover ring-1 ring-slate-200">
+            <button type="button" data-image-lightbox="{{ barang.foto.url }}" data-image-alt="Foto {{ barang.nama_barang }}" aria-label="Perbesar foto {{ barang.nama_barang }}" title="Perbesar foto" class="block w-full rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-700">
+                <img src="{{ barang.foto.url }}" alt="{{ barang.nama_barang }}" class="h-56 w-full rounded-md object-contain ring-1 ring-slate-200">
+            </button>
             {% else %}
             <div class="flex h-56 w-full items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50 text-slate-400">
                 <i data-lucide="image-off" class="h-8 w-8"></i>
@@ -74,6 +76,10 @@
             <div class="mt-2 text-xl font-bold text-slate-900">{{ barang.nim_pemilik|default:"-" }}</div>
         </div>
         <div class="rounded-3xl bg-slate-50 p-5">
+            <div class="text-sm font-semibold text-slate-500">Nomor WhatsApp Pemilik</div>
+            <div class="mt-2 text-xl font-bold text-slate-900">{{ barang.nomor_whatsapp|default:"-" }}</div>
+        </div>
+        <div class="rounded-3xl bg-slate-50 p-5">
             <div class="text-sm font-semibold text-slate-500">Koneksi Akun</div>
             {% if barang.sudah_terhubung_akun %}
             <div class="mt-2 inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-sm font-bold text-emerald-700">
@@ -93,5 +99,6 @@
 {% endblock %}
 
 {% block extra_script %}
+{% include "barang_tertinggal/_image_lightbox.html" %}
 {% include "components/confirmation_modal.html" with title="Konfirmasi Hapus Barang Tertinggal" confirm_label="Lanjutkan" confirm_icon="arrow-right" %}
 {% endblock %}

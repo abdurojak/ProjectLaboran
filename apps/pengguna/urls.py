@@ -1,4 +1,5 @@
 from django.urls import path
+from .chat import chat_room, chat_send
 
 from .views import (
     FakultasCreateView,
@@ -20,13 +21,13 @@ from .views import (
     PenggunaUpdateProfileView,
     PenggunaUpdateView,
     PenggunaVerifyRegisterView,
+    VerifyResetPasswordView,
     ProdiCreateView,
     ProdiUpdateView,
     ResetPasswordView,
     SchoolSearchView,
     delete_pengalaman,
     download_cv,
-    toggle_connection,
 )
 
 app_name = 'pengguna'
@@ -37,11 +38,13 @@ urlpatterns = [
     path('register/', PenggunaRegisterView.as_view(), name='register'),
     path('register/verifikasi/', PenggunaVerifyRegisterView.as_view(), name='verify_register'),
     path('forgot-password/', ForgotPasswordRequestView.as_view(), name='forgot_password'),
+    path('reset-password/verifikasi/', VerifyResetPasswordView.as_view(), name='verify_reset_password'),
     path('reset-password/', ResetPasswordView.as_view(), name='reset_password'),
     path('logout/', PenggunaLogoutView.as_view(), name='logout'),
     path('', PenggunaListView.as_view(), name='list'),
     path('kelola/', PenggunaManageListView.as_view(), name='manage_list'),
-    path('<int:pk>/hubungkan/', toggle_connection, name='toggle_connection'),
+    path('chat/<int:pk>/', chat_room, name='chat_room'),
+    path('chat/<int:pk>/kirim/', chat_send, name='chat_send'),
     path('master-akademik/', MasterAkademikView.as_view(), name='master_akademik'),
     path('master-akademik/fakultas/tambah/', FakultasCreateView.as_view(), name='fakultas_create'),
     path('master-akademik/fakultas/<int:pk>/edit/', FakultasUpdateView.as_view(), name='fakultas_update'),

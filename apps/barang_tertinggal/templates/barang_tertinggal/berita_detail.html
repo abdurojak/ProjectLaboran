@@ -8,7 +8,7 @@
     <article class="surface-card overflow-hidden">
         <div class="grid lg:grid-cols-[minmax(0,1.08fr)_minmax(20rem,.92fr)]">
             <div class="min-h-80 bg-gradient-to-br from-amber-50 to-orange-100 lg:min-h-[34rem]">
-                {% if barang.foto %}<img src="{{ barang.foto.url }}" alt="Foto {{ barang.nama_barang }}" class="h-full min-h-80 w-full object-contain p-4 lg:min-h-[34rem]">{% else %}<span class="flex h-full min-h-80 items-center justify-center text-amber-600 lg:min-h-[34rem]"><i data-lucide="package-search" class="h-24 w-24"></i></span>{% endif %}
+                {% if barang.foto %}<button type="button" data-image-lightbox="{{ barang.foto.url }}" data-image-alt="Foto {{ barang.nama_barang }}" aria-label="Perbesar foto {{ barang.nama_barang }}" title="Perbesar foto" class="block h-full w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-700"><img src="{{ barang.foto.url }}" alt="Foto {{ barang.nama_barang }}" class="h-full min-h-80 w-full object-contain p-4 lg:min-h-[34rem]"></button>{% else %}<span class="flex h-full min-h-80 items-center justify-center text-amber-600 lg:min-h-[34rem]"><i data-lucide="package-search" class="h-24 w-24"></i></span>{% endif %}
             </div>
             <div class="p-6 md:p-8">
                 <div class="flex flex-wrap items-center gap-2"><span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-700">{{ barang.get_status_display }}</span><span class="text-xs font-black uppercase tracking-[0.16em] text-slate-400">{{ barang.kode_barang_tertinggal }}</span></div>
@@ -25,4 +25,8 @@
         </div>
     </article>
 </section>
+{% endblock %}
+
+{% block extra_script %}
+{% include "barang_tertinggal/_image_lightbox.html" %}
 {% endblock %}

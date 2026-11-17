@@ -63,6 +63,7 @@ class Pengguna(models.Model):
     ]
 
     foto = models.ImageField(upload_to='pengguna/', blank=True, null=True)
+    wajib_ganti_foto = models.BooleanField(default=False)
     cover_image = models.ImageField('Foto sampul', upload_to='pengguna/covers/', blank=True, null=True)
     cv = models.FileField('CV', upload_to='pengguna/cv/', blank=True, null=True)
     kode_pengguna = models.CharField(max_length=10, unique=True, blank=True, editable=False)
@@ -84,6 +85,7 @@ class Pengguna(models.Model):
     ringkasan_profesional = models.TextField('Tentang', blank=True)
     keahlian = models.TextField('Keahlian', blank=True, help_text='Pisahkan setiap keahlian dengan koma.')
     notifikasi_dibaca_pada = models.DateTimeField(blank=True, null=True)
+    terakhir_aktif_pada = models.DateTimeField(blank=True, null=True)
     dibuat_pada = models.DateTimeField(auto_now_add=True)
     diperbarui_pada = models.DateTimeField(auto_now=True)
 
@@ -147,6 +149,24 @@ class KoneksiPengguna(models.Model):
 
     def __str__(self):
         return f'{self.pengikut} mengikuti {self.mengikuti}'
+
+
+class PesanPribadi(models.Model):
+    pengirim = models.ForeignKey(Pengguna, on_delete=models.PROTECT, related_name='pesan_terkirim')
+    penerima = models.ForeignKey(Pengguna, on_delete=models.PROTECT, related_name='pesan_diterima')
+    isi = models.TextField(max_length=2000)
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+    dibaca_pada = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['dibuat_pada', 'pk']
+        indexes = [
+            models.Index(fields=['pengirim', 'penerima', 'dibuat_pada']),
+            models.Index(fields=['penerima', 'pengirim', 'dibaca_pada']),
+        ]
+
+    def __str__(self):
+        return f'Pesan {self.pengirim_id} ke {self.penerima_id}'
 
 
 class PengalamanPengguna(models.Model):

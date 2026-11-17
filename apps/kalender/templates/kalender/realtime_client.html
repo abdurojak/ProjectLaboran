@@ -52,6 +52,7 @@
         let refreshTimer = null;
         let regionRefreshInFlight = false;
         let summaryTimer = null;
+        let presenceTimer = null;
         let latestSummaryId = null;
         let closedByPage = false;
         let audioContext = null;
@@ -202,6 +203,13 @@
             socket.addEventListener('open', function () {
                 reconnectAttempt = 0;
                 syncNotificationSummary();
+                socket.send(JSON.stringify({action: 'heartbeat'}));
+                window.clearInterval(presenceTimer);
+                presenceTimer = window.setInterval(function () {
+                    if (socket.readyState === WebSocket.OPEN && document.visibilityState === 'visible') {
+                        socket.send(JSON.stringify({action: 'heartbeat'}));
+                    }
+                }, 25000);
             });
             socket.addEventListener('message', function (event) {
                 let message;
@@ -216,6 +224,7 @@
                 scheduleRefresh(message.payload);
             });
             socket.addEventListener('close', function (event) {
+                window.clearInterval(presenceTimer);
                 if (closedByPage || event.code === 4401 || event.code === 4403) return;
                 const delay = Math.min(30000, 1000 * Math.pow(2, reconnectAttempt++));
                 window.clearTimeout(reconnectTimer);
@@ -228,6 +237,7 @@
             closedByPage = true;
             window.clearTimeout(reconnectTimer);
             window.clearInterval(summaryTimer);
+            window.clearInterval(presenceTimer);
             if (socket) socket.close();
         });
         document.addEventListener('pointerdown', unlockNotificationSound, {once: true});
@@ -235,6 +245,7 @@
         document.addEventListener('visibilitychange', function () {
             if (document.visibilityState === 'visible') {
                 syncNotificationSummary();
+                if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({action: 'heartbeat'}));
             }
         });
         window.addEventListener('focus', syncNotificationSummary);

@@ -1,0 +1,30 @@
+<dialog id="barang-image-lightbox" class="m-auto w-[min(96vw,72rem)] max-w-none rounded-lg border border-slate-200 bg-white p-2 shadow-2xl backdrop:bg-slate-950/85 sm:p-4" aria-label="Foto barang tertinggal">
+    <div class="mb-2 flex items-center justify-between gap-3 px-1">
+        <p id="barang-image-lightbox-title" class="min-w-0 truncate text-sm font-semibold text-slate-900"></p>
+        <button type="button" data-image-lightbox-close class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-slate-700 hover:bg-slate-100" aria-label="Tutup foto" title="Tutup foto">
+            <i data-lucide="x" class="h-5 w-5"></i>
+        </button>
+    </div>
+    <img id="barang-image-lightbox-photo" alt="" class="mx-auto max-h-[80vh] max-w-full object-contain">
+</dialog>
+<script>
+(() => {
+    const dialog = document.getElementById('barang-image-lightbox');
+    const photo = document.getElementById('barang-image-lightbox-photo');
+    const title = document.getElementById('barang-image-lightbox-title');
+    if (!dialog || !photo || !title) return;
+
+    document.addEventListener('click', (event) => {
+        const trigger = event.target.closest('[data-image-lightbox]');
+        if (trigger) {
+            photo.src = trigger.dataset.imageLightbox;
+            photo.alt = trigger.dataset.imageAlt || 'Foto barang tertinggal';
+            title.textContent = trigger.dataset.imageAlt || 'Foto barang tertinggal';
+            dialog.showModal();
+        } else if (event.target.closest('[data-image-lightbox-close]') || event.target === dialog) {
+            dialog.close();
+        }
+    });
+    dialog.addEventListener('close', () => photo.removeAttribute('src'));
+})();
+</script>

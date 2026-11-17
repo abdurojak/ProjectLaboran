@@ -198,8 +198,8 @@ SIDEBAR_LINKS = [
     },
     {'title': 'Ruangan', 'icon': 'door-open', 'url': 'ruangan:ruangan_list', 'namespace': 'ruangan', 'roles': {ADMIN_ROLE, LABORAN_ROLE, ASISTEN_LAB_ROLE, MAHASISWA_ROLE}},
     {
-        'title': 'Jaringan', 'icon': 'contact-round', 'url': 'pengguna:list',
-        'namespace': 'pengguna', 'url_names': {'list', 'detail'},
+        'title': 'Chat', 'icon': 'messages-square', 'url': 'pengguna:list',
+        'namespace': 'pengguna', 'url_names': {'list', 'chat_room'},
         'roles': {ADMIN_ROLE, LABORAN_ROLE, ASISTEN_LAB_ROLE, MAHASISWA_ROLE},
     },
     {'title': 'Surat Laboran', 'icon': 'mails', 'url': 'surat:list', 'namespace': 'surat', 'roles': {LABORAN_ROLE}},
@@ -227,6 +227,7 @@ PUBLIC_PAGE_META = {
     ('pengguna', 'register'): {'title': 'Register', 'icon': 'user-plus'},
     ('pengguna', 'verify_register'): {'title': 'Verifikasi Register', 'icon': 'shield-check'},
     ('pengguna', 'forgot_password'): {'title': 'Lupa Password', 'icon': 'key-round'},
+    ('pengguna', 'verify_reset_password'): {'title': 'Verifikasi Reset Password', 'icon': 'shield-check'},
     ('pengguna', 'reset_password'): {'title': 'Reset Password', 'icon': 'lock-keyhole'},
 }
 

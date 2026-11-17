@@ -16,12 +16,14 @@ class BarangTertinggalForm(forms.ModelForm):
             'tanggal_diambil',
             'nama_pemilik',
             'nim_pemilik',
+            'nomor_whatsapp',
             'status',
         ]
         widgets = {
             'foto': forms.FileInput(attrs={'class': 'hidden', 'accept': 'image/*'}),
-            'tanggal_ditemukan': forms.DateInput(attrs={'type': 'date'}),
-            'tanggal_diambil': forms.DateInput(attrs={'type': 'date'}),
+            'tanggal_ditemukan': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
+            'tanggal_diambil': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
+            'nomor_whatsapp': forms.TextInput(attrs={'inputmode': 'tel', 'autocomplete': 'tel', 'placeholder': '08... atau +62...'}),
         }
 
     def save(self, commit=True):

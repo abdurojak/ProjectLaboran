@@ -1,5 +1,6 @@
 from datetime import date
 
+from django.core.validators import RegexValidator
 from django.db import models
 from django.urls import reverse
 
@@ -21,6 +22,10 @@ class BarangTertinggal(models.Model):
     tanggal_diambil = models.DateField(blank=True, null=True)
     nama_pemilik = models.CharField(max_length=150, blank=True)
     nim_pemilik = models.CharField('NIM Pemilik', max_length=40, blank=True, db_index=True)
+    nomor_whatsapp = models.CharField(
+        'Nomor WhatsApp Pemilik', max_length=16, blank=True,
+        validators=[RegexValidator(r'^\+?[0-9]{9,15}$', 'Masukkan nomor WhatsApp 9-15 digit, boleh diawali +.')],
+    )
     pemilik = models.ForeignKey(
         'pengguna.Pengguna',
         on_delete=models.SET_NULL,

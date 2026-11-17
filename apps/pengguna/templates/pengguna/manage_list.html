@@ -5,7 +5,7 @@
     <div class="min-w-0 bg-transparent">
         <p class="text-sm font-black uppercase tracking-[0.2em] text-brand-700">Kontrol Akun</p>
         <h2 class="mt-2 text-3xl font-black text-slate-900">Kelola Pengguna</h2>
-        <p class="mt-2 text-sm text-slate-500">Data akun Aslab, Mahasiswa, dan Laboran. Menu ini terpisah dari Jaringan.</p>
+        <p class="mt-2 text-sm text-slate-500">Data akun Aslab, Mahasiswa, dan Laboran.</p>
     </div>
 
     <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" role="group" aria-label="Filter kategori pengguna">
@@ -32,7 +32,7 @@
                         <td class="break-words">{{ item.nim_nik }}</td><td class="break-words">{{ item.email }}</td><td>{{ item.prodi }}</td>
                         <td><span class="inline-flex whitespace-nowrap rounded-full bg-slate-100 px-3 py-1 text-xs font-black">{% if item.role == 'asisten_lab' %}Aslab{% else %}{{ item.get_role_display }}{% endif %}</span></td>
                         <td>{% if item.is_verified %}<span class="whitespace-nowrap font-bold text-emerald-700">Terverifikasi</span>{% else %}<span class="whitespace-nowrap font-bold text-amber-700">Belum verifikasi</span>{% endif %}</td>
-                        <td><div class="flex flex-nowrap gap-3"><a class="whitespace-nowrap font-black text-brand-700" href="{% url 'pengguna:detail' item.pk %}">Detail</a><a class="whitespace-nowrap font-black text-amber-700" href="{% url 'pengguna:update' item.pk %}">Edit</a></div></td>
+                        <td><div class="flex flex-wrap gap-3"><a class="whitespace-nowrap font-black text-brand-700" href="{% url 'pengguna:detail' item.pk %}">Detail</a>{% if can_delete_users %}<a class="whitespace-nowrap font-black text-amber-700" href="{% url 'pengguna:update' item.pk %}">Edit</a><form method="post" action="{% url 'pengguna:delete' item.pk %}" data-confirm-message="Hapus akun {{ item.nama_pengguna }}? Tindakan ini tidak dapat dibatalkan." class="inline">{% csrf_token %}<button type="submit" class="inline-flex items-center gap-1 whitespace-nowrap font-black text-rose-700 hover:text-rose-800"><i data-lucide="trash-2" class="h-4 w-4"></i>Hapus</button></form>{% endif %}</div></td>
                     </tr>
                     {% endfor %}
                     <tr class="hidden" data-user-empty><td colspan="7" class="py-12 text-center text-slate-500">Pengguna tidak ditemukan.</td></tr>
@@ -44,6 +44,7 @@
 {% endblock %}
 
 {% block extra_script %}
+{% include "components/confirmation_modal.html" with title="Hapus Pengguna" confirm_label="Hapus" confirm_icon="trash-2" %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const root = document.querySelector('[data-user-management]');

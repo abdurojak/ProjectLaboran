@@ -9,6 +9,7 @@ from django.contrib.auth.hashers import check_password, make_password
 from django.conf import settings
 from django.core.cache import cache
 from django.db.models import Count, Q
+from django.db.models.deletion import ProtectedError
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
@@ -42,10 +43,11 @@ from .forms import (
     VerificationCodeForm,
 )
 from .cv import build_cv_pdf
-from .models import Fakultas, KoneksiPengguna, PengalamanPengguna, Pengguna, Prodi, School
+from .models import Fakultas, PengalamanPengguna, Pengguna, PesanPribadi, Prodi, School
 
 
 OTP_SESSION_KEY = 'pengguna_otp'
+RESET_PASSWORD_VERIFIED_KEY = 'reset_password_verified'
 PENDING_REGISTER_USER_KEY = 'pengguna_pending_register_id'
 OTP_EXPIRE_MINUTES = 10
 OTP_MAX_ATTEMPTS = 5
@@ -108,6 +110,12 @@ def password_reset_request_cache_key(request, identifier):
     address = request.META.get('REMOTE_ADDR', '')
     digest = hashlib.sha256(f'{address}:{identifier.strip().lower()}'.encode()).hexdigest()
     return f'pengguna-password-reset:{digest}'
+
+
+def password_reset_ip_cache_key(request):
+    address = request.META.get('REMOTE_ADDR', '')
+    digest = hashlib.sha256(address.encode()).hexdigest()
+    return f'pengguna-password-reset-ip:{digest}'
 
 
 def otp_resend_cache_key(request, pengguna):
@@ -210,7 +218,7 @@ def send_verification_code(
     elif purpose == 'profile_phone':
         verification_url = build_public_url('pengguna:verify_profile_phone', pengguna.pk)
     else:
-        verification_url = build_public_url('pengguna:reset_password')
+        verification_url = build_public_url('pengguna:verify_reset_password')
 
     if method == 'email':
         is_simulated_email = email_delivery_is_simulated()
@@ -269,9 +277,7 @@ class PenggunaListView(ListView):
         queryset = Pengguna.objects.exclude(role='admin')
         if pengguna:
             queryset = queryset.exclude(pk=pengguna.pk)
-        return queryset.annotate(
-            jumlah_pengikut=Count('koneksi_pengikut', distinct=True),
-        ).order_by('nama_pengguna')
+        return queryset.filter(is_verified=True).order_by('nama_pengguna')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -285,14 +291,13 @@ class PenggunaListView(ListView):
         context['can_view_private_contacts'] = bool(
             pengguna and pengguna.role == 'laboran'
         )
-        connected_ids = set()
-        if pengguna:
-            connected_ids = set(KoneksiPengguna.objects.filter(
-                pengikut=pengguna,
-                mengikuti__role__in={'laboran', 'asisten_lab', 'mahasiswa'},
-            ).values_list('mengikuti_id', flat=True))
+        online_cutoff = timezone.now() - timedelta(seconds=75)
+        unread_counts = dict(PesanPribadi.objects.filter(
+            penerima=pengguna, dibaca_pada__isnull=True,
+        ).values('pengirim_id').annotate(total=Count('pk')).values_list('pengirim_id', 'total')) if pengguna else {}
         for item in context['pengguna_list']:
-            item.is_connected = item.pk in connected_ids
+            item.is_online = bool(item.terakhir_aktif_pada and item.terakhir_aktif_pada >= online_cutoff)
+            item.unread_chat_count = unread_counts.get(item.pk, 0)
         return context
 
 
@@ -308,6 +313,7 @@ class PenggunaManageListView(UserManagementRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        context['can_delete_users'] = self.request.current_pengguna.role == 'admin'
         context['selected_role'] = self.request.GET.get('role', '').strip()
         context['search_query'] = self.request.GET.get('q', '').strip()
         base = Pengguna.objects.exclude(role='admin')
@@ -320,34 +326,6 @@ class PenggunaManageListView(UserManagementRequiredMixin, ListView):
         return context
 
 
-@require_POST
-def toggle_connection(request, pk):
-    pengguna = getattr(request, 'current_pengguna', None)
-    target = get_object_or_404(Pengguna, pk=pk)
-    if not pengguna:
-        return JsonResponse({'ok': False, 'message': 'Silakan login terlebih dahulu.'}, status=401)
-    if target.role == 'admin':
-        return JsonResponse({'ok': False, 'message': 'Profil tidak tersedia.'}, status=404)
-    if target.pk == pengguna.pk:
-        return JsonResponse({'ok': False, 'message': 'Tidak dapat mengikuti akun sendiri.'}, status=400)
-
-    connection, created = KoneksiPengguna.objects.get_or_create(
-        pengikut=pengguna,
-        mengikuti=target,
-    )
-    connected = created
-    if not created:
-        connection.delete()
-        connected = False
-    follower_count = KoneksiPengguna.objects.filter(mengikuti=target).count()
-    return JsonResponse({
-        'ok': True,
-        'connected': connected,
-        'follower_count': follower_count,
-        'message': 'Berhasil terhubung.' if connected else 'Koneksi dibatalkan.',
-    })
-
-
 class PenggunaDetailView(DetailView):
     model = Pengguna
     template_name = 'pengguna/detail.html'
@@ -355,8 +333,13 @@ class PenggunaDetailView(DetailView):
 
     def get_queryset(self):
         # Akun admin tidak menjadi bagian direktori/profil publik, termasuk
-        # ketika URL profilnya ditebak secara langsung.
-        return super().get_queryset().exclude(role='admin')
+        # ketika URL profilnya ditebak secara langsung. Admin tetap bisa
+        # membuka profilnya sendiri dari menu akun.
+        current = getattr(self.request, 'current_pengguna', None)
+        queryset = super().get_queryset()
+        if current and current.role == 'admin':
+            return queryset.filter(Q(pk=current.pk) | ~Q(role='admin'))
+        return queryset.exclude(role='admin')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -399,18 +382,6 @@ class PenggunaDetailView(DetailView):
             and current_pengguna.role == 'laboran'
             and self.object.role in {'mahasiswa', 'asisten_lab'}
         )
-        context['followers'] = (
-            Pengguna.objects.filter(
-                koneksi_diikuti__mengikuti=self.object,
-            ).exclude(role='admin').order_by('nama_pengguna')
-        )
-        context['following'] = (
-            Pengguna.objects.filter(
-                koneksi_pengikut__pengikut=self.object,
-            ).exclude(role='admin').order_by('nama_pengguna')
-        )
-        context['followers_count'] = context['followers'].count()
-        context['following_count'] = context['following'].count()
         context['profile_form'] = PenggunaProfileForm(
             instance=self.object,
             current_pengguna=current_pengguna,
@@ -451,7 +422,7 @@ class PenggunaCreateView(AdminPenggunaRequiredMixin, CreateView):
     success_url = reverse_lazy('pengguna:list')
 
 
-class PenggunaUpdateView(UserManagementRequiredMixin, UpdateView):
+class PenggunaUpdateView(AdminPenggunaRequiredMixin, UpdateView):
     model = Pengguna
     form_class = PenggunaForm
     template_name = 'pengguna/form.html'
@@ -467,7 +438,22 @@ class PenggunaDeleteView(AdminPenggunaRequiredMixin, PostOnlyDeleteMixin, Delete
     model = Pengguna
     template_name = 'pengguna/confirm_delete.html'
     context_object_name = 'pengguna'
-    success_url = reverse_lazy('pengguna:list')
+    success_url = reverse_lazy('pengguna:manage_list')
+
+    def get_queryset(self):
+        return super().get_queryset().exclude(role='admin')
+
+    def form_valid(self, form):
+        try:
+            response = super().form_valid(form)
+        except ProtectedError:
+            messages.error(
+                self.request,
+                'Akun tidak dapat dihapus karena masih terkait dengan arsip atau transaksi. Data terkait harus tetap tersimpan.',
+            )
+            return redirect(self.success_url)
+        messages.success(self.request, 'Pengguna berhasil dihapus.')
+        return response
 
 
 class MasterAkademikView(AdminRequiredMixin, ListView):
@@ -957,39 +943,37 @@ class PenggunaVerifyRegisterView(FormView):
 class ForgotPasswordRequestView(FormView):
     template_name = 'pengguna/forgot_password.html'
     form_class = ForgotPasswordRequestForm
-    success_url = reverse_lazy('pengguna:reset_password')
+    success_url = reverse_lazy('pengguna:verify_reset_password')
 
     def form_valid(self, form):
         identifier = form.cleaned_data['nim_nik'].strip()
         cache_key = password_reset_request_cache_key(self.request, identifier)
+        ip_cache_key = password_reset_ip_cache_key(self.request)
         request_count = int(cache.get(cache_key, 0))
-        pengguna = Pengguna.objects.filter(nim_nik=identifier).first()
+        ip_request_count = int(cache.get(ip_cache_key, 0))
+        pengguna = Pengguna.objects.filter(
+            Q(nim_nik=identifier) | Q(email__iexact=identifier)
+        ).first()
+        self.request.session.pop(RESET_PASSWORD_VERIFIED_KEY, None)
+        self.request.session.pop(OTP_SESSION_KEY, None)
 
-        if request_count < settings.PASSWORD_RESET_MAX_REQUESTS:
-            cache.set(
-                cache_key,
-                request_count + 1,
-                settings.PASSWORD_RESET_WINDOW_SECONDS,
-            )
-            if pengguna:
-                send_verification_code(
-                    self.request,
-                    pengguna,
-                    'email',
-                    'reset_password',
-                    show_delivery_message=False,
-                )
-            else:
-                store_otp(self.request, 'reset_password', None, 'email')
-        else:
-            # A decoy flow keeps the response indistinguishable while avoiding
-            # repeated email delivery to a known account.
-            store_otp(self.request, 'reset_password', None, 'email')
+        if (request_count >= settings.PASSWORD_RESET_MAX_REQUESTS or
+                ip_request_count >= settings.PASSWORD_RESET_MAX_REQUESTS * 5):
+            form.add_error(None, 'Terlalu banyak permintaan. Coba lagi beberapa saat nanti.')
+            return self.form_invalid(form)
+        cache.set(cache_key, request_count + 1, settings.PASSWORD_RESET_WINDOW_SECONDS)
+        cache.set(ip_cache_key, ip_request_count + 1, settings.PASSWORD_RESET_WINDOW_SECONDS)
+        if not pengguna:
+            form.add_error('nim_nik', 'Akun tidak ditemukan. Periksa email, NIM, atau NIK.')
+            return self.form_invalid(form)
+        if not send_verification_code(
+            self.request, pengguna, 'email', 'reset_password', show_delivery_message=False,
+        ):
+            self.request.session.pop(OTP_SESSION_KEY, None)
+            form.add_error(None, 'Kode belum dapat dikirim ke email akun. Coba lagi nanti.')
+            return self.form_invalid(form)
 
-        messages.success(
-            self.request,
-            'Jika NIM/NIK terdaftar, kode reset password telah dikirim ke email akun.',
-        )
+        messages.success(self.request, 'Profil ditemukan. Masukkan kode yang dikirim ke email akun.')
         if settings.DEBUG and email_delivery_is_simulated():
             messages.info(
                 self.request,
@@ -998,35 +982,65 @@ class ForgotPasswordRequestView(FormView):
         return redirect(self.success_url)
 
 
+class VerifyResetPasswordView(FormView):
+    template_name = 'pengguna/verify_reset_password.html'
+    form_class = VerificationCodeForm
+
+    def dispatch(self, request, *args, **kwargs):
+        otp = get_pending_otp(request, 'reset_password')
+        self.reset_pengguna = Pengguna.objects.filter(pk=otp['pengguna_id']).first() if otp else None
+        if not self.reset_pengguna:
+            messages.warning(request, 'Proses reset tidak aktif. Silakan cari akun kembali.')
+            return redirect('pengguna:forgot_password')
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['reset_pengguna'] = self.reset_pengguna
+        local, _, domain = self.reset_pengguna.email.partition('@')
+        context['masked_email'] = f"{local[:2]}***@{domain}" if domain else 'email akun'
+        return context
+
+    def form_valid(self, form):
+        otp = get_pending_otp(self.request, 'reset_password')
+        if not otp or not otp_code_matches(self.request, otp, form.cleaned_data['kode']):
+            if not get_pending_otp(self.request, 'reset_password'):
+                messages.error(self.request, 'Batas percobaan atau masa berlaku kode habis. Minta kode baru.')
+                return redirect('pengguna:forgot_password')
+            form.add_error('kode', 'Kode verifikasi tidak sesuai.')
+            return self.form_invalid(form)
+
+        self.request.session.pop(OTP_SESSION_KEY, None)
+        self.request.session.cycle_key()
+        self.request.session[RESET_PASSWORD_VERIFIED_KEY] = {
+            'pengguna_id': self.reset_pengguna.pk,
+            'expires_at': (timezone.now() + timedelta(minutes=OTP_EXPIRE_MINUTES)).isoformat(),
+        }
+        return redirect('pengguna:reset_password')
+
+
 class ResetPasswordView(FormView):
     template_name = 'pengguna/reset_password.html'
     form_class = ResetPasswordForm
     success_url = reverse_lazy('pengguna:login')
 
     def dispatch(self, request, *args, **kwargs):
-        if not get_pending_otp(request, 'reset_password'):
-            messages.warning(request, 'Tidak ada proses reset password aktif. Silakan minta kode ulang.')
+        verified = request.session.get(RESET_PASSWORD_VERIFIED_KEY) or {}
+        expires_at = verified.get('expires_at')
+        self.reset_pengguna = Pengguna.objects.filter(pk=verified.get('pengguna_id')).first()
+        if not self.reset_pengguna or not expires_at or timezone.now() > timezone.datetime.fromisoformat(expires_at):
+            request.session.pop(RESET_PASSWORD_VERIFIED_KEY, None)
+            messages.warning(request, 'Verifikasi kode belum selesai atau sudah kedaluwarsa.')
             return redirect('pengguna:forgot_password')
         return super().dispatch(request, *args, **kwargs)
 
-    def form_valid(self, form):
-        otp = get_pending_otp(self.request, 'reset_password')
-        if not otp_code_matches(self.request, otp, form.cleaned_data['kode']):
-            if not get_pending_otp(self.request, 'reset_password'):
-                messages.error(self.request, 'Batas percobaan kode tercapai. Silakan minta kode baru.')
-                return redirect('pengguna:forgot_password')
-            form.add_error('kode', 'Kode verifikasi tidak sesuai.')
-            return self.form_invalid(form)
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['reset_pengguna'] = self.reset_pengguna
+        return context
 
-        pengguna_id = otp.get('pengguna_id')
-        pengguna = Pengguna.objects.filter(pk=pengguna_id).first() if pengguna_id else None
-        if not pengguna:
-            self.request.session.pop(OTP_SESSION_KEY, None)
-            messages.info(
-                self.request,
-                'Jika data akun valid, silakan gunakan kode terbaru yang dikirim ke email.',
-            )
-            return redirect('pengguna:forgot_password')
+    def form_valid(self, form):
+        pengguna = self.reset_pengguna
         if check_password(form.cleaned_data['password'], pengguna.password):
             form.add_error('password', 'Password baru tidak boleh sama dengan password yang sedang digunakan.')
             return self.form_invalid(form)
@@ -1034,7 +1048,7 @@ class ResetPasswordView(FormView):
         pengguna.password = make_password(form.cleaned_data['password'])
         pengguna.is_verified = True
         pengguna.save(update_fields=['password', 'is_verified', 'diperbarui_pada'])
-        self.request.session.pop(OTP_SESSION_KEY, None)
+        self.request.session.pop(RESET_PASSWORD_VERIFIED_KEY, None)
         messages.success(self.request, 'Password berhasil diganti. Silakan login dengan password baru.')
         return redirect(self.success_url)
 

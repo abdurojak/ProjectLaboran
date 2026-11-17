@@ -1,5 +1,6 @@
 import hashlib
 import mimetypes
+from datetime import timedelta
 from pathlib import PurePosixPath
 
 from django.conf import settings
@@ -54,6 +55,8 @@ from apps.peminjaman.notifications import send_peminjaman_status_notification
 from apps.peminjaman.services import update_peminjaman_status
 from apps.pendaftaran_asleb.services import sync_expired_asleb_periods
 from apps.pengguna.models import Pengguna
+from apps.pengguna.models import PesanPribadi
+from apps.pengguna.chat import conversation_messages, create_private_message, mark_conversation_read, touch_presence
 from apps.pengguna.middleware import PenggunaLoginRequiredMiddleware
 
 from .authentication import has_mobile_access
@@ -90,6 +93,71 @@ from .services import (
 
 def api_error(message, code, http_status=status.HTTP_400_BAD_REQUEST, **extra):
     return Response({'detail': message, 'code': code, **extra}, status=http_status)
+
+
+class PeerChatStatusView(APIView):
+    permission_classes = [IsMobileUser]
+
+    def get(self, request):
+        touch_presence(request.user)
+        unread = PesanPribadi.objects.filter(penerima=request.user, dibaca_pada__isnull=True).count()
+        return Response({'unread_count': unread})
+
+
+class PeerChatUsersView(APIView):
+    permission_classes = [IsMobileUser]
+
+    def get(self, request):
+        touch_presence(request.user)
+        cutoff = timezone.now() - timedelta(seconds=75)
+        unread = dict(PesanPribadi.objects.filter(
+            penerima=request.user, dibaca_pada__isnull=True,
+        ).values('pengirim_id').annotate(total=Count('pk')).values_list('pengirim_id', 'total'))
+        users = Pengguna.objects.filter(is_verified=True).exclude(pk=request.user.pk).exclude(role='admin').order_by('nama_pengguna')
+        return Response({'results': [
+            {
+                'id': user.pk,
+                'name': user.nama_pengguna,
+                'role': user.get_role_display(),
+                'photo_url': absolute_file_url(request, user.foto),
+                'online': bool(user.terakhir_aktif_pada and user.terakhir_aktif_pada >= cutoff),
+                'unread_count': unread.get(user.pk, 0),
+            }
+            for user in users
+        ]})
+
+
+class PeerChatThreadView(APIView):
+    permission_classes = [IsMobileUser]
+
+    def get_target(self, request, pk):
+        return Pengguna.objects.filter(pk=pk, is_verified=True).exclude(pk=request.user.pk).exclude(role='admin').first()
+
+    def get(self, request, pk):
+        target = self.get_target(request, pk)
+        if not target:
+            return api_error('Pengguna tidak ditemukan.', 'user_not_found', status.HTTP_404_NOT_FOUND)
+        touch_presence(request.user)
+        mark_conversation_read(request.user, target)
+        before_id = request.query_params.get('before')
+        if before_id and not before_id.isdigit():
+            return api_error('Penanda pesan tidak valid.', 'invalid_cursor')
+        recent = list(conversation_messages(request.user, target, int(before_id) if before_id else None))
+        items = list(reversed(recent[:100]))
+        return Response({'messages': [
+            {'id': item.pk, 'text': item.isi, 'mine': item.pengirim_id == request.user.pk,
+             'created_at': item.dibuat_pada.isoformat()}
+            for item in items
+        ], 'has_more': len(recent) > 100})
+
+    def post(self, request, pk):
+        target = self.get_target(request, pk)
+        if not target:
+            return api_error('Pengguna tidak ditemukan.', 'user_not_found', status.HTTP_404_NOT_FOUND)
+        message, error, status_code = create_private_message(request.user, target, request.data.get('message'))
+        if error:
+            return api_error(error, 'chat_message_rejected', status_code)
+        return Response({'id': message.pk, 'ok': True}, status=status.HTTP_201_CREATED)
 
 
 class StudentQrView(APIView):
@@ -467,12 +535,15 @@ class ScheduleDetailView(APIView):
             ],
             'can_check_in': (
                 valid
+                and not request.user.wajib_ganti_foto
                 and not already_checked_in
                 and bool(available_modules)
                 and (PengaturanAbsensiAsleb.get_solo().dibuka or manual_permission is not None)
             ),
             'check_in_message': (
-                'Anda sudah melakukan absensi masuk untuk jadwal ini.'
+                'Ganti foto profil dengan foto wajah asli melalui web LabHub sebelum absen.'
+                if request.user.wajib_ganti_foto
+                else 'Anda sudah melakukan absensi masuk untuk jadwal ini.'
                 if already_checked_in
                 else 'Tidak ada modul yang belum diabsen untuk mata kuliah ini.'
                 if not available_modules
@@ -489,6 +560,11 @@ class CheckInView(APIView):
 
     @transaction.atomic
     def post(self, request):
+        if request.user.wajib_ganti_foto:
+            return api_error(
+                'Ganti foto profil dengan foto wajah asli melalui web LabHub sebelum absen.',
+                'profile_photo_required',
+            )
         serializer = CheckInSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         asleb = get_active_asleb(request.user)

@@ -1054,6 +1054,10 @@ class AbsensiAslebCreateView(CreateView):
             messages.error(request, 'Absensi hanya bisa diisi oleh role Asisten Lab.')
             return redirect('dashboard:home')
 
+        if pengguna.wajib_ganti_foto:
+            messages.error(request, 'Ganti foto profil dengan foto wajah asli sebelum mengisi absensi.')
+            return redirect('pengguna:detail', pk=pengguna.pk)
+
         if not self.asleb:
             messages.error(request, 'Data Aslab untuk akun ini belum ditemukan.')
             return redirect('dashboard:home')

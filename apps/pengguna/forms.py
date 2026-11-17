@@ -244,6 +244,8 @@ class PenggunaProfileForm(forms.ModelForm):
 
         if hapus_foto:
             instance.foto = None
+        elif self.cleaned_data.get('foto') and 'foto' in self.files:
+            instance.wajib_ganti_foto = False
 
         if commit:
             instance.save()
@@ -663,19 +665,19 @@ class VerificationCodeForm(forms.Form):
 
 
 class ForgotPasswordRequestForm(forms.Form):
-    nim_nik = forms.CharField(label='NIM/NIK', max_length=40, widget=forms.TextInput(attrs={
-        'inputmode': 'numeric',
-        'pattern': '[0-9]*',
-    }))
+    nim_nik = forms.CharField(label='Email, NIM, atau NIK', max_length=254)
 
     def clean_nim_nik(self):
         nim_nik = self.cleaned_data['nim_nik'].strip()
         if not nim_nik.isdigit():
-            raise forms.ValidationError('NIM/NIK hanya boleh berisi angka.')
+            try:
+                forms.EmailField().clean(nim_nik)
+            except forms.ValidationError as exc:
+                raise forms.ValidationError('Masukkan email atau NIM/NIK berupa angka.') from exc
         return nim_nik
 
 
-class ResetPasswordForm(VerificationCodeForm):
+class ResetPasswordForm(forms.Form):
     password = forms.CharField(label='Password baru', widget=forms.PasswordInput)
     password_confirmation = forms.CharField(label='Konfirmasi password baru', widget=forms.PasswordInput)
 

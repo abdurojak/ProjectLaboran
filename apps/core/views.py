@@ -379,7 +379,11 @@ class SettingsView(TemplateView):
         if pengguna.role in {ADMIN_ROLE, LABORAN_ROLE}:
             cards.append({
                 'title': 'Kelola Pengguna',
-                'description': 'Lihat, cari, dan perbarui data akun Laboran, Asisten Lab, dan Mahasiswa.',
+                'description': (
+                    'Kelola akun Laboran, Asisten Lab, dan Mahasiswa.'
+                    if pengguna.role == ADMIN_ROLE else
+                    'Lihat dan cari akun Laboran, Asisten Lab, dan Mahasiswa.'
+                ),
                 'url': 'pengguna:manage_list',
                 'args': [],
                 'icon': 'users-round',

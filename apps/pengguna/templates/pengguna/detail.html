@@ -283,6 +283,12 @@
 
 {% block content %}
 <div class="profile-page">
+    {% if pengguna.wajib_ganti_foto and can_edit_profile %}
+    <div class="mb-5 rounded-lg border border-amber-300 bg-amber-50 px-5 py-4 text-amber-950" role="alert">
+        <p class="font-bold">Foto profil perlu diganti</p>
+        <p class="mt-1 text-sm">Gunakan foto wajah asli. Absensi asisten lab belum dapat dilakukan sampai foto baru berhasil diunggah.</p>
+    </div>
+    {% endif %}
     {% include "pengguna/profile_professional.html" %}
 </div>
 {% if False %}

@@ -46,6 +46,29 @@ document.addEventListener('DOMContentLoaded', function () {
     let token = '';
     let busy = false;
     let scanning = false;
+    let audioContext = null;
+
+    function playSuccessBeep() {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+        try {
+            const audio = audioContext || new AudioContextClass();
+            audioContext = audio;
+            const oscillator = audio.createOscillator();
+            const volume = audio.createGain();
+            oscillator.type = 'sine';
+            oscillator.frequency.value = 880;
+            volume.gain.setValueAtTime(0.001, audio.currentTime);
+            volume.gain.exponentialRampToValueAtTime(0.15, audio.currentTime + 0.01);
+            volume.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 0.16);
+            oscillator.connect(volume);
+            volume.connect(audio.destination);
+            oscillator.start();
+            oscillator.stop(audio.currentTime + 0.17);
+        } catch (error) {
+            // Audio may be disabled by browser or device settings.
+        }
+    }
 
     async function post(url, value) {
         const body = new URLSearchParams({token: value});
@@ -71,6 +94,7 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             await stopCamera();
             const data = await post(panel.dataset.previewUrl, value);
+            playSuccessBeep();
             panel.querySelector('[data-scan-name]').textContent = data.nama;
             panel.querySelector('[data-scan-nim]').textContent = data.nim;
             panel.querySelector('[data-scan-class]').textContent = data.matkul + ' · ' + data.modul;
@@ -89,6 +113,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
     startButton.addEventListener('click', async function () {
         if (busy) return;
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+            try {
+                audioContext = audioContext || new AudioContextClass();
+                audioContext.resume();
+            } catch (error) {
+                // Scanner remains usable when audio is unavailable.
+            }
+        }
         if (!window.Html5Qrcode) {
             status.textContent = 'Pemindai belum tersedia. Gunakan absensi manual.';
             return;

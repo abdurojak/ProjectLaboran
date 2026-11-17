@@ -32,6 +32,9 @@ class JadwalPraktikumForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.current_pengguna = kwargs.pop('current_pengguna', None)
         super().__init__(*args, **kwargs)
+        self.fields['hari'].choices = [
+            (value, label) for value, label in self.fields['hari'].choices if value != 'sabtu'
+        ]
         self.fields['matkul'].queryset = self.get_matkul_queryset()
         self.fields['matkul'].initial = self.get_initial_matkul()
         room_queryset = self.get_optimal_room_queryset()

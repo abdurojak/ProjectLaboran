@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Jaringan Pengguna{% endblock %}
+{% block title %}Chat Pengguna{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -22,9 +22,9 @@
 <section class="min-w-0 space-y-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="max-w-3xl">
-            <p class="text-sm font-bold uppercase tracking-[0.2em] text-brand-700">Jaringan LabHub</p>
-            <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">Jaringan Pengguna</h2>
-            <p class="mt-2 text-sm text-slate-500">Temukan dan kenali seluruh pengguna LabHub dalam satu jaringan.</p>
+            <p class="text-sm font-bold uppercase text-brand-700">LabHub</p>
+            <h2 class="mt-2 text-2xl font-black text-slate-900 sm:text-3xl">Chat Pengguna</h2>
+            <p class="mt-2 text-sm text-slate-500">Pilih pengguna untuk membuka percakapan.</p>
         </div>
         {% if can_manage_users %}<a class="btn-primary w-full justify-center gap-2 sm:w-auto" href="{% url 'pengguna:create' %}"><i data-lucide="user-plus" class="h-4 w-4"></i><span>Tambah Pengguna</span></a>{% endif %}
     </div>
@@ -44,11 +44,11 @@
         </div>
     </section>
 
-    <div><h3 class="text-xl font-black text-slate-900 sm:text-2xl">Temukan Pengguna LabHub</h3><p class="mt-1 text-sm text-slate-500" data-user-result-summary aria-live="polite"></p></div>
+    <div><h3 class="text-xl font-black text-slate-900 sm:text-2xl">Pengguna LabHub</h3><p class="mt-1 text-sm text-slate-500" data-user-result-summary aria-live="polite"></p></div>
 
     <div class="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3 2xl:grid-cols-4" data-user-list>
         {% for pengguna in pengguna_list %}
-        <article class="network-card flex flex-col" data-user-card data-prodi="{{ pengguna.prodi|lower }}" data-search="{{ pengguna.nama_pengguna|lower }} {{ pengguna.nim_nik|lower }} {{ pengguna.kode_pengguna|lower }} {{ pengguna.fakultas|lower }} {{ pengguna.prodi|lower }}">
+        <article class="network-card flex flex-col" data-user-card data-user-id="{{ pengguna.pk }}" data-prodi="{{ pengguna.prodi|lower }}" data-search="{{ pengguna.nama_pengguna|lower }} {{ pengguna.nim_nik|lower }} {{ pengguna.kode_pengguna|lower }} {{ pengguna.fakultas|lower }} {{ pengguna.prodi|lower }}">
             <div class="network-cover relative overflow-hidden">
                 {% if pengguna.cover_image %}<img src="{{ pengguna.cover_image.url }}" alt="Sampul profil {{ pengguna.nama_pengguna }}" class="h-full w-full object-cover">{% endif %}
             </div>
@@ -57,18 +57,9 @@
                 <h4 class="mt-3 line-clamp-2 text-base font-black leading-tight text-slate-900 sm:text-xl">{{ pengguna.nama_pengguna }}</h4>
                 <p class="mt-2 line-clamp-3 min-h-[3.75rem] text-xs leading-5 text-slate-500 sm:text-sm sm:leading-6">{% if pengguna.ringkasan_profesional %}{{ pengguna.ringkasan_profesional|truncatechars:100 }}{% elif pengguna.prodi %}{{ pengguna.prodi }} di Universitas Trisakti{% else %}Pengguna LabHub Universitas Trisakti{% endif %}</p>
                 <p class="mt-2 truncate text-[11px] font-semibold text-slate-400 sm:text-xs">{{ pengguna.kode_pengguna }} · {{ pengguna.nim_nik }}{% if pengguna.prodi %} · {{ pengguna.prodi }}{% endif %}</p>
-                <div class="mt-3 flex items-center justify-center gap-2 text-[11px] font-semibold text-slate-500 sm:text-xs">
-                    <i data-lucide="users" class="h-3.5 w-3.5"></i>
-                    <span data-follower-count>{{ pengguna.jumlah_pengikut }}</span> pengikut
-                </div>
+                <p class="mt-3 flex items-center justify-center gap-2 text-xs font-semibold" data-presence data-last-active="{{ pengguna.terakhir_aktif_pada|date:'c' }}"><span class="h-2.5 w-2.5 rounded-full {% if pengguna.is_online %}bg-emerald-500{% else %}bg-slate-300{% endif %}" data-presence-dot></span><span data-presence-label>{% if pengguna.is_online %}Aktif di LabHub{% else %}Tidak aktif{% endif %}</span></p>
                 <div class="mt-auto pt-4">
-                    <form method="post" action="{% url 'pengguna:toggle_connection' pengguna.pk %}" data-connect-form>
-                        {% csrf_token %}
-                        <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-full border-2 border-brand-600 px-3 py-2 text-xs font-black text-brand-700 transition hover:bg-brand-50 disabled:cursor-wait disabled:opacity-60 sm:text-sm" data-connect-button data-connected="{% if pengguna.is_connected %}true{% else %}false{% endif %}">
-                            <i data-lucide="{% if pengguna.is_connected %}user-check{% else %}user-plus{% endif %}" class="h-4 w-4"></i>
-                            <span>{% if pengguna.is_connected %}Terhubung{% else %}Hubungkan{% endif %}</span>
-                        </button>
-                    </form>
+                    <a class="btn-primary w-full justify-center gap-2" href="{% url 'pengguna:chat_room' pengguna.pk %}"><i data-lucide="message-circle" class="h-4 w-4"></i>Chat <span data-unread-count class="{% if not pengguna.unread_chat_count %}hidden {% endif %}rounded-full bg-white px-2 py-0.5 text-xs text-brand-700">{{ pengguna.unread_chat_count }}</span></a>
                     <a class="mt-2 inline-flex w-full items-center justify-center px-3 py-1.5 text-xs font-bold text-slate-500 transition hover:text-brand-700" href="{% url 'pengguna:detail' pengguna.pk %}">Lihat profil</a>
                     {% if can_manage_users %}<div class="mt-3 flex items-center justify-center gap-4 text-xs font-bold"><a class="inline-flex items-center gap-1 text-amber-600" href="{% url 'pengguna:update' pengguna.pk %}"><i data-lucide="pencil" class="h-3.5 w-3.5"></i>Edit</a><form method="post" action="{% url 'pengguna:delete' pengguna.pk %}" data-confirm-message="Yakin ingin menghapus pengguna {{ pengguna.nama_pengguna }}?">{% csrf_token %}<button type="submit" class="inline-flex items-center gap-1 text-rose-600"><i data-lucide="trash-2" class="h-3.5 w-3.5"></i>Hapus</button></form></div>{% endif %}
                 </div>
@@ -108,35 +99,34 @@ document.addEventListener('DOMContentLoaded', function () {
     resetButton.addEventListener('click', function () { searchInput.value = ''; prodiFilter.value = ''; applyUserFilters(); searchInput.focus(); });
     applyUserFilters();
 
-    document.querySelectorAll('[data-connect-form]').forEach(function (form) {
-        form.addEventListener('submit', async function (event) {
-            event.preventDefault();
-            const button = form.querySelector('[data-connect-button]');
-            button.disabled = true;
-            try {
-                const response = await fetch(form.action, {
-                    method: 'POST',
-                    headers: {'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json'},
-                    body: new FormData(form),
-                    credentials: 'same-origin'
-                });
-                const payload = await response.json();
-                if (!response.ok || !payload.ok) throw new Error(payload.message || 'Koneksi belum dapat diperbarui.');
-                button.dataset.connected = payload.connected ? 'true' : 'false';
-                button.querySelector('span').textContent = payload.connected ? 'Terhubung' : 'Hubungkan';
-                const icon = button.querySelector('svg');
-                if (icon) icon.setAttribute('data-lucide', payload.connected ? 'user-check' : 'user-plus');
-                const card = form.closest('[data-user-card]');
-                const count = card ? card.querySelector('[data-follower-count]') : null;
-                if (count) count.textContent = payload.follower_count;
-                if (window.lucide) window.lucide.createIcons();
-            } catch (error) {
-                window.alert(error.message);
-            } finally {
-                button.disabled = false;
+    function updatePresence(card, active, timestamp) {
+        const status = card.querySelector('[data-presence]');
+        if (!status) return;
+        if (timestamp) status.dataset.lastActive = timestamp;
+        status.querySelector('[data-presence-dot]').classList.toggle('bg-emerald-500', active);
+        status.querySelector('[data-presence-dot]').classList.toggle('bg-slate-300', !active);
+        status.querySelector('[data-presence-label]').textContent = active ? 'Aktif di LabHub' : 'Tidak aktif';
+    }
+    document.addEventListener('labhub:realtime', function (event) {
+        const payload = event.detail || {};
+        if (payload.event === 'chat.message') {
+            const card = cards.find(function (item) { return item.dataset.userId === String(payload.sender_id); });
+            if (card) {
+                const badge = card.querySelector('[data-unread-count]');
+                badge.textContent = String((Number(badge.textContent) || 0) + 1);
+                badge.classList.remove('hidden');
             }
-        });
+        }
+        if (payload.event !== 'presence.updated') return;
+        const card = cards.find(function (item) { return item.dataset.userId === String(payload.user_id); });
+        if (card) updatePresence(card, true, payload.created_at);
     });
+    window.setInterval(function () {
+        cards.forEach(function (card) {
+            const timestamp = card.querySelector('[data-presence]')?.dataset.lastActive;
+            if (timestamp) updatePresence(card, Date.now() - new Date(timestamp).getTime() < 75000);
+        });
+    }, 10000);
 });
 </script>
 {% endblock %}

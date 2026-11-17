@@ -37,6 +37,35 @@ class BarangTertinggalViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Barang Mahasiswa Tertinggal')
+        self.assertContains(response, 'data-barang-item')
+        self.assertContains(response, 'data-barang-search')
+        self.assertContains(response, 'data-barang-status')
+        self.assertNotContains(response, 'overflow-x-auto')
+        self.assertNotContains(response, 'min-w-max')
+
+    def test_foto_barang_dapat_diperbesar_dari_daftar_dan_detail(self):
+        self.barang.foto = 'barang_tertinggal/foto/flashdisk.jpg'
+        self.barang.save(update_fields=['foto'])
+
+        for route in ('list', 'detail'):
+            args = [self.barang.pk] if route != 'list' else []
+            response = self.client.get(reverse(f'barang_tertinggal:{route}', args=args))
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, 'data-image-lightbox=')
+            self.assertContains(response, 'id="barang-image-lightbox"')
+
+        mahasiswa = Pengguna.objects.create(
+            nama_pengguna='Mahasiswa Foto', nim_nik='06400239990',
+            email='fotobarang@std.trisakti.ac.id', password='rahasia123',
+            no_hp='081299990', alamat='Jakarta', fakultas='Teknologi Industri',
+            prodi='Informatika', gender='perempuan', role='mahasiswa',
+        )
+        session = self.client.session
+        session['pengguna_id'] = mahasiswa.pk
+        session.save()
+        response = self.client.get(reverse('barang_tertinggal:berita_detail', args=[self.barang.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-image-lightbox=')
 
     def test_list_menampilkan_data_dan_modal_konfirmasi(self):
         response = self.client.get(reverse('barang_tertinggal:list'))
@@ -161,6 +190,7 @@ class BarangTertinggalViewTests(TestCase):
                 'tanggal_diambil': '2026-06-24',
                 'nama_pemilik': 'Andi',
                 'nim_pemilik': '06400230001',
+                'nomor_whatsapp': '081234567890',
                 'status': 'diambil',
             },
         )
@@ -170,6 +200,37 @@ class BarangTertinggalViewTests(TestCase):
         self.assertEqual(self.barang.nama_barang, 'Flashdisk Sandisk')
         self.assertEqual(self.barang.status, 'diambil')
         self.assertEqual(self.barang.nim_pemilik, '06400230001')
+        self.assertEqual(self.barang.nomor_whatsapp, '081234567890')
+
+    def test_form_edit_menampilkan_data_lama(self):
+        self.barang.nama_pemilik = 'Andi'
+        self.barang.nim_pemilik = '06400230001'
+        self.barang.nomor_whatsapp = '081234567890'
+        self.barang.tanggal_diambil = '2026-06-24'
+        self.barang.save()
+
+        response = self.client.get(reverse('barang_tertinggal:update', args=[self.barang.pk]))
+
+        self.assertContains(response, 'value="Flashdisk"')
+        self.assertContains(response, 'value="Andi"')
+        self.assertContains(response, 'value="06400230001"')
+        self.assertContains(response, 'value="081234567890"')
+        self.assertContains(response, 'value="2026-06-22"')
+        self.assertContains(response, 'value="2026-06-24"')
+
+    def test_nomor_whatsapp_tidak_valid_ditolak(self):
+        response = self.client.post(reverse('barang_tertinggal:update', args=[self.barang.pk]), {
+            'nama_barang': self.barang.nama_barang,
+            'jenis_barang': self.barang.jenis_barang,
+            'jumlah_barang': 1,
+            'tanggal_ditemukan': '2026-06-22',
+            'nomor_whatsapp': 'nomor-salah',
+            'status': 'tertinggal',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Masukkan nomor WhatsApp 9-15 digit')
+        self.barang.refresh_from_db()
+        self.assertEqual(self.barang.nomor_whatsapp, '')
 
     def test_form_edit_bisa_menghapus_foto(self):
         self.barang.foto = SimpleUploadedFile('flashdisk.jpg', b'fake-image-content', content_type='image/jpeg')

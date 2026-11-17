@@ -142,6 +142,7 @@ class PenggunaLoginRequiredMiddleware:
         logout_url = reverse('pengguna:logout')
         register_url = reverse('pengguna:register')
         reset_password_url = reverse('pengguna:reset_password')
+        verify_reset_password_url = reverse('pengguna:verify_reset_password')
         verify_register_url = reverse('pengguna:verify_register')
         path = request.path_info
         public_path = self.public_path(path)
@@ -153,6 +154,7 @@ class PenggunaLoginRequiredMiddleware:
                 login_url,
                 register_url,
                 reset_password_url,
+                verify_reset_password_url,
                 verify_register_url,
             )
         }
@@ -393,7 +395,7 @@ class PenggunaLoginRequiredMiddleware:
         if path in self.MAHASISWA_ALLOWED_PENGGUNA_PATHS:
             return True
 
-        if resolved.url_name in {'list', 'detail'}:
+        if resolved.url_name in {'list', 'detail', 'chat_room', 'chat_send'}:
             return True
 
         return resolved.url_name in {
@@ -409,7 +411,7 @@ class PenggunaLoginRequiredMiddleware:
         if path in self.MAHASISWA_ALLOWED_PENGGUNA_PATHS:
             return True
 
-        if resolved.url_name in {'list', 'detail'}:
+        if resolved.url_name in {'list', 'detail', 'chat_room', 'chat_send'}:
             return True
 
         return resolved.url_name in {

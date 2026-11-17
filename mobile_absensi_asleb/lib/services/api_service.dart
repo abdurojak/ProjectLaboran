@@ -226,6 +226,21 @@ class ApiService {
 
   Future<Map<String, dynamic>> adminChat() => _getMap('chat-admin/');
 
+  Future<Map<String, dynamic>> peerChatStatus() => _getMap('chat/status/');
+
+  Future<Map<String, dynamic>> peerChatUsers() => _getMap('chat/users/');
+
+  Future<Map<String, dynamic>> peerChatThread(int userId, {int? before}) =>
+      _getMap('chat/$userId/${before == null ? '' : '?before=$before'}');
+
+  Future<void> sendPeerChatMessage(int userId, String message) async {
+    try {
+      await dio.post('chat/$userId/', data: {'message': message});
+    } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
+  }
+
   Future<Map<String, dynamic>> startAdminChat() async {
     try {
       final response = await dio.post('chat-admin/', data: {'action': 'start'});

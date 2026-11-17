@@ -13,6 +13,7 @@
                 </div>
                 <div class="mb-1 flex flex-wrap gap-2">
                     {% if can_download_cv %}<a class="btn-primary gap-2" href="{% url 'pengguna:cv_download' pengguna.pk %}"><i data-lucide="download" class="h-4 w-4"></i>Download CV</a>{% endif %}
+                    {% if current_pengguna.pk != pengguna.pk %}<a class="btn-primary gap-2" href="{% url 'pengguna:chat_room' pengguna.pk %}"><i data-lucide="message-circle" class="h-4 w-4"></i>Chat</a>{% endif %}
                     {% if can_edit_profile %}<button type="button" data-profile-modal-open class="btn-secondary gap-2"><i data-lucide="pencil" class="h-4 w-4"></i>Edit Profil</button>
                     <button type="button" data-password-modal-open class="btn-secondary gap-2"><i data-lucide="key-round" class="h-4 w-4"></i>Password</button>{% endif %}
                 </div>
@@ -22,10 +23,6 @@
                 <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-2"><h1 class="text-3xl font-black tracking-tight text-slate-950">{{ pengguna.nama_pengguna }}</h1><span class="rounded-full bg-brand-50 px-3 py-1 text-xs font-black text-brand-700">{{ pengguna.get_role_display }}</span></div>
                     <p class="mt-2 text-base font-semibold text-slate-700">{{ pengguna.prodi }} · {{ pengguna.fakultas }}</p>
-                    <div class="mt-3 flex flex-wrap items-center gap-4 text-sm">
-                        <a href="#profile-followers" class="font-bold text-slate-600 hover:text-brand-700"><strong class="text-slate-950">{{ followers_count }}</strong> pengikut</a>
-                        <a href="#profile-following" class="font-bold text-slate-600 hover:text-brand-700"><strong class="text-slate-950">{{ following_count }}</strong> mengikuti</a>
-                    </div>
                     {% if can_view_private_contacts %}<p class="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-slate-500"><span>{{ pengguna.alamat|truncatechars:90 }}</span><span>·</span><a href="mailto:{{ pengguna.email }}" class="font-bold text-brand-700 hover:underline">Info kontak</a></p>{% endif %}
                     <div class="mt-4 flex flex-wrap gap-2 text-xs font-bold"><span class="rounded-full bg-slate-100 px-3 py-1.5 text-slate-600">NIM/NIK {{ pengguna.nim_nik }}</span><span class="rounded-full bg-slate-100 px-3 py-1.5 text-slate-600">{{ pengguna.kode_pengguna }}</span>{% if pengguna.role == 'asisten_lab' and asleb_profile %}<span class="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-700">Status Aslab: {{ asleb_profile.level_efektif_display }}</span><span class="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-700">{{ asleb_profile.jumlah_periode_asleb }} periode sebagai aslab.</span>{% endif %}</div>
                 </div>
@@ -82,19 +79,6 @@
         </div>
 
         <aside class="space-y-5">
-            <article class="surface-card p-5" id="profile-followers">
-                <div class="flex items-center justify-between gap-3"><h2 class="text-lg font-black text-slate-900">Pengikut</h2><span class="rounded-full bg-brand-50 px-3 py-1 text-xs font-black text-brand-700">{{ followers_count }}</span></div>
-                <div class="mt-4 grid gap-3">
-                    {% for item in followers|slice:":12" %}<a href="{% url 'pengguna:detail' item.pk %}" class="flex items-center gap-3 rounded-2xl p-2 transition hover:bg-slate-50">{% if item.foto %}<img src="{{ item.foto.url }}" alt="{{ item.nama_pengguna }}" class="h-10 w-10 rounded-full object-cover">{% else %}<span class="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-700"><i data-lucide="user" class="h-4 w-4"></i></span>{% endif %}<span class="min-w-0"><strong class="block truncate text-sm text-slate-800">{{ item.nama_pengguna }}</strong><span class="block truncate text-xs text-slate-500">{{ item.prodi|default:"Pengguna LabHub" }}</span></span></a>{% empty %}<p class="text-sm text-slate-500">Belum memiliki pengikut.</p>{% endfor %}
-                </div>
-            </article>
-
-            <article class="surface-card p-5" id="profile-following">
-                <div class="flex items-center justify-between gap-3"><h2 class="text-lg font-black text-slate-900">Mengikuti</h2><span class="rounded-full bg-cyan-50 px-3 py-1 text-xs font-black text-cyan-700">{{ following_count }}</span></div>
-                <div class="mt-4 grid gap-3">
-                    {% for item in following|slice:":12" %}<a href="{% url 'pengguna:detail' item.pk %}" class="flex items-center gap-3 rounded-2xl p-2 transition hover:bg-slate-50">{% if item.foto %}<img src="{{ item.foto.url }}" alt="{{ item.nama_pengguna }}" class="h-10 w-10 rounded-full object-cover">{% else %}<span class="flex h-10 w-10 items-center justify-center rounded-full bg-cyan-100 text-cyan-700"><i data-lucide="user" class="h-4 w-4"></i></span>{% endif %}<span class="min-w-0"><strong class="block truncate text-sm text-slate-800">{{ item.nama_pengguna }}</strong><span class="block truncate text-xs text-slate-500">{{ item.prodi|default:"Pengguna LabHub" }}</span></span></a>{% empty %}<p class="text-sm text-slate-500">Belum mengikuti pengguna lain.</p>{% endfor %}
-                </div>
-            </article>
 
             {% if can_view_private_contacts %}<article class="surface-card p-5"><h2 class="text-lg font-black text-slate-900">Informasi Kontak</h2><div class="mt-4 grid gap-4 text-sm"><div><p class="text-xs font-bold uppercase tracking-wider text-slate-400">Email</p><a href="mailto:{{ pengguna.email }}" class="mt-1 block break-all font-bold text-brand-700">{{ pengguna.email }}</a></div><div><p class="text-xs font-bold uppercase tracking-wider text-slate-400">No. HP</p><p class="mt-1 font-bold text-slate-700">{{ pengguna.no_hp|default:"-" }}</p></div><div><p class="text-xs font-bold uppercase tracking-wider text-slate-400">Gender</p><p class="mt-1 font-bold text-slate-700">{{ pengguna.get_gender_display }}</p></div><div><p class="text-xs font-bold uppercase tracking-wider text-slate-400">Alamat</p><p class="mt-1 leading-6 text-slate-600">{{ pengguna.alamat|default:"-" }}</p></div></div></article>{% endif %}
 

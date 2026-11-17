@@ -12,7 +12,7 @@ from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.http import HttpResponse
 from django.db import IntegrityError
-from django.test import RequestFactory, TestCase, override_settings
+from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
 from django.test.utils import override_script_prefix
 from django.urls import reverse
 from django.utils import timezone
@@ -20,8 +20,10 @@ from django.utils import timezone
 from apps.asleb.models import Asleb, ModulPraktikum, PesertaPraktikum
 from apps.kalender.models import KegiatanKalender
 from apps.pendaftaran_asleb.models import MataKuliahAsleb, PendaftaranAsleb
+from apps.surat.models import SuratPengadaan
 from .middleware import PenggunaLoginRequiredMiddleware
-from .models import Fakultas, PengalamanPengguna, Pengguna, Prodi
+from .models import Fakultas, PengalamanPengguna, Pengguna, PesanPribadi, Prodi
+from .utils import BLOCKED_AVATAR_HASHES, matches_blocked_avatar, validate_human_face_photo
 
 
 def registration_photo(name='wajah.gif'):
@@ -31,6 +33,31 @@ def registration_photo(name='wajah.gif'):
         b'\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;'
     )
     return SimpleUploadedFile(name, content, content_type='image/gif')
+
+
+class ProfilePhotoValidationTests(SimpleTestCase):
+    def test_known_avatar_and_near_duplicate_are_blocked(self):
+        import cv2
+
+        with patch('apps.pengguna.utils.image_perceptual_hash', return_value=BLOCKED_AVATAR_HASHES[0] ^ 0b10101):
+            self.assertTrue(matches_blocked_avatar(None, cv2))
+
+    def test_unrelated_image_is_not_blocked(self):
+        import cv2
+
+        with patch('apps.pengguna.utils.image_perceptual_hash', return_value=BLOCKED_AVATAR_HASHES[0] ^ ((1 << 64) - 1)):
+            self.assertFalse(matches_blocked_avatar(None, cv2))
+
+    def test_photo_validation_rejects_known_avatar(self):
+        import cv2
+        import numpy as np
+
+        image = np.full((128, 128, 3), 127, dtype=np.uint8)
+        encoded = cv2.imencode('.png', image)[1].tobytes()
+        upload = SimpleUploadedFile('avatar.png', encoded, content_type='image/png')
+        with patch('apps.pengguna.utils.matches_blocked_avatar', return_value=True):
+            with self.assertRaisesMessage(forms.ValidationError, 'Gunakan foto wajah asli'):
+                validate_human_face_photo(upload)
 
 
 class PenggunaModelTests(TestCase):
@@ -150,7 +177,7 @@ class PenggunaViewTests(TestCase):
         self.assertContains(response, 'data-user-filter-reset')
         self.assertContains(response, 'data-user-list')
         self.assertNotContains(response, 'data-user-group')
-        self.assertEqual(response.content.decode().count('data-user-card data-prodi='), 3)
+        self.assertEqual(response.content.decode().count('data-user-card data-user-id='), 3)
         self.assertContains(response, 'applyUserFilters()')
         self.assertContains(response, '<option value="informatika">Informatika</option>', html=False)
 
@@ -218,7 +245,7 @@ class PenggunaViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, mahasiswa.nama_pengguna)
         self.assertContains(response, asisten.nama_pengguna)
-        self.assertContains(response, laboran.kode_pengguna)
+        self.assertNotContains(response, f'data-user-id="{laboran.pk}"')
         self.assertContains(response, 'data-user-list')
         self.assertNotContains(response, 'data-user-group')
         self.assertNotContains(response, 'Tambah Pengguna')
@@ -252,6 +279,8 @@ class PenggunaViewTests(TestCase):
         session['pengguna_id'] = laboran.pk
         session.save()
 
+        manage_response = self.client.get(reverse('pengguna:manage_list'))
+        self.assertNotContains(manage_response, reverse('pengguna:delete', args=[target.pk]))
         self.assertRedirects(self.client.get(reverse('pengguna:create')), reverse('pengguna:list'))
         self.assertRedirects(self.client.get(reverse('pengguna:update', args=[target.pk])), reverse('pengguna:list'))
         self.assertRedirects(self.client.post(reverse('pengguna:delete', args=[target.pk])), reverse('pengguna:list'))
@@ -289,12 +318,17 @@ class PenggunaViewTests(TestCase):
         self.assertEqual(pengguna.role, 'asisten_lab')
 
     def test_update_pengguna_tanpa_password_tidak_mengubah_password(self):
-        password_lama = self.pengguna.password
+        target = Pengguna.objects.create(
+            nama_pengguna='Andi Laboran', nim_nik='3301001', email='andi.laboran@example.com',
+            password='rahasia123', no_hp='081234567890', alamat='Jakarta',
+            fakultas='Teknologi Industri', prodi='Informatika', gender='laki_laki', role='laboran',
+        )
+        password_lama = target.password
         response = self.client.post(
-            reverse('pengguna:update', args=[self.pengguna.pk]),
+            reverse('pengguna:update', args=[target.pk]),
             {
                 'nama_pengguna': 'Andi Updated',
-                'nim_nik': '2201001',
+                'nim_nik': target.nim_nik,
                 'email': 'andi.updated@example.com',
                 'password': '',
                 'no_hp': '081234567890',
@@ -307,12 +341,12 @@ class PenggunaViewTests(TestCase):
             },
         )
 
-        self.pengguna.refresh_from_db()
-        self.assertRedirects(response, reverse('pengguna:list'))
-        self.assertEqual(self.pengguna.nama_pengguna, 'Andi Updated')
-        self.assertEqual(self.pengguna.password, password_lama)
-        self.assertEqual(self.pengguna.role, 'laboran')
-        self.assertTrue(self.pengguna.is_verified)
+        target.refresh_from_db()
+        self.assertRedirects(response, reverse('pengguna:manage_list'))
+        self.assertEqual(target.nama_pengguna, 'Andi Updated')
+        self.assertEqual(target.password, password_lama)
+        self.assertEqual(target.role, 'laboran')
+        self.assertTrue(target.is_verified)
 
     def test_admin_dapat_mengubah_status_verified_pengguna(self):
         target = Pengguna.objects.create(
@@ -346,11 +380,16 @@ class PenggunaViewTests(TestCase):
         )
 
         target.refresh_from_db()
-        self.assertRedirects(response, reverse('pengguna:list'))
+        self.assertRedirects(response, reverse('pengguna:manage_list'))
         self.assertFalse(target.is_verified)
 
     def test_form_pengguna_menampilkan_checkbox_verified(self):
-        response = self.client.get(reverse('pengguna:update', args=[self.pengguna.pk]))
+        target = Pengguna.objects.create(
+            nama_pengguna='Maya Mahasiswa', nim_nik='2203002', email='maya.verified@example.com',
+            password='rahasia123', no_hp='081234567890', alamat='Jakarta',
+            fakultas='Teknologi Industri', prodi='Informatika', gender='perempuan', role='mahasiswa',
+        )
+        response = self.client.get(reverse('pengguna:update', args=[target.pk]))
 
         self.assertContains(response, 'name="is_verified"')
         self.assertContains(response, 'Akun terverifikasi')
@@ -429,7 +468,7 @@ class PenggunaViewTests(TestCase):
         directory_response = self.client.get(reverse('pengguna:list'))
         self.assertEqual(directory_response.status_code, 200)
         self.assertContains(directory_response, target.nama_pengguna)
-        self.assertContains(directory_response, 'Jaringan Pengguna')
+        self.assertContains(directory_response, 'Chat Pengguna')
 
     def test_laboran_dapat_melihat_kontak_pribadi_profil(self):
         laboran = Pengguna.objects.create(
@@ -941,10 +980,42 @@ class PenggunaViewTests(TestCase):
         self.assertEqual(target.role, 'mahasiswa')
 
     def test_delete_pengguna(self):
+        target = Pengguna.objects.create(
+            nama_pengguna='Target Hapus', nim_nik='2201099',
+            email='target-hapus@example.com', password='rahasia123',
+            no_hp='081234567899', alamat='Jakarta', fakultas='Teknologi Industri',
+            prodi='Informatika', gender='laki_laki', role='mahasiswa',
+        )
+        manage_response = self.client.get(reverse('pengguna:manage_list'))
+        self.assertContains(manage_response, reverse('pengguna:delete', args=[target.pk]))
+        self.assertNotIn('Jaringan', [link['title'] for link in manage_response.context['sidebar_links']])
+
+        response = self.client.post(reverse('pengguna:delete', args=[target.pk]))
+
+        self.assertRedirects(response, reverse('pengguna:manage_list'), fetch_redirect_response=False)
+        self.assertFalse(Pengguna.objects.filter(pk=target.pk).exists())
+
+    def test_admin_tidak_dapat_menghapus_akun_admin(self):
         response = self.client.post(reverse('pengguna:delete', args=[self.pengguna.pk]))
 
-        self.assertRedirects(response, reverse('pengguna:list'), fetch_redirect_response=False)
-        self.assertFalse(Pengguna.objects.filter(pk=self.pengguna.pk).exists())
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(Pengguna.objects.filter(pk=self.pengguna.pk).exists())
+
+    def test_pengguna_dengan_arsip_terlindungi_tidak_dapat_dihapus(self):
+        target = Pengguna.objects.create(
+            nama_pengguna='Target Arsip', nim_nik='2201098',
+            email='target-arsip@example.com', password='rahasia123',
+            no_hp='081234567898', alamat='Jakarta', fakultas='Teknologi Industri',
+            prodi='Informatika', gender='laki_laki', role='laboran',
+        )
+        SuratPengadaan.objects.create(
+            nomor='TEST-001', tanggal=date(2026, 11, 16), isi='Arsip pengadaan', dibuat_oleh=target,
+        )
+        response = self.client.post(reverse('pengguna:delete', args=[target.pk]), follow=True)
+
+        self.assertRedirects(response, reverse('pengguna:manage_list'))
+        self.assertContains(response, 'masih terkait dengan arsip atau transaksi')
+        self.assertTrue(Pengguna.objects.filter(pk=target.pk).exists())
 
 
 class PenggunaAuthTests(TestCase):
@@ -1768,13 +1839,19 @@ class PenggunaAuthTests(TestCase):
     def test_forgot_password_mengganti_password_dengan_otp(self):
         response = self.client.post(
             reverse('pengguna:forgot_password'),
-            {'nim_nik': '2201001'},
+            {'nim_nik': self.pengguna.email},
         )
 
-        self.assertRedirects(response, reverse('pengguna:reset_password'))
+        self.assertRedirects(response, reverse('pengguna:verify_reset_password'))
+        profile = self.client.get(reverse('pengguna:verify_reset_password'))
+        self.assertContains(profile, self.pengguna.nama_pengguna)
+        self.assertContains(profile, 'Kode verifikasi')
+        self.assertNotContains(profile, 'Password baru')
+        self.assertRedirects(self.client.get(reverse('pengguna:reset_password')), reverse('pengguna:forgot_password'))
         kode = self.client.session['pengguna_otp']['code']
+        response = self.client.post(reverse('pengguna:verify_reset_password'), {'kode': kode})
+        self.assertRedirects(response, reverse('pengguna:reset_password'))
         response = self.client.post(reverse('pengguna:reset_password'), {
-            'kode': kode,
             'password': 'passwordbaru123',
             'password_confirmation': 'passwordbaru123',
         })
@@ -1782,24 +1859,42 @@ class PenggunaAuthTests(TestCase):
 
         self.assertRedirects(response, reverse('pengguna:login'))
         self.assertTrue(check_password('passwordbaru123', self.pengguna.password))
+        self.assertRedirects(self.client.get(reverse('pengguna:reset_password')), reverse('pengguna:forgot_password'))
 
-    def test_forgot_password_tidak_membocorkan_apakah_nim_terdaftar(self):
+    def test_forgot_password_tidak_mengirim_kode_untuk_akun_tidak_ditemukan(self):
         response = self.client.post(
             reverse('pengguna:forgot_password'),
             {'nim_nik': '9999999999'},
         )
 
-        self.assertRedirects(response, reverse('pengguna:reset_password'))
-        self.assertIsNone(self.client.session['pengguna_otp']['pengguna_id'])
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Akun tidak ditemukan')
+        self.assertNotIn('pengguna_otp', self.client.session)
         self.assertEqual(len(mail.outbox), 0)
+        self.assertRedirects(self.client.get(reverse('pengguna:verify_reset_password')), reverse('pengguna:forgot_password'))
 
-        kode = self.client.session['pengguna_otp']['code']
-        reset_response = self.client.post(reverse('pengguna:reset_password'), {
-            'kode': kode,
-            'password': 'passwordbaru123',
-            'password_confirmation': 'passwordbaru123',
+    def test_reset_password_tidak_bisa_dibuka_sebelum_kode_diverifikasi(self):
+        self.client.post(reverse('pengguna:forgot_password'), {'nim_nik': self.pengguna.nim_nik})
+        response = self.client.post(reverse('pengguna:reset_password'), {
+            'password': 'passwordbaru123', 'password_confirmation': 'passwordbaru123',
         })
-        self.assertRedirects(reset_response, reverse('pengguna:forgot_password'))
+
+        self.assertRedirects(response, reverse('pengguna:forgot_password'))
+        self.pengguna.refresh_from_db()
+        self.assertTrue(check_password('rahasia123', self.pengguna.password))
+
+    def test_verifikasi_reset_menampilkan_foto_dan_menolak_kode_salah(self):
+        self.pengguna.foto = 'pengguna/wajah-test.jpg'
+        self.pengguna.save(update_fields=['foto'])
+        self.client.post(reverse('pengguna:forgot_password'), {'nim_nik': self.pengguna.nim_nik})
+
+        response = self.client.get(reverse('pengguna:verify_reset_password'))
+        self.assertContains(response, self.pengguna.nama_pengguna)
+        self.assertContains(response, 'wajah-test.jpg')
+        wrong_code = '000000' if self.client.session['pengguna_otp']['code'] != '000000' else '111111'
+        response = self.client.post(reverse('pengguna:verify_reset_password'), {'kode': wrong_code})
+        self.assertContains(response, 'Kode verifikasi tidak sesuai')
+        self.assertRedirects(self.client.get(reverse('pengguna:reset_password')), reverse('pengguna:forgot_password'))
 
     @override_settings(
         PASSWORD_RESET_MAX_REQUESTS=2,
@@ -1813,10 +1908,13 @@ class PenggunaAuthTests(TestCase):
                 reverse('pengguna:forgot_password'),
                 {'nim_nik': self.pengguna.nim_nik},
             )
-            self.assertRedirects(response, reverse('pengguna:reset_password'))
+            if _ < 2:
+                self.assertRedirects(response, reverse('pengguna:verify_reset_password'))
+            else:
+                self.assertEqual(response.status_code, 200)
 
         self.assertEqual(len(mail.outbox), 2)
-        self.assertIsNone(self.client.session['pengguna_otp']['pengguna_id'])
+        self.assertNotIn('pengguna_otp', self.client.session)
 
     def test_reset_password_menolak_password_lama(self):
         response = self.client.post(
@@ -1824,10 +1922,13 @@ class PenggunaAuthTests(TestCase):
             {'nim_nik': '2201001'},
         )
 
-        self.assertRedirects(response, reverse('pengguna:reset_password'))
+        self.assertRedirects(response, reverse('pengguna:verify_reset_password'))
         kode = self.client.session['pengguna_otp']['code']
+        self.assertRedirects(
+            self.client.post(reverse('pengguna:verify_reset_password'), {'kode': kode}),
+            reverse('pengguna:reset_password'),
+        )
         response = self.client.post(reverse('pengguna:reset_password'), {
-            'kode': kode,
             'password': 'rahasia123',
             'password_confirmation': 'rahasia123',
         })
@@ -1842,21 +1943,17 @@ class PenggunaAuthTests(TestCase):
             reverse('pengguna:forgot_password'),
             {'nim_nik': '2201001'},
         )
-        self.assertRedirects(response, reverse('pengguna:reset_password'))
+        self.assertRedirects(response, reverse('pengguna:verify_reset_password'))
         wrong_code = '000000' if self.client.session['pengguna_otp']['code'] != '000000' else '111111'
 
         for _ in range(4):
-            response = self.client.post(reverse('pengguna:reset_password'), {
+            response = self.client.post(reverse('pengguna:verify_reset_password'), {
                 'kode': wrong_code,
-                'password': 'passwordbaru123',
-                'password_confirmation': 'passwordbaru123',
             })
             self.assertEqual(response.status_code, 200)
 
-        response = self.client.post(reverse('pengguna:reset_password'), {
+        response = self.client.post(reverse('pengguna:verify_reset_password'), {
             'kode': wrong_code,
-            'password': 'passwordbaru123',
-            'password_confirmation': 'passwordbaru123',
         })
 
         self.assertRedirects(response, reverse('pengguna:forgot_password'))
@@ -1959,7 +2056,7 @@ class PenggunaAuthTests(TestCase):
         self.assertNotContains(response, f'href="{reverse("barang_tertinggal:list")}"')
         self.assertNotContains(response, f'href="{reverse("asleb:asleb_list")}"')
         self.assertNotContains(response, f'href="{reverse("pendaftaran_asleb:pendaftaran_list")}"')
-        self.assertNotContains(response, f'href="{reverse("asleb:honor_list")}"')
+        self.assertContains(response, f'href="{reverse("asleb:honor_list")}"')
         self.assertContains(response, f'href="{reverse("pengguna:list")}"')
 
     def test_asisten_lab_tidak_bisa_membuka_menu_admin_asleb_langsung(self):
@@ -2025,6 +2122,93 @@ class PenggunaAuthTests(TestCase):
         response = self.client.get(reverse('inventaris:barang_list'))
 
         self.assertEqual(response.status_code, 200)
+
+
+class PrivateChatTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.sender = Pengguna.objects.create(
+            nama_pengguna='Pengirim', nim_nik='064000000001', email='pengirim@std.trisakti.ac.id',
+            password='Password123!', no_hp='081234567890', alamat='Jakarta',
+            fakultas='Teknologi Industri', prodi='Informatika', gender='laki_laki', role='mahasiswa',
+        )
+        self.recipient = Pengguna.objects.create(
+            nama_pengguna='Penerima', nim_nik='064000000002', email='penerima@std.trisakti.ac.id',
+            password='Password123!', no_hp='081234567891', alamat='Jakarta',
+            fakultas='Teknologi Industri', prodi='Informatika', gender='perempuan', role='asisten_lab',
+        )
+        session = self.client.session
+        session['pengguna_id'] = self.sender.pk
+        session.save()
+
+    def test_pesan_disimpan_notifikasi_masuk_dan_dibaca(self):
+        from apps.kalender.models import Notifikasi
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(reverse('pengguna:chat_send', args=[self.recipient.pk]), {
+                'message': 'Halo, ada jadwal baru?',
+            })
+        self.assertEqual(response.status_code, 201)
+        message = PesanPribadi.objects.get()
+        self.assertEqual(message.isi, 'Halo, ada jadwal baru?')
+        self.assertTrue(Notifikasi.objects.filter(pengguna=self.recipient, source_key=f'chat:{message.pk}').exists())
+
+        session = self.client.session
+        session['pengguna_id'] = self.recipient.pk
+        session.save()
+        result = self.client.get(reverse('pengguna:chat_room', args=[self.sender.pk]), HTTP_ACCEPT='application/json')
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.json()['messages'][0]['text'], message.isi)
+        message.refresh_from_db()
+        self.assertIsNotNone(message.dibaca_pada)
+        self.assertFalse(Notifikasi.objects.filter(pengguna=self.recipient, source_key=f'chat:{message.pk}', dibaca_pada__isnull=True).exists())
+
+    def test_chat_menolak_akun_sendiri_dan_pesan_kosong(self):
+        self.assertEqual(self.client.post(reverse('pengguna:chat_send', args=[self.sender.pk]), {'message': 'tes'}).status_code, 400)
+        self.assertEqual(self.client.post(reverse('pengguna:chat_send', args=[self.recipient.pk]), {'message': '  '}).status_code, 400)
+        self.assertFalse(PesanPribadi.objects.exists())
+
+    def test_chat_tidak_terbuka_tanpa_login(self):
+        self.client.logout()
+        self.client.session.flush()
+        response = self.client.get(reverse('pengguna:chat_room', args=[self.recipient.pk]))
+        self.assertEqual(response.status_code, 302)
+
+    def test_chat_menampilkan_hanya_pesan_dua_pengguna(self):
+        third = Pengguna.objects.create(
+            nama_pengguna='Ketiga', nim_nik='064000000003', email='ketiga@std.trisakti.ac.id',
+            password='Password123!', no_hp='081234567892', alamat='Jakarta',
+            fakultas='Teknologi Industri', prodi='Informatika', gender='laki_laki', role='mahasiswa',
+        )
+        PesanPribadi.objects.create(pengirim=third, penerima=self.recipient, isi='Rahasia ketiga')
+        PesanPribadi.objects.create(pengirim=self.recipient, penerima=self.sender, isi='Halo pengirim')
+
+        response = self.client.get(reverse('pengguna:chat_room', args=[self.recipient.pk]))
+
+        self.assertContains(response, 'Halo pengirim')
+        self.assertNotContains(response, 'Rahasia ketiga')
+        self.assertContains(response, 'data-chat-messages')
+
+    def test_direktori_chat_tidak_menampilkan_hubungkan(self):
+        response = self.client.get(reverse('pengguna:list'))
+        self.assertContains(response, 'Chat Pengguna')
+        self.assertNotContains(response, 'Hubungkan')
+
+    def test_riwayat_chat_lama_dapat_dimuat_bertahap(self):
+        PesanPribadi.objects.bulk_create([
+            PesanPribadi(pengirim=self.sender, penerima=self.recipient, isi=f'Pesan {number}')
+            for number in range(105)
+        ])
+        url = reverse('pengguna:chat_room', args=[self.recipient.pk])
+        current = self.client.get(url, HTTP_ACCEPT='application/json').json()
+        self.assertEqual(len(current['messages']), 100)
+        self.assertTrue(current['has_more'])
+
+        older = self.client.get(
+            f"{url}?before={current['messages'][0]['id']}", HTTP_ACCEPT='application/json',
+        ).json()
+        self.assertEqual(len(older['messages']), 5)
+        self.assertFalse(older['has_more'])
 
 
 class SensitiveMediaAccessTests(TestCase):

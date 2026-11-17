@@ -126,6 +126,24 @@ class NotificationRealtimeTests(TransactionTestCase):
 
         async_to_sync(scenario)()
 
+    def test_heartbeat_menandai_pengguna_aktif(self):
+        headers = self.session_headers(self.mahasiswa)
+
+        async def scenario():
+            socket = WebsocketCommunicator(application, '/ws/notifikasi/', headers=headers)
+            connected, _ = await socket.connect()
+            self.assertTrue(connected)
+            await socket.receive_json_from()
+            await socket.send_json_to({'action': 'heartbeat'})
+            payload = await socket.receive_json_from()
+            self.assertEqual(payload['payload']['event'], 'presence.updated')
+            self.assertEqual(payload['payload']['user_id'], self.mahasiswa.pk)
+            await socket.disconnect()
+
+        async_to_sync(scenario)()
+        self.mahasiswa.refresh_from_db()
+        self.assertIsNotNone(self.mahasiswa.terakhir_aktif_pada)
+
     def test_notifikasi_realtime_tetap_disimpan_tanpa_socket_aktif(self):
         sent = send_user_notification(self.mahasiswa.pk, {
             'event': 'test.persisted',

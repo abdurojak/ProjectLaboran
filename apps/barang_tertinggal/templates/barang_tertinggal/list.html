@@ -1,121 +1,77 @@
 {% extends "base.html" %}
-
 {% block title %}Barang Mahasiswa Tertinggal{% endblock %}
 
 {% block content %}
-<section class="min-w-0 space-y-6" data-realtime-region="barang-tertinggal-manager">
+<section class="min-w-0 space-y-5" data-realtime-region="barang-tertinggal-manager">
     <div class="flex flex-wrap items-start justify-between gap-4">
-        <div>
-            <p class="text-sm font-bold uppercase tracking-[0.2em] text-amber-600">Barang Tertinggal</p>
-            <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">Barang Mahasiswa Tertinggal</h2>
-            <p class="mt-2 text-sm text-slate-500">Kelola barang mahasiswa yang tertinggal, hilang, atau sudah diambil.</p>
-        </div>
-        <a class="btn-primary bg-amber-500 shadow-amber-500/20 hover:bg-amber-600" href="{% url 'barang_tertinggal:create' %}">
-            <i data-lucide="plus" class="h-4 w-4"></i>
-            <span>Tambah Barang</span>
-        </a>
+        <div class="min-w-0"><p class="text-sm font-bold uppercase text-amber-700">Barang Tertinggal</p><h2 class="mt-2 text-2xl font-black text-slate-900 sm:text-3xl">Barang Mahasiswa Tertinggal</h2></div>
+        <a class="btn-primary w-full justify-center gap-2 sm:w-auto" href="{% url 'barang_tertinggal:create' %}"><i data-lucide="plus" class="h-4 w-4"></i>Tambah Barang</a>
     </div>
-
-    <div class="hidden">
-        {% for value, label in status_choices %}
-        <span>{{ label }}</span>
-        {% endfor %}
+    <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_190px]">
+        <div><label for="barang-search">Cari barang</label><input id="barang-search" type="search" placeholder="Nama, kode, pemilik, atau lokasi" data-barang-search></div>
+        <div><label for="barang-status">Status</label><select id="barang-status" data-barang-status><option value="">Semua status</option>{% for value, label in status_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
     </div>
-
-    <div class="surface-card min-w-0 overflow-hidden">
-        <div class="overflow-x-auto">
-            <table class="min-w-max" data-mobile-card-table>
-                <thead class="bg-slate-50">
-                    <tr>
-                        <th>Foto</th>
-                        <th>Kode</th>
-                        <th>Nama Barang</th>
-                        <th>Jenis</th>
-                        <th>Jumlah</th>
-                        <th>Tanggal Ditemukan</th>
-                        <th>Tanggal Diambil</th>
-                        <th>Pemilik</th>
-                        <th>NIM</th>
-                        <th>Akun</th>
-                        <th>Status</th>
-                        <th>Aksi</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for barang in barang_tertinggal_list %}
-                    <tr class="hover:bg-slate-50/70">
-                        <td>
-                            {% if barang.foto %}
-                            <img src="{{ barang.foto.url }}" alt="{{ barang.nama_barang }}" class="h-14 w-14 rounded-2xl object-cover ring-1 ring-slate-200">
-                            {% else %}
-                            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
-                                <i data-lucide="image" class="h-5 w-5"></i>
-                            </div>
-                            {% endif %}
-                        </td>
-                        <td class="font-semibold text-slate-600">{{ barang.kode_barang_tertinggal }}</td>
-                        <td class="font-semibold text-slate-900">{{ barang.nama_barang }}</td>
-                        <td>{{ barang.jenis_barang }}</td>
-                        <td>{{ barang.jumlah_barang }}</td>
-                        <td>{{ barang.tanggal_ditemukan|date:"d M Y" }}</td>
-                        <td>{{ barang.tanggal_diambil|date:"d M Y"|default:"-" }}</td>
-                        <td>{{ barang.nama_pemilik|default:"-" }}</td>
-                        <td class="font-semibold text-slate-600">{{ barang.nim_pemilik|default:"-" }}</td>
-                        <td>
-                            {% if barang.sudah_terhubung_akun %}
-                            <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
-                                <i data-lucide="link" class="h-3.5 w-3.5"></i>
-                                Terhubung
-                            </span>
-                            {% else %}
-                            <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
-                                <i data-lucide="unlink" class="h-3.5 w-3.5"></i>
-                                Belum terhubung
-                            </span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <span class="
-                                {% if barang.status == 'tertinggal' %}bg-amber-100 text-amber-700
-                                {% elif barang.status == 'hilang' %}bg-rose-100 text-rose-700
-                                {% elif barang.status == 'diambil' %}bg-emerald-100 text-emerald-700
-                                {% else %}bg-slate-100 text-slate-700{% endif %}
-                                inline-flex rounded-full px-3 py-1 text-xs font-bold">
-                                {{ barang.get_status_display }}
-                            </span>
-                        </td>
-                        <td>
-                            <div class="flex flex-wrap gap-3 text-sm font-semibold">
-                                <a class="inline-flex items-center gap-1 text-brand-700 hover:text-brand-800" href="{% url 'barang_tertinggal:detail' barang.pk %}">
-                                    <i data-lucide="eye" class="h-4 w-4"></i>
-                                    <span>Detail</span>
-                                </a>
-                                <a class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700" href="{% url 'barang_tertinggal:update' barang.pk %}">
-                                    <i data-lucide="pencil" class="h-4 w-4"></i>
-                                    <span>Edit</span>
-                                </a>
-                                <form method="post" action="{% url 'barang_tertinggal:delete' barang.pk %}" data-confirm-message="Yakin ingin menghapus barang tertinggal {{ barang.nama_barang }}?" class="inline">
-                                    {% csrf_token %}
-                                    <button type="submit" class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700">
-                                        <i data-lucide="trash-2" class="h-4 w-4"></i>
-                                        <span>Hapus</span>
-                                    </button>
-                                </form>
-                            </div>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="12" class="py-12 text-center text-slate-500">Belum ada data barang tertinggal.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+    <p class="text-sm text-slate-500" data-barang-count aria-live="polite"></p>
+    <div class="divide-y divide-slate-200 border-y border-slate-200" data-barang-list>
+        {% for barang in barang_tertinggal_list %}
+        <article class="grid min-w-0 gap-4 py-5 sm:grid-cols-[80px_minmax(0,1fr)] sm:gap-5" data-barang-item data-status="{{ barang.status }}" data-search="{{ barang.nama_barang|lower }} {{ barang.kode_barang_tertinggal|lower }} {{ barang.jenis_barang|lower }} {{ barang.nama_pemilik|lower }} {{ barang.nim_pemilik|lower }} {{ barang.lokasi_ditemukan|lower }}">
+            <div class="flex items-start gap-4 sm:block">
+                {% if barang.foto %}<button type="button" data-image-lightbox="{{ barang.foto.url }}" data-image-alt="Foto {{ barang.nama_barang }}" aria-label="Perbesar foto {{ barang.nama_barang }}" class="shrink-0 rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-700"><img src="{{ barang.foto.url }}" alt="{{ barang.nama_barang }}" class="h-20 w-20 rounded-md object-cover ring-1 ring-slate-200"></button>{% else %}<div class="flex h-20 w-20 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-400"><i data-lucide="image" class="h-6 w-6"></i></div>{% endif %}
+                <div class="min-w-0 sm:hidden"><p class="break-words font-bold text-slate-900">{{ barang.nama_barang }}</p><p class="mt-1 break-all text-xs text-slate-500">{{ barang.kode_barang_tertinggal }}</p></div>
+            </div>
+            <div class="min-w-0">
+                <div class="flex flex-wrap items-start justify-between gap-2"><div class="hidden min-w-0 sm:block"><h3 class="break-words text-lg font-bold text-slate-900">{{ barang.nama_barang }}</h3><p class="mt-1 text-xs text-slate-500">{{ barang.kode_barang_tertinggal }}</p></div><span class="inline-flex rounded-md px-2.5 py-1 text-xs font-bold {% if barang.status == 'tertinggal' %}bg-amber-100 text-amber-800{% elif barang.status == 'hilang' %}bg-rose-100 text-rose-800{% else %}bg-emerald-100 text-emerald-800{% endif %}">{{ barang.get_status_display }}</span></div>
+                <dl class="mt-3 grid min-w-0 gap-x-5 gap-y-2 text-sm sm:grid-cols-2 xl:grid-cols-3">
+                    <div><dt class="text-xs text-slate-500">Jenis / jumlah</dt><dd class="break-words font-medium text-slate-800">{{ barang.jenis_barang }} · {{ barang.jumlah_barang }}</dd></div>
+                    <div><dt class="text-xs text-slate-500">Ditemukan</dt><dd class="text-slate-800">{{ barang.tanggal_ditemukan|date:"d M Y" }}</dd></div>
+                    <div><dt class="text-xs text-slate-500">Lokasi</dt><dd class="break-words text-slate-800">{{ barang.lokasi_ditemukan|default:"-" }}</dd></div>
+                    <div><dt class="text-xs text-slate-500">Pemilik / NIM</dt><dd class="break-words text-slate-800">{{ barang.nama_pemilik|default:"-" }}{% if barang.nim_pemilik %} · {{ barang.nim_pemilik }}{% endif %}</dd></div>
+                    <div><dt class="text-xs text-slate-500">WhatsApp</dt><dd class="break-all text-slate-800">{{ barang.nomor_whatsapp|default:"-" }}</dd></div>
+                    <div><dt class="text-xs text-slate-500">Diambil</dt><dd class="text-slate-800">{{ barang.tanggal_diambil|date:"d M Y"|default:"-" }}</dd></div>
+                </dl>
+                <div class="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3 text-sm font-semibold">
+                    <a class="inline-flex items-center gap-1 text-brand-700 hover:underline" href="{% url 'barang_tertinggal:detail' barang.pk %}"><i data-lucide="eye" class="h-4 w-4"></i>Detail</a>
+                    <a class="inline-flex items-center gap-1 text-amber-700 hover:underline" href="{% url 'barang_tertinggal:update' barang.pk %}"><i data-lucide="pencil" class="h-4 w-4"></i>Edit</a>
+                    <form method="post" action="{% url 'barang_tertinggal:delete' barang.pk %}" data-confirm-message="Yakin ingin menghapus barang tertinggal {{ barang.nama_barang }}?">{% csrf_token %}<button type="submit" class="inline-flex items-center gap-1 text-rose-700 hover:underline"><i data-lucide="trash-2" class="h-4 w-4"></i>Hapus</button></form>
+                </div>
+            </div>
+        </article>
+        {% empty %}<p class="py-12 text-center text-sm text-slate-500">Belum ada data barang tertinggal.</p>{% endfor %}
     </div>
+    <p class="hidden py-8 text-center text-sm text-slate-500" data-barang-empty>Tidak ada barang yang sesuai pencarian.</p>
 </section>
 {% endblock %}
 
 {% block extra_script %}
+{% include "barang_tertinggal/_image_lightbox.html" %}
 {% include "components/confirmation_modal.html" with title="Konfirmasi Hapus Barang Tertinggal" confirm_label="Lanjutkan" confirm_icon="arrow-right" %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    function bindFilters() {
+        const section = document.querySelector('[data-realtime-region="barang-tertinggal-manager"]');
+        if (!section) return;
+        const search = section.querySelector('[data-barang-search]');
+        const status = section.querySelector('[data-barang-status]');
+        const items = Array.from(section.querySelectorAll('[data-barang-item]'));
+        const count = section.querySelector('[data-barang-count]');
+        const empty = section.querySelector('[data-barang-empty]');
+        function filterItems() {
+            const query = search.value.toLocaleLowerCase('id-ID').trim();
+            let visible = 0;
+            items.forEach(function (item) {
+                const match = (!query || item.dataset.search.includes(query)) && (!status.value || item.dataset.status === status.value);
+                item.classList.toggle('hidden', !match);
+                if (match) visible += 1;
+            });
+            count.textContent = visible + ' barang ditampilkan';
+            empty.classList.toggle('hidden', visible !== 0 || !items.length);
+        }
+        search.addEventListener('input', filterItems);
+        status.addEventListener('change', filterItems);
+        filterItems();
+    }
+    bindFilters();
+    document.addEventListener('labhub:regions-refreshed', bindFilters);
+});
+</script>
 {% endblock %}
