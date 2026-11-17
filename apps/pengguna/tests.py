@@ -1307,7 +1307,7 @@ class PenggunaAuthTests(TestCase):
         self.assertContains(response, 'NIM/NIK hanya boleh berisi angka.')
         self.assertNotIn('pengguna_id', self.client.session)
 
-    def test_login_menolak_akun_belum_terverifikasi(self):
+    def test_login_memulihkan_verifikasi_akun_belum_terverifikasi(self):
         self.pengguna.is_verified = False
         self.pengguna.save(update_fields=['is_verified'])
 
@@ -1320,8 +1320,8 @@ class PenggunaAuthTests(TestCase):
             },
         )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Akun belum diverifikasi')
+        self.assertRedirects(response, reverse('pengguna:verify_register'))
+        self.assertEqual(self.client.session['pengguna_pending_register_id'], self.pengguna.pk)
         self.assertNotIn('pengguna_id', self.client.session)
 
     def test_login_karyawan_hanya_untuk_admin_dan_laboran(self):

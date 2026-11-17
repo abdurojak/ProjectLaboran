@@ -808,6 +808,14 @@ class PenggunaLoginView(FormView):
         pengguna = form.cleaned_data['pengguna']
         cache.delete(login_attempt_cache_key(self.request))
         self.request.session.cycle_key()
+        if not pengguna.is_verified:
+            self.request.session.pop('pengguna_id', None)
+            self.request.session[PENDING_REGISTER_USER_KEY] = pengguna.pk
+            pending = get_pending_otp(self.request, 'register')
+            if pending and pending.get('pengguna_id') != pengguna.pk:
+                self.request.session.pop(OTP_SESSION_KEY, None)
+            messages.info(self.request, 'Akun belum aktif. Masukkan kode dari email atau pilih Kirim ulang kode untuk melanjutkan verifikasi.')
+            return redirect('pengguna:verify_register')
         self.request.session['pengguna_id'] = pengguna.pk
         if pengguna.role == 'laboran' and pengguna.must_change_password:
             self.request.session['password_change_required'] = True

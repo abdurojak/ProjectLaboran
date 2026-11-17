@@ -529,11 +529,11 @@ class LoginPenggunaForm(forms.Form):
         except Pengguna.DoesNotExist:
             raise forms.ValidationError(self.error_messages['invalid_login'])
 
-        if not pengguna.is_verified:
-            raise forms.ValidationError('Akun belum diverifikasi. Selesaikan verifikasi terlebih dahulu.')
-
         if not check_password(password, pengguna.password):
             raise forms.ValidationError(self.error_messages['invalid_login'])
+
+        if not pengguna.is_verified and pengguna.role != 'mahasiswa':
+            raise forms.ValidationError('Akun belum diverifikasi. Hubungi pengelola LabHub.')
 
         if jenis_login == 'mahasiswa' and pengguna.role not in ['mahasiswa', 'asisten_lab']:
             raise forms.ValidationError('Akun ini bukan akun mahasiswa. Pilih login sebagai karyawan.')
