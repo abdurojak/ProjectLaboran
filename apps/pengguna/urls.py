@@ -1,5 +1,6 @@
 from django.urls import path
 from .chat import chat_room, chat_send
+from .google_oauth import google_login, google_callback
 
 from .views import (
     FakultasCreateView,
@@ -34,6 +35,8 @@ app_name = 'pengguna'
 
 urlpatterns = [
     path('login/', PenggunaLoginView.as_view(), name='login'),
+    path('login/google/', google_login, name='google_login'),
+    path('login/google/callback/', google_callback, name='google_callback'),
     path('wajib-ganti-password/', LaboranForcePasswordChangeView.as_view(), name='force_password_change'),
     path('register/', PenggunaRegisterView.as_view(), name='register'),
     path('register/verifikasi/', PenggunaVerifyRegisterView.as_view(), name='verify_register'),

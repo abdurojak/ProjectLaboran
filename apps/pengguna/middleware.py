@@ -152,6 +152,8 @@ class PenggunaLoginRequiredMiddleware:
                 forgot_password_url,
                 health_url,
                 login_url,
+                reverse('pengguna:google_login'),
+                reverse('pengguna:google_callback'),
                 register_url,
                 reset_password_url,
                 verify_reset_password_url,

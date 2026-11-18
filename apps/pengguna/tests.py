@@ -3,6 +3,7 @@ import shutil
 import tempfile
 from smtplib import SMTPException
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlparse
 
 from django.contrib.auth.hashers import check_password
 from django import forms
@@ -24,6 +25,70 @@ from apps.surat.models import SuratPengadaan
 from .middleware import PenggunaLoginRequiredMiddleware
 from .models import Fakultas, PengalamanPengguna, Pengguna, PesanPribadi, Prodi
 from .utils import BLOCKED_AVATAR_HASHES, matches_blocked_avatar, validate_human_face_photo
+
+
+@override_settings(GOOGLE_OAUTH_CLIENT_ID='test-client', GOOGLE_OAUTH_CLIENT_SECRET='test-secret')
+class GoogleLoginTests(TestCase):
+    def setUp(self):
+        self.user = Pengguna.objects.create(
+            nama_pengguna='Google User', nim_nik='2201999', email='google@example.com',
+            password='not-used', no_hp='081234567890', alamat='Jakarta',
+            fakultas='Teknologi Industri', prodi='Informatika', gender='laki_laki',
+        )
+
+    def start(self):
+        response = self.client.get(reverse('pengguna:google_login'))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(urlparse(response.url).hostname, 'accounts.google.com')
+        return parse_qs(urlparse(response.url).query)['state'][0]
+
+    def test_start_sets_state_nonce_and_pkce(self):
+        state = self.start()
+        pending = self.client.session['google_oauth_pending']
+        self.assertEqual(pending['state'], state)
+        self.assertTrue(pending['nonce'])
+        self.assertTrue(pending['verifier'])
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID='', GOOGLE_OAUTH_CLIENT_SECRET='')
+    def test_button_hidden_until_configured(self):
+        response = self.client.get(reverse('pengguna:login'))
+        self.assertNotContains(response, 'Masuk dengan Google')
+        self.assertRedirects(self.client.get(reverse('pengguna:google_login')), reverse('pengguna:login'))
+
+    def test_callback_rejects_wrong_state_without_token_request(self):
+        self.start()
+        with patch('apps.pengguna.google_oauth.urlopen') as token_request:
+            response = self.client.get(reverse('pengguna:google_callback'), {'code': 'x', 'state': 'wrong'})
+        self.assertRedirects(response, reverse('pengguna:login'))
+        token_request.assert_not_called()
+        self.assertNotIn('google_oauth_pending', self.client.session)
+
+    def test_callback_links_only_verified_existing_account(self):
+        state = self.start()
+        pending = self.client.session['google_oauth_pending']
+        from io import BytesIO
+        token_response = BytesIO(b'{"id_token":"signed-token"}')
+        claims = {'nonce': pending['nonce'], 'email': 'GOOGLE@example.com', 'email_verified': True}
+        with patch('apps.pengguna.google_oauth.urlopen', return_value=token_response), \
+                patch('apps.pengguna.google_oauth.jwt.PyJWKClient') as jwks, \
+                patch('apps.pengguna.google_oauth.jwt.decode', return_value=claims):
+            jwks.return_value.get_signing_key_from_jwt.return_value.key = 'key'
+            response = self.client.get(reverse('pengguna:google_callback'), {'code': 'x', 'state': state})
+        self.assertRedirects(response, reverse('dashboard:home'))
+        self.assertEqual(self.client.session['pengguna_id'], self.user.pk)
+
+    def test_callback_rejects_unknown_email(self):
+        state = self.start()
+        pending = self.client.session['google_oauth_pending']
+        from io import BytesIO
+        claims = {'nonce': pending['nonce'], 'email': 'unknown@example.com', 'email_verified': True}
+        with patch('apps.pengguna.google_oauth.urlopen', return_value=BytesIO(b'{"id_token":"signed-token"}')), \
+                patch('apps.pengguna.google_oauth.jwt.PyJWKClient') as jwks, \
+                patch('apps.pengguna.google_oauth.jwt.decode', return_value=claims):
+            jwks.return_value.get_signing_key_from_jwt.return_value.key = 'key'
+            response = self.client.get(reverse('pengguna:google_callback'), {'code': 'x', 'state': state})
+        self.assertRedirects(response, reverse('pengguna:login'))
+        self.assertNotIn('pengguna_id', self.client.session)
 
 
 def registration_photo(name='wajah.gif'):

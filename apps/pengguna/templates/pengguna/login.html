@@ -79,6 +79,12 @@
                 </a>
             </div>
         </form>
+        {% if google_login_enabled %}
+        <a class="btn-secondary flex w-full items-center justify-center gap-3 py-3 text-center" href="{% url 'pengguna:google_login' %}{% if request.GET.next %}?next={{ request.GET.next|urlencode }}{% endif %}">
+            <span class="font-bold text-brand-700">G</span>
+            <span>Masuk dengan Google</span>
+        </a>
+        {% endif %}
     </div>
 </section>
 {% endblock %}

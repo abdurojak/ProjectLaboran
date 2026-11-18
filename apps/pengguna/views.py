@@ -788,6 +788,13 @@ class PenggunaLoginView(FormView):
     form_class = LoginPenggunaForm
     success_url = reverse_lazy('dashboard:home')
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['google_login_enabled'] = bool(
+            settings.GOOGLE_OAUTH_CLIENT_ID and settings.GOOGLE_OAUTH_CLIENT_SECRET
+        )
+        return context
+
     def post(self, request, *args, **kwargs):
         cache_key = login_attempt_cache_key(request)
         attempts = int(cache.get(cache_key, 0))
