@@ -2206,6 +2206,9 @@ class PrivateChatTests(TestCase):
         self.assertContains(response, 'data-chat-embedded')
         self.assertContains(response, 'data-chat-close')
         self.assertNotContains(response, 'data-global-loading data-initial-loading')
+        self.assertEqual(response['X-Frame-Options'], 'SAMEORIGIN')
+        full_page = self.client.get(reverse('pengguna:chat_room', args=[self.recipient.pk]))
+        self.assertEqual(full_page['X-Frame-Options'], 'DENY')
 
     def test_chat_menolak_akun_sendiri_dan_pesan_kosong(self):
         self.assertEqual(self.client.post(reverse('pengguna:chat_send', args=[self.sender.pk]), {'message': 'tes'}).status_code, 400)

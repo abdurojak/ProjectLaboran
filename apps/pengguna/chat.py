@@ -125,14 +125,18 @@ def chat_room(request, pk):
             for item in messages
         ], 'has_more': has_more,
             'online': bool(target.terakhir_aktif_pada and target.terakhir_aktif_pada >= now - timedelta(seconds=75))})
-    return render(request, 'pengguna/chat_room.html', {
+    embedded = request.GET.get('popup') == '1'
+    response = render(request, 'pengguna/chat_room.html', {
         'target': target,
         'chat_messages': messages,
         'has_more': has_more,
-        'embedded': request.GET.get('popup') == '1',
+        'embedded': embedded,
         'stickers': STIKER,
         'online': bool(target.terakhir_aktif_pada and target.terakhir_aktif_pada >= now - timedelta(seconds=75)),
     })
+    if embedded:
+        response['X-Frame-Options'] = 'SAMEORIGIN'
+    return response
 
 
 @require_POST
