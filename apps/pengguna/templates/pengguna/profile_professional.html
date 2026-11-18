@@ -13,7 +13,7 @@
                 </div>
                 <div class="mb-1 flex flex-wrap gap-2">
                     {% if can_download_cv %}<a class="btn-primary gap-2" href="{% url 'pengguna:cv_download' pengguna.pk %}"><i data-lucide="download" class="h-4 w-4"></i>Download CV</a>{% endif %}
-                    {% if current_pengguna.pk != pengguna.pk %}<a class="btn-primary gap-2" href="{% url 'pengguna:chat_room' pengguna.pk %}"><i data-lucide="message-circle" class="h-4 w-4"></i>Chat</a>{% endif %}
+                    {% if current_pengguna.pk != pengguna.pk %}<a class="btn-primary gap-2" href="{% url 'pengguna:chat_room' pengguna.pk %}" data-no-page-transition="true" data-no-global-loading="true"><i data-lucide="message-circle" class="h-4 w-4"></i>Chat</a>{% endif %}
                     {% if can_edit_profile %}<button type="button" data-profile-modal-open class="btn-secondary gap-2"><i data-lucide="pencil" class="h-4 w-4"></i>Edit Profil</button>
                     <button type="button" data-password-modal-open class="btn-secondary gap-2"><i data-lucide="key-round" class="h-4 w-4"></i>Password</button>{% endif %}
                 </div>

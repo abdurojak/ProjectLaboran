@@ -2205,6 +2205,7 @@ class PrivateChatTests(TestCase):
         response = self.client.get(reverse('pengguna:chat_room', args=[self.recipient.pk]) + '?popup=1')
         self.assertContains(response, 'data-chat-embedded')
         self.assertContains(response, 'data-chat-close')
+        self.assertNotContains(response, 'data-global-loading data-initial-loading')
 
     def test_chat_menolak_akun_sendiri_dan_pesan_kosong(self):
         self.assertEqual(self.client.post(reverse('pengguna:chat_send', args=[self.sender.pk]), {'message': 'tes'}).status_code, 400)
@@ -2237,6 +2238,8 @@ class PrivateChatTests(TestCase):
         response = self.client.get(reverse('pengguna:list'))
         self.assertContains(response, 'Chat Pengguna')
         self.assertNotContains(response, 'Hubungkan')
+        self.assertContains(response, 'data-no-page-transition="true"')
+        self.assertContains(response, 'data-no-global-loading="true"')
 
     def test_riwayat_chat_lama_dapat_dimuat_bertahap(self):
         PesanPribadi.objects.bulk_create([

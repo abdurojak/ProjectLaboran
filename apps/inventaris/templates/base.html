@@ -2369,6 +2369,7 @@
 </head>
 <body>
     <div class="app-page-background" aria-hidden="true"></div>
+    {% if not embedded %}
     <div data-global-loading data-initial-loading="true" class="is-visible" aria-live="polite" aria-hidden="false">
         <div data-global-loading-card>
             <div data-global-loading-core>
@@ -2377,6 +2378,7 @@
             <p data-global-loading-text>Memproses</p>
         </div>
     </div>
+    {% endif %}
     {% if current_pengguna %}
     {% include "components/navbar.html" %}
     {% endif %}
@@ -2971,7 +2973,8 @@
                     const href = link.getAttribute('href');
                     if (!href || link.dataset.noPageTransition === 'true' || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
                     if (link.closest('[data-no-global-loading="true"]')) return;
-                    if (new URL(href, window.location.href).origin !== window.location.origin) return;
+                    const targetUrl = new URL(href, window.location.href);
+                    if (targetUrl.origin !== window.location.origin || /\/pengguna\/chat\/\d+\/$/.test(targetUrl.pathname)) return;
                     event.preventDefault();
                     showGlobalLoading(event);
                     appContent.classList.add('is-leaving');
