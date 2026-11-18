@@ -159,7 +159,7 @@
         </div>
         <div class="grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-4">
             {% for item in laboran_transfer_summary %}
-            <article class="rounded-[22px] border border-slate-200 bg-white/80 p-4 shadow-sm">
+            <article class="honor-laboran-transfer rounded-lg border border-slate-200 bg-white/80 p-4 shadow-sm">
                 <div class="flex items-start justify-between gap-3">
                     <div class="min-w-0">
                         <div class="truncate font-black text-slate-900">{{ item.laboran.nama_pengguna }}</div>
@@ -388,6 +388,13 @@
 
 {% block extra_script %}
 <style>
+    html[data-theme="dark"] .honor-page .honor-laboran-transfer {
+        background: #223149 !important;
+        border-color: #3b4b63 !important;
+    }
+    html[data-theme="dark"] .honor-page .honor-laboran-transfer .text-violet-700 {
+        color: #c4b5fd !important;
+    }
     html[data-theme="dark"] .honor-page .honor-record {
         background: #172338 !important;
         border-color: #334155 !important;
