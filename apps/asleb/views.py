@@ -32,7 +32,7 @@ from apps.jadwal.models import JadwalPraktikum
 from apps.kalender.realtime import send_attendance_update, send_data_refresh, send_honor_update
 from apps.pengguna.models import Pengguna
 from apps.pendaftaran_asleb.forms import PengaturanBiayaTransferForm
-from apps.pendaftaran_asleb.models import AslabAssignment, PengaturanBiayaTransfer
+from apps.pendaftaran_asleb.models import AslabAssignment, PendaftaranAsleb, PengaturanBiayaTransfer
 from apps.pendaftaran_asleb.replacement_services import (
     end_single_active_assignment_for_replacement,
     payment_eligible_honors,
@@ -252,6 +252,14 @@ class AslebDetailView(LabOperationsRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['has_operational_history'] = asleb_has_operational_history(self.object)
+        signatures = PendaftaranAsleb.objects.filter(
+            nim=self.object.nim,
+            status__in=['diterima', 'digenerate'],
+        ).exclude(tanda_tangan='').order_by('-tanggal_daftar', '-pk')
+        context['registration_signature'] = (
+            signatures.filter(periode=self.object.periode_aktif).first()
+            if self.object.periode_aktif_id else None
+        ) or signatures.first()
         return context
 
 
@@ -412,12 +420,11 @@ class HonorAslebListView(HonorAccessMixin, ListView):
         total_honor = global_honor_qs.aggregate(total=Sum('jumlah'))['total'] or 0
         total_honor_kotor = sum(honor.total_honor for honor in global_honor_qs)
         pengguna = getattr(self.request, 'current_pengguna', None)
-        transfer_totals = {
-            row['assigned_laboran_id']: row
-            for row in global_honor_qs.filter(assigned_laboran__isnull=False)
-            .values('assigned_laboran_id')
-            .annotate(total=Sum('jumlah'), count=Count('id'))
-        }
+        transfer_totals = {}
+        for honor in global_honor_qs.filter(assigned_laboran__isnull=False):
+            transfer = transfer_totals.setdefault(honor.assigned_laboran_id, {'total': 0, 'count': 0})
+            transfer['total'] += honor.total_honor
+            transfer['count'] += 1
         laboran_transfer_summary = []
         for laboran in Pengguna.objects.filter(role=LABORAN_ROLE, is_verified=True).order_by('nama_pengguna', 'pk'):
             transfer = transfer_totals.get(laboran.pk, {})
@@ -3246,21 +3253,28 @@ def revoke_manual_attendance_permission(request, pk):
 @transaction.atomic
 def confirm_honor_transfer(request, pk):
     pengguna = getattr(request, 'current_pengguna', None)
-    if not can_manage_lab_operations(pengguna):
-        messages.error(request, 'Hanya laboran yang bisa mengonfirmasi transfer honor.')
+    async_request = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+    def failure(message, status=400):
+        if async_request:
+            return JsonResponse({'success': False, 'message': message}, status=status)
+        messages.error(request, message)
         return redirect('asleb:honor_list')
+
+    if not can_manage_lab_operations(pengguna):
+        return failure('Hanya laboran yang bisa mengonfirmasi transfer honor.', 403)
 
     asleb_id = get_object_or_404(HonorAsleb.objects.only('asleb_id'), pk=pk).asleb_id
     Asleb.objects.select_for_update().get(pk=asleb_id)
     honor = get_object_or_404(HonorAsleb.objects.select_for_update(), pk=pk)
     if not payment_eligible_honors(HonorAsleb.objects.filter(pk=honor.pk)).exists():
-        messages.error(request, 'Honor sedang ditahan sampai proses penggantian aslab selesai.')
-        return redirect('asleb:honor_list')
+        return failure('Honor sedang ditahan sampai proses penggantian aslab selesai.')
     if pengguna.role == LABORAN_ROLE and honor.assigned_laboran_id != pengguna.pk:
-        messages.error(request, 'Tugas TF honor ini bukan milik akun laboran Anda.')
-        return redirect('asleb:honor_list')
+        return failure('Tugas TF honor ini bukan milik akun laboran Anda.', 403)
 
     if honor.status == 'dibayar':
+        if async_request:
+            return JsonResponse({'success': False, 'message': 'Honor ini sudah dikonfirmasi dibayar.'}, status=409)
         messages.warning(request, 'Honor ini sudah dikonfirmasi dibayar dan tidak dapat dikonfirmasi ulang.')
         return redirect('asleb:honor_list')
 
@@ -3272,8 +3286,7 @@ def confirm_honor_transfer(request, pk):
             for field_errors in form.errors.values()
             for error in field_errors
         )
-        messages.error(request, f'Konfirmasi transfer gagal. {errors}')
-        return redirect('asleb:honor_list')
+        return failure(f'Konfirmasi transfer gagal. {errors}')
 
     honor = form.save(commit=False)
     if not honor.tanggal_transfer:
@@ -3286,6 +3299,14 @@ def confirm_honor_transfer(request, pk):
         robust=True,
     )
     transaction.on_commit(lambda: send_honor_update(honor, event='honor.paid'))
+    if async_request:
+        return JsonResponse({
+            'success': True,
+            'message': f'Honor {honor.asleb.nama} berhasil dikonfirmasi sudah ditransfer.',
+            'tanggal_transfer': honor.tanggal_transfer.strftime('%d %b %Y'),
+            'pic_transfer': honor.pic_transfer,
+            'bukti_transfer_url': honor.bukti_transfer.url,
+        })
     messages.success(request, f'Honor {honor.asleb.nama} berhasil dikonfirmasi sudah ditransfer.')
     return redirect('asleb:honor_list')
 
@@ -3420,8 +3441,6 @@ def _sync_honor_attendance(asleb, bulan):
         return honor
     honor.jumlah_praktikum = max(honor.jumlah_praktikum, 1)
     honor.total_pertemuan = get_total_honor_attendance_count(asleb, bulan)
-    if honor.status == 'draft':
-        honor.status = 'diproses'
     honor.save()
     return reconcile_retrospective_honor(honor=honor)
 

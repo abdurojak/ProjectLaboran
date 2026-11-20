@@ -113,7 +113,6 @@ class HonorAsleb(models.Model):
     ]
 
     STATUS_CHOICES = [
-        ('draft', 'Draft'),
         ('diproses', 'Diproses'),
         ('dibayar', 'Dibayar'),
     ]
@@ -153,7 +152,7 @@ class HonorAsleb(models.Model):
     )
     pic_transfer = models.CharField(max_length=120, blank=True)
     keterangan = models.CharField(max_length=200, blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='diproses')
     diarsipkan_pada = models.DateTimeField(blank=True, null=True)
     dibuat_pada = models.DateTimeField(auto_now_add=True)
     diperbarui_pada = models.DateTimeField(auto_now=True)

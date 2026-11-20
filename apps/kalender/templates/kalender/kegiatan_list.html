@@ -166,6 +166,11 @@
         white-space: nowrap;
         align-self: flex-start;
     }
+    .calendar-mobile-event {
+        background: var(--surface-bg);
+        border-color: var(--border-color);
+        color: var(--text-main);
+    }
     @media (min-width: 1024px) {
         .calendar-side-info {
             display: none;
@@ -333,11 +338,44 @@
             font-size: 0.75rem;
         }
         .fc .fc-daygrid-day-frame {
-            min-height: 5.75rem;
+            min-height: 4.25rem;
+            padding: 0.125rem;
         }
-        .fc .fc-event {
-            font-size: 0.7rem;
-            padding: 0.2rem 0.3rem;
+        .fc .fc-daygrid-day-number {
+            padding: 0.25rem;
+            font-size: 0.8rem;
+        }
+        .fc .fc-daygrid-day.is-mobile-selected {
+            box-shadow: inset 0 0 0 2px #0f766e;
+        }
+        .fc .fc-daygrid-day-events {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.2rem;
+            margin: 0.15rem 0.2rem 0;
+        }
+        .fc .fc-daygrid-event-harness {
+            display: inline-block;
+            margin: 0;
+        }
+        .fc .fc-daygrid-event {
+            display: block;
+            width: 0.5rem;
+            height: 0.5rem;
+            min-height: 0;
+            margin: 0;
+            padding: 0;
+            border-radius: 50%;
+            overflow: hidden;
+        }
+        .fc .fc-daygrid-event .fc-event-main,
+        .fc .fc-daygrid-event .fc-event-time,
+        .fc .fc-daygrid-event .fc-event-title {
+            display: none;
+        }
+        .fc .fc-daygrid-more-link {
+            font-size: 0.65rem;
+            line-height: 1;
         }
         .calendar-legend-item {
             width: 100%;
@@ -395,6 +433,10 @@
             </div>
             <div class="calendar-scroll">
                 <div id="fullcalendar"></div>
+            </div>
+            <div id="calendar-mobile-agenda" class="mt-4 border-t border-slate-200 pt-4 md:hidden" aria-live="polite">
+                <h4 id="calendar-mobile-date" class="text-base font-bold text-slate-900"></h4>
+                <div id="calendar-mobile-events" class="mt-3 space-y-2"></div>
             </div>
         </div>
 
@@ -493,6 +535,50 @@
     document.addEventListener('DOMContentLoaded', function () {
         const calendarEl = document.getElementById('fullcalendar');
         const eventData = JSON.parse(document.getElementById('calendar-events-data').textContent);
+        const mobileDate = document.getElementById('calendar-mobile-date');
+        const mobileEvents = document.getElementById('calendar-mobile-events');
+        const isMobile = window.matchMedia('(max-width: 767px)');
+        let selectedDay = new Date();
+
+        function dateKey(date) {
+            return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-');
+        }
+
+        function renderMobileAgenda(calendar) {
+            if (!isMobile.matches) return;
+            const dayKey = dateKey(selectedDay);
+            calendarEl.querySelectorAll('.fc-daygrid-day').forEach(cell => {
+                cell.classList.toggle('is-mobile-selected', cell.dataset.date === dayKey);
+            });
+            mobileDate.textContent = new Intl.DateTimeFormat('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(selectedDay);
+            mobileEvents.replaceChildren();
+            const events = calendar.getEvents().filter(event => {
+                const start = event.startStr.slice(0, 10);
+                const end = event.endStr ? event.endStr.slice(0, 10) : null;
+                return start <= dayKey && (!end || dayKey < end || start === dayKey);
+            }).sort((a, b) => a.start - b.start);
+            if (!events.length) {
+                const empty = document.createElement('p');
+                empty.className = 'text-sm text-slate-500';
+                empty.textContent = 'Tidak ada kegiatan pada tanggal ini.';
+                mobileEvents.append(empty);
+                return;
+            }
+            events.forEach(event => {
+                const item = document.createElement(event.url ? 'a' : 'div');
+                if (event.url) item.href = event.url;
+                item.className = 'calendar-mobile-event flex min-w-0 items-start gap-3 rounded-lg border px-3 py-2 text-sm';
+                const dot = document.createElement('span');
+                dot.className = 'mt-1.5 h-2 w-2 shrink-0 rounded-full';
+                dot.style.backgroundColor = event.backgroundColor || '#2563eb';
+                const label = document.createElement('span');
+                label.className = 'min-w-0 break-words';
+                const time = event.allDay ? '' : new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit' }).format(event.start) + ' · ';
+                label.textContent = time + event.title;
+                item.append(dot, label);
+                mobileEvents.append(item);
+            });
+        }
 
         const calendar = new FullCalendar.Calendar(calendarEl, {
             initialView: 'dayGridMonth',
@@ -510,8 +596,27 @@
                 list: 'Agenda'
             },
             events: eventData,
-            navLinks: true,
-            dayMaxEvents: 3,
+            navLinks: !isMobile.matches,
+            dayMaxEvents: isMobile.matches ? false : 3,
+            eventDidMount: function(info) {
+                if (isMobile.matches && info.view.type === 'dayGridMonth') {
+                    info.el.style.backgroundColor = info.event.backgroundColor || '#2563eb';
+                    info.el.setAttribute('aria-label', info.event.title);
+                }
+            },
+            dateClick: function(info) {
+                selectedDay = info.date;
+                renderMobileAgenda(calendar);
+            },
+            datesSet: function(info) {
+                const monthStart = info.view.currentStart;
+                const monthEnd = info.view.currentEnd;
+                if (selectedDay < monthStart || selectedDay >= monthEnd) selectedDay = monthStart;
+                renderMobileAgenda(calendar);
+            },
+            eventsSet: function() {
+                renderMobileAgenda(calendar);
+            },
             eventTimeFormat: {
                 hour: '2-digit',
                 minute: '2-digit',

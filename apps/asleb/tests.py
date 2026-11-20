@@ -28,6 +28,7 @@ from apps.pendaftaran_asleb.models import (
 from apps.pendaftaran_asleb.services import deactivate_asleb_membership, get_asleb_experience, sync_expired_asleb_periods
 from apps.kalender.models import Notifikasi
 from apps.pengguna.models import PengalamanPengguna, Pengguna
+from apps.pengguna.middleware import PenggunaLoginRequiredMiddleware
 from apps.jadwal.models import JadwalPraktikum, PermintaanPerubahanJadwal
 from apps.ruangan.models import RuanganLab
 
@@ -132,6 +133,7 @@ class AslebViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Data Aslab')
+        self.assertContains(response, 'data-asleb-item')
         self.assertContains(response, 'Siti Nurhaliza')
         self.assertContains(response, 'Pemrograman Web')
         active_links = [link['title'] for link in response.context['sidebar_links'] if link['active']]
@@ -1516,6 +1518,42 @@ class AslebViewTests(TestCase):
         self.assertNotContains(response, reverse('asleb:asleb_update', args=[self.asleb.pk]))
         self.assertNotContains(response, '<span>Edit</span>', html=False)
 
+    def test_laboran_dapat_melihat_tanda_tangan_pendaftaran_aslab(self):
+        assignment = self.create_active_assignment()
+        registration = PendaftaranAsleb.objects.create(
+            nama=self.asleb.nama,
+            nim=self.asleb.nim,
+            no_hp=self.asleb.no_hp,
+            email=self.asleb.email,
+            program_studi=self.asleb.program_studi,
+            semester=self.asleb.semester,
+            matkul=self.matkul,
+            periode=assignment.slot.periode,
+            status='digenerate',
+            tanda_tangan=self.make_camera_photo('tanda-tangan.png'),
+        )
+        PendaftaranAsleb.objects.create(
+            nama='Pendaftar Lain', nim='2301002', no_hp='081234567899',
+            program_studi=self.asleb.program_studi, semester=4, matkul=self.matkul,
+            status='digenerate', tanda_tangan=self.make_camera_photo('tanda-tangan-lain.png'),
+        )
+
+        response = self.client.get(reverse('asleb:asleb_detail', args=[self.asleb.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['registration_signature'], registration)
+        self.assertContains(response, registration.tanda_tangan.url)
+        self.assertContains(response, reverse('pendaftaran_asleb:pendaftaran_detail', args=[registration.pk]))
+        self.assertNotContains(response, 'tanda-tangan-lain.png')
+        self.assertTrue(registration.tanda_tangan.storage.exists(registration.tanda_tangan.name))
+        media_access = PenggunaLoginRequiredMiddleware(lambda request: None)
+        self.assertTrue(media_access.can_access_media(self.pengguna, registration.tanda_tangan.url))
+
+    def test_detail_aslab_tanpa_tanda_tangan_menampilkan_status_kosong(self):
+        response = self.client.get(reverse('asleb:asleb_detail', args=[self.asleb.pk]))
+
+        self.assertContains(response, 'Tanda tangan pendaftaran belum tersedia.')
+
     def test_detail_aslab_menampilkan_semua_mata_kuliah_aktif(self):
         first_assignment = self.create_active_assignment()
         other_course = MataKuliahAsleb.objects.create(
@@ -2263,6 +2301,26 @@ class AslebViewTests(TestCase):
         self.assertEqual(edit_response.status_code, 404)
         self.assertEqual(delete_response.status_code, 404)
         self.assertTrue(HonorAsleb.objects.filter(pk=honor.pk, status='dibayar').exists())
+        list_response = self.client.get(reverse('asleb:honor_list'), {'bulan': '2026-07'})
+        self.assertEqual(list_response.status_code, 200)
+        self.assertNotContains(list_response, reverse('asleb:honor_update', args=[honor.pk]))
+        self.assertContains(list_response, '<details data-honor-details', html=False)
+        self.assertContains(list_response, 'Lihat detail honor')
+        self.assertContains(list_response, 'Sudah dibayar')
+
+    def test_honor_baru_langsung_diproses_tanpa_pilihan_draft(self):
+        honor = HonorAsleb.objects.create(
+            asleb=self.asleb,
+            bulan=date(2026, 7, 1),
+            total_pertemuan=1,
+            assigned_laboran=self.pengguna,
+        )
+
+        self.assertEqual(honor.status, 'diproses')
+        self.assertNotIn('draft', dict(HonorAsleb.STATUS_CHOICES))
+        response = self.client.get(reverse('asleb:honor_list'), {'bulan': '2026-07'})
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, '<option value="draft">', html=False)
 
     def test_honor_asleb_dua_periode_masih_junior(self):
         self.create_pendaftaran_history(self.asleb.nim, 2)

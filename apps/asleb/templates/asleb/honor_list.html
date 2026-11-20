@@ -154,8 +154,8 @@
 
     <div class="surface-card overflow-hidden">
         <div class="border-b border-slate-200 bg-slate-50/80 px-5 py-4">
-            <h3 class="text-lg font-black text-slate-900">Jumlah Transfer per Laboran</h3>
-            <p class="mt-1 text-sm text-slate-500">Pembagian seluruh honor Aslab sesuai filter yang sedang dipilih.</p>
+            <h3 class="text-lg font-black text-slate-900">Honor Kotor per Laboran</h3>
+            <p class="mt-1 text-sm text-slate-500">Total honor sebelum potongan untuk bulan yang dipilih.</p>
         </div>
         <div class="grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-4">
             {% for item in laboran_transfer_summary %}
@@ -212,10 +212,10 @@
                 <i data-lucide="search" class="h-4 w-4"></i>
                 <span>Terapkan</span>
             </button>
-            <a href="{% url 'asleb:honor_list' %}" class="btn-secondary">
+            <button type="reset" class="btn-secondary">
                 <i data-lucide="rotate-ccw" class="h-4 w-4"></i>
                 <span>Reset</span>
-            </a>
+            </button>
         </div>
     </form>
 
@@ -234,7 +234,7 @@
         </div>
         <div class="grid gap-4 p-4">
             {% for honor in honor_list %}
-            <article class="honor-record rounded-lg border border-slate-200 bg-white/80 p-4 shadow-sm">
+            <article class="honor-record rounded-lg border border-slate-200 bg-white/80 p-4 shadow-sm" data-honor-item data-status="{{ honor.status }}" data-search="{{ honor.asleb.nama }} {{ honor.asleb.nim }} {{ honor.asleb.matkul }} {{ honor.pic_transfer }} {{ honor.assigned_laboran.nama_pengguna|default:'' }}">
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div class="min-w-0">
                         <div class="flex flex-wrap items-center gap-2">
@@ -252,6 +252,18 @@
                     </div>
                 </div>
 
+                <div data-paid-summary class="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900{% if honor.status != 'dibayar' %} hidden{% endif %}">
+                    <span class="font-bold">Sudah dibayar</span>
+                    <span data-paid-date>{% if honor.tanggal_transfer %}{{ honor.tanggal_transfer|date:"d M Y" }}{% else %}-{% endif %}</span>
+                    <span data-paid-pic>PIC: {{ honor.pic_transfer|default:"-" }}</span>
+                    {% if honor.bukti_transfer %}<a data-paid-proof class="font-bold text-brand-700 hover:text-brand-800" href="{{ honor.bukti_transfer.url }}" target="_blank" rel="noreferrer">Bukti transfer</a>{% else %}<a data-paid-proof class="hidden font-bold text-brand-700 hover:text-brand-800" target="_blank" rel="noreferrer">Bukti transfer</a>{% endif %}
+                </div>
+                {% if honor.status == 'dibayar' %}
+                <details data-honor-details class="mt-3">
+                    <summary class="cursor-pointer text-sm font-bold text-brand-700 hover:text-brand-800">Lihat detail honor</summary>
+                {% else %}
+                <div data-honor-details>
+                {% endif %}
                 <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                     <div class="honor-summary-tile rounded-lg bg-slate-50 p-3">
                         <div class="text-xs font-bold uppercase text-slate-500">Honor sebelum potongan</div>
@@ -319,7 +331,7 @@
                     <div class="honor-meta-tile rounded-lg border border-slate-200 bg-slate-50/70 p-4">
                         <div class="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Data TF Gaji</div>
                         <div class="mt-2 font-bold text-slate-900">{{ honor.tujuan_transfer }}</div>
-                        <div class="text-sm text-slate-500">
+                        <div data-transfer-date class="text-sm text-slate-500">
                             {% if honor.tanggal_transfer %}
                             TF: {{ honor.tanggal_transfer|date:"d M Y" }}
                             {% else %}
@@ -342,10 +354,10 @@
                         {% else %}
                         <div class="mt-3 text-sm text-slate-500">Bukti pembayaran belum tersedia.</div>
                         {% endif %}
-                        {% if not honor.replacement_held %}
+                        {% if not honor.replacement_held and honor.status != 'dibayar' %}
                         {% if is_admin or is_laboran %}
                         <div class="mt-3 flex flex-wrap gap-3 text-sm font-semibold">
-                            <a class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700" href="{% url 'asleb:honor_update' honor.pk %}">
+                            <a data-honor-edit class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700" href="{% url 'asleb:honor_update' honor.pk %}">
                                 <i data-lucide="pencil" class="h-4 w-4"></i><span>Edit</span>
                             </a>
                             {% if is_admin %}
@@ -360,12 +372,13 @@
                         </div>
                         {% endif %}
                         {% endif %}
-                        <div class="mt-3 text-sm text-slate-500">PIC: {{ honor.pic_transfer|default:"-" }}</div>
+                        <div data-transfer-pic class="mt-3 text-sm text-slate-500">PIC: {{ honor.pic_transfer|default:"-" }}</div>
                     </div>
                 </div>
+                {% if honor.status == 'dibayar' %}</details>{% else %}</div>{% endif %}
 
                 {% if honor.status != 'dibayar' and not honor.replacement_held and not is_asisten_lab %}
-                <form method="post" enctype="multipart/form-data" action="{% url 'asleb:honor_confirm_transfer' honor.pk %}" class="honor-transfer-card mt-4 grid gap-3 rounded-lg border border-emerald-100 bg-emerald-50 p-4 md:grid-cols-[180px_minmax(0,1fr)_auto] md:items-center">
+                <form method="post" enctype="multipart/form-data" action="{% url 'asleb:honor_confirm_transfer' honor.pk %}" class="honor-transfer-card mt-4 grid gap-3 rounded-lg border border-emerald-100 bg-emerald-50 p-4 md:grid-cols-[180px_minmax(0,1fr)_auto] md:items-center" data-honor-transfer>
                     {% csrf_token %}
                     <input type="date" name="tanggal_transfer" value="{% now 'Y-m-d' %}" class="min-h-10 rounded-xl bg-white text-xs">
                     <input type="file" name="bukti_transfer" accept="image/*,.pdf" class="text-xs">
@@ -374,6 +387,7 @@
                         <span>Sudah di TF</span>
                     </button>
                 </form>
+                <div data-transfer-feedback role="alert" class="mt-2 hidden text-sm font-semibold text-red-700"></div>
                 {% endif %}
             </article>
             {% empty %}
@@ -381,6 +395,7 @@
                 Belum ada rekap honor aslab.
             </div>
             {% endfor %}
+            {% if honor_list %}<div data-honor-search-empty hidden class="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-10 text-center text-slate-500">Tidak ada honor yang cocok.</div>{% endif %}
         </div>
     </div>
 </section>
@@ -442,23 +457,82 @@
         const searchInput = document.getElementById('id_q');
         const bulanInput = document.getElementById('id_bulan');
         const statusSelect = document.getElementById('id_status');
-        let searchTimer = null;
-
-        if (searchInput) {
-            searchInput.addEventListener('input', function () {
-                clearTimeout(searchTimer);
-                searchTimer = setTimeout(function () {
-                    form.submit();
-                }, 350);
+        const loadedMonth = bulanInput.value;
+        const normalize = value => value.toLocaleLowerCase('id-ID').trim();
+        const filter = function () {
+            const query = normalize(searchInput.value);
+            const status = statusSelect.value;
+            let visible = 0;
+            document.querySelectorAll('[data-honor-item]').forEach(function (item) {
+                const match = (!query || normalize(item.dataset.search).includes(query)) && (!status || item.dataset.status === status);
+                item.hidden = !match;
+                if (match) visible += 1;
             });
-        }
+            const empty = document.querySelector('[data-honor-search-empty]');
+            if (empty) empty.hidden = visible !== 0;
+        };
+        const loadMonth = function () {
+            searchInput.disabled = true;
+            statusSelect.disabled = true;
+            form.submit();
+        };
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+            if (bulanInput.value !== loadedMonth) loadMonth();
+            else filter();
+        });
+        form.addEventListener('reset', function () { requestAnimationFrame(filter); });
+        searchInput.addEventListener('input', filter);
+        statusSelect.addEventListener('change', filter);
+        bulanInput.addEventListener('change', loadMonth);
+        filter();
 
-        [bulanInput, statusSelect].forEach(function (input) {
-            if (input) {
-                input.addEventListener('change', function () {
-                    form.submit();
-                });
-            }
+        document.querySelectorAll('[data-honor-transfer]').forEach(function (transferForm) {
+            transferForm.addEventListener('submit', async function (event) {
+                event.preventDefault();
+                const button = transferForm.querySelector('button[type="submit"]');
+                const card = transferForm.closest('.honor-record');
+                const feedback = card.querySelector('[data-transfer-feedback]');
+                if (button.disabled) return;
+                button.disabled = true;
+                feedback.classList.add('hidden');
+                try {
+                    const response = await fetch(transferForm.action, {
+                        method: 'POST',
+                        body: new FormData(transferForm),
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                        credentials: 'same-origin',
+                    });
+                    const result = await response.json();
+                    if (!response.ok || !result.success) throw new Error(result.message || 'Konfirmasi transfer gagal.');
+                    const detailsContent = card.querySelector('[data-honor-details]');
+                    detailsContent.querySelector('[data-transfer-date]').textContent = 'TF: ' + result.tanggal_transfer;
+                    detailsContent.querySelector('[data-transfer-pic]').textContent = 'PIC: ' + result.pic_transfer;
+                    detailsContent.querySelector('[data-honor-edit]')?.remove();
+                    const details = document.createElement('details');
+                    details.className = 'mt-3';
+                    details.dataset.honorDetails = '';
+                    const summary = document.createElement('summary');
+                    summary.className = 'cursor-pointer text-sm font-bold text-brand-700 hover:text-brand-800';
+                    summary.textContent = 'Lihat detail honor';
+                    details.append(summary, ...Array.from(detailsContent.childNodes));
+                    detailsContent.replaceWith(details);
+                    const paidSummary = card.querySelector('[data-paid-summary]');
+                    paidSummary.querySelector('[data-paid-date]').textContent = result.tanggal_transfer;
+                    paidSummary.querySelector('[data-paid-pic]').textContent = 'PIC: ' + result.pic_transfer;
+                    const proof = paidSummary.querySelector('[data-paid-proof]');
+                    proof.href = result.bukti_transfer_url;
+                    proof.classList.remove('hidden');
+                    paidSummary.classList.remove('hidden');
+                    transferForm.remove();
+                    card.dataset.status = 'dibayar';
+                    filter();
+                } catch (error) {
+                    feedback.textContent = error.message || 'Koneksi gagal. Silakan coba lagi.';
+                    feedback.classList.remove('hidden');
+                    button.disabled = false;
+                }
+            });
         });
     });
 </script>

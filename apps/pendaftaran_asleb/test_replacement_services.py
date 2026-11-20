@@ -604,7 +604,7 @@ class HonorReassignmentTests(TestCase):
             tanggal_bergabung=date(2026, 7, 1),
         )
 
-    def honor(self, asleb, month, status='draft'):
+    def honor(self, asleb, month, status='diproses'):
         values = {
             'asleb': asleb,
             'bulan': month,

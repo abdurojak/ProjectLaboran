@@ -35,10 +35,10 @@
                 <i data-lucide="search" class="h-4 w-4"></i>
                 <span>Terapkan</span>
             </button>
-            <a href="{% url 'asleb:asleb_list' %}" class="btn-secondary">
+            <button type="reset" class="btn-secondary">
                 <i data-lucide="rotate-ccw" class="h-4 w-4"></i>
                 <span>Reset</span>
-            </a>
+            </button>
         </div>
     </form>
 
@@ -57,7 +57,7 @@
                 </thead>
                 <tbody>
                     {% for asleb in asleb_list %}
-                    <tr class="hover:bg-slate-50/70">
+                    <tr class="hover:bg-slate-50/70" data-asleb-item data-status="{{ asleb.status }}" data-search="{{ asleb.nama }} {{ asleb.nim }} {{ asleb.no_hp }} {{ asleb.program_studi }} {{ asleb.matkul }}">
                         <td>
                             <div class="font-semibold text-slate-900">{{ asleb.nama }}</div>
                             <div class="mt-1 text-xs text-slate-500">NIM {{ asleb.nim }}</div>
@@ -105,6 +105,7 @@
                         <td colspan="5" class="py-12 text-center text-slate-500">Belum ada data aslab.</td>
                     </tr>
                     {% endfor %}
+                    {% if asleb_list %}<tr data-search-empty hidden><td colspan="5" class="py-12 text-center text-slate-500">Tidak ada aslab yang cocok.</td></tr>{% endif %}
                 </tbody>
             </table>
         </div>
@@ -112,7 +113,7 @@
 
     <div class="asleb-responsive-list gap-4" data-asleb-responsive-list>
         {% for asleb in asleb_list %}
-        <article class="surface-card min-w-0 overflow-hidden p-5" data-asleb-responsive-card>
+        <article class="surface-card min-w-0 overflow-hidden p-5" data-asleb-responsive-card data-asleb-item data-status="{{ asleb.status }}" data-search="{{ asleb.nama }} {{ asleb.nim }} {{ asleb.no_hp }} {{ asleb.program_studi }} {{ asleb.matkul }}">
             <div class="flex min-w-0 items-start justify-between gap-3">
                 <div class="min-w-0">
                     <h3 class="break-words text-base font-black text-slate-900">{{ asleb.nama }}</h3>
@@ -178,6 +179,7 @@
         {% empty %}
         <div class="surface-card px-4 py-10 text-center text-sm text-slate-500">Belum ada data aslab.</div>
         {% endfor %}
+        {% if asleb_list %}<div data-search-empty hidden class="surface-card px-4 py-10 text-center text-sm text-slate-500">Tidak ada aslab yang cocok.</div>{% endif %}
     </div>
 </section>
 {% endblock %}
@@ -253,22 +255,26 @@
         const form = document.getElementById('asleb-filter-form');
         const searchInput = document.getElementById('id_q');
         const statusSelect = document.getElementById('id_status');
-        let searchTimer = null;
-
-        if (searchInput) {
-            searchInput.addEventListener('input', function () {
-                clearTimeout(searchTimer);
-                searchTimer = setTimeout(function () {
-                    form.submit();
-                }, 350);
+        const normalize = value => value.toLocaleLowerCase('id-ID').trim();
+        const filter = function () {
+            const query = normalize(searchInput.value);
+            const status = statusSelect.value;
+            document.querySelectorAll('[data-asleb-desktop-list], [data-asleb-responsive-list]').forEach(function (list) {
+                let visible = 0;
+                list.querySelectorAll('[data-asleb-item]').forEach(function (item) {
+                    const match = (!query || normalize(item.dataset.search).includes(query)) && (!status || item.dataset.status === status);
+                    item.hidden = !match;
+                    if (match) visible += 1;
+                });
+                const empty = list.querySelector('[data-search-empty]');
+                if (empty) empty.hidden = visible !== 0;
             });
-        }
-
-        if (statusSelect) {
-            statusSelect.addEventListener('change', function () {
-                form.submit();
-            });
-        }
+        };
+        form.addEventListener('submit', function (event) { event.preventDefault(); filter(); });
+        form.addEventListener('reset', function () { requestAnimationFrame(filter); });
+        searchInput.addEventListener('input', filter);
+        statusSelect.addEventListener('change', filter);
+        filter();
 
     });
 </script>

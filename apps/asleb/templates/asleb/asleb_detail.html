@@ -2,10 +2,43 @@
 
 {% block title %}Detail Aslab{% endblock %}
 
+{% block extra_head %}
+<style>
+    .asleb-detail-page,
+    .asleb-detail-page .surface-card {
+        min-width: 0;
+        max-width: 100%;
+    }
+    .asleb-detail-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .asleb-detail-grid > div {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+    @media (min-width: 768px) {
+        .asleb-detail-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+    @media (max-width: 767px) {
+        .asleb-detail-page .surface-card {
+            padding: 1rem;
+        }
+        .asleb-detail-grid {
+            gap: 0.75rem;
+        }
+        .asleb-detail-grid > div {
+            padding: 1rem;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<section class="mx-auto max-w-4xl space-y-6">
+<section class="asleb-detail-page mx-auto w-full max-w-4xl space-y-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div class="min-w-0">
             <p class="text-sm font-bold uppercase tracking-[0.2em] text-emerald-700">Aslab</p>
             <h2 class="mt-2 text-3xl font-black tracking-tight text-slate-900">{{ asleb.nama }}</h2>
             <p class="mt-2 text-sm text-slate-500">Detail data asisten laboratorium.</p>
@@ -76,7 +109,7 @@
         {% endif %}
     </div>
 
-    <div class="surface-card grid gap-5 p-6 md:grid-cols-2 md:p-8">
+    <div class="asleb-detail-grid surface-card grid gap-5 p-6 md:p-8">
         <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">NIM</div><div class="mt-2 text-xl font-bold text-slate-900">{{ asleb.nim }}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">No HP</div><div class="mt-2 text-xl font-bold text-slate-900">{{ asleb.no_hp }}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5"><div class="text-sm font-semibold text-slate-500">Email</div><div class="mt-2 text-xl font-bold text-slate-900">{{ asleb.email|default:"-" }}</div></div>
@@ -101,6 +134,22 @@
         <div class="rounded-3xl bg-slate-50 p-5 md:col-span-2"><div class="text-sm font-semibold text-slate-500">Tanggal Bergabung</div><div class="mt-2 text-xl font-bold text-slate-900">{{ asleb.tanggal_bergabung|date:"d M Y" }}</div></div>
         <div class="rounded-3xl bg-slate-50 p-5 md:col-span-2"><div class="text-sm font-semibold text-slate-500">Catatan</div><div class="mt-2 text-base leading-7 text-slate-700">{{ asleb.catatan|default:"-" }}</div></div>
     </div>
+
+    <section class="surface-card p-6 md:p-8">
+        <h3 class="text-lg font-bold text-slate-900">Tanda Tangan Pendaftaran</h3>
+        {% if registration_signature %}
+        <p class="mt-1 text-sm text-slate-500">Diunggah saat pendaftaran {{ registration_signature.tanggal_daftar|date:"d M Y" }}.</p>
+        <div class="mt-4 max-w-md rounded-lg border border-slate-200 bg-white p-4">
+            <img src="{{ registration_signature.tanda_tangan.url }}" alt="Tanda tangan pendaftaran {{ asleb.nama }}" class="max-h-40 w-full object-contain" loading="lazy">
+        </div>
+        <div class="mt-4 flex flex-wrap gap-3">
+            <a class="btn-secondary" href="{{ registration_signature.tanda_tangan.url }}" target="_blank" rel="noopener"><i data-lucide="external-link" class="h-4 w-4"></i><span>Lihat berkas asli</span></a>
+            <a class="btn-secondary" href="{% url 'pendaftaran_asleb:pendaftaran_detail' registration_signature.pk %}"><i data-lucide="file-text" class="h-4 w-4"></i><span>Detail pendaftaran</span></a>
+        </div>
+        {% else %}
+        <p class="mt-2 text-sm text-slate-500">Tanda tangan pendaftaran belum tersedia.</p>
+        {% endif %}
+    </section>
 </section>
 {% endblock %}
 
