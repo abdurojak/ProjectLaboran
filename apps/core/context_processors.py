@@ -38,6 +38,7 @@ TONES = {
 
 
 SIDEBAR_LINKS = [
+    {'title': 'Rekap Honorarium', 'icon': 'file-chart-column', 'url': 'asleb:honor_list', 'namespace': 'asleb', 'roles': {ADMIN_ROLE}},
     {'title': 'Dashboard', 'icon': 'layout-grid', 'url': 'dashboard:home', 'namespace': 'dashboard'},
     {'title': 'Kalender', 'icon': 'calendar-days', 'url': 'kalender:kegiatan_list', 'namespace': 'kalender'},
     {
@@ -221,7 +222,7 @@ SIDEBAR_LINKS = [
 
 MAHASISWA_VISIBLE_NAMESPACES = {'core', 'dashboard', 'kalender', 'peminjaman', 'jadwal', 'asleb', 'ruangan', 'pengguna'}
 ASISTEN_LAB_HIDDEN_NAMESPACES = {'inventaris', 'barang_tertinggal', 'asleb', 'pendaftaran_asleb'}
-ADMIN_VISIBLE_NAMESPACES = {'core', 'dashboard', 'kalender', 'pengguna', 'ruangan'}
+ADMIN_VISIBLE_NAMESPACES = {'core', 'dashboard', 'kalender', 'pengguna', 'ruangan', 'asleb'}
 
 PUBLIC_PAGE_META = {
     ('pengguna', 'login'): {'title': 'Login', 'icon': 'log-in'},

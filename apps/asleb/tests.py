@@ -74,6 +74,13 @@ from .surat_honor import (
 
 
 class AslebViewTests(TestCase):
+    def test_admin_dapat_melihat_rekap_honor_tanpa_aksi_transfer(self):
+        self.pengguna.role = 'admin'
+        self.pengguna.save(update_fields=['role'])
+        response = self.client.get(reverse('asleb:honor_list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'data-honor-transfer>')
+
     @classmethod
     def setUpClass(cls):
         super().setUpClass()

@@ -238,7 +238,7 @@ class PenggunaLoginRequiredMiddleware:
         if pengguna_id and not is_exempt:
             resolved = resolve(path)
             namespace = resolved.namespace
-            if pengguna.role == 'admin' and namespace not in self.ADMIN_ALLOWED_NAMESPACES:
+            if pengguna.role == 'admin' and namespace not in self.ADMIN_ALLOWED_NAMESPACES and not (namespace == 'asleb' and resolved.url_name == 'honor_list'):
                 return redirect('dashboard:home')
 
             if pengguna.role == 'mahasiswa' and not self.mahasiswa_can_access(namespace, path, resolved, pengguna):

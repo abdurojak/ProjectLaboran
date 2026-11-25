@@ -138,7 +138,7 @@ class LabOperationsRequiredMixin:
 class HonorAccessMixin:
     def dispatch(self, request, *args, **kwargs):
         pengguna = getattr(request, 'current_pengguna', None)
-        if not pengguna or pengguna.role not in {LABORAN_ROLE, ASISTEN_LAB_ROLE}:
+        if not pengguna or pengguna.role not in {LABORAN_ROLE, ASISTEN_LAB_ROLE, 'admin'}:
             messages.error(request, 'Anda tidak memiliki akses ke rekap honorarium.')
             return redirect('dashboard:home')
         return super().dispatch(request, *args, **kwargs)
@@ -408,7 +408,7 @@ class HonorAslebListView(HonorAccessMixin, ListView):
             queryset = queryset.filter(assigned_laboran=pengguna)
         elif pengguna and pengguna.role == ASISTEN_LAB_ROLE:
             queryset = queryset.filter(asleb__nim=pengguna.nim_nik)
-        elif pengguna:
+        elif pengguna and pengguna.role != 'admin':
             queryset = queryset.none()
         return self._apply_request_filters(queryset)
 
@@ -3420,7 +3420,8 @@ def get_total_honor_attendance_count(asleb, bulan):
     web_keys = set(web_absensi.exclude(jadwal__isnull=True).values_list('jadwal_id', 'tanggal_praktikum'))
     mobile_keys = set(mobile_absensi.exclude(jadwal__isnull=True).values_list('jadwal_id', 'tanggal_absensi'))
     legacy_count = web_absensi.filter(jadwal__isnull=True).count() + mobile_absensi.filter(jadwal__isnull=True).count()
-    return len(web_keys | mobile_keys) + legacy_count
+    # Each submitted module counts; mobile check-in only fills sessions without a module submission.
+    return web_absensi.count() + len(mobile_keys - web_keys) + mobile_absensi.filter(jadwal__isnull=True).count()
 
 
 @transaction.atomic
@@ -3438,8 +3439,19 @@ def _sync_honor_attendance(asleb, bulan):
         )
     # Bukti transfer mengunci nominal pembayaran yang sudah diselesaikan.
     if honor.status == 'dibayar':
+        count = get_total_honor_attendance_count(asleb, bulan)
+        expected = min(7 * count, 60) * honor.honor_per_jam
+        shortage = max(expected - honor.honor_sebelum_potongan, 0)
+        HonorAsleb.objects.filter(pk=honor.pk).update(
+            kekurangan_bayar=shortage,
+            catatan_koreksi=(
+                f'Koreksi absensi per modul: {count} modul x 7 jam; batas 60 jam/bulan. '
+                f'Honor kotor seharusnya Rp{expected:,}; tercatat Rp{honor.honor_sebelum_potongan:,}. '
+                f'Kekurangan Rp{shortage:,}, belum dibayarkan.'
+            ) if shortage else '',
+        )
         return honor
-    honor.jumlah_praktikum = max(honor.jumlah_praktikum, 1)
+    honor.jumlah_praktikum = 1
     honor.total_pertemuan = get_total_honor_attendance_count(asleb, bulan)
     honor.save()
     return reconcile_retrospective_honor(honor=honor)

@@ -130,6 +130,8 @@ class HonorAsleb(models.Model):
     level = models.CharField(max_length=20, choices=LEVEL_CHOICES, default='junior')
     jumlah_praktikum = models.PositiveSmallIntegerField('Jumlah Modul', default=1)
     total_pertemuan = models.PositiveSmallIntegerField('Total Pertemuan', default=0)
+    kekurangan_bayar = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    catatan_koreksi = models.TextField(blank=True)
     jumlah = models.DecimalField(max_digits=12, decimal_places=2)
     metode_transfer = models.CharField(
         max_length=30,
