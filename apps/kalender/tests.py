@@ -1,10 +1,13 @@
 from datetime import date, time, timedelta
+from unittest.mock import patch
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from channels.testing import WebsocketCommunicator
 from django.conf import settings
 from django.contrib.sessions.backends.db import SessionStore
+from django.core import mail
+from django.core.management import call_command
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.test.utils import override_script_prefix
 from django.utils import timezone
@@ -19,10 +22,61 @@ from apps.kalender.context_processors import get_unread_notification_count, get_
 from apps.jadwal.models import JadwalPraktikum
 from apps.ruangan.models import RuanganLab
 
-from .models import KegiatanKalender, Notifikasi
+from .models import EmailPerayaanTerkirim, KegiatanKalender, Notifikasi
 from .realtime import send_peminjaman_status_update, send_user_notification, user_group_name
 from .utils import get_perayaan_calendar_events, get_perayaan_notifications
 from project_laboran.asgi import application
+
+
+class PerayaanEmailTests(TestCase):
+    def setUp(self):
+        self.pengguna = Pengguna.objects.create(
+            nama_pengguna='Siti', nim_nik='0640020999',
+            email='siti@std.trisakti.ac.id', password='rahasia123',
+            no_hp='081200000999', alamat='Jakarta', fakultas='FTI',
+            prodi='Informatika', gender='perempuan', role='mahasiswa',
+        )
+
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    @patch('apps.kalender.management.commands.send_perayaan_emails.timezone.localdate', return_value=date(2026, 11, 25))
+    def test_hari_h_mengirim_sekali_dan_menampilkan_ucapan(self, _today):
+        call_command('send_perayaan_emails')
+        call_command('send_perayaan_emails')
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('Hari Guru Nasional', mail.outbox[0].subject)
+        self.assertIn('Siti', mail.outbox[0].body)
+        self.assertEqual(EmailPerayaanTerkirim.objects.count(), 1)
+
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    @patch('apps.kalender.management.commands.send_perayaan_emails.timezone.localdate', return_value=date(2026, 11, 26))
+    def test_di_luar_hari_perayaan_tidak_mengirim(self, _today):
+        call_command('send_perayaan_emails')
+        self.assertEqual(len(mail.outbox), 0)
+
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    @patch('apps.kalender.management.commands.send_perayaan_emails.timezone.localdate', return_value=date(2026, 5, 12))
+    def test_peringatan_trisakti_memakai_bahasa_mengenang(self, _today):
+        call_command('send_perayaan_emails')
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('Mengenang', mail.outbox[0].subject)
+        self.assertNotIn('Selamat', mail.outbox[0].body)
+
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    @patch('apps.kalender.management.commands.send_perayaan_emails.timezone.localdate', return_value=date(2026, 11, 25))
+    def test_akun_belum_terverifikasi_tidak_menerima_email(self, _today):
+        self.pengguna.is_verified = False
+        self.pengguna.save(update_fields=['is_verified'])
+        call_command('send_perayaan_emails')
+        self.assertEqual(len(mail.outbox), 0)
+
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    @patch('apps.kalender.management.commands.send_perayaan_emails.send_branded_email', side_effect=RuntimeError('SMTP gagal'))
+    @patch('apps.kalender.management.commands.send_perayaan_emails.timezone.localdate', return_value=date(2026, 11, 25))
+    def test_gagal_kirim_tidak_mencatat_sebagai_terkirim(self, _today, _send):
+        with self.assertRaises(RuntimeError):
+            call_command('send_perayaan_emails')
+        self.assertFalse(EmailPerayaanTerkirim.objects.exists())
 
 
 class NotificationRealtimeTests(TransactionTestCase):

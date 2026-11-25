@@ -134,3 +134,18 @@ class Notifikasi(models.Model):
     def __str__(self):
         return self.judul
 
+
+class EmailPerayaanTerkirim(models.Model):
+    pengguna = models.ForeignKey(Pengguna, on_delete=models.CASCADE)
+    tanggal = models.DateField()
+    judul = models.CharField(max_length=200)
+    dikirim_pada = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['pengguna', 'tanggal', 'judul'],
+                name='unique_email_perayaan_per_pengguna',
+            ),
+        ]
+
