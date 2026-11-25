@@ -295,6 +295,7 @@ class BatchHonor(models.Model):
     bulan = models.DateField()
     laboran = models.ForeignKey('pengguna.Pengguna', on_delete=models.PROTECT)
     dana_diterima = models.DecimalField(max_digits=12, decimal_places=2)
+    cadangan_admin = models.DecimalField(max_digits=12, decimal_places=2, default=0, validators=[MinValueValidator(0)])
     dibuat_pada = models.DateTimeField(auto_now_add=True)
     catatan = models.TextField(blank=True)
 

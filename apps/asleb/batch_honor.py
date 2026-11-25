@@ -66,6 +66,9 @@ def create_batch(request):
     items = []
     try:
         funds = Decimal(request.POST.get('dana_diterima', '0'))
+        admin = Decimal(request.POST.get('cadangan_admin', '0') or '0')
+        if not admin.is_finite() or admin < 0 or admin != admin.quantize(Decimal('.01')):
+            raise ValueError
         if not funds.is_finite() or funds <= 0 or funds != funds.quantize(Decimal('.01')):
             raise ValueError
         from apps.pendaftaran_asleb.replacement_services import payment_eligible_honors
@@ -77,12 +80,12 @@ def create_batch(request):
                 if amount > balances(h)['remaining'] or not payment_eligible_honors(HonorAsleb.objects.filter(pk=h.pk)).exists():
                     raise ValueError
                 items.append((h, amount))
-        if not items or sum(amount for _, amount in items) != funds:
+        if not items or sum(amount for _, amount in items) + admin != funds:
             raise ValueError
     except (ValueError, InvalidOperation):
         messages.error(request, 'Alokasi harus sama dengan dana diterima, tidak melebihi sisa kewajiban, dan honor tidak sedang ditahan.')
         return redirect('asleb:honor_batches')
-    batch = BatchHonor.objects.create(bulan=month, laboran=user, dana_diterima=funds, catatan=request.POST.get('catatan', '').strip())
+    batch = BatchHonor.objects.create(bulan=month, laboran=user, dana_diterima=funds, cadangan_admin=admin, catatan=request.POST.get('catatan', '').strip())
     ItemBatchHonor.objects.bulk_create([ItemBatchHonor(batch=batch, honor=h, nominal=amount) for h, amount in items])
     messages.success(request, f'Batch #{batch.pk} dikunci. Nominal alokasi tidak berubah mengikuti koreksi absensi.')
     return redirect('asleb:honor_batches')
