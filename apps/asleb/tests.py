@@ -75,6 +75,22 @@ from .surat_honor import (
 
 class AslebViewTests(TestCase):
     @patch('apps.asleb.views.get_total_honor_attendance_count', return_value=8)
+    def test_rekap_menampilkan_transfer_batch_tanpa_form_transfer_ganda(self, _count):
+        from .models import BatchHonor, ItemBatchHonor
+        honor = HonorAsleb.objects.create(asleb=self.asleb, bulan=date(2026, 10, 1), total_pertemuan=8, assigned_laboran=self.pengguna)
+        batch = BatchHonor.objects.create(bulan=honor.bulan, laboran=self.pengguna, dana_diterima=196000)
+        ItemBatchHonor.objects.create(batch=batch, honor=honor, nominal=196000, tanggal_transfer=date(2026, 10, 15), dibayar_pada=timezone.now(), bukti_transfer='honor_asleb/batch/test.png', rincian_jam=[{'source_id':honor.pk,'hours':'28','gross':'196000'}])
+        response = self.client.get(reverse('asleb:honor_list'), {'bulan': '2026-10'})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Transfer batch selesai')
+        self.assertContains(response, 'honor_asleb/batch/test.png')
+        self.assertNotContains(response, 'data-honor-transfer>')
+        paid_response = self.client.get(reverse('asleb:honor_list'), {'bulan': '2026-10', 'status': 'dibayar'})
+        self.assertContains(paid_response, 'Transfer batch selesai')
+        honor.refresh_from_db()
+        self.assertEqual(honor.status, 'diproses')
+
+    @patch('apps.asleb.views.get_total_honor_attendance_count', return_value=8)
     def test_bawaan_dibatasi_60_jam_dan_sisa_berlanjut(self, _count):
         from .honor_carry import carry_balance, allocate_hours
         from .models import BatchHonor, ItemBatchHonor

@@ -12,7 +12,7 @@ from django.core.paginator import Paginator
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.base import ContentFile
 from django.db import IntegrityError, transaction
-from django.db.models import Avg, Count, Prefetch, Q, Sum
+from django.db.models import Avg, Count, F, Prefetch, Q, Sum
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.response import TemplateResponse
@@ -377,7 +377,17 @@ def filter_honor_queryset(request, queryset, *, report_errors=True):
             queryset = queryset.none()
 
     if status:
-        queryset = queryset.filter(status=status)
+        queryset = queryset.annotate(
+            batch_count=Count('batch_items', distinct=True),
+            batch_paid_count=Count('batch_items', filter=Q(batch_items__dibayar_pada__isnull=False), distinct=True),
+        )
+        complete = Q(batch_count__gt=0, batch_count=F('batch_paid_count'))
+        if status == 'dibayar':
+            queryset = queryset.filter(Q(status='dibayar') | complete)
+        elif status == 'diproses':
+            queryset = queryset.filter(status=status).exclude(complete)
+        else:
+            queryset = queryset.filter(status=status)
     return queryset
 
 
@@ -457,6 +467,20 @@ class HonorAslebListView(HonorAccessMixin, ListView):
         context['is_admin'] = False
         context['is_laboran'] = bool(pengguna and pengguna.role == LABORAN_ROLE)
         context['is_asisten_lab'] = bool(pengguna and pengguna.role == ASISTEN_LAB_ROLE)
+        if not context['is_asisten_lab']:
+            from .honor_carry import carry_balance
+            for honor in context['honor_list']:
+                items = list(honor.batch_items.select_related('batch__laboran').order_by('batch_id', 'pk'))
+                if items:
+                    paid = sum((item.nominal for item in items if item.dibayar_pada), Decimal(0))
+                    allocated = sum((item.nominal for item in items), Decimal(0))
+                    carry = carry_balance(honor)
+                    honor.batch_summary = {
+                        'items': items, 'paid': paid, 'allocated': allocated,
+                        'pending': allocated - paid,
+                        'complete': all(item.dibayar_pada for item in items),
+                        'carried': sum((s['hours'] for s in carry['sources']), Decimal(0)),
+                    }
         from .models import ItemBatchHonor
         context['batch_payments'] = ItemBatchHonor.objects.filter(
             honor__asleb__nim=pengguna.nim_nik, dibayar_pada__isnull=False,
