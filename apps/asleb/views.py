@@ -386,6 +386,12 @@ class HonorAslebListView(HonorAccessMixin, ListView):
     template_name = 'asleb/honor_list.html'
     context_object_name = 'honor_list'
 
+    def get_template_names(self):
+        pengguna = getattr(self.request, 'current_pengguna', None)
+        if pengguna and pengguna.role == ASISTEN_LAB_ROLE:
+            return ['asleb/honor_payments_student.html']
+        return [self.template_name]
+
     def _apply_request_filters(self, queryset, *, report_errors=True):
         queryset = filter_honor_queryset(self.request, queryset, report_errors=report_errors)
         if not self.request.GET.get('bulan', '').strip():
@@ -407,7 +413,7 @@ class HonorAslebListView(HonorAccessMixin, ListView):
         if pengguna and pengguna.role == LABORAN_ROLE:
             queryset = queryset.filter(assigned_laboran=pengguna)
         elif pengguna and pengguna.role == ASISTEN_LAB_ROLE:
-            queryset = queryset.filter(asleb__nim=pengguna.nim_nik)
+            queryset = queryset.filter(asleb__nim=pengguna.nim_nik, status='dibayar')
         elif pengguna and pengguna.role != 'admin':
             queryset = queryset.none()
         return self._apply_request_filters(queryset)
@@ -456,6 +462,10 @@ class HonorAslebListView(HonorAccessMixin, ListView):
             honor__asleb__nim=pengguna.nim_nik, dibayar_pada__isnull=False,
             honor__bulan=selected_bulan_date,
         ).select_related('honor', 'batch') if context['is_asisten_lab'] else []
+        if context['is_asisten_lab']:
+            legacy_total = sum(honor.jumlah for honor in context['honor_list'])
+            batch_total = sum(item.nominal for item in context['batch_payments'])
+            context['total_diterima'] = f'Rp {legacy_total + batch_total:,.0f}'.replace(',', '.')
         context['formula_note'] = 'Total jam = jumlah modul × total pertemuan × 7 jam, maksimal 60 jam per bulan. Periode ke-1 dan ke-2 Junior Rp7.000/jam; mulai periode ke-3 Senior Rp8.000/jam.'
         context['biaya_transfer_form'] = PengaturanBiayaTransferForm(instance=PengaturanBiayaTransfer.get_solo())
         return context
