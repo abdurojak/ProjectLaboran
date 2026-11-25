@@ -75,7 +75,27 @@ from .surat_honor import (
 
 class AslebViewTests(TestCase):
     @patch('apps.asleb.views.get_total_honor_attendance_count', return_value=8)
-    def test_batch_honor_mengunci_nominal_dan_mencegah_alokasi_ganda(self, _count):
+    def test_bawaan_dibatasi_60_jam_dan_sisa_berlanjut(self, _count):
+        from .honor_carry import carry_balance, allocate_hours
+        from .models import BatchHonor, ItemBatchHonor
+        old = HonorAsleb.objects.create(asleb=self.asleb, bulan=date(2026, 9, 1), total_pertemuan=3, status='dibayar', tanggal_transfer=date(2026, 10, 1), pic_transfer='Test', bukti_transfer='honor_asleb/test.png')
+        current = HonorAsleb.objects.create(asleb=self.asleb, bulan=date(2026, 10, 1), total_pertemuan=8)
+        balance = carry_balance(current)
+        self.assertEqual(balance['carried_hours'], Decimal(35))
+        self.assertEqual(balance['scheduled_hours'], Decimal(60))
+        self.assertEqual(balance['deferred_hours'], Decimal(31))
+        batch = BatchHonor.objects.create(bulan=current.bulan, laboran=self.pengguna, dana_diterima=420000)
+        ItemBatchHonor.objects.create(batch=batch, honor=current, nominal=420000, rincian_jam=balance['plan'])
+        self.assertEqual(carry_balance(current)['remaining'], 0)
+        next_month = HonorAsleb.objects.create(asleb=self.asleb, bulan=date(2026, 11, 1), total_pertemuan=8)
+        next_balance = carry_balance(next_month)
+        self.assertEqual(next_balance['carried_hours'], Decimal(31))
+        self.assertEqual(next_balance['scheduled_hours'], Decimal(60))
+        self.assertEqual(next_balance['deferred_hours'], Decimal(27))
+
+    @patch('apps.asleb.batch_honor.timezone.localdate', return_value=date(2026, 10, 1))
+    @patch('apps.asleb.views.get_total_honor_attendance_count', return_value=8)
+    def test_batch_honor_mengunci_nominal_dan_mencegah_alokasi_ganda(self, _count, _today):
         from .models import BatchHonor, ItemBatchHonor
         honor = HonorAsleb.objects.create(asleb=self.asleb, bulan=date(2026, 10, 1), total_pertemuan=8, assigned_laboran=self.pengguna)
         payload = {'bulan': '2026-10', 'dana_diterima': '196000', 'konfirmasi': 'KUNCI BATCH', f'nominal_{honor.pk}': '196000'}

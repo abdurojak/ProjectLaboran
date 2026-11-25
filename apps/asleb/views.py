@@ -3284,6 +3284,10 @@ def confirm_honor_transfer(request, pk):
     honor = get_object_or_404(HonorAsleb.objects.select_for_update(), pk=pk)
     if honor.batch_items.exists():
         return failure('Honor ini sudah dialokasikan dalam batch. Catat transfer melalui Batch Pembayaran.')
+    from .honor_carry import carry_balance
+    carry = carry_balance(honor)
+    if carry['carried_hours'] or carry['deferred_hours']:
+        return failure('Honor memiliki modul bawaan atau sisa jam. Gunakan Batch Pembayaran agar batas 60 jam dan asal modul tercatat.')
     if not payment_eligible_honors(HonorAsleb.objects.filter(pk=honor.pk)).exists():
         return failure('Honor sedang ditahan sampai proses penggantian aslab selesai.')
     if pengguna.role == LABORAN_ROLE and honor.assigned_laboran_id != pengguna.pk:

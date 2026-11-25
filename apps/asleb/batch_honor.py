@@ -14,6 +14,7 @@ from .models import Asleb, BatchHonor, HonorAsleb, ItemBatchHonor
 
 
 def balances(honor):
+    from .honor_carry import carry_balance
     from .views import get_total_honor_attendance_count
     count = get_total_honor_attendance_count(honor.asleb, honor.bulan)
     entitlement = Decimal(min(count * 7, 60) * honor.honor_per_jam)
@@ -21,8 +22,9 @@ def balances(honor):
     legacy_paid = honor.jumlah if honor.status == 'dibayar' else Decimal(0)
     allocated = honor.batch_items.aggregate(total=Sum('nominal'))['total'] or Decimal(0)
     paid = honor.batch_items.filter(dibayar_pada__isnull=False).aggregate(total=Sum('nominal'))['total'] or Decimal(0)
+    carry = carry_balance(honor)
     return {'entitlement': entitlement, 'paid': legacy_paid + paid,
-            'allocated': allocated, 'remaining': max(entitlement - legacy_paid - allocated, Decimal(0)),
+            'allocated': allocated, **carry,
             'overpaid': max(legacy_paid + paid - entitlement, Decimal(0))}
 
 
@@ -37,6 +39,9 @@ def batch_list(request):
     user = staff(request)
     month = parse_date(request.GET.get('bulan', timezone.localdate().strftime('%Y-%m')) + '-01')
     month = month or timezone.localdate().replace(day=1)
+    if month == timezone.localdate().replace(day=1):
+        from .honor_carry import ensure_month
+        ensure_month(month)
     honors = HonorAsleb.objects.filter(bulan=month).select_related('asleb', 'assigned_laboran')
     batches = BatchHonor.objects.filter(bulan=month).select_related('laboran').prefetch_related('items__honor__asleb')
     if user.role == 'laboran':
@@ -56,6 +61,9 @@ def create_batch(request):
     if user.role != 'laboran':
         raise PermissionDenied
     month = parse_date(request.POST.get('bulan', '') + '-01')
+    if month and month < timezone.localdate().replace(day=1):
+        messages.error(request, 'Alokasi bulan lama tetap dikunci. Modul tersisa dibukukan pada bulan berjalan.')
+        return redirect('asleb:honor_batches')
     if not month or request.POST.get('konfirmasi') != 'KUNCI BATCH':
         messages.error(request, 'Isi bulan dan ketik KUNCI BATCH untuk mengunci alokasi dana.')
         return redirect('asleb:honor_batches')
@@ -79,14 +87,17 @@ def create_batch(request):
             if amount:
                 if amount > balances(h)['remaining'] or not payment_eligible_honors(HonorAsleb.objects.filter(pk=h.pk)).exists():
                     raise ValueError
-                items.append((h, amount))
-        if not items or sum(amount for _, amount in items) + admin != funds:
+                from .honor_carry import allocate_hours
+                balance = balances(h)
+                details = allocate_hours(balance['sources'], max(Decimal(60) - balance['reserved_hours'], Decimal(0)), amount + balance['fee'])
+                items.append((h, amount, details))
+        if not items or sum(amount for _, amount, _ in items) + admin != funds:
             raise ValueError
     except (ValueError, InvalidOperation):
         messages.error(request, 'Alokasi harus sama dengan dana diterima, tidak melebihi sisa kewajiban, dan honor tidak sedang ditahan.')
         return redirect('asleb:honor_batches')
     batch = BatchHonor.objects.create(bulan=month, laboran=user, dana_diterima=funds, cadangan_admin=admin, catatan=request.POST.get('catatan', '').strip())
-    ItemBatchHonor.objects.bulk_create([ItemBatchHonor(batch=batch, honor=h, nominal=amount) for h, amount in items])
+    ItemBatchHonor.objects.bulk_create([ItemBatchHonor(batch=batch, honor=h, nominal=amount, rincian_jam=details) for h, amount, details in items])
     messages.success(request, f'Batch #{batch.pk} dikunci. Nominal alokasi tidak berubah mengikuti koreksi absensi.')
     return redirect('asleb:honor_batches')
 

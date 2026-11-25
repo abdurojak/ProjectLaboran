@@ -304,6 +304,7 @@ class BatchHonor(models.Model):
 
 
 class ItemBatchHonor(models.Model):
+    rincian_jam = models.JSONField(default=list, blank=True)
     batch = models.ForeignKey(BatchHonor, on_delete=models.PROTECT, related_name='items')
     honor = models.ForeignKey(HonorAsleb, on_delete=models.PROTECT, related_name='batch_items')
     nominal = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
