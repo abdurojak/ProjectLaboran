@@ -389,6 +389,22 @@ class AslebViewTests(TestCase):
 
         self.assertRedirects(response, reverse('pengguna:detail', args=[account.pk]))
 
+    def test_asleb_tanpa_foto_tetap_diblokir_meski_flag_sudah_mati(self):
+        account = Pengguna.objects.create(
+            nama_pengguna='Siti Nurhaliza', nim_nik=self.asleb.nim,
+            email='siti-no-photo@example.com', password='rahasia123',
+            no_hp='081234567891', alamat='Jakarta', fakultas='Teknologi Industri',
+            prodi='Informatika', gender='perempuan', role='asisten_lab',
+            wajib_ganti_foto=False,
+        )
+        session = self.client.session
+        session['pengguna_id'] = account.pk
+        session.save()
+
+        response = self.client.get(reverse('asleb:absensi_create'))
+
+        self.assertRedirects(response, reverse('pengguna:detail', args=[account.pk]))
+
     def test_absensi_form_memakai_layout_responsif(self):
         PengaturanAbsensiAsleb.get_solo().__class__.objects.update_or_create(pk=1, defaults={'dibuka': True})
         aslab_user = Pengguna.objects.create(
@@ -450,6 +466,7 @@ class AslebViewTests(TestCase):
             gender='perempuan',
             role='asisten_lab',
             is_verified=True,
+            foto='profil/asisten.jpg',
         )
         self.create_active_assignment()
         session = self.client.session
@@ -1074,6 +1091,7 @@ class AslebViewTests(TestCase):
             email='aslab-dual@std.trisakti.ac.id', password='rahasia123',
             no_hp=self.asleb.no_hp, alamat='Jakarta', fakultas='Teknologi Industri',
             prodi='Informatika', gender='perempuan', role='asisten_lab', is_verified=True,
+            foto='profil/siti.jpg',
         )
         session = self.client.session
         session['pengguna_id'] = pengguna.pk

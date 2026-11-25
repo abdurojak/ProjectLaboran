@@ -101,6 +101,8 @@ class PenggunaForm(forms.ModelForm):
 
         if hapus_foto:
             instance.foto = None
+            if instance.role == 'asisten_lab':
+                instance.wajib_ganti_foto = True
 
         # Password Laboran dibuat/direset oleh pengelola hanya bersifat
         # sementara. Laboran menetapkan password pribadinya saat login baru.
@@ -244,6 +246,8 @@ class PenggunaProfileForm(forms.ModelForm):
 
         if hapus_foto:
             instance.foto = None
+            if instance.role == 'asisten_lab':
+                instance.wajib_ganti_foto = True
         elif self.cleaned_data.get('foto') and 'foto' in self.files:
             instance.wajib_ganti_foto = False
 

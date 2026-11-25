@@ -538,13 +538,14 @@ class ScheduleDetailView(APIView):
             'can_check_in': (
                 valid
                 and not request.user.wajib_ganti_foto
+                and bool(request.user.foto)
                 and not already_checked_in
                 and bool(available_modules)
                 and (PengaturanAbsensiAsleb.get_solo().dibuka or manual_permission is not None)
             ),
             'check_in_message': (
                 'Ganti foto profil dengan foto wajah asli melalui web LabHub sebelum absen.'
-                if request.user.wajib_ganti_foto
+                if request.user.wajib_ganti_foto or not request.user.foto
                 else 'Batas modul untuk jadwal ini sudah tercapai.'
                 if already_checked_in
                 else 'Tidak ada modul yang belum diabsen untuk mata kuliah ini.'
@@ -562,7 +563,7 @@ class CheckInView(APIView):
 
     @transaction.atomic
     def post(self, request):
-        if request.user.wajib_ganti_foto:
+        if request.user.wajib_ganti_foto or not request.user.foto:
             return api_error(
                 'Ganti foto profil dengan foto wajah asli melalui web LabHub sebelum absen.',
                 'profile_photo_required',

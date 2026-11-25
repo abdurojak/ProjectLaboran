@@ -59,7 +59,7 @@ class MobileAbsensiApiTests(TestCase):
             nama_pengguna='Aslab Mobile', nim_nik='0640020001', email='aslab@std.trisakti.ac.id',
             password='Password123!', no_hp='081200000001', alamat='Jakarta',
             fakultas='Teknologi Industri', prodi='Informatika', gender='laki_laki',
-            role='asisten_lab', is_verified=True,
+            role='asisten_lab', is_verified=True, foto=valid_photo('profil-aslab.jpg'),
         )
         self.laboran = Pengguna.objects.create(
             nama_pengguna='Laboran Mobile', nim_nik='1000000099', email='laboran.mobile@trisakti.ac.id',
@@ -771,6 +771,20 @@ class MobileAbsensiApiTests(TestCase):
     def test_wajib_ganti_foto_memblokir_absensi_mobile(self):
         self.user.wajib_ganti_foto = True
         self.user.save(update_fields=['wajib_ganti_foto'])
+        self.authenticate()
+
+        response = self.client.post(
+            reverse('mobile_api:check_in'), self.check_in_payload(), format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data['code'], 'profile_photo_required')
+        self.assertFalse(AbsensiMasukAsleb.objects.exists())
+
+    def test_tanpa_foto_profil_memblokir_absensi_mobile(self):
+        self.user.foto = None
+        self.user.wajib_ganti_foto = False
+        self.user.save(update_fields=['foto', 'wajib_ganti_foto'])
         self.authenticate()
 
         response = self.client.post(

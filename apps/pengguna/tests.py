@@ -891,6 +891,23 @@ class PenggunaViewTests(TestCase):
         self.assertEqual(self.pengguna.no_hp, '081234567890')
         self.assertEqual(self.pengguna.role, 'laboran')
 
+    def test_asleb_yang_menghapus_foto_kembali_wajib_ganti_foto(self):
+        from .forms import PenggunaProfileForm
+
+        self.pengguna.role = 'asisten_lab'
+        self.pengguna.foto = 'profil/lama.jpg'
+        self.pengguna.wajib_ganti_foto = False
+        form = PenggunaProfileForm(
+            data={'hapus_foto': '1'}, instance=self.pengguna,
+            current_pengguna=self.pengguna,
+        )
+        form.cleaned_data = {'foto': None}
+        form._errors = {}
+        updated = form.save(commit=False)
+
+        self.assertFalse(updated.foto)
+        self.assertTrue(updated.wajib_ganti_foto)
+
     def test_update_profile_no_hp_baru_langsung_disimpan_tanpa_otp(self):
         response = self.client.post(
             reverse('pengguna:update_profile', args=[self.pengguna.pk]),
