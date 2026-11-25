@@ -1,4 +1,5 @@
 from django.urls import path
+from . import batch_honor
 
 from .qr_attendance import qr_scan_confirm, qr_scan_preview, student_qr_image, student_qr_page
 
@@ -66,6 +67,9 @@ from .views import (
 app_name = 'asleb'
 
 urlpatterns = [
+    path('honorarium/batch/', batch_honor.batch_list, name='honor_batches'),
+    path('honorarium/batch/buat/', batch_honor.create_batch, name='honor_batch_create'),
+    path('honorarium/batch/item/<int:pk>/bayar/', batch_honor.pay_item, name='honor_batch_pay'),
     path('qr-mahasiswa/', student_qr_page, name='qr_mahasiswa'),
     path('qr-mahasiswa/gambar/', student_qr_image, name='qr_mahasiswa_image'),
     path('praktikum-mahasiswa/<int:matkul_pk>/modul/<int:modul_pk>/qr/pratinjau/', qr_scan_preview, name='praktikum_qr_preview'),

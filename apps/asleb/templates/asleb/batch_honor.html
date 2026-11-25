@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block title %}Batch Pembayaran Honor{% endblock %}
+{% block content %}
+<section class="min-w-0 space-y-6">
+<div class="flex flex-wrap justify-between gap-3"><h2 class="text-2xl font-black">Batch Pembayaran Honor</h2><a class="btn-secondary" href="{% url 'asleb:honor_list' %}">Rekap Honor</a></div>
+<form method="get" class="flex flex-wrap gap-3"><input type="month" name="bulan" value="{{ month }}" required><button class="btn-secondary">Tampilkan</button></form>
+<form method="post" action="{% url 'asleb:honor_batch_create' %}" class="space-y-4">{% csrf_token %}<input type="hidden" name="bulan" value="{{ month }}">
+<div class="overflow-x-auto"><table><thead><tr><th>Aslab</th><th>Kewajiban bersih</th><th>Sudah ditransfer</th><th>Alokasi batch</th><th>Belum dialokasikan</th><th>Kelebihan bayar</th>{% if can_pay %}<th>Alokasi baru</th>{% endif %}</tr></thead><tbody>
+{% for row in rows %}<tr><td>{{ row.honor.asleb.nama }}</td><td>Rp{{ row.entitlement }}</td><td>Rp{{ row.paid }}</td><td>Rp{{ row.allocated }}</td><td>Rp{{ row.remaining }}</td><td>Rp{{ row.overpaid }}</td>{% if can_pay %}<td><input aria-label="Alokasi {{ row.honor.asleb.nama }}" type="number" name="nominal_{{ row.honor.pk }}" min="0" max="{{ row.remaining|stringformat:'.2f' }}" step="0.01" value="0"></td>{% endif %}</tr>{% empty %}<tr><td colspan="7">Belum ada rekap bulan ini.</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_pay %}<div class="grid gap-3 sm:grid-cols-2"><label>Dana diterima (Rp)<input name="dana_diterima" type="number" min="0.01" step="0.01" required></label><label>Catatan<input name="catatan" maxlength="1000"></label><label>Konfirmasi penguncian<input name="konfirmasi" placeholder="Ketik KUNCI BATCH" required pattern="KUNCI BATCH"></label></div><button class="btn-primary" type="submit">Kunci Batch Dana Diterima</button>{% endif %}
+</form>
+{% for batch in batches %}<section class="border-t border-slate-200 pt-5 space-y-3"><h3 class="text-lg font-bold">Batch #{{ batch.pk }} · {{ batch.laboran.nama_pengguna }} · Rp{{ batch.dana_diterima }}</h3><p>{{ batch.catatan }}</p>
+{% for item in batch.items.all %}<div class="border-b border-slate-200 py-3"><p class="font-bold">{{ item.honor.asleb.nama }} · Rp{{ item.nominal }}</p>{% if item.dibayar_pada %}<p>Ditransfer {{ item.tanggal_transfer|date:'d M Y' }}</p><a href="{{ item.bukti_transfer.url }}" target="_blank" rel="noreferrer" class="text-brand-700">Bukti transfer</a>{% elif can_pay %}<form method="post" enctype="multipart/form-data" action="{% url 'asleb:honor_batch_pay' item.pk %}" class="grid gap-3 sm:grid-cols-3">{% csrf_token %}<input aria-label="Tanggal transfer" type="date" name="tanggal_transfer" required><input aria-label="Bukti transfer" type="file" name="bukti_transfer" accept="image/jpeg,image/png,image/webp,application/pdf" required><button class="btn-primary">Catat Transfer Rp{{ item.nominal }}</button></form>{% else %}<p>Menunggu transfer</p>{% endif %}</div>{% endfor %}</section>{% endfor %}
+</section>
+{% endblock %}

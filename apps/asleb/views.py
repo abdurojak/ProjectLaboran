@@ -451,6 +451,11 @@ class HonorAslebListView(HonorAccessMixin, ListView):
         context['is_admin'] = False
         context['is_laboran'] = bool(pengguna and pengguna.role == LABORAN_ROLE)
         context['is_asisten_lab'] = bool(pengguna and pengguna.role == ASISTEN_LAB_ROLE)
+        from .models import ItemBatchHonor
+        context['batch_payments'] = ItemBatchHonor.objects.filter(
+            honor__asleb__nim=pengguna.nim_nik, dibayar_pada__isnull=False,
+            honor__bulan=selected_bulan_date,
+        ).select_related('honor', 'batch') if context['is_asisten_lab'] else []
         context['formula_note'] = 'Total jam = jumlah modul × total pertemuan × 7 jam, maksimal 60 jam per bulan. Periode ke-1 dan ke-2 Junior Rp7.000/jam; mulai periode ke-3 Senior Rp8.000/jam.'
         context['biaya_transfer_form'] = PengaturanBiayaTransferForm(instance=PengaturanBiayaTransfer.get_solo())
         return context
@@ -3267,6 +3272,8 @@ def confirm_honor_transfer(request, pk):
     asleb_id = get_object_or_404(HonorAsleb.objects.only('asleb_id'), pk=pk).asleb_id
     Asleb.objects.select_for_update().get(pk=asleb_id)
     honor = get_object_or_404(HonorAsleb.objects.select_for_update(), pk=pk)
+    if honor.batch_items.exists():
+        return failure('Honor ini sudah dialokasikan dalam batch. Catat transfer melalui Batch Pembayaran.')
     if not payment_eligible_honors(HonorAsleb.objects.filter(pk=honor.pk)).exists():
         return failure('Honor sedang ditahan sampai proses penggantian aslab selesai.')
     if pengguna.role == LABORAN_ROLE and honor.assigned_laboran_id != pengguna.pk:

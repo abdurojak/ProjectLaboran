@@ -74,6 +74,30 @@ from .surat_honor import (
 
 
 class AslebViewTests(TestCase):
+    @patch('apps.asleb.views.get_total_honor_attendance_count', return_value=8)
+    def test_batch_honor_mengunci_nominal_dan_mencegah_alokasi_ganda(self, _count):
+        from .models import BatchHonor, ItemBatchHonor
+        honor = HonorAsleb.objects.create(asleb=self.asleb, bulan=date(2026, 10, 1), total_pertemuan=8, assigned_laboran=self.pengguna)
+        payload = {'bulan': '2026-10', 'dana_diterima': '196000', 'konfirmasi': 'KUNCI BATCH', f'nominal_{honor.pk}': '196000'}
+        response = self.client.post(reverse('asleb:honor_batch_create'), payload)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(BatchHonor.objects.count(), 1)
+        self.assertEqual(ItemBatchHonor.objects.get().nominal, Decimal('196000'))
+        self.client.post(reverse('asleb:honor_batch_create'), payload)
+        self.assertEqual(BatchHonor.objects.count(), 2)
+        self.client.post(reverse('asleb:honor_batch_create'), payload)
+        self.assertEqual(BatchHonor.objects.count(), 2)
+        self.assertEqual(self.client.get(reverse('asleb:honor_batches'), {'bulan': '2026-10'}).status_code, 200)
+
+    def test_admin_batch_read_only(self):
+        self.pengguna.role = 'admin'
+        self.pengguna.save(update_fields=['role'])
+        self.assertEqual(self.client.get(reverse('asleb:honor_batches')).status_code, 200)
+        response = self.client.post(reverse('asleb:honor_batch_create'), {})
+        self.assertIn(response.status_code, [302, 403])
+        from .models import BatchHonor
+        self.assertFalse(BatchHonor.objects.exists())
+
     def test_admin_dapat_melihat_rekap_honor_tanpa_aksi_transfer(self):
         self.pengguna.role = 'admin'
         self.pengguna.save(update_fields=['role'])

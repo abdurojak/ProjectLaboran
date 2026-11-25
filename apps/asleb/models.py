@@ -291,6 +291,29 @@ class HonorAsleb(models.Model):
             self.nama_pemilik_transfer = registration.nama_pemilik_rekening or registration.nama
 
 
+class BatchHonor(models.Model):
+    bulan = models.DateField()
+    laboran = models.ForeignKey('pengguna.Pengguna', on_delete=models.PROTECT)
+    dana_diterima = models.DecimalField(max_digits=12, decimal_places=2)
+    dibuat_pada = models.DateTimeField(auto_now_add=True)
+    catatan = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-dibuat_pada']
+
+
+class ItemBatchHonor(models.Model):
+    batch = models.ForeignKey(BatchHonor, on_delete=models.PROTECT, related_name='items')
+    honor = models.ForeignKey(HonorAsleb, on_delete=models.PROTECT, related_name='batch_items')
+    nominal = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+    tanggal_transfer = models.DateField(null=True, blank=True)
+    bukti_transfer = models.FileField(upload_to='honor_asleb/batch/', blank=True)
+    dibayar_pada = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['batch', 'honor'], name='unique_honor_per_batch')]
+
+
 class HonorReassignment(models.Model):
     STATUS_HELD = 'held'
     STATUS_REASSIGNED = 'reassigned'

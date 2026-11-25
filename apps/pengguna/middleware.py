@@ -238,7 +238,7 @@ class PenggunaLoginRequiredMiddleware:
         if pengguna_id and not is_exempt:
             resolved = resolve(path)
             namespace = resolved.namespace
-            if pengguna.role == 'admin' and namespace not in self.ADMIN_ALLOWED_NAMESPACES and not (namespace == 'asleb' and resolved.url_name == 'honor_list'):
+            if pengguna.role == 'admin' and namespace not in self.ADMIN_ALLOWED_NAMESPACES and not (namespace == 'asleb' and resolved.url_name in {'honor_list', 'honor_batches'}):
                 return redirect('dashboard:home')
 
             if pengguna.role == 'mahasiswa' and not self.mahasiswa_can_access(namespace, path, resolved, pengguna):
@@ -304,11 +304,14 @@ class PenggunaLoginRequiredMiddleware:
             ).exists()
 
         if media_name.startswith('honor_asleb/'):
-            from apps.asleb.models import HonorAsleb
+            from apps.asleb.models import HonorAsleb, ItemBatchHonor
 
             return pengguna.role == 'laboran' or HonorAsleb.objects.filter(
                 asleb__nim=pengguna.nim_nik,
                 bukti_transfer=media_name,
+            ).exists() or ItemBatchHonor.objects.filter(
+                honor__asleb__nim=pengguna.nim_nik, bukti_transfer=media_name,
+                dibayar_pada__isnull=False,
             ).exists()
 
         if media_name.startswith('surat_honor_asleb/'):

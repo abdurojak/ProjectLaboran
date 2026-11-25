@@ -58,6 +58,7 @@
 
 {% block content %}
 <section class="honor-page space-y-6" data-realtime-region="honor-aslab-list">
+    {% for payment in batch_payments %}<div class="border border-emerald-200 rounded-lg p-4"><p class="font-bold">Pembayaran batch #{{ payment.batch_id }} · Rp{{ payment.nominal }}</p><p>{{ payment.tanggal_transfer|date:'d M Y' }}</p><a class="text-brand-700" href="{{ payment.bukti_transfer.url }}" target="_blank" rel="noreferrer">Bukti transfer</a></div>{% endfor %}
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="max-w-3xl">
             <p class="text-sm font-bold uppercase tracking-[0.2em] text-violet-700">Honorarium</p>
@@ -65,6 +66,7 @@
             <p class="mt-2 text-sm text-slate-500">{{ formula_note }}</p>
         </div>
         <div class="honor-page-actions flex w-full flex-wrap gap-3 lg:w-auto lg:justify-end">
+            {% if not is_asisten_lab %}<a class="btn-secondary" href="{% url 'asleb:honor_batches' %}?bulan={{ selected_bulan }}"><i data-lucide="wallet" class="h-4 w-4"></i>Batch Pembayaran</a>{% endif %}
             {% if is_admin or is_laboran %}
             <a class="btn-primary bg-emerald-700 hover:bg-emerald-800 shadow-emerald-900/20" href="{% url 'asleb:honor_export_excel' %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}" data-no-global-loading="true" data-no-page-transition="true">
                 <i data-lucide="file-spreadsheet" class="h-4 w-4"></i>
