@@ -1,5 +1,5 @@
 from django.urls import path
-from .chat import chat_room, chat_send
+from .chat import chat_room, chat_send, chat_unread_summary
 from .google_oauth import google_login, google_callback
 
 from .views import (
@@ -47,6 +47,7 @@ urlpatterns = [
     path('', PenggunaListView.as_view(), name='list'),
     path('kelola/', PenggunaManageListView.as_view(), name='manage_list'),
     path('chat/<int:pk>/', chat_room, name='chat_room'),
+    path('chat/unread/', chat_unread_summary, name='chat_unread_summary'),
     path('chat/<int:pk>/kirim/', chat_send, name='chat_send'),
     path('master-akademik/', MasterAkademikView.as_view(), name='master_akademik'),
     path('master-akademik/fakultas/tambah/', FakultasCreateView.as_view(), name='fakultas_create'),

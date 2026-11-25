@@ -2237,6 +2237,46 @@ class PrivateChatTests(TestCase):
         session['pengguna_id'] = self.sender.pk
         session.save()
 
+    def test_badge_chat_menghitung_pengirim_unik_dan_mengurutkan_belum_dibaca(self):
+        another = Pengguna.objects.create(
+            nama_pengguna='Zara', nim_nik='064000000003', email='zara@std.trisakti.ac.id',
+            password='Password123!', no_hp='081234567892', alamat='Jakarta',
+            fakultas='Teknologi Industri', prodi='Informatika', gender='perempuan', role='mahasiswa',
+        )
+        already_read = Pengguna.objects.create(
+            nama_pengguna='Ari', nim_nik='064000000004', email='ari@std.trisakti.ac.id',
+            password='Password123!', no_hp='081234567893', alamat='Jakarta',
+            fakultas='Teknologi Industri', prodi='Informatika', gender='laki_laki', role='mahasiswa',
+        )
+        PesanPribadi.objects.create(pengirim=self.sender, penerima=self.recipient, isi='Satu')
+        PesanPribadi.objects.create(pengirim=self.sender, penerima=self.recipient, isi='Dua')
+        PesanPribadi.objects.create(pengirim=another, penerima=self.recipient, isi='Tiga')
+        session = self.client.session
+        session['pengguna_id'] = self.recipient.pk
+        session.save()
+
+        response = self.client.get(reverse('pengguna:list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['chat_unread_senders'], 2)
+        self.assertEqual(
+            {item.pk for item in response.context['pengguna_list'][:2]},
+            {self.sender.pk, another.pk},
+        )
+        self.assertEqual(response.context['pengguna_list'][-1].pk, already_read.pk)
+        self.assertContains(response, 'data-chat-sidebar-count')
+        summary = self.client.get(reverse('pengguna:chat_unread_summary'))
+        self.assertEqual(summary.json()['sender_count'], 2)
+        self.assertEqual(summary.json()['counts'][str(self.sender.pk)], 2)
+
+        self.client.get(reverse('pengguna:chat_room', args=[self.sender.pk]))
+        self.assertEqual(self.client.get(reverse('pengguna:chat_unread_summary')).json()['sender_count'], 1)
+
+    def test_ringkasan_pesan_memerlukan_login(self):
+        session = self.client.session
+        session.flush()
+        response = self.client.get(reverse('pengguna:chat_unread_summary'))
+        self.assertNotEqual(response.status_code, 200)
+
     def test_pesan_disimpan_notifikasi_masuk_dan_dibaca(self):
         from apps.kalender.models import Notifikasi
 

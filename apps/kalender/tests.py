@@ -21,7 +21,7 @@ from apps.ruangan.models import RuanganLab
 
 from .models import KegiatanKalender, Notifikasi
 from .realtime import send_peminjaman_status_update, send_user_notification, user_group_name
-from .utils import get_perayaan_notifications
+from .utils import get_perayaan_calendar_events, get_perayaan_notifications
 from project_laboran.asgi import application
 
 
@@ -258,7 +258,7 @@ class KalenderViewsTests(TestCase):
         self.assertContains(response, 'Peringatan Universitas Trisakti')
         self.assertContains(response, 'Keterangan Notifikasi')
         self.assertContains(response, 'Hari Kemerdekaan Republik Indonesia')
-        self.assertContains(response, 'Tahun Baru Imlek')
+        self.assertContains(response, 'Hari Guru Nasional')
         self.assertContains(response, 'Peringatan Tragedi Trisakti')
         self.assertContains(response, 'Dies Natalis Universitas Trisakti')
 
@@ -1409,5 +1409,16 @@ class KalenderViewsTests(TestCase):
 
         titles = [notification['judul'] for notification in notifications]
         self.assertIn('Hari Kemerdekaan Republik Indonesia', titles)
+
+    def test_hari_guru_nasional_muncul_pada_25_november_tiap_tahun(self):
+        for year in (2026, 2027):
+            events = get_perayaan_calendar_events(year)
+            self.assertIn(
+                ('Hari Guru Nasional', f'{year}-11-25'),
+                {(event['title'], event['start']) for event in events},
+            )
+        notifications = get_perayaan_notifications(date(2026, 11, 24), days=2)
+        self.assertIn('Hari Guru Nasional', [item['judul'] for item in notifications])
+        self.assertNotIn('Tahun Baru Imlek', [event['title'] for event in get_perayaan_calendar_events(2027)])
 
 

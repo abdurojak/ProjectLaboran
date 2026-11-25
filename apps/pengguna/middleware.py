@@ -400,7 +400,7 @@ class PenggunaLoginRequiredMiddleware:
         if path in self.MAHASISWA_ALLOWED_PENGGUNA_PATHS:
             return True
 
-        if resolved.url_name in {'list', 'detail', 'chat_room', 'chat_send'}:
+        if resolved.url_name in {'list', 'detail', 'chat_room', 'chat_send', 'chat_unread_summary'}:
             return True
 
         return resolved.url_name in {
@@ -416,7 +416,7 @@ class PenggunaLoginRequiredMiddleware:
         if path in self.MAHASISWA_ALLOWED_PENGGUNA_PATHS:
             return True
 
-        if resolved.url_name in {'list', 'detail', 'chat_room', 'chat_send'}:
+        if resolved.url_name in {'list', 'detail', 'chat_room', 'chat_send', 'chat_unread_summary'}:
             return True
 
         return resolved.url_name in {

@@ -1,4 +1,5 @@
 from django.utils import timezone
+from apps.pengguna.models import PesanPribadi
 
 from apps.core.permissions import (
     ADMIN_ROLE,
@@ -248,6 +249,12 @@ def dashboard_sidebar(request):
     links = []
     active_sidebar = None
     public_page_meta = PUBLIC_PAGE_META.get((current_namespace, current_url_name))
+    current_pengguna = getattr(request, 'current_pengguna', None)
+    chat_unread_senders = (
+        PesanPribadi.objects.filter(penerima=current_pengguna, dibaca_pada__isnull=True)
+        .values('pengirim_id').distinct().count()
+        if current_pengguna else 0
+    )
 
     for link in SIDEBAR_LINKS:
         current_pengguna = getattr(request, 'current_pengguna', None)
@@ -288,6 +295,8 @@ def dashboard_sidebar(request):
                 continue
 
         item = link.copy()
+        if item['title'] == 'Chat':
+            item['unread_count'] = chat_unread_senders
         item['active'] = _set_active(item, current_namespace, current_url_name)
         item.update(TONES['teal'] if item['active'] else TONES['gray'])
         if item['active']:
@@ -303,4 +312,5 @@ def dashboard_sidebar(request):
             active_sidebar['icon'] if active_sidebar else (public_page_meta or {}).get('icon', 'layout-dashboard')
         ),
         'today': timezone.localdate(),
+        'chat_unread_senders': chat_unread_senders,
     }

@@ -3430,6 +3430,22 @@
 document.addEventListener('DOMContentLoaded', function () {
     let overlay = null;
     let previousFocus = null;
+    async function refreshChatUnread() {
+        try {
+            const response = await fetch("{% url 'pengguna:chat_unread_summary' %}", {credentials: 'same-origin', cache: 'no-store'});
+            if (!response.ok) return;
+            const summary = await response.json();
+            document.querySelectorAll('[data-chat-sidebar-count]').forEach(function (badge) {
+                badge.textContent = String(summary.sender_count);
+                badge.classList.toggle('hidden', !summary.sender_count);
+                badge.setAttribute('aria-label', summary.sender_count + ' pengirim belum dibaca');
+            });
+            document.dispatchEvent(new CustomEvent('labhub:chat-unread', {detail: summary}));
+        } catch (error) { /* Badge tetap memakai hitungan terakhir saat jaringan terputus. */ }
+    }
+    document.addEventListener('labhub:realtime', function (event) {
+        if (event.detail?.event === 'chat.message') refreshChatUnread();
+    });
     function closeChat() {
         if (!overlay) return;
         overlay.remove();
@@ -3454,6 +3470,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const frame = document.createElement('iframe');
         frame.title = 'Percakapan';
         frame.style.cssText = 'width:100%;height:100%;border:0;background:var(--surface-bg,#fff)';
+        frame.addEventListener('load', refreshChatUnread);
         panel.appendChild(frame);
         overlay.appendChild(panel);
         overlay.addEventListener('click', function (e) { if (e.target === overlay) closeChat(); });
@@ -3463,6 +3480,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     window.addEventListener('message', function (event) {
         if (event.origin === window.location.origin && event.data && event.data.type === 'labhub:close-chat') closeChat();
+        if (event.origin === window.location.origin && event.data && event.data.type === 'labhub:chat-read') refreshChatUnread();
     });
     document.addEventListener('keydown', function (event) { if (event.key === 'Escape' && overlay) closeChat(); });
 });

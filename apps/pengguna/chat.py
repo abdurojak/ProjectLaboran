@@ -4,7 +4,7 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.core.cache import cache
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
@@ -56,6 +56,18 @@ def touch_presence(pengguna):
             'type': 'realtime.event',
             'payload': {'event': 'presence.updated', 'user_id': pengguna.pk, 'created_at': now.isoformat(), 'silent': True},
         })
+
+
+@require_GET
+def chat_unread_summary(request):
+    pengguna = getattr(request, 'current_pengguna', None)
+    if not pengguna:
+        return JsonResponse({'detail': 'Login diperlukan.'}, status=403)
+    rows = PesanPribadi.objects.filter(
+        penerima=pengguna, dibaca_pada__isnull=True,
+    ).values('pengirim_id').annotate(total=Count('pk'))
+    counts = {str(row['pengirim_id']): row['total'] for row in rows}
+    return JsonResponse({'sender_count': len(counts), 'counts': counts})
 
 
 def create_private_message(pengguna, target, content, sticker=None):

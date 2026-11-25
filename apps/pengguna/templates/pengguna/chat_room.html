@@ -112,6 +112,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const payload = await response.json();
         payload.messages.forEach(function (item) { addMessage(item, false); });
         presence.textContent = payload.online ? 'Aktif di LabHub' : 'Tidak aktif';
+        if (window.parent !== window) window.parent.postMessage({type: 'labhub:chat-read'}, window.location.origin);
         scrollToBottom();
     }
     async function sendMessage(sticker) {

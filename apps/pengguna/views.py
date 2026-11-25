@@ -8,7 +8,7 @@ from django.contrib import messages
 from django.contrib.auth.hashers import check_password, make_password
 from django.conf import settings
 from django.core.cache import cache
-from django.db.models import Count, Q
+from django.db.models import Count, Max, Q
 from django.db.models.deletion import ProtectedError
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -292,12 +292,21 @@ class PenggunaListView(ListView):
             pengguna and pengguna.role == 'laboran'
         )
         online_cutoff = timezone.now() - timedelta(seconds=75)
-        unread_counts = dict(PesanPribadi.objects.filter(
+        unread_rows = PesanPribadi.objects.filter(
             penerima=pengguna, dibaca_pada__isnull=True,
-        ).values('pengirim_id').annotate(total=Count('pk')).values_list('pengirim_id', 'total')) if pengguna else {}
+        ).values('pengirim_id').annotate(total=Count('pk'), latest=Max('dibuat_pada')) if pengguna else []
+        unread_counts = {row['pengirim_id']: row for row in unread_rows}
         for item in context['pengguna_list']:
             item.is_online = bool(item.terakhir_aktif_pada and item.terakhir_aktif_pada >= online_cutoff)
-            item.unread_chat_count = unread_counts.get(item.pk, 0)
+            item.unread_chat_count = unread_counts.get(item.pk, {}).get('total', 0)
+        context['pengguna_list'] = sorted(
+            context['pengguna_list'],
+            key=lambda item: (
+                not item.unread_chat_count,
+                -(unread_counts[item.pk]['latest'].timestamp()) if item.unread_chat_count else 0,
+                item.nama_pengguna.casefold(),
+            ),
+        )
         return context
 
 

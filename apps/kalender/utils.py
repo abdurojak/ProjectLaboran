@@ -3,16 +3,21 @@ from datetime import date, datetime, timedelta
 
 PERAYAAN_TETAP_INDONESIA = [
     (1, 1, 'Tahun Baru Masehi', 'Hari perayaan nasional otomatis', '#f97316', 'perayaan'),
-    (2, 17, 'Tahun Baru Imlek', 'Hari perayaan nasional otomatis', '#f97316', 'perayaan'),
+    (1, 24, 'Hari Pendidikan Internasional', 'Peringatan pendidikan internasional', '#f97316', 'perayaan'),
     (4, 21, 'Hari Kartini', 'Hari perayaan nasional otomatis', '#f97316', 'perayaan'),
+    (4, 23, 'Hari Buku Sedunia', 'Peringatan pendidikan internasional', '#f97316', 'perayaan'),
     (5, 1, 'Hari Buruh', 'Hari perayaan nasional otomatis', '#f97316', 'perayaan'),
     (5, 2, 'Hari Pendidikan Nasional', 'Hari perayaan nasional otomatis', '#f97316', 'perayaan'),
     (5, 20, 'Hari Kebangkitan Nasional', 'Hari perayaan nasional otomatis', '#f97316', 'perayaan'),
     (6, 1, 'Hari Lahir Pancasila', 'Hari perayaan nasional otomatis', '#f97316', 'perayaan'),
+    (7, 23, 'Hari Anak Nasional', 'Peringatan nasional', '#f97316', 'perayaan'),
     (8, 17, 'Hari Kemerdekaan Republik Indonesia', 'Hari perayaan nasional otomatis', '#f97316', 'perayaan'),
     (10, 1, 'Hari Kesaktian Pancasila', 'Hari perayaan nasional otomatis', '#f97316', 'perayaan'),
+    (10, 5, 'Hari Guru Sedunia', 'Peringatan pendidikan internasional', '#f97316', 'perayaan'),
     (10, 28, 'Hari Sumpah Pemuda', 'Hari perayaan nasional otomatis', '#f97316', 'perayaan'),
     (11, 10, 'Hari Pahlawan', 'Hari perayaan nasional otomatis', '#f97316', 'perayaan'),
+    (11, 25, 'Hari Guru Nasional', 'Peringatan nasional', '#f97316', 'perayaan'),
+    (12, 10, 'Hari Hak Asasi Manusia', 'Peringatan internasional', '#f97316', 'perayaan'),
     (12, 22, 'Hari Ibu', 'Hari perayaan nasional otomatis', '#f97316', 'perayaan'),
     (12, 25, 'Hari Natal', 'Hari perayaan nasional otomatis', '#f97316', 'perayaan'),
 ]

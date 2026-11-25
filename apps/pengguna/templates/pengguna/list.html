@@ -107,15 +107,25 @@ document.addEventListener('DOMContentLoaded', function () {
         status.querySelector('[data-presence-dot]').classList.toggle('bg-slate-300', !active);
         status.querySelector('[data-presence-label]').textContent = active ? 'Aktif di LabHub' : 'Tidak aktif';
     }
+    document.addEventListener('labhub:chat-unread', function (event) {
+        const counts = event.detail.counts || {};
+        const list = document.querySelector('[data-user-list]');
+        cards.forEach(function (card) {
+            const count = counts[card.dataset.userId] || 0;
+            const badge = card.querySelector('[data-unread-count]');
+            badge.textContent = String(count);
+            badge.classList.toggle('hidden', !count);
+        });
+        const ordered = Array.from(list.querySelectorAll('[data-user-card]'));
+        ordered.filter(card => counts[card.dataset.userId])
+            .concat(ordered.filter(card => !counts[card.dataset.userId]))
+            .forEach(card => list.appendChild(card));
+    });
     document.addEventListener('labhub:realtime', function (event) {
         const payload = event.detail || {};
         if (payload.event === 'chat.message') {
             const card = cards.find(function (item) { return item.dataset.userId === String(payload.sender_id); });
-            if (card) {
-                const badge = card.querySelector('[data-unread-count]');
-                badge.textContent = String((Number(badge.textContent) || 0) + 1);
-                badge.classList.remove('hidden');
-            }
+            if (card) card.parentElement.prepend(card);
         }
         if (payload.event !== 'presence.updated') return;
         const card = cards.find(function (item) { return item.dataset.userId === String(payload.user_id); });

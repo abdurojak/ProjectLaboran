@@ -32,8 +32,9 @@
                 </details>
                 {% elif link.url %}
                 <a data-sidebar-link data-active="{% if link.active %}true{% else %}false{% endif %}" href="{% url link.url %}" class="{% if link.active %}bg-brand-50 text-brand-800 ring-1 ring-brand-100{% else %}text-slate-700 hover:bg-slate-50{% endif %} flex h-14 items-center gap-4 rounded-2xl px-3 font-semibold transition" title="{{ link.title }}">
-                    <span data-sidebar-icon class="{{ link.icon_bg }} {{ link.icon_text }} flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl">
+                    <span data-sidebar-icon class="{{ link.icon_bg }} {{ link.icon_text }} relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl">
                         <i data-lucide="{{ link.icon }}" class="h-5 w-5"></i>
+                        {% if link.title == 'Chat' %}<span data-chat-sidebar-count class="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black text-white ring-2 ring-white{% if not link.unread_count %} hidden{% endif %}" aria-label="{{ link.unread_count }} pengirim belum dibaca">{{ link.unread_count }}</span>{% endif %}
                     </span>
                     <span data-sidebar-label class="hidden min-w-0 truncate">{{ link.title }}</span>
                 </a>
