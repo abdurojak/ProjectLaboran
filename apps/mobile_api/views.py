@@ -445,12 +445,12 @@ class DashboardView(APIView):
         today_schedules = [item for item in schedules if item.hari == today_key]
         context = attendance_context(asleb, today_schedules, today)
         context['request'] = request
-        honor_queryset = HonorAsleb.objects.filter(asleb=asleb).order_by('-bulan')
-        honor_bulan_ini = honor_queryset.filter(
-            bulan__year=today.year,
-            bulan__month=today.month,
-        ).first()
-        total_pending = honor_queryset.exclude(status='dibayar').aggregate(total=Sum('jumlah'))['total'] or 0
+        from apps.asleb.paid_honor import paid_honor_rows
+        honor_queryset = paid_honor_rows(asleb.nim)
+        current_payments = [h for h in honor_queryset if h.bulan.year == today.year and h.bulan.month == today.month]
+        honor_bulan_ini = current_payments[0] if current_payments else None
+        current_paid_total = sum(h.jumlah for h in current_payments)
+        total_pending = 0
         return Response({
             'profile': ProfileSerializer(request.user, context={'request': request}).data,
             'mata_kuliah': get_asleb_course_labels(asleb),
@@ -459,11 +459,11 @@ class DashboardView(APIView):
             'honor': {
                 'bulan_ini': {
                     'bulan': honor_bulan_ini.bulan if honor_bulan_ini else None,
-                    'jumlah': honor_bulan_ini.jumlah if honor_bulan_ini else 0,
+                    'jumlah': current_paid_total,
                     'status': honor_bulan_ini.status if honor_bulan_ini else 'belum_ada',
                     'total_pertemuan': honor_bulan_ini.total_pertemuan if honor_bulan_ini else 0,
-                    'biaya_admin': honor_bulan_ini.biaya_admin if honor_bulan_ini else 0,
-                    'total_sebelum_potongan': honor_bulan_ini.honor_sebelum_potongan if honor_bulan_ini else 0,
+                    'biaya_admin': 0,
+                    'total_sebelum_potongan': current_paid_total,
                 },
                 'total_pending': total_pending,
                 'riwayat': [

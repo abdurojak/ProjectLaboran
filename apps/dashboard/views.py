@@ -213,9 +213,10 @@ class DashboardView(TemplateView):
                         tanggal_praktikum__month=honor_bulan_ini.bulan.month,
                     ).order_by('-tanggal_praktikum')[:3]
                 )
-            riwayat_honor_saya = HonorAsleb.objects.filter(
-                asleb__nim=pengguna.nim_nik,
-            ).select_related('asleb')[:6]
+            from apps.asleb.paid_honor import paid_honor_rows
+            riwayat_honor_saya = paid_honor_rows(pengguna.nim_nik)[:6]
+            honor_bulan_ini = None
+            honor_bulan_ini_total = sum(h.jumlah for h in paid_honor_rows(pengguna.nim_nik) if h.bulan == awal_bulan)
             for honor in riwayat_honor_saya:
                 honor.matkul_labels = honor_matkul_labels or (
                     [honor.asleb.matkul] if honor.asleb.matkul else []
