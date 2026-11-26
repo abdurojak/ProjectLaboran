@@ -451,6 +451,8 @@ class DashboardView(APIView):
         honor_bulan_ini = current_payments[0] if current_payments else None
         current_paid_total = sum(h.jumlah for h in current_payments)
         total_pending = 0
+        from apps.asleb.paid_honor import honor_estimate
+        estimate = honor_estimate(asleb.nim, today.replace(day=1))
         return Response({
             'profile': ProfileSerializer(request.user, context={'request': request}).data,
             'mata_kuliah': get_asleb_course_labels(asleb),
@@ -459,9 +461,12 @@ class DashboardView(APIView):
             'honor': {
                 'bulan_ini': {
                     'bulan': honor_bulan_ini.bulan if honor_bulan_ini else None,
-                    'jumlah': current_paid_total,
-                    'status': honor_bulan_ini.status if honor_bulan_ini else 'belum_ditransfer',
-                    'label': 'Pembayaran diterima bulan ini',
+                    'jumlah': estimate['due'],
+                    'tambahan_bulan_sebelumnya': estimate['carried'],
+                    'honor_bulan_berjalan': estimate['current'],
+                    'sudah_diterima': current_paid_total,
+                    'status': 'diproses' if estimate['due'] else ('dibayar' if current_payments else 'belum_ada'),
+                    'label': 'Honor yang akan ditransfer',
                     'total_pertemuan': honor_bulan_ini.total_pertemuan if honor_bulan_ini else 0,
                     'biaya_admin': 0,
                     'total_sebelum_potongan': current_paid_total,

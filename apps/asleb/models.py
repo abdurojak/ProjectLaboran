@@ -190,7 +190,7 @@ class HonorAsleb(models.Model):
 
     @property
     def total_akhir(self):
-        return min(self.total_jam_terealisasi, 60)
+        return self.total_jam_terealisasi
 
     @property
     def honor_per_jam(self):

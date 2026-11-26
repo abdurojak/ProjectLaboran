@@ -3,7 +3,9 @@ from decimal import Decimal, ROUND_DOWN
 from .models import HonorAsleb, ItemBatchHonor
 
 
-def allocate_hours(sources, budget=Decimal(60), gross=None):
+def allocate_hours(sources, budget=None, gross=None):
+    if budget is None:
+        budget = sum((s['hours'] for s in sources), Decimal(0))
     result = []
     for source in sources:
         hours = min(source['hours'], budget)
@@ -45,7 +47,7 @@ def carry_balance(honor):
             if item.honor_id == honor.pk:
                 target_reserved += used
     available = [{'source_id': h.pk, 'hours': hours[h.pk], 'rate': Decimal(h.honor_per_jam), 'month': h.bulan} for h in sources if hours[h.pk] > 0]
-    plan = allocate_hours(available, max(Decimal(60) - target_reserved, Decimal(0)))
+    plan = allocate_hours(available, sum((s['hours'] for s in available), Decimal(0)))
     gross = sum((Decimal(p['gross']) for p in plan), Decimal(0)).quantize(Decimal('.01'), rounding=ROUND_DOWN)
     fee = honor.biaya_admin if honor.status != 'dibayar' and not honor.batch_items.exists() else Decimal(0)
     carried = sum((s['hours'] for s in available if s['month'] < honor.bulan), Decimal(0))

@@ -12,6 +12,27 @@ from apps.pengguna.models import Pengguna
 from .models import HonorAsleb
 
 
+def send_batch_paid_notification(item_id):
+    from .models import ItemBatchHonor
+    from .views import notify_pengguna
+    item = ItemBatchHonor.objects.select_related('honor__asleb', 'batch__laboran').get(pk=item_id)
+    if not item.dibayar_pada:
+        return
+    amount = f'Rp {item.nominal:,.0f}'.replace(',', '.')
+    period = date_format(item.honor.bulan, 'F Y')
+    url = reverse('asleb:honor_list')
+    users = Pengguna.objects.filter(nim_nik=item.honor.asleb.nim, is_verified=True)
+    for user in users:
+        notify_pengguna(user, f'honor-batch-paid:{item.pk}', 'Honor sudah ditransfer', f'Honor {period} sebesar {amount} telah ditransfer. Bukti tersedia pada riwayat pembayaran.', url=url, badge='Honor', icon='wallet')
+    recipients = list(users.exclude(email='').values_list('email', flat=True))
+    if recipients:
+        send_branded_email(subject=f'Honor {period} sudah ditransfer', recipients=recipients,
+            text_body=f'Honor {period} sebesar {amount} telah ditransfer pada {item.tanggal_transfer}. Lihat bukti di {_public_url("asleb:honor_list")}',
+            title='Honor sudah ditransfer', greeting=f'Halo {item.honor.asleb.nama},',
+            intro=f'Pembayaran honor {period} sebesar {amount} telah dikonfirmasi.',
+            action_url=_public_url('asleb:honor_list'), action_label='Lihat bukti transfer', fail_silently=False)
+
+
 def _public_url(route_name):
     base_url = settings.PUBLIC_ACCESS_BASE_URL.rstrip('/') + '/'
     return urljoin(base_url, reverse(route_name).lstrip('/'))

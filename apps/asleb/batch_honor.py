@@ -18,7 +18,7 @@ def balances(honor):
     from .honor_carry import carry_balance
     from .views import get_total_honor_attendance_count
     count = get_total_honor_attendance_count(honor.asleb, honor.bulan)
-    entitlement = Decimal(min(count * 7, 60) * honor.honor_per_jam)
+    entitlement = Decimal(count * 7 * honor.honor_per_jam)
     entitlement = max(entitlement - honor.biaya_admin, Decimal(0))
     legacy_paid = honor.jumlah if honor.status == 'dibayar' else Decimal(0)
     allocated = honor.batch_items.aggregate(total=Sum('nominal'))['total'] or Decimal(0)
@@ -98,7 +98,7 @@ def create_batch(request):
                     raise ValueError
                 from .honor_carry import allocate_hours
                 balance = balances(h)
-                details = allocate_hours(balance['sources'], max(Decimal(60) - balance['reserved_hours'], Decimal(0)), amount + balance['fee'])
+                details = allocate_hours(balance['sources'], balance['scheduled_hours'], amount + balance['fee'])
                 items.append((h, amount, details))
         if not items or sum(amount for _, amount, _ in items) + admin != funds:
             raise ValueError
@@ -142,5 +142,7 @@ def pay_item(request, pk):
     item.bukti_transfer = proof
     item.dibayar_pada = timezone.now()
     item.save(update_fields=['tanggal_transfer', 'bukti_transfer', 'dibayar_pada'])
+    from .notifications import send_batch_paid_notification
+    transaction.on_commit(lambda: send_batch_paid_notification(item.pk), robust=True)
     messages.success(request, 'Transfer batch berhasil dicatat.')
     return redirect(return_url)

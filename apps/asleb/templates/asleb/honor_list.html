@@ -241,7 +241,7 @@
                 <div class="flex flex-wrap justify-between gap-3"><div><h4 class="text-lg font-black text-slate-900">{{ honor.asleb.nama }}</h4><p class="text-sm text-slate-500">{{ honor.asleb.nim }} · {{ honor.bulan|date:'F Y' }}</p></div><div><p class="text-sm text-slate-500">Sudah ditransfer melalui batch</p><p class="text-2xl font-black text-emerald-700">Rp{{ honor.batch_summary.paid }}</p></div></div>
                 <div class="mt-4 grid gap-3 sm:grid-cols-3"><p>Alokasi terkunci: <strong>Rp{{ honor.batch_summary.allocated }}</strong></p><p>Menunggu transfer: <strong>Rp{{ honor.batch_summary.pending }}</strong></p><p>{% if honor.batch_summary.complete %}<strong class="text-emerald-700">Transfer batch selesai</strong>{% else %}<strong class="text-amber-700">Transfer batch belum selesai</strong>{% endif %}</p></div>
                 {% for payment in honor.batch_summary.items %}<div class="mt-3 border-t border-slate-200 pt-3"><p class="font-bold">Batch #{{ payment.batch_id }} · Rp{{ payment.nominal }} · {{ payment.batch.laboran.nama_pengguna }}</p>{% if payment.dibayar_pada %}<p class="text-sm text-slate-500">Ditransfer {{ payment.tanggal_transfer|date:'d M Y' }}</p><a class="text-brand-700 font-bold" href="{{ payment.bukti_transfer.url }}" target="_blank" rel="noreferrer">Lihat bukti transfer</a>{% else %}<a class="text-brand-700 font-bold" href="{% url 'asleb:honor_batches' %}?bulan={{ honor.bulan|date:'Y-m' }}">Catat transfer di Batch Pembayaran</a>{% endif %}</div>{% endfor %}
-                <p class="mt-4 text-sm text-slate-500">Jam belum dialokasikan: {{ honor.batch_summary.carried|floatformat:2 }} jam. Sisa bulan sebelumnya dibukukan pada batch bulan berikutnya, mengikuti batas 60 jam.</p>
+                <p class="mt-4 text-sm text-slate-500">Jam belum dialokasikan: {{ honor.batch_summary.carried|floatformat:2 }} jam. Sisa bulan sebelumnya dibukukan pada batch bulan berikutnya, tanpa batas jam bulanan.</p>
                 {% else %}
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div class="min-w-0">
@@ -307,7 +307,6 @@
                         <div class="honor-breakdown-cell bg-white/90 p-4">
                             <div class="text-xs font-bold uppercase text-slate-400">3. Jam Dibayar</div>
                             <div class="mt-2 font-black {% if honor.total_jam_terealisasi > honor.total_akhir %}text-amber-700{% else %}text-slate-900{% endif %}">{{ honor.total_akhir }} jam</div>
-                            {% if honor.total_jam_terealisasi > honor.total_akhir %}<div class="mt-1 text-xs font-bold text-amber-600">Dibatasi maksimal 60 jam</div>{% endif %}
                         </div>
                         <div class="honor-breakdown-cell bg-white/90 p-4">
                             <div class="text-xs font-bold uppercase text-slate-400">4. Tarif</div>

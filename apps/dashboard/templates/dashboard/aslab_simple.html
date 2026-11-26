@@ -70,10 +70,12 @@
     {% endif %}
 
     <section class="surface-card min-w-0 overflow-hidden p-5 md:p-6">
-        <p class="text-xs font-black uppercase tracking-[0.2em] text-violet-700">Pembayaran Honor</p>
-        <h3 class="mt-2 text-xl font-black text-slate-900">Diterima untuk Bulan Ini</h3>
-        {% if honor_bulan_ini_total %}<p class="mt-4 text-2xl font-black text-violet-700">{{ honor_bulan_ini_total_rupiah }}</p>
-        {% else %}<p class="mt-4 text-lg font-bold text-amber-700">Belum ditransfer</p><p class="mt-2 text-sm text-slate-500">Belum ada transfer yang tercatat untuk bulan ini. Absensi tetap tersimpan untuk proses honor.</p>{% endif %}
+        <p class="text-xs font-black uppercase tracking-[0.2em] text-violet-700">Honor Bulan Ini</p>
+        <h3 class="mt-2 text-xl font-black text-slate-900">Yang Akan Ditransfer</h3>
+        <p class="mt-4 text-2xl font-black text-violet-700">Rp{{ honor_estimate.due|floatformat:0 }}</p>
+        <p class="mt-2 text-sm text-slate-500">Bulan berjalan: Rp{{ honor_estimate.current|floatformat:0 }}</p>
+        <p class="mt-2 text-sm text-slate-500">Tambahan bulan sebelumnya: Rp{{ honor_estimate.carried|floatformat:0 }}</p>
+        <p class="mt-2 text-sm text-slate-500">Sudah diterima: {{ honor_bulan_ini_total_rupiah }}</p>
         <a class="mt-4 inline-flex font-bold text-brand-700" href="{% url 'asleb:honor_list' %}">Lihat riwayat pembayaran</a>
     </section>
     <div class="dashboard-stats-grid grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4">

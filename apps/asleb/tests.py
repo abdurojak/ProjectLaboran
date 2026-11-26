@@ -74,6 +74,18 @@ from .surat_honor import (
 
 
 class AslebViewTests(TestCase):
+    @patch('apps.asleb.views.get_total_honor_attendance_count', return_value=9)
+    def test_estimasi_memisahkan_bawaan_dan_batch_tertunda(self, _count):
+        from .models import BatchHonor, ItemBatchHonor
+        from .paid_honor import honor_estimate
+        old = HonorAsleb.objects.create(asleb=self.asleb, bulan=date(2026, 10, 1), total_pertemuan=9)
+        current = HonorAsleb.objects.create(asleb=self.asleb, bulan=date(2026, 11, 1), total_pertemuan=9)
+        batch = BatchHonor.objects.create(bulan=current.bulan, laboran=self.pengguna, dana_diterima=49000)
+        ItemBatchHonor.objects.create(batch=batch, honor=current, nominal=49000, rincian_jam=[{'source_id': old.pk, 'hours': '7', 'gross': '49000'}])
+        estimate = honor_estimate(self.asleb.nim, current.bulan)
+        self.assertEqual(estimate['current'] + estimate['carried'], estimate['due'])
+        self.assertEqual(estimate['carried'], 63 * current.honor_per_jam)
+
     def test_catat_transfer_kembali_ke_bulan_dan_penerima_yang_sama(self):
         from .models import BatchHonor, ItemBatchHonor
         honor = HonorAsleb.objects.create(asleb=self.asleb, bulan=date(2026, 10, 1), total_pertemuan=1, assigned_laboran=self.pengguna)
@@ -100,23 +112,23 @@ class AslebViewTests(TestCase):
         self.assertEqual(honor.status, 'diproses')
 
     @patch('apps.asleb.views.get_total_honor_attendance_count', return_value=8)
-    def test_bawaan_dibatasi_60_jam_dan_sisa_berlanjut(self, _count):
+    def test_bawaan_tanpa_batas_jam_dan_tidak_dihitung_ganda(self, _count):
         from .honor_carry import carry_balance, allocate_hours
         from .models import BatchHonor, ItemBatchHonor
         old = HonorAsleb.objects.create(asleb=self.asleb, bulan=date(2026, 9, 1), total_pertemuan=3, status='dibayar', tanggal_transfer=date(2026, 10, 1), pic_transfer='Test', bukti_transfer='honor_asleb/test.png')
         current = HonorAsleb.objects.create(asleb=self.asleb, bulan=date(2026, 10, 1), total_pertemuan=8)
         balance = carry_balance(current)
         self.assertEqual(balance['carried_hours'], Decimal(35))
-        self.assertEqual(balance['scheduled_hours'], Decimal(60))
-        self.assertEqual(balance['deferred_hours'], Decimal(31))
-        batch = BatchHonor.objects.create(bulan=current.bulan, laboran=self.pengguna, dana_diterima=420000)
-        ItemBatchHonor.objects.create(batch=batch, honor=current, nominal=420000, rincian_jam=balance['plan'])
+        self.assertEqual(balance['scheduled_hours'], Decimal(91))
+        self.assertEqual(balance['deferred_hours'], Decimal(0))
+        batch = BatchHonor.objects.create(bulan=current.bulan, laboran=self.pengguna, dana_diterima=637000)
+        ItemBatchHonor.objects.create(batch=batch, honor=current, nominal=637000, rincian_jam=balance['plan'])
         self.assertEqual(carry_balance(current)['remaining'], 0)
         next_month = HonorAsleb.objects.create(asleb=self.asleb, bulan=date(2026, 11, 1), total_pertemuan=8)
         next_balance = carry_balance(next_month)
-        self.assertEqual(next_balance['carried_hours'], Decimal(31))
-        self.assertEqual(next_balance['scheduled_hours'], Decimal(60))
-        self.assertEqual(next_balance['deferred_hours'], Decimal(27))
+        self.assertEqual(next_balance['carried_hours'], Decimal(0))
+        self.assertEqual(next_balance['scheduled_hours'], Decimal(56))
+        self.assertEqual(next_balance['deferred_hours'], Decimal(0))
 
     @patch('apps.asleb.batch_honor.timezone.localdate', return_value=date(2026, 10, 1))
     @patch('apps.asleb.views.get_total_honor_attendance_count', return_value=8)
@@ -2246,10 +2258,10 @@ class AslebViewTests(TestCase):
         )
 
         self.assertEqual(honor.total_jam_terealisasi, 140)
-        self.assertEqual(honor.total_akhir, 60)
+        self.assertEqual(honor.total_akhir, 140)
         self.assertEqual(honor.level, 'senior')
         self.assertEqual(honor.honor_per_jam, 8000)
-        self.assertEqual(honor.jumlah, 480000)
+        self.assertEqual(honor.jumlah, 1120000)
         self.assertEqual(honor.metode_transfer, 'bni')
         self.assertEqual(honor.nomor_transfer, '123456789')
         self.assertEqual(honor.nama_pemilik_transfer, 'Riwayat Asleb 3')
@@ -2664,7 +2676,7 @@ class AslebViewTests(TestCase):
             worksheet = workbook.read('xl/worksheets/sheet1.xml').decode()
         for header in (
             'No', 'Nama', 'NIM', 'Jumlah Praktikum', 'Status Junior/Senior',
-            'Total Pertemuan', 'Total Jam Terealisasi', 'Total Akhir (Max 60)',
+            'Total Pertemuan', 'Total Jam Terealisasi', 'Total Jam Dibayar',
             'Honor/Jam', 'Total Honor', 'PIC Transfer',
         ):
             self.assertIn(header, worksheet)

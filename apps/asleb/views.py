@@ -490,7 +490,7 @@ class HonorAslebListView(HonorAccessMixin, ListView):
             legacy_total = sum(honor.jumlah for honor in context['honor_list'])
             batch_total = sum(item.nominal for item in context['batch_payments'])
             context['total_diterima'] = f'Rp {legacy_total + batch_total:,.0f}'.replace(',', '.')
-        context['formula_note'] = 'Total jam = jumlah modul × total pertemuan × 7 jam, maksimal 60 jam per bulan. Periode ke-1 dan ke-2 Junior Rp7.000/jam; mulai periode ke-3 Senior Rp8.000/jam.'
+        context['formula_note'] = 'Total jam = jumlah modul × total pertemuan × 7 jam, tanpa batas jam bulanan. Periode ke-1 dan ke-2 Junior Rp7.000/jam; mulai periode ke-3 Senior Rp8.000/jam.'
         context['biaya_transfer_form'] = PengaturanBiayaTransferForm(instance=PengaturanBiayaTransfer.get_solo())
         return context
 
@@ -534,7 +534,7 @@ def export_honor_asleb_excel(request):
         'Status Junior/Senior',
         'Total Pertemuan',
         'Total Jam Terealisasi',
-        'Total Akhir (Max 60)',
+        'Total Jam Dibayar',
         'Honor/Jam',
         'Total Honor',
         'PIC Transfer',
@@ -3311,7 +3311,7 @@ def confirm_honor_transfer(request, pk):
     from .honor_carry import carry_balance
     carry = carry_balance(honor)
     if carry['carried_hours'] or carry['deferred_hours']:
-        return failure('Honor memiliki modul bawaan atau sisa jam. Gunakan Batch Pembayaran agar batas 60 jam dan asal modul tercatat.')
+        return failure('Honor memiliki modul bawaan atau sisa jam. Gunakan Batch Pembayaran agar asal modul tercatat.')
     if not payment_eligible_honors(HonorAsleb.objects.filter(pk=honor.pk)).exists():
         return failure('Honor sedang ditahan sampai proses penggantian aslab selesai.')
     if pengguna.role == LABORAN_ROLE and honor.assigned_laboran_id != pengguna.pk:
@@ -3485,12 +3485,12 @@ def _sync_honor_attendance(asleb, bulan):
     # Bukti transfer mengunci nominal pembayaran yang sudah diselesaikan.
     if honor.status == 'dibayar':
         count = get_total_honor_attendance_count(asleb, bulan)
-        expected = min(7 * count, 60) * honor.honor_per_jam
+        expected = 7 * count * honor.honor_per_jam
         shortage = max(expected - honor.honor_sebelum_potongan, 0)
         HonorAsleb.objects.filter(pk=honor.pk).update(
             kekurangan_bayar=shortage,
             catatan_koreksi=(
-                f'Koreksi absensi per modul: {count} modul x 7 jam; batas 60 jam/bulan. '
+                f'Koreksi absensi per modul: {count} modul x 7 jam; tanpa batas jam bulanan. '
                 f'Honor kotor seharusnya Rp{expected:,}; tercatat Rp{honor.honor_sebelum_potongan:,}. '
                 f'Kekurangan Rp{shortage:,}, belum dibayarkan.'
             ) if shortage else '',
