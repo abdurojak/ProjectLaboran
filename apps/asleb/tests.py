@@ -129,9 +129,9 @@ class AslebViewTests(TestCase):
         self.assertEqual(BatchHonor.objects.count(), 1)
         self.assertEqual(ItemBatchHonor.objects.get().nominal, Decimal('196000'))
         self.client.post(reverse('asleb:honor_batch_create'), payload)
-        self.assertEqual(BatchHonor.objects.count(), 2)
+        self.assertEqual(BatchHonor.objects.count(), 1)
         self.client.post(reverse('asleb:honor_batch_create'), payload)
-        self.assertEqual(BatchHonor.objects.count(), 2)
+        self.assertEqual(BatchHonor.objects.count(), 1)
         self.assertEqual(self.client.get(reverse('asleb:honor_batches'), {'bulan': '2026-10'}).status_code, 200)
 
     def test_admin_batch_read_only(self):

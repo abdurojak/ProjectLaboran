@@ -49,9 +49,15 @@ def batch_list(request):
         honors = honors.filter(assigned_laboran=user)
         batches = batches.filter(laboran=user)
     rows = [{'honor': h, **balances(h)} for h in honors]
+    for row in rows:
+        row['can_allocate'] = (
+            user.role == 'laboran' and month >= timezone.localdate().replace(day=1)
+            and row['remaining'] > 0 and row['allocated'] == 0
+        )
     return render(request, 'asleb/batch_honor.html', {
         'rows': rows, 'batches': batches, 'month': month.strftime('%Y-%m'),
         'can_pay': user.role == 'laboran',
+        'can_create': any(row['can_allocate'] for row in rows),
     })
 
 
@@ -86,6 +92,8 @@ def create_batch(request):
             if not amount.is_finite() or amount < 0 or amount != amount.quantize(Decimal('.01')):
                 raise ValueError
             if amount:
+                if h.batch_items.exists():
+                    raise ValueError
                 if amount > balances(h)['remaining'] or not payment_eligible_honors(HonorAsleb.objects.filter(pk=h.pk)).exists():
                     raise ValueError
                 from .honor_carry import allocate_hours
