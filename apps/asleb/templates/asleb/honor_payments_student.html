@@ -7,7 +7,7 @@
         <label>Bulan<input type="month" name="bulan" value="{{ selected_bulan }}" required></label>
         <button class="btn-secondary" type="submit">Tampilkan</button>
     </form>
-    <div class="border-b border-slate-200 pb-5"><p class="text-sm text-slate-500">Total diterima · {{ selected_bulan_label }}</p><p class="mt-2 text-3xl font-black text-brand-700">{{ total_diterima }}</p></div>
+    <div class="border-b border-slate-200 pb-5"><p class="text-sm text-slate-500">Total diterima · {{ selected_bulan_label }}</p><p class="mt-2 text-3xl font-black text-brand-700">{% if honor_list or batch_payments %}{{ total_diterima }}{% else %}Belum ditransfer{% endif %}</p></div>
     {% for honor in honor_list %}
     <article class="border-b border-slate-200 py-4">
         <h3 class="font-bold text-slate-900">Honor {{ honor.bulan|date:'F Y' }}</h3>

@@ -208,8 +208,7 @@ class _HonorSummaryCard extends StatelessWidget {
       honor?['bulan_ini'] as Map? ?? {},
     );
     final amount = monthHonor['jumlah'] ?? 0;
-    final pending = honor?['total_pending'] ?? 0;
-    final meetings = monthHonor['total_pertemuan'] ?? 0;
+    final hasPayment = (num.tryParse(amount.toString()) ?? 0) > 0;
     final status = monthHonor['status'] as String? ?? 'belum_ada';
     final colors = Theme.of(context).colorScheme;
     return Container(
@@ -236,7 +235,7 @@ class _HonorSummaryCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Honor Bulan Ini',
+                  'Pembayaran Diterima Bulan Ini',
                   style: TextStyle(
                     color: colors.onSurfaceVariant,
                     fontWeight: FontWeight.w800,
@@ -244,7 +243,7 @@ class _HonorSummaryCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  _rupiah(amount),
+                  hasPayment ? _rupiah(amount) : 'Belum ditransfer',
                   style: TextStyle(
                     color: colors.onSurface,
                     fontSize: 22,
@@ -253,7 +252,7 @@ class _HonorSummaryCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '$meetings pertemuan • ${status.replaceAll('_', ' ')} • pending ${_rupiah(pending)}',
+                  hasPayment ? status.replaceAll('_', ' ') : 'Absensi tetap tersimpan untuk proses honor.',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(

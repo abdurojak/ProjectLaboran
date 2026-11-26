@@ -460,7 +460,8 @@ class DashboardView(APIView):
                 'bulan_ini': {
                     'bulan': honor_bulan_ini.bulan if honor_bulan_ini else None,
                     'jumlah': current_paid_total,
-                    'status': honor_bulan_ini.status if honor_bulan_ini else 'belum_ada',
+                    'status': honor_bulan_ini.status if honor_bulan_ini else 'belum_ditransfer',
+                    'label': 'Pembayaran diterima bulan ini',
                     'total_pertemuan': honor_bulan_ini.total_pertemuan if honor_bulan_ini else 0,
                     'biaya_admin': 0,
                     'total_sebelum_potongan': current_paid_total,
