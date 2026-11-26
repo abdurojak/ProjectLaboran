@@ -219,6 +219,10 @@ class DashboardView(TemplateView):
             honor_bulan_ini_total = sum(h.jumlah for h in paid_honor_rows(pengguna.nim_nik) if h.bulan == awal_bulan)
             from apps.asleb.paid_honor import honor_estimate
             context['honor_estimate'] = honor_estimate(pengguna.nim_nik, awal_bulan)
+            context['honor_estimate_rupiah'] = {
+                key: self.format_rupiah(value)
+                for key, value in context['honor_estimate'].items()
+            }
             for honor in riwayat_honor_saya:
                 honor.matkul_labels = honor_matkul_labels or (
                     [honor.asleb.matkul] if honor.asleb.matkul else []

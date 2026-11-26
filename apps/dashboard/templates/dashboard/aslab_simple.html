@@ -1,4 +1,38 @@
 <style>
+    .honor-summary { display: grid; grid-template-columns: minmax(220px, .9fr) minmax(0, 2fr); align-items: center; gap: 28px; }
+    .honor-summary-main { min-width: 0; }
+    .honor-summary-heading { display: flex; align-items: center; gap: 9px; color: #0f766e; font-size: 13px; font-weight: 800; }
+    .honor-summary-heading svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .honor-summary-total { margin-top: 10px; color: #0f172a; font-size: 30px; line-height: 1.2; font-weight: 900; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+    .honor-summary-caption { margin-top: 5px; font-size: 12px; color: #64748b; }
+    .honor-summary-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 14px; font-size: 12px; font-weight: 700; color: #0f766e; }
+    .honor-summary-link svg { width: 14px; height: 14px; }
+    .honor-summary-details { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; }
+    .honor-summary-detail { min-width: 0; padding: 8px 18px; border-left: 1px solid #e2e8f0; }
+    .honor-summary-detail dt { color: #64748b; font-size: 12px; line-height: 1.5; }
+    .honor-summary-detail dd { margin: 8px 0 0; color: #334155; font-size: 19px; font-weight: 800; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+    .honor-summary-detail--carry dd { color: #b45309; }
+    .honor-summary-detail--paid dd { color: #0f766e; }
+    html[data-theme="dark"] .honor-summary-total { color: #f1f5f9; }
+    html[data-theme="dark"] .honor-summary-heading,
+    html[data-theme="dark"] .honor-summary-link,
+    html[data-theme="dark"] .honor-summary-detail--paid dd { color: #5eead4; }
+    html[data-theme="dark"] .honor-summary-detail { border-color: rgba(148, 163, 184, .18); }
+    html[data-theme="dark"] .honor-summary-detail dt,
+    html[data-theme="dark"] .honor-summary-caption { color: #94a3b8; }
+    html[data-theme="dark"] .honor-summary-detail dd { color: #e2e8f0; }
+    html[data-theme="dark"] .honor-summary-detail--carry dd { color: #fcd34d; }
+    html[data-theme="dark"] .honor-summary-detail--paid dd { color: #5eead4; }
+    @media (max-width: 900px) {
+        .honor-summary { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+        .honor-summary-detail:first-child { border-left: 0; padding-left: 0; }
+    }
+    @media (max-width: 480px) {
+        .honor-summary-details { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+        .honor-summary-detail { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 0; border: 0; }
+        .honor-summary-detail dt { flex: 1; }
+        .honor-summary-detail dd { margin: 0; font-size: 16px; text-align: right; }
+    }
     .dashboard-status-pill {
         border: 1px solid rgba(148, 163, 184, 0.18);
         background: rgba(248, 250, 252, 0.92);
@@ -69,14 +103,18 @@
     </section>
     {% endif %}
 
-    <section class="surface-card min-w-0 overflow-hidden p-5 md:p-6">
-        <p class="text-xs font-black uppercase tracking-[0.2em] text-violet-700">Honor Bulan Ini</p>
-        <h3 class="mt-2 text-xl font-black text-slate-900">Yang Akan Ditransfer</h3>
-        <p class="mt-4 text-2xl font-black text-violet-700">Rp{{ honor_estimate.due|floatformat:0 }}</p>
-        <p class="mt-2 text-sm text-slate-500">Bulan berjalan: Rp{{ honor_estimate.current|floatformat:0 }}</p>
-        <p class="mt-2 text-sm text-slate-500">Tambahan bulan sebelumnya: Rp{{ honor_estimate.carried|floatformat:0 }}</p>
-        <p class="mt-2 text-sm text-slate-500">Sudah diterima: {{ honor_bulan_ini_total_rupiah }}</p>
-        <a class="mt-4 inline-flex font-bold text-brand-700" href="{% url 'asleb:honor_list' %}">Lihat riwayat pembayaran</a>
+    <section class="surface-card honor-summary min-w-0 p-5 md:p-6" aria-label="Ringkasan honor bulan ini">
+        <div class="honor-summary-main">
+            <h3 class="honor-summary-heading"><i data-lucide="wallet" aria-hidden="true"></i>Honor Bulan Ini</h3>
+            <p class="honor-summary-total">{{ honor_estimate_rupiah.due }}</p>
+            <p class="honor-summary-caption">Yang akan ditransfer</p>
+            <a class="honor-summary-link" href="{% url 'asleb:honor_list' %}">Riwayat pembayaran<i data-lucide="arrow-up-right" aria-hidden="true"></i></a>
+        </div>
+        <dl class="honor-summary-details">
+            <div class="honor-summary-detail"><dt>Bulan berjalan</dt><dd>{{ honor_estimate_rupiah.current }}</dd></div>
+            <div class="honor-summary-detail honor-summary-detail--carry"><dt>Tambahan bulan sebelumnya</dt><dd>{{ honor_estimate_rupiah.carried }}</dd></div>
+            <div class="honor-summary-detail honor-summary-detail--paid"><dt>Sudah diterima</dt><dd>{{ honor_bulan_ini_total_rupiah }}</dd></div>
+        </dl>
     </section>
     <div class="dashboard-stats-grid grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {% for stat in stats_cards %}
