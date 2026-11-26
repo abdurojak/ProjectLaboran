@@ -208,6 +208,7 @@ class _HonorSummaryCard extends StatelessWidget {
       honor?['bulan_ini'] as Map? ?? {},
     );
     final amount = monthHonor['jumlah'] ?? 0;
+    final monthLabel = DateFormat('MMMM yyyy', 'id_ID').format(DateTime.now());
 
 
     final colors = Theme.of(context).colorScheme;
@@ -252,7 +253,7 @@ class _HonorSummaryCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Bulan berjalan: ${_rupiah(monthHonor['honor_bulan_berjalan'])}\nTambahan bulan sebelumnya: ${_rupiah(monthHonor['tambahan_bulan_sebelumnya'])}\nSudah diterima: ${_rupiah(monthHonor['sudah_diterima'])}',
+                  '$monthLabel: ${_rupiah(monthHonor['honor_bulan_berjalan'])}\nTambahan bulan sebelumnya: ${_rupiah(monthHonor['tambahan_bulan_sebelumnya'])}\nSudah diterima: ${_rupiah(monthHonor['sudah_diterima'])}',
                   style: TextStyle(
                     color: colors.onSurfaceVariant,
                     fontSize: 12,

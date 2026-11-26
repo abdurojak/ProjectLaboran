@@ -6,6 +6,7 @@ from django.test import TestCase, override_settings
 from django.core import mail
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.formats import date_format
 
 from apps.asleb.models import Asleb, HonorAsleb
 from apps.inventaris.models import Barang
@@ -854,6 +855,7 @@ class DashboardViewTests(TestCase):
         self.assertContains(response, 'Peringatan Peminjaman')
         self.assertContains(response, 'Kamera Aslab')
         self.assertContains(response, 'Honor Bulan Ini')
+        self.assertContains(response, date_format(timezone.localdate(), 'F Y'))
         self.assertLess(content.index('Peringatan Peminjaman'), content.index('Honor Bulan Ini'))
 
     def test_dashboard_mahasiswa_menampilkan_qr_pendaftaran_asleb_saat_dibuka(self):
@@ -964,6 +966,7 @@ class DashboardViewTests(TestCase):
         response = self.client.get(reverse('dashboard:home'))
 
         self.assertContains(response, 'Honor Bulan Ini')
+        self.assertContains(response, date_format(timezone.localdate(), 'F Y'))
         self.assertContains(response, 'Sebelum Potongan')
         self.assertContains(response, 'Biaya Admin')
         self.assertContains(response, 'Total Diterima')

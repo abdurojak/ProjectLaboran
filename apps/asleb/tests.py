@@ -74,6 +74,17 @@ from .surat_honor import (
 
 
 class AslebViewTests(TestCase):
+    def test_input_nilai_tidak_memakai_spinner(self):
+        from .forms import HasilPraktikumMahasiswaForm, ReviewLaporanPraktikumForm
+
+        hasil_form = HasilPraktikumMahasiswaForm()
+        review_form = ReviewLaporanPraktikumForm()
+        for field in ('nilai_realtime', 'nilai_laporan'):
+            self.assertEqual(hasil_form.fields[field].widget.input_type, 'text')
+            self.assertEqual(hasil_form.fields[field].widget.attrs['inputmode'], 'decimal')
+        self.assertEqual(review_form.fields['nilai'].widget.input_type, 'text')
+        self.assertEqual(review_form.fields['nilai'].widget.attrs['inputmode'], 'decimal')
+
     @patch('apps.asleb.views.get_total_honor_attendance_count', return_value=9)
     def test_estimasi_memisahkan_bawaan_dan_batch_tertunda(self, _count):
         from .models import BatchHonor, ItemBatchHonor

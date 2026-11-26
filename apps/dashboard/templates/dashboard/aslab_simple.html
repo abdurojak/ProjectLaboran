@@ -111,7 +111,7 @@
             <a class="honor-summary-link" href="{% url 'asleb:honor_list' %}">Riwayat pembayaran<i data-lucide="arrow-up-right" aria-hidden="true"></i></a>
         </div>
         <dl class="honor-summary-details">
-            <div class="honor-summary-detail"><dt>Bulan berjalan</dt><dd>{{ honor_estimate_rupiah.current }}</dd></div>
+            <div class="honor-summary-detail"><dt>{{ today|date:'F Y' }}</dt><dd>{{ honor_estimate_rupiah.current }}</dd></div>
             <div class="honor-summary-detail honor-summary-detail--carry"><dt>Tambahan bulan sebelumnya</dt><dd>{{ honor_estimate_rupiah.carried }}</dd></div>
             <div class="honor-summary-detail honor-summary-detail--paid"><dt>Sudah diterima</dt><dd>{{ honor_bulan_ini_total_rupiah }}</dd></div>
         </dl>

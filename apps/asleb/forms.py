@@ -678,8 +678,8 @@ class HasilPraktikumMahasiswaForm(forms.ModelForm):
         model = HasilPraktikumMahasiswa
         fields = ['status_absensi', 'nilai_realtime', 'nilai_laporan', 'catatan']
         widgets = {
-            'nilai_realtime': forms.NumberInput(attrs={'min': 0, 'max': 100, 'step': '0.01', 'placeholder': '0-100'}),
-            'nilai_laporan': forms.NumberInput(attrs={'min': 0, 'max': 100, 'step': '0.01', 'placeholder': '0-100'}),
+            'nilai_realtime': forms.TextInput(attrs={'inputmode': 'decimal', 'placeholder': '0-100'}),
+            'nilai_laporan': forms.TextInput(attrs={'inputmode': 'decimal', 'placeholder': '0-100'}),
             'catatan': forms.TextInput(attrs={'placeholder': 'Opsional'}),
         }
 
@@ -801,7 +801,7 @@ class ReviewLaporanPraktikumForm(forms.ModelForm):
         fields = ['catatan_asisten', 'nilai']
         widgets = {
             'catatan_asisten': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Komentar penilaian (opsional)'}),
-            'nilai': forms.NumberInput(attrs={'min': 0, 'max': 100, 'step': '0.01'}),
+            'nilai': forms.TextInput(attrs={'inputmode': 'decimal', 'placeholder': '0-100'}),
         }
 
     def clean(self):
