@@ -8,6 +8,7 @@ from django.db.models import Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.dateparse import parse_date
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from .models import Asleb, BatchHonor, HonorAsleb, ItemBatchHonor
@@ -109,28 +110,29 @@ def pay_item(request, pk):
     item = get_object_or_404(ItemBatchHonor.objects.select_related('batch', 'honor'), pk=pk)
     if user.role != 'laboran' or item.batch.laboran_id != user.pk:
         raise PermissionDenied
+    return_url = f"{reverse('asleb:honor_batches')}?bulan={item.batch.bulan:%Y-%m}#transfer-{item.pk}"
     Asleb.objects.select_for_update().get(pk=item.honor.asleb_id)
     item = ItemBatchHonor.objects.select_for_update().get(pk=pk)
     from apps.pendaftaran_asleb.replacement_services import payment_eligible_honors
     if not payment_eligible_honors(HonorAsleb.objects.filter(pk=item.honor_id)).exists():
         messages.error(request, 'Honor sedang ditahan. Selesaikan proses penggantian aslab dahulu.')
-        return redirect('asleb:honor_batches')
+        return redirect(return_url)
     if item.dibayar_pada:
         messages.error(request, 'Transfer ini sudah tercatat.')
-        return redirect('asleb:honor_batches')
+        return redirect(return_url)
     proof = request.FILES.get('bukti_transfer')
     transfer_date = parse_date(request.POST.get('tanggal_transfer', ''))
     if not proof or proof.size > 5 * 1024 * 1024 or not transfer_date or transfer_date > timezone.localdate():
         messages.error(request, 'Isi tanggal transfer yang valid dan bukti pembayaran maksimal 5 MB.')
-        return redirect('asleb:honor_batches')
+        return redirect(return_url)
     from .forms import KonfirmasiTransferHonorForm
     validation = KonfirmasiTransferHonorForm({'tanggal_transfer': transfer_date}, {'bukti_transfer': proof}, instance=item.honor)
     if not validation.is_valid():
         messages.error(request, 'Bukti transfer tidak valid. Gunakan format bukti pembayaran yang didukung.')
-        return redirect('asleb:honor_batches')
+        return redirect(return_url)
     item.tanggal_transfer = transfer_date
     item.bukti_transfer = proof
     item.dibayar_pada = timezone.now()
     item.save(update_fields=['tanggal_transfer', 'bukti_transfer', 'dibayar_pada'])
     messages.success(request, 'Transfer batch berhasil dicatat.')
-    return redirect('asleb:honor_batches')
+    return redirect(return_url)

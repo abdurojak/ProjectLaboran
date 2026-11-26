@@ -74,6 +74,15 @@ from .surat_honor import (
 
 
 class AslebViewTests(TestCase):
+    def test_catat_transfer_kembali_ke_bulan_dan_penerima_yang_sama(self):
+        from .models import BatchHonor, ItemBatchHonor
+        honor = HonorAsleb.objects.create(asleb=self.asleb, bulan=date(2026, 10, 1), total_pertemuan=1, assigned_laboran=self.pengguna)
+        batch = BatchHonor.objects.create(bulan=honor.bulan, laboran=self.pengguna, dana_diterima=49000)
+        item = ItemBatchHonor.objects.create(batch=batch, honor=honor, nominal=49000)
+        response = self.client.post(reverse('asleb:honor_batch_pay', args=[item.pk]), {})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, f"{reverse('asleb:honor_batches')}?bulan=2026-10#transfer-{item.pk}")
+
     @patch('apps.asleb.views.get_total_honor_attendance_count', return_value=8)
     def test_rekap_menampilkan_transfer_batch_tanpa_form_transfer_ganda(self, _count):
         from .models import BatchHonor, ItemBatchHonor
