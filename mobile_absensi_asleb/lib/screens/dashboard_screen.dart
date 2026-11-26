@@ -252,9 +252,7 @@ class _HonorSummaryCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Bulan berjalan: '+_rupiah(monthHonor['honor_bulan_berjalan'] ?? 0)+' • Tambahan bulan sebelumnya: '+_rupiah(monthHonor['tambahan_bulan_sebelumnya'] ?? 0),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                  'Bulan berjalan: ${_rupiah(monthHonor['honor_bulan_berjalan'])}\nTambahan bulan sebelumnya: ${_rupiah(monthHonor['tambahan_bulan_sebelumnya'])}\nSudah diterima: ${_rupiah(monthHonor['sudah_diterima'])}',
                   style: TextStyle(
                     color: colors.onSurfaceVariant,
                     fontSize: 12,

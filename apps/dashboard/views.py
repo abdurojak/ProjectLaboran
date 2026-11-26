@@ -639,7 +639,7 @@ class DashboardView(TemplateView):
             },
             {
                 'title': 'Rekap Honorarium Aslab',
-                'description': 'Hitung honor aslab per bulan berdasarkan total pertemuan, batas 60 jam, dan tarif Junior/Senior.',
+                'description': 'Hitung honor aslab per bulan berdasarkan total pertemuan dan tarif Junior/Senior.',
                 'url': 'asleb:honor_list',
                 'status': 'Aktif',
                 'icon': 'file-chart-column',
