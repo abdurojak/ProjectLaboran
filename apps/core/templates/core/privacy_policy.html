@@ -1,0 +1,72 @@
+{% load static %}
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kebijakan Privasi LabHub</title>
+  <meta name="description" content="Kebijakan privasi aplikasi LabHub, penggunaan data, keamanan, dan permintaan penghapusan akun.">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f5f8fa; color: #233340; font: 16px/1.75 system-ui, sans-serif; }
+    header { background: #fff; border-bottom: 1px solid #dce6eb; }
+    main, .brand { max-width: 860px; margin: auto; padding: 24px; }
+    .brand { display: flex; align-items: center; gap: 14px; font-size: 22px; font-weight: 750; color: #096a70; }
+    .brand img { width: 48px; height: 48px; object-fit: contain; }
+    main { padding-top: 36px; padding-bottom: 60px; }
+    h1 { font-size: 32px; line-height: 1.25; margin: 0 0 12px; color: #142733; }
+    h2 { font-size: 21px; line-height: 1.4; margin-top: 32px; color: #096a70; }
+    a { color: #096a70; overflow-wrap: anywhere; }
+    li { margin-bottom: 8px; }
+    .updated { font-size: 14px; color: #526775; }
+    nav { padding: 18px 0; border-block: 1px solid #dce6eb; margin: 24px 0; display: flex; flex-wrap: wrap; gap: 12px 24px; }
+    footer { margin-top: 36px; border-top: 1px solid #dce6eb; padding-top: 20px; font-size: 14px; }
+    @media(max-width: 480px) { main, .brand { padding-inline: 20px; } h1 { font-size: 28px; } }
+  </style>
+</head>
+<body>
+<header><div class="brand"><img src="{% static 'core/img/labhub-logo.png' %}" alt="Logo LabHub">LabHub</div></header>
+<main>
+  <h1>Kebijakan Privasi LabHub</h1>
+  <p class="updated">Berlaku dan diperbarui pada 27 November 2026</p>
+  <p>Kebijakan ini menjelaskan pemrosesan data pada aplikasi Android LabHub dan layanan web LabHub. Layanan dikelola oleh Laboran Teknik Informatika, Fakultas Teknologi Industri, Universitas Trisakti (LabTIF), untuk mendukung kegiatan operasional laboratorium.</p>
+  <nav aria-label="Isi kebijakan"><a href="#data">Data dan penggunaan</a><a href="#sharing">Akses dan pihak ketiga</a><a href="#deletion">Penghapusan akun</a><a href="#contact">Hubungi kami</a></nav>
+  <h2 id="data">1. Data yang diproses dan tujuannya</h2>
+  <p>Jenis data bergantung pada peran akun dan fitur yang digunakan. Tidak semua pengguna diminta memberikan seluruh data berikut:</p>
+  <ul>
+    <li><strong>Akun dan profil:</strong> nama, NIM/NIK, email, nomor telepon, foto profil, serta informasi pendidikan, program studi, dan alamat yang diberikan pengguna. Digunakan untuk identifikasi, verifikasi akun, komunikasi, dan pengelolaan akses.</li>
+    <li><strong>Autentikasi:</strong> kredensial akun dan token sesi digunakan untuk proses login dan keamanan. Aplikasi menyimpan token login melalui penyimpanan aman perangkat; kata sandi akun disimpan di server dalam bentuk hash.</li>
+    <li><strong>Kegiatan akademik:</strong> pendaftaran aslab, transkrip atau dokumen kualifikasi yang diunggah, penugasan, jadwal, mata kuliah, modul, laporan, nilai, dan riwayat absensi digunakan untuk administrasi praktikum.</li>
+    <li><strong>Foto dan video:</strong> foto profil, bukti absensi, bukti transfer, dan lampiran lain yang dipilih atau diambil pengguna diunggah untuk mendukung fitur terkait. Kamera juga dipakai untuk pemindaian QR pada fitur yang tersedia.</li>
+    <li><strong>Pembayaran honor:</strong> informasi rekening atau tujuan pembayaran, nama pemilik rekening, perhitungan honor, serta bukti dan tanggal transfer diproses untuk pembayaran dan rekonsiliasi administrasi.</li>
+    <li><strong>Operasional:</strong> transaksi peminjaman barang, pengembalian, laporan barang tertinggal, dan komunikasi dalam fitur yang digunakan disimpan untuk penyelenggaraan layanan.</li>
+    <li><strong>Data teknis:</strong> permintaan jaringan dapat menghasilkan log seperti alamat IP, waktu akses, endpoint, dan informasi kesalahan untuk keamanan dan pemecahan masalah.</li>
+  </ul>
+  <h2>2. Izin perangkat</h2>
+  <p>LabHub meminta izin kamera ketika diperlukan untuk mengambil foto atau memindai QR. Pemilihan foto, video, atau dokumen dilakukan melalui pemilih berkas/media perangkat; aplikasi mengakses berkas yang pengguna pilih untuk fitur tersebut. Pengguna dapat mengatur izin melalui pengaturan Android. Menolak izin dapat membuat fitur yang memerlukan izin tersebut tidak dapat digunakan.</p>
+  <p>Versi Android saat kebijakan ini diterbitkan tidak meminta izin lokasi perangkat dan tidak melakukan pelacakan GPS di latar belakang. Data lokasi pada catatan lama, bila ada, merupakan bagian dari bukti kegiatan yang sebelumnya dikirim melalui layanan.</p>
+  <h2 id="sharing">3. Akses, pengungkapan, dan penyedia layanan</h2>
+  <p>Data digunakan untuk layanan LabHub, bukan untuk dijual atau iklan berbasis perilaku. Data dapat diakses oleh pengelola, laboran, aslab, atau pengguna terkait sesuai kewenangan dan kebutuhan kegiatan akademik. Contohnya, laboran dapat melihat bukti absensi dan pembayaran, sedangkan aslab dapat mengelola data praktikum yang ditugaskan kepadanya.</p>
+  <p>Penyedia infrastruktur hosting dan layanan email dapat memproses data yang diperlukan untuk penyimpanan, pengiriman kode verifikasi, dan pemberitahuan. Pengungkapan juga dapat dilakukan bila diperlukan untuk memenuhi kewajiban hukum atau menangani penyalahgunaan.</p>
+  <p>Jika pengguna memakai chatbot LabBot pada layanan web, pertanyaan dan konteks layanan yang diperlukan dapat dikirim ke penyedia AI yang dikonfigurasi, termasuk Google Gemini. Jangan memasukkan kata sandi, kode verifikasi, informasi rekening, atau data pribadi sensitif ke dalam percakapan chatbot. Fitur tersebut mengikuti ketersediaannya pada layanan yang digunakan.</p>
+  <p>Tautan ke situs pihak ketiga, seperti situs universitas, media sosial, atau peta, mengikuti kebijakan privasi situs tujuan saat dibuka.</p>
+  <h2>4. Penyimpanan dan keamanan</h2>
+  <p>Data layanan disimpan pada infrastruktur server yang digunakan pengelola. Komunikasi layanan produksi menggunakan HTTPS. Kontrol autentikasi, pembatasan akses berdasarkan peran, dan perlindungan penyimpanan diterapkan untuk mengurangi risiko akses tidak sah. Tidak ada sistem yang dapat menjamin keamanan mutlak.</p>
+  <p>Data dipertahankan selama diperlukan untuk penyelenggaraan layanan, verifikasi kegiatan, kewajiban administrasi akademik dan keuangan, penyelesaian sengketa, serta kewajiban hukum yang berlaku. Durasi dapat berbeda menurut jenis catatan. Salinan cadangan dapat bertahan hingga siklus penggantian atau penghapusan cadangan; data tersebut tidak digunakan kembali untuk kegiatan operasional kecuali diperlukan untuk pemulihan.</p>
+  <h2 id="deletion">5. Hak pengguna dan penghapusan akun</h2>
+  <p>Pengguna dapat meminta akses, koreksi, penghapusan akun, atau penghapusan data pribadi dengan mengirim email ke <a href="mailto:Labtif.fti@trisakti.ac.id?subject=Permintaan%20Penghapusan%20Akun%20LabHub">Labtif.fti@trisakti.ac.id</a>. Permintaan dapat diajukan tanpa login ke aplikasi.</p>
+  <p>Untuk penghapusan akun, gunakan subjek <strong>Permintaan Penghapusan Akun LabHub</strong>, cantumkan nama dan NIM/NIK serta alamat email akun, dan jelaskan apakah permintaan mencakup akun beserta data terkait atau data tertentu saja. Jangan mengirim kata sandi atau kode verifikasi. Pengelola akan memverifikasi kepemilikan akun sebelum memproses permintaan dan memberikan informasi mengenai tindak lanjutnya.</p>
+  <p>Data profil dan data terkait yang tidak lagi diperlukan akan dihapus atau dianonimkan setelah permintaan diverifikasi. Catatan akademik, absensi, transaksi peminjaman yang belum selesai, pembayaran, atau bukti lain yang masih diperlukan untuk kewajiban administrasi, hukum, atau penyelesaian sengketa dapat tetap disimpan secara terbatas. Pengelola akan menjelaskan jika ada data yang tidak dapat dihapus dan alasan penyimpanannya. Menghapus aplikasi dari perangkat tidak otomatis menghapus akun atau data di server.</p>
+  <h2>6. Pengguna layanan</h2>
+  <p>LabHub ditujukan untuk mahasiswa, asisten laboratorium, dan staf dalam kegiatan laboratorium universitas; bukan layanan yang ditujukan kepada anak-anak. Jika terdapat data yang dikirim tanpa kewenangan, hubungi pengelola untuk pemeriksaan dan tindak lanjut.</p>
+  <h2>7. Perubahan kebijakan</h2>
+  <p>Kebijakan dapat diperbarui untuk mencerminkan perubahan fitur atau pemrosesan data. Tanggal pembaruan ditampilkan pada halaman ini. Perubahan material akan diinformasikan melalui layanan atau sarana komunikasi yang tersedia.</p>
+  <h2 id="contact">8. Hubungi kami</h2>
+  <p><strong>Laboran Teknik Informatika, Fakultas Teknologi Industri, Universitas Trisakti</strong><br>
+  Email: <a href="mailto:Labtif.fti@trisakti.ac.id">Labtif.fti@trisakti.ac.id</a><br>
+  Telepon: <a href="tel:+6285894488626">+62 858-9448-8626</a><br>
+  Jl. Kyai Tapa No. 1, Grogol, Jakarta Barat, Indonesia.</p>
+  <footer>LabHub &middot; Laboran Teknik Informatika Usakti</footer>
+</main>
+</body>
+</html>

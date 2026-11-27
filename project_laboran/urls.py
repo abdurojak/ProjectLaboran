@@ -21,9 +21,11 @@ from django.urls import include, path, re_path
 from django.conf import settings
 from django.http import JsonResponse
 from django.views.static import serve as serve_media
+from django.views.generic import TemplateView
 from apps.pengguna.views import SchoolSearchView
 
 urlpatterns = [
+    path('privacy-policy/', TemplateView.as_view(template_name='core/privacy_policy.html'), name='privacy_policy'),
     path('health/', lambda request: JsonResponse({'status': 'ok'}), name='health'),
     path('api/profile/education/schools/search/', SchoolSearchView.as_view(), name='school_search_global'),
     path('api/mobile/v1/', include('apps.mobile_api.urls')),

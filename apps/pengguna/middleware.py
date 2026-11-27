@@ -100,6 +100,7 @@ class PenggunaLoginRequiredMiddleware:
     }
 
     EXEMPT_PREFIXES = (
+        '/privacy-policy/',
         '/api/',
         '/admin/',
         '/health/',
